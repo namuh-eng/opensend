@@ -1,6 +1,6 @@
 # Ingester deployment runbook
 
-Issue #70 splits SES/SNS ingestion into its own container and App Runner service so webhook bursts do not contend with the Next.js app.
+Issue #70 splits SES/SNS ingestion into its own container and ECS/Fargate service so webhook bursts do not contend with the Next.js app.
 
 ## Local docker-compose
 
@@ -25,21 +25,36 @@ docker compose logs -f ingester
 
 ## Production deploy shape
 
-`bash scripts/deploy.sh <image-tag>` now deploys two services:
+Team production runs on AWS ECS/Fargate behind the shared `namuh` ALB.
+`bash scripts/deploy.sh` deploys two long-running services and a one-off
+migrator task:
 
 - app image from `Dockerfile`
+- migrator image from the `Dockerfile` `migrator` target, pushed to the app ECR repo as `<tag>-migrator`
 - ingester image from `packages/ingester/Dockerfile`
 
-Override names when the real production service or repository names differ from the repo defaults:
+Supported targets:
 
 ```bash
-APP_ECR_REPO=resend-clone \
-APP_RUNNER_SERVICE=resend-clone \
-INGESTER_ECR_REPO=resend-clone-ingester \
-INGESTER_APP_RUNNER_SERVICE=opensend-ingester \
-bash scripts/deploy.sh <image-tag>
+bash scripts/deploy.sh migrate   # DB-only migration/repair
+bash scripts/deploy.sh app       # app image + migrations + app service redeploy
+bash scripts/deploy.sh ingester  # ingester image + migrations + ingester service redeploy
+bash scripts/deploy.sh all       # app + ingester images + migrations + both redeploys
 ```
 
+Override names when production service or repository names differ from repo defaults:
+
+```bash
+PRODUCT=opensend \
+ECS_CLUSTER=namuh \
+IMAGE_TAG=latest \
+PLATFORM=linux/amd64 \
+bash scripts/deploy.sh all
+```
+
+Do not bypass the script with a raw `aws ecs update-service` after schema
+changes. The script runs migrations before service redeploys so app code does
+not start against an older database schema.
 
 ## Background job worker
 
@@ -102,30 +117,21 @@ The app and ingester emit structured JSON logs, W3C/OpenTelemetry-compatible tra
 
 ## Tail ingester logs
 
-1. Resolve the service id:
+Tail the ECS CloudWatch log group:
 
 ```bash
-SERVICE_NAME=opensend-ingester
-aws apprunner list-services \
-  --region us-east-1 \
-  --query "ServiceSummaryList[?ServiceName=='${SERVICE_NAME}'].ServiceId | [0]" \
-  --output text
+aws logs tail /ecs/opensend-ingester --region us-east-1 --since 10m --follow
 ```
 
-2. Find the CloudWatch log group that App Runner created:
+Check recent ECS service events:
 
 ```bash
-SERVICE_NAME=opensend-ingester
-aws logs describe-log-groups \
+aws ecs describe-services \
+  --cluster namuh \
+  --services opensend-ingester \
   --region us-east-1 \
-  --log-group-name-prefix "/aws/apprunner/${SERVICE_NAME}"
-```
-
-3. Tail the application log group:
-
-```bash
-LOG_GROUP="/aws/apprunner/opensend-ingester/<service-id>/application"
-aws logs tail "${LOG_GROUP}" --region us-east-1 --since 10m --follow
+  --query 'services[0].events[0:10].message' \
+  --output table
 ```
 
 ## Force-process a missed SES event
@@ -147,7 +153,7 @@ curl -i "${INGESTER_URL}" \
 This repo change does not create or mutate external AWS resources on its own. Before production cutover, verify:
 
 - the ingester ECR repository exists
-- the ingester App Runner service has the shared RDS and Secrets Manager wiring
+- the app, ingester, and migrator ECS tasks have shared RDS and Secrets Manager wiring
 - the SQS queue exists with a redrive policy and DLQ
 - EventBridge schedule/rules exist for scheduled-email and webhook retry scans
 - IAM grants app publish permissions and ingester consume/delete/change-visibility permissions

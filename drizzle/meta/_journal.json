@@ -43,6 +43,13 @@
       "when": 1777939200000,
       "tag": "0005_session_better_auth_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777939200001,
+      "tag": "0006_repair_domain_columns",
+      "breakpoints": true
     }
   ]
 }

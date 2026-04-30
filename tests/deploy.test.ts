@@ -29,6 +29,14 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(dockerfile).toContain("ENV PORT=8080");
   });
 
+  it("Dockerfile includes a migration runner image", () => {
+    const dockerfile = readFileSync(join(root, "Dockerfile"), "utf-8");
+    expect(dockerfile).toContain("FROM base AS migrator");
+    expect(dockerfile).toContain("COPY drizzle ./drizzle");
+    expect(dockerfile).toContain("COPY src/lib/db/migrate.ts");
+    expect(dockerfile).toContain('CMD ["bun", "src/lib/db/migrate.ts"]');
+  });
+
   it("deploy script builds, pushes, and force-redeploys ECS services", () => {
     const scriptPath = join(root, "scripts", "deploy.sh");
     expect(existsSync(scriptPath)).toBe(true);
@@ -39,6 +47,45 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(script).toContain("aws ecs update-service");
     expect(script).toContain("--force-new-deployment");
     expect(script).toContain("aws ecs wait services-stable");
+  });
+
+  it("deploy script runs migrations before ECS service redeploys", () => {
+    const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
+    expect(script).toContain("bash scripts/deploy.sh migrate");
+    expect(script).toContain("APP_MIGRATOR_TARGET");
+    expect(script).toContain("aws ecs register-task-definition");
+    expect(script).toContain("aws ecs run-task");
+
+    const allDeployBlock = script.slice(
+      script.indexOf("  all)"),
+      script.indexOf("  *)"),
+    );
+    expect(allDeployBlock.indexOf("run_migrations")).toBeGreaterThan(-1);
+    expect(allDeployBlock.indexOf("redeploy")).toBeGreaterThan(-1);
+    expect(allDeployBlock.indexOf("run_migrations")).toBeLessThan(
+      allDeployBlock.indexOf("redeploy"),
+    );
+  });
+
+  it("has an idempotent repair migration for production domain columns", () => {
+    const migration = readFileSync(
+      join(root, "drizzle", "0006_repair_domain_columns.sql"),
+      "utf-8",
+    );
+    expect(migration).toContain('CREATE TABLE IF NOT EXISTS "email_events"');
+    expect(migration).toContain('CREATE TABLE IF NOT EXISTS "received_emails"');
+    expect(migration).toContain(
+      'CREATE TABLE IF NOT EXISTS "webhook_deliveries"',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN IF NOT EXISTS "custom_return_path"',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN IF NOT EXISTS "tracking_subdomain"',
+    );
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS "capabilities"');
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS "sent_at"');
+    expect(migration).toContain("CREATE UNIQUE INDEX IF NOT EXISTS");
   });
 
   it("package.json has build scripts for the app and ingester", () => {
