@@ -45,7 +45,8 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 - `bun run dev` — Next.js dev server on port 3015
 - `bun run build` — production build
 - `bun run db:generate` — Drizzle migration files
-- `bun run db:migrate` — apply migrations
+- `bun run db:migrate` — apply migrations for the configured `DATABASE_URL`
+- `bash scripts/deploy.sh migrate` — team prod: build/push the migrator image and run an ECS one-off migration task only
 - `bun run db:push` — push schema (dev)
 - `bun run db:seed` — seed sample data
 - `docker compose up -d` — full stack with Postgres + auto-migration
@@ -71,14 +72,14 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
   - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` — SES + S3
   - `S3_BUCKET_NAME` — email attachment storage
   - Google OAuth client credentials for Better Auth
-- **Deployment**: Docker Compose is the reference deploy. Team production uses `bash scripts/deploy.sh` for both the Next.js app and the standalone ingester service (service name, URL, and any non-default ECR details can be overridden via environment variables if local memory differs from the repo defaults).
+- **Deployment**: Docker Compose is the reference deploy. Team production uses `bash scripts/deploy.sh` for the Next.js app and standalone ingester on ECS/Fargate; `app`, `ingester`, and `all` run migrations before service redeploy, and `migrate` runs migrations only.
 - **Ingester cutover**: SES SNS should point at `https://<ingester-service-url>/events/ses`, not the app URL. See `docs/ingester-deploy.md` for the split-service runbook, CloudWatch log tailing, and replay instructions.
 
 ## Security — Secrets Management
 - **Never hardcode** passwords, tokens, or API keys in scripts or source.
 - **Contributors / local dev**: use `.env` (gitignored).
 - **Team production**: secrets live in **AWS Secrets Manager** (region `us-east-1`). Ask Jaeyun or Ashley for the current secret IDs and access.
-- **Shared service wiring**: both the app and the ingester must receive the same database/credential secrets; keep the actual secret IDs external to the repo and inject them through the ECS task definition (`secrets` block, referenced via Secrets Manager ARN).
+- **Shared service wiring**: app, ingester, and migrator ECS tasks must receive the same database/credential secrets; keep the actual secret IDs external to the repo and inject them through the ECS task definition (`secrets` block, referenced via Secrets Manager ARN).
 - Retrieve at runtime:
   ```bash
   aws secretsmanager get-secret-value --secret-id <id> --region us-east-1 --query SecretString --output text
@@ -96,10 +97,11 @@ Team prod runs on **ECS Fargate**, not App Runner. App Runner deployment is depr
   - `events.<product>.namuh.co` → ingester target group (port 3016)
 - **ACM cert** has SANs for `namuh.co`, `*.namuh.co`, `*.opensend.namuh.co`. Add new SANs and re-validate when adding products.
 - **DNS authoritative on Cloudflare**, NOT Route53. Zone `namuh.co` ID = `182dba68b02c180d4eb127eb0b025284`. Always use the Cloudflare API for namuh.co records. Do not create Route53 hosted zones for it.
-- **Deploy**: `bash scripts/deploy.sh [app|ingester|all]` — builds, pushes to ECR, force-redeploys ECS service, waits until stable.
-- **ECR repos**: `<product>-app`, `<product>-ingester`. **ECS services**: `<product>-app`, `<product>-ingester`. **Log groups**: `/ecs/<product>-app`, `/ecs/<product>-ingester`.
+- **Deploy**: `bash scripts/deploy.sh [app|ingester|all|migrate]` — builds/pushes images, runs the migrator ECS task before app/ingester redeploys, force-redeploys selected ECS services, waits until stable. Use `migrate` alone for DB-only repairs.
+- **ECR repos**: `<product>-app`, `<product>-ingester`. The app repo also carries the `<tag>-migrator` image built from the Dockerfile `migrator` target. **ECS services**: `<product>-app`, `<product>-ingester`. **Log groups**: `/ecs/<product>-app`, `/ecs/<product>-ingester`.
 
 ## Production Gotchas (must-know)
+- **Run prod migrations before redeploying app code that expects new columns**: `scripts/deploy.sh` now does this automatically, but never bypass it with a raw `aws ecs update-service` after schema changes. Use `bash scripts/deploy.sh migrate` for DB-only fixes. The migrator image runs `src/lib/db/migrate.ts` via the Drizzle migrator API; avoid switching back to `drizzle-kit migrate` without re-testing in ECS. If a dashboard list page works but a detail page 404s, suspect swallowed DB/schema errors before assuming a missing route.
 - **Cloudflare zone ID secret was wrong historically**: `resend-clone/cloudflare/zone-id` previously pointed at the wrong zone (`foreverbrowsing.com`), causing both ACM validation CNAMEs and customer DKIM auto-setup records to be silently written to the wrong zone. Fixed 2026-04-30; verify the secret value matches the namuh.co zone ID before trusting `cloudflare.ts` output.
 - **Docker build platform**: Fargate is `linux/amd64`. M-chip Macs default to `arm64`, which silently produces tasks that fail to start. Always `docker buildx build --platform linux/amd64 ... --push`.
 - **`bun install` in containers needs `--ignore-scripts`**: postinstall calls `node scripts/install-git-hooks.mjs` which is not present at the `deps` Dockerfile stage. Without `--ignore-scripts` the build fails.
