@@ -51,6 +51,10 @@ docker compose up -d
 That's it. Open **http://localhost:3015** and sign in with Google (configure `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env`).
 
 > The `migrate` service runs database migrations automatically on first boot. Compose also launches the standalone ingester on port `3016` (`http://localhost:3016/health`) for SES/SNS events and background workers.
+>
+> Outside Docker Compose, migrations are not automatic unless your deploy path
+> runs the migrator. Team ECS/Fargate production uses `bash scripts/deploy.sh`,
+> which runs a one-off migrator task before service redeploys.
 
 ## Features
 
@@ -191,11 +195,25 @@ New AWS accounts start in SES **sandbox mode** — emails can only be sent to ve
 For production, we recommend:
 
 - **Database**: Use a managed PostgreSQL (AWS RDS, Supabase, Neon, etc.) instead of the Docker Compose Postgres
+- **Migrations**: Run committed Drizzle migrations before deploying app code that expects new columns. The Dockerfile has a `migrator` target that runs `src/lib/db/migrate.ts`; team ECS deploys run it automatically via `bash scripts/deploy.sh`.
 - **Reverse proxy**: Put Nginx or Caddy in front for TLS termination
 - **Secrets**: Store credentials in your cloud provider's secrets manager
 - **Rate limiting**: Use a shared Redis/ElastiCache instance instead of the disabled local default
 - **Background jobs**: Use SQS with a redrive policy/DLQ, plus EventBridge to trigger scheduled-email and webhook retry scans
 - **Observability**: Emit structured JSON logs, trace/correlation headers, and CloudWatch EMF metrics for send and worker flows
+
+Team production on AWS ECS/Fargate:
+
+```bash
+bash scripts/deploy.sh migrate   # DB-only migration/repair
+bash scripts/deploy.sh app       # app image + migrations + app redeploy
+bash scripts/deploy.sh ingester  # ingester image + migrations + ingester redeploy
+bash scripts/deploy.sh all       # app + ingester images + migrations + both redeploys
+```
+
+If a list page works but a detail page shows 404 after a deploy, check for
+schema drift before assuming a missing Next.js route. A server component may be
+catching a database error and rendering `notFound()`.
 
 ### Shared rate limiting (staging/production)
 

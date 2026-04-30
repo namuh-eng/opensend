@@ -21,8 +21,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY drizzle ./drizzle
 COPY drizzle.config.ts ./
 COPY src/lib/db/schema.ts ./src/lib/db/schema.ts
+COPY src/lib/db/migrate.ts ./src/lib/db/migrate.ts
 COPY package.json ./
-CMD ["bunx", "drizzle-kit", "migrate", "--config", "drizzle.config.ts"]
+CMD ["bun", "src/lib/db/migrate.ts"]
 
 # Production app
 FROM base AS runner
