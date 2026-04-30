@@ -1,9 +1,3 @@
-import {
-  getRateLimitBackend,
-  getTtl,
-  incrCache,
-  isRedisConfigured,
-} from "@/lib/cache/redis";
 import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -12,16 +6,35 @@ type RateCheckResult =
   | { allowed: false; retryAfter: number; status: 429 }
   | { allowed: false; error: string; status: 503 };
 
+type RateLimitBackend = "disabled" | "redis";
+type RateLimitDependencies = typeof import("@/lib/cache/redis");
+
 const RATE_LIMIT_BACKEND_UNAVAILABLE_ERROR =
   "Rate limiting is temporarily unavailable.";
 let hasLoggedRateLimitConfigError = false;
+let hasLoggedUnsupportedRateLimitBackend = false;
+
+function getRateLimitBackend(): RateLimitBackend {
+  const backend = process.env.RATE_LIMIT_BACKEND?.trim().toLowerCase();
+  if (!backend) return "disabled";
+  if (backend === "disabled" || backend === "redis") return backend;
+
+  if (!hasLoggedUnsupportedRateLimitBackend) {
+    hasLoggedUnsupportedRateLimitBackend = true;
+    console.warn(
+      `[rate-limit] Unsupported RATE_LIMIT_BACKEND="${backend}". Falling back to "disabled".`,
+    );
+  }
+  return "disabled";
+}
 
 async function checkRate(
   key: string,
   maxRequests: number,
   windowMs: number,
+  rateLimit: RateLimitDependencies,
 ): Promise<RateCheckResult> {
-  if (!isRedisConfigured()) {
+  if (!rateLimit.isRedisConfigured()) {
     if (!hasLoggedRateLimitConfigError) {
       hasLoggedRateLimitConfigError = true;
       console.error(
@@ -37,7 +50,7 @@ async function checkRate(
 
   const redisKey = `ratelimit:${key}`;
   const windowSeconds = Math.ceil(windowMs / 1000);
-  const count = await incrCache(redisKey, windowSeconds);
+  const count = await rateLimit.incrCache(redisKey, windowSeconds);
 
   if (count === null) {
     return {
@@ -51,7 +64,7 @@ async function checkRate(
     return { allowed: true };
   }
 
-  const ttl = await getTtl(redisKey);
+  const ttl = await rateLimit.getTtl(redisKey);
   return {
     allowed: false,
     retryAfter: ttl && ttl > 0 ? ttl : windowSeconds,
@@ -118,6 +131,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ headers: responseHeaders });
   }
 
+  const rateLimit = await import("@/lib/cache/redis");
+
   const rawIp =
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
   const ip = /^[\d.a-fA-F:]+$/.test(rawIp) ? rawIp : "unknown";
@@ -125,7 +140,7 @@ export async function middleware(request: NextRequest) {
   const rateLimitKey = `${ip}:${authKey}:${pathname}`;
 
   const { max, windowMs } = getLimits(pathname, request.method);
-  const result = await checkRate(rateLimitKey, max, windowMs);
+  const result = await checkRate(rateLimitKey, max, windowMs, rateLimit);
 
   if (!result.allowed) {
     return NextResponse.json(

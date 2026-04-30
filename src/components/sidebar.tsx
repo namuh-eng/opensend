@@ -1,7 +1,9 @@
 "use client";
 
+import { authClient } from "@/lib/auth-client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 
 const NAV_ITEMS = [
   {
@@ -215,6 +217,35 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { data: session } = authClient.useSession();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+
+  const userLabel =
+    session?.user.email ?? session?.user.name ?? "Signed in user";
+  const userInitial = userLabel.charAt(0).toUpperCase();
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    setSignOutError(null);
+
+    try {
+      const result = await authClient.signOut();
+      if (result.error) {
+        setSignOutError(result.error.message ?? "Unable to sign out.");
+        setIsSigningOut(false);
+        return;
+      }
+
+      if (window.location.pathname !== "/auth") {
+        router.push("/auth");
+      }
+    } catch {
+      setSignOutError("Unable to sign out.");
+      setIsSigningOut(false);
+    }
+  };
 
   return (
     <aside className="fixed left-0 top-0 bottom-0 w-[250px] bg-black flex flex-col border-r border-[rgba(176,199,217,0.145)]">
@@ -270,12 +301,41 @@ export function Sidebar() {
       <div className="px-4 py-3 border-t border-[rgba(176,199,217,0.145)]">
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-semibold text-white">
-            J
+            {userInitial}
           </div>
-          <span className="text-[12px] text-[#A1A4A5] truncate">
-            user@example.com
+          <span className="text-[12px] text-[#A1A4A5] truncate flex-1">
+            {userLabel}
           </span>
         </div>
+        {signOutError ? (
+          <p className="mt-2 text-[12px] text-red-400" role="alert">
+            {signOutError}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          onClick={handleSignOut}
+          disabled={isSigningOut}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-[rgba(176,199,217,0.145)] px-3 py-2 text-[13px] font-medium text-[#A1A4A5] transition-colors hover:bg-[rgba(24,25,28,0.5)] hover:text-[#F0F0F0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-busy={isSigningOut}
+        >
+          <svg
+            aria-hidden="true"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" x2="9" y1="12" y2="12" />
+          </svg>
+          {isSigningOut ? "Signing out..." : "Sign out"}
+        </button>
       </div>
     </aside>
   );
