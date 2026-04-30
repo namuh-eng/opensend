@@ -1,6 +1,7 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { webhooks } from "@/lib/db/schema";
+import { updateWebhookSchema } from "@/lib/validation/webhooks";
 import { eq } from "drizzle-orm";
 
 export async function GET(
@@ -47,34 +48,38 @@ export async function PATCH(
 
   const { id } = await params;
 
-  let body: {
-    endpoint?: string;
-    url?: string;
-    events?: string[];
-    event_types?: string[];
-    status?: string;
-    active?: boolean;
-  };
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  const result = updateWebhookSchema.safeParse(body);
+  if (!result.success) {
+    return Response.json(
+      { error: "Validation failed", details: result.error.flatten() },
+      { status: 422 },
+    );
+  }
+
   try {
+    const validated = result.data;
     const updateData: Record<string, unknown> = {};
-    if (body.endpoint !== undefined) updateData.url = body.endpoint;
-    if (body.url !== undefined) updateData.url = body.url;
+    if (validated.endpoint !== undefined) updateData.url = validated.endpoint;
+    if (validated.url !== undefined) updateData.url = validated.url;
 
-    if (body.events !== undefined) updateData.eventTypes = body.events;
-    if (body.event_types !== undefined)
-      updateData.eventTypes = body.event_types;
+    if (validated.events !== undefined)
+      updateData.eventTypes = validated.events;
+    if (validated.event_types !== undefined)
+      updateData.eventTypes = validated.event_types;
 
-    // Support "active" (boolean) and "status" ("enabled"/"disabled")
-    if (body.status !== undefined) {
-      updateData.status = body.status === "enabled" ? "active" : "inactive";
-    } else if (body.active !== undefined) {
-      updateData.status = body.active ? "active" : "inactive";
+    // Support "active" (boolean) and "status" ("enabled"/"disabled").
+    if (validated.status !== undefined) {
+      updateData.status =
+        validated.status === "enabled" ? "active" : "disabled";
+    } else if (validated.active !== undefined) {
+      updateData.status = validated.active ? "active" : "disabled";
     }
 
     const [updated] = await db

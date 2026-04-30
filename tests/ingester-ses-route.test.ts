@@ -64,6 +64,23 @@ vi.mock("@namuh/core", () => {
     logTelemetry: mockLogTelemetry,
     publishBackgroundJob: mockPublishBackgroundJob,
     recordTelemetryError: mockRecordTelemetryError,
+    toWebhookEventType: (eventType: string) => {
+      const candidate = eventType.includes(".")
+        ? eventType
+        : `email.${eventType}`;
+      return [
+        "email.sent",
+        "email.delivered",
+        "email.bounced",
+        "email.complained",
+        "email.delivery_delayed",
+        "email.opened",
+        "email.clicked",
+        "email.failed",
+      ].includes(candidate)
+        ? candidate
+        : null;
+    },
     webhookRepo: {
       list: mockWebhookList,
     },

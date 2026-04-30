@@ -16,6 +16,7 @@ export * from "./auth/api-auth";
 export * from "./auth/rate-limiter";
 export * from "./dto";
 export * from "./webhook-signing";
+export * from "./webhook-events";
 export * from "./services/dns";
 export * from "./services/domain";
 export * from "./services/email";

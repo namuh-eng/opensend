@@ -7,6 +7,7 @@ import {
   logTelemetry,
   publishBackgroundJob,
   recordTelemetryError,
+  toWebhookEventType,
   webhookRepo,
 } from "@namuh/core";
 import { Hono } from "hono";
@@ -145,16 +146,15 @@ app.post("/events/ses", async (c) => {
       },
     });
 
+    const webhookEventType = toWebhookEventType(event.type);
+    if (!webhookEventType) {
+      return c.text("OK");
+    }
+
     const { data: hooks } = await webhookRepo.list({ limit: 100 });
     for (const hook of hooks) {
       const types = hook.eventTypes as string[];
-      const webhookEventType = `email.${event.type}`;
-      if (
-        hook.status === "active" &&
-        (types.includes("*") ||
-          types.includes(event.type) ||
-          types.includes(webhookEventType))
-      ) {
+      if (hook.status === "active" && types.includes(webhookEventType)) {
         const delivery = await webhookDispatcher.enqueue(hook.id, event.id);
         await publishBackgroundJob(
           createBackgroundJob({
