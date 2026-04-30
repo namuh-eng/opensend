@@ -254,14 +254,14 @@ curl -i http://localhost:3015/api/auth/verify \
 # Expect: X-RateLimit-Backend: redis when enabled
 ```
 
-The included `Dockerfile` produces an optimized multi-stage build suitable for any container platform (AWS App Runner, Google Cloud Run, Fly.io, Railway, etc.):
+The included `Dockerfile` produces an optimized multi-stage build suitable for any container platform (AWS ECS Fargate, Google Cloud Run, Fly.io, Railway, etc.):
 
 ```bash
 docker build -t namuh-send .
 docker run -p 3015:8080 --env-file .env namuh-send
 ```
 
-For the split-service App Runner shape, SNS cutover, and ingester log/replay runbook, see [`docs/ingester-deploy.md`](docs/ingester-deploy.md).
+For the ECS Fargate split-service shape, ALB host-based events routing, SNS cutover, and ingester log/replay runbook, see [`docs/ingester-deploy.md`](docs/ingester-deploy.md).
 
 ## Architecture
 
