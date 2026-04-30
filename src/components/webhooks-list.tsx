@@ -1,6 +1,7 @@
 "use client";
 
 import { StatusBadge } from "@/components/status-badge";
+import type { SupportedWebhookEventType } from "@namuh/core/src/webhook-events";
 
 interface Webhook {
   id: string;
@@ -10,9 +11,42 @@ interface Webhook {
   createdAt: string;
 }
 
-export function WebhooksList({ webhooks }: { webhooks: Webhook[] }) {
+function formatEventType(eventType: string): string {
+  return eventType
+    .replace(/^email\./, "")
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+export function WebhooksList({
+  supportedEventTypes,
+  webhooks,
+}: {
+  supportedEventTypes: SupportedWebhookEventType[];
+  webhooks: Webhook[];
+}) {
   return (
-    <div className="mt-8">
+    <div className="mt-8 space-y-6">
+      <section className="rounded-lg border border-white/5 bg-black p-6">
+        <h2 className="text-sm font-medium uppercase tracking-wider text-white/40">
+          Supported events
+        </h2>
+        <div
+          className="mt-4 flex flex-wrap gap-2"
+          aria-label="Supported webhook events"
+        >
+          {supportedEventTypes.map((eventType) => (
+            <span
+              key={eventType}
+              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-[#F0F0F0]"
+            >
+              {eventType}
+            </span>
+          ))}
+        </div>
+      </section>
+
       <div className="overflow-hidden rounded-lg border border-white/5 bg-black">
         <table className="min-w-full divide-y divide-white/5">
           <thead>
@@ -43,7 +77,14 @@ export function WebhooksList({ webhooks }: { webhooks: Webhook[] }) {
                   />
                 </td>
                 <td className="px-6 py-4 text-sm text-white/40">
-                  {webhook.eventTypes.join(", ")}
+                  {webhook.eventTypes
+                    .filter((eventType) =>
+                      supportedEventTypes.includes(
+                        eventType as SupportedWebhookEventType,
+                      ),
+                    )
+                    .map((eventType) => formatEventType(eventType))
+                    .join(", ")}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-white/40">
                   {new Date(webhook.createdAt).toLocaleDateString()}

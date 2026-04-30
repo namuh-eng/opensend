@@ -862,6 +862,45 @@ describe("route smoke coverage", () => {
     expect(deleteJson.deleted).toBe(true);
   });
 
+  it("rejects unsupported webhook event types in create and update routes", async () => {
+    const listRoute = await import("@/app/api/webhooks/route");
+    const detailRoute = await import("@/app/api/webhooks/[id]/route");
+
+    mockInsert.mockClear();
+    const createRes = await listRoute.POST(
+      makeNextRequest("http://localhost/api/webhooks", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          endpoint: "https://example.com/webhook",
+          events: ["email.unknown"],
+        }),
+      }),
+    );
+
+    expect(createRes.status).toBe(422);
+    expect(mockInsert).not.toHaveBeenCalled();
+
+    mockUpdate.mockClear();
+    const patchRes = await detailRoute.PATCH(
+      makeNextRequest("http://localhost/api/webhooks/wh-1", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ event_types: ["delivered"] }),
+      }),
+      { params: Promise.resolve({ id: "wh-1" }) },
+    );
+
+    expect(patchRes.status).toBe(422);
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
   it("covers broadcasts and templates detail routes with happy path and 404s", async () => {
     const broadcastsRoute = await import("@/app/api/broadcasts/[id]/route");
     const templatesRoute = await import("@/app/api/templates/[id]/route");

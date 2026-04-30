@@ -1,6 +1,7 @@
 import { WebhooksList } from "@/components/webhooks-list";
 import { db } from "@/lib/db";
 import { webhooks } from "@/lib/db/schema";
+import { SUPPORTED_WEBHOOK_EVENT_TYPES } from "@namuh/core/src/webhook-events";
 import { desc } from "drizzle-orm";
 
 export default async function WebhooksPage() {
@@ -20,7 +21,10 @@ export default async function WebhooksPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-[#F0F0F0]">Webhooks</h1>
-      <WebhooksList webhooks={data} />
+      <WebhooksList
+        supportedEventTypes={[...SUPPORTED_WEBHOOK_EVENT_TYPES]}
+        webhooks={data}
+      />
     </div>
   );
 }
