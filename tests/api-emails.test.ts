@@ -173,7 +173,7 @@ describe("POST /api/emails", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns 422 when required fields are missing", async () => {
+  it("returns 422 with flattened validation details when required fields are missing", async () => {
     const { POST } = await import("@/app/api/emails/route");
     const req = makeRequest(
       "POST",
@@ -183,7 +183,16 @@ describe("POST /api/emails", () => {
     const res = await POST(req);
     expect(res.status).toBe(422);
     const json = await res.json();
-    expect(json).toHaveProperty("error");
+    expect(json).toEqual({
+      error: "Validation failed",
+      details: {
+        formErrors: [],
+        fieldErrors: {
+          to: [expect.any(String)],
+          subject: [expect.any(String)],
+        },
+      },
+    });
   });
 
   it("returns 422 when from is missing", async () => {

@@ -13,7 +13,7 @@ import {
   recordTelemetryError,
 } from "@namuh/core";
 import { and, desc, eq, gt, lt } from "drizzle-orm";
-import type { ZodError } from "zod";
+import { type ZodError, flattenError } from "zod";
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -121,7 +121,7 @@ export async function POST(request: Request): Promise<Response> {
       outcome: "invalid",
     });
     return jsonWithTelemetry(
-      { error: "Validation failed", details: result.error.flatten() },
+      { error: "Validation failed", details: flattenError(result.error) },
       telemetry,
       { status: 422 },
     );
@@ -395,5 +395,5 @@ export async function DELETE(request: Request): Promise<Response> {
 
 // Error fallback for Zod (kept explicit for strict typing in route handlers)
 export function formatZodError(error: ZodError): Record<string, unknown> {
-  return error.flatten();
+  return flattenError(error);
 }
