@@ -542,3 +542,89 @@ export const automationRuns = pgTable(
     ),
   ],
 );
+
+// ── Billing Tables (additive, gated by BILLING_BACKEND) ────────────
+
+export const plans = pgTable(
+  "plans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: varchar("slug", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    monthlyPriceCents: integer("monthly_price_cents").notNull().default(0),
+    monthlyEmailQuota: integer("monthly_email_quota").notNull().default(0),
+    maxDomains: integer("max_domains").notNull().default(0),
+    maxApiKeys: integer("max_api_keys").notNull().default(0),
+    stripePriceId: varchar("stripe_price_id", { length: 255 }),
+    isPublic: boolean("is_public").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("plans_slug_idx").on(t.slug)],
+);
+
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => plans.id),
+    status: varchar("status", { length: 50 }).notNull().default("active"),
+    currentPeriodStart: timestamp("current_period_start", {
+      withTimezone: true,
+    }),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("subscriptions_user_id_idx").on(t.userId),
+    uniqueIndex("subscriptions_stripe_subscription_id_idx").on(
+      t.stripeSubscriptionId,
+    ),
+    index("subscriptions_status_idx").on(t.status),
+  ],
+);
+
+export const stripeCustomers = pgTable(
+  "stripe_customers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    stripeCustomerId: varchar("stripe_customer_id", { length: 255 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("stripe_customers_user_id_idx").on(t.userId),
+    uniqueIndex("stripe_customers_stripe_customer_id_idx").on(
+      t.stripeCustomerId,
+    ),
+  ],
+);
+
+export const usagePeriods = pgTable(
+  "usage_periods",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    emailsSent: integer("emails_sent").notNull().default(0),
+    lastIncrementAt: timestamp("last_increment_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("usage_periods_user_period_idx").on(t.userId, t.periodStart),
+    index("usage_periods_user_id_idx").on(t.userId),
+  ],
+);
