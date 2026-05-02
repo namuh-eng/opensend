@@ -17,6 +17,11 @@ import {
 const ALLOWED_STATUSES = new Set(["draft", "enabled", "disabled"]);
 
 const STEP_KEY_PATTERN = /^[A-Za-z0-9_:-]{1,64}$/;
+const CONNECTION_TYPES = new Set([
+  "default",
+  "condition_met",
+  "condition_not_met",
+]);
 
 export interface ValidatedAutomation {
   triggerEventName: string;
@@ -117,6 +122,10 @@ export function validateAutomationInput(
   >;
 
   const connections = input.connections ?? [];
+  const stepTypesByKey = new Map(
+    normalized.map((step) => [step.key, step.type]),
+  );
+  const seenConnectionBranches = new Set<string>();
   for (const edge of connections) {
     if (!edge || typeof edge.from !== "string" || typeof edge.to !== "string") {
       throw new AutomationValidationError(
@@ -124,12 +133,37 @@ export function validateAutomationInput(
         "connection_edge_invalid",
       );
     }
+    if (
+      edge.type !== undefined &&
+      (typeof edge.type !== "string" || !CONNECTION_TYPES.has(edge.type))
+    ) {
+      throw new AutomationValidationError(
+        `connection ${edge.from} -> ${edge.to} has invalid branch label`,
+        "connection_type_invalid",
+      );
+    }
+    const branchType = edge.type ?? "default";
     if (!seenKeys.has(edge.from) || !seenKeys.has(edge.to)) {
       throw new AutomationValidationError(
         `connection ${edge.from} -> ${edge.to} references unknown step key`,
         "connection_unknown_step",
       );
     }
+    const fromStepType = stepTypesByKey.get(edge.from);
+    if (branchType !== "default" && fromStepType !== "condition") {
+      throw new AutomationValidationError(
+        `connection ${edge.from} -> ${edge.to} uses condition branch label from a non-condition step`,
+        "connection_branch_from_non_condition",
+      );
+    }
+    const branchKey = `${edge.from}:${branchType}`;
+    if (seenConnectionBranches.has(branchKey)) {
+      throw new AutomationValidationError(
+        `connection from ${edge.from} has duplicate ${branchType} branch`,
+        "connection_branch_duplicate",
+      );
+    }
+    seenConnectionBranches.add(branchKey);
     if (edge.from === edge.to) {
       throw new AutomationValidationError(
         `connection ${edge.from} -> ${edge.to} cannot be a self-loop`,

@@ -7,24 +7,87 @@ export const automationStepTypeSchema = z.enum([
   "delay",
   "send_email",
   "end",
+  "condition",
 ]);
+
+const conditionComparableValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]);
+
+const conditionPredicateSchema = z
+  .object({
+    left: z
+      .string()
+      .trim()
+      .regex(
+        /^(event|contact)\.[A-Za-z0-9_.-]+$|^steps\.[A-Za-z0-9_:-]+\.output(\.[A-Za-z0-9_.-]+)?$/,
+        "left must reference event.*, contact.*, or steps.<key>.output.*",
+      ),
+    operator: z.enum([
+      "equals",
+      "not_equals",
+      "greater_than",
+      "greater_than_or_equal",
+      "less_than",
+      "less_than_or_equal",
+      "contains",
+      "exists",
+    ]),
+    right: conditionComparableValueSchema.optional(),
+  })
+  .superRefine((predicate, ctx) => {
+    if (predicate.operator !== "exists" && !("right" in predicate)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["right"],
+        message: "right is required unless the condition operator is exists",
+      });
+    }
+  });
+
+// First condition slice intentionally supports one predicate only. Compose
+// branching with multiple condition steps instead of accepting expression trees.
+const conditionStepConfigSchema = z.object({
+  predicate: conditionPredicateSchema,
+});
 
 const automationStepConfigSchema = z.record(z.string(), z.unknown());
 
-export const automationStepSchema = z.object({
-  key: z
-    .string()
-    .min(1)
-    .max(64)
-    .regex(/^[A-Za-z0-9_:-]+$/, "step key may only contain A-Z, 0-9, _, :, -"),
-  type: automationStepTypeSchema,
-  config: automationStepConfigSchema.optional(),
-  position: z.number().int().nonnegative().optional(),
-});
+export const automationStepSchema = z
+  .object({
+    key: z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(
+        /^[A-Za-z0-9_:-]+$/,
+        "step key may only contain A-Z, 0-9, _, :, -",
+      ),
+    type: automationStepTypeSchema,
+    config: automationStepConfigSchema.optional(),
+    position: z.number().int().nonnegative().optional(),
+  })
+  .superRefine((step, ctx) => {
+    if (step.type === "condition") {
+      const parsed = conditionStepConfigSchema.safeParse(step.config);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          ctx.addIssue({
+            ...issue,
+            path: ["config", ...issue.path],
+          });
+        }
+      }
+    }
+  });
 
 export const automationConnectionSchema = z.object({
   from: z.string().min(1).max(64),
   to: z.string().min(1).max(64),
+  type: z.enum(["default", "condition_met", "condition_not_met"]).optional(),
 });
 
 export const createAutomationSchema = z.object({

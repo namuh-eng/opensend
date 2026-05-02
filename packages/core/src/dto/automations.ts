@@ -20,9 +20,15 @@ export type AutomationRunStatus =
   | "cancelled"
   | "skipped";
 
+export type AutomationConnectionType =
+  | "default"
+  | "condition_met"
+  | "condition_not_met";
+
 export interface AutomationConnectionDTO {
   from: string;
   to: string;
+  type?: AutomationConnectionType;
 }
 
 export interface TriggerStepConfig {
@@ -50,11 +56,34 @@ export interface SendEmailStepConfig {
 
 export type EndStepConfig = Record<string, never>;
 
+export type ConditionOperator =
+  | "equals"
+  | "not_equals"
+  | "greater_than"
+  | "greater_than_or_equal"
+  | "less_than"
+  | "less_than_or_equal"
+  | "contains"
+  | "exists";
+
+export type ConditionComparableValue = string | number | boolean | null;
+
+export interface ConditionPredicateConfig {
+  left: string;
+  operator: ConditionOperator;
+  right?: ConditionComparableValue;
+}
+
+export interface ConditionStepConfig {
+  predicate: ConditionPredicateConfig;
+}
+
 export type AutomationStepConfig =
   | TriggerStepConfig
   | DelayStepConfig
   | SendEmailStepConfig
-  | EndStepConfig;
+  | EndStepConfig
+  | ConditionStepConfig;
 
 export interface AutomationStepInput {
   key: string;
@@ -132,6 +161,18 @@ export interface AutomationRunDTO {
 }
 
 const RESERVED_EVENT_PREFIX = "resend:";
+const CONDITION_PATH_PATTERN =
+  /^(event|contact)\.[A-Za-z0-9_.-]+$|^steps\.[A-Za-z0-9_:-]+\.output(\.[A-Za-z0-9_.-]+)?$/;
+const CONDITION_OPERATORS: ReadonlySet<ConditionOperator> = new Set([
+  "equals",
+  "not_equals",
+  "greater_than",
+  "greater_than_or_equal",
+  "less_than",
+  "less_than_or_equal",
+  "contains",
+  "exists",
+]);
 const MAX_DELAY_DAYS = 30;
 export const MAX_DELAY_SECONDS = MAX_DELAY_DAYS * 24 * 60 * 60;
 
@@ -279,6 +320,68 @@ export function normalizeSendEmailConfig(
   return config;
 }
 
+function isComparableValue(value: unknown): value is ConditionComparableValue {
+  return (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
+}
+
+export function normalizeConditionConfig(
+  raw: Record<string, unknown>,
+): ConditionStepConfig {
+  const predicate =
+    typeof raw.predicate === "object" && raw.predicate !== null
+      ? (raw.predicate as Record<string, unknown>)
+      : null;
+  if (!predicate) {
+    throw new AutomationValidationError(
+      "condition step requires config.predicate",
+      "condition_predicate_required",
+    );
+  }
+
+  const left = typeof predicate.left === "string" ? predicate.left.trim() : "";
+  if (!CONDITION_PATH_PATTERN.test(left)) {
+    throw new AutomationValidationError(
+      "condition predicate left must reference event.*, contact.*, or steps.<key>.output.*",
+      "condition_left_invalid",
+    );
+  }
+
+  const operator = predicate.operator;
+  if (
+    typeof operator !== "string" ||
+    !CONDITION_OPERATORS.has(operator as ConditionOperator)
+  ) {
+    throw new AutomationValidationError(
+      "condition predicate operator is unsupported",
+      "condition_operator_invalid",
+    );
+  }
+
+  if (operator === "exists") {
+    return { predicate: { left, operator: "exists" } };
+  }
+
+  if (!("right" in predicate) || !isComparableValue(predicate.right)) {
+    throw new AutomationValidationError(
+      "condition predicate right must be a string, number, boolean, or null",
+      "condition_right_invalid",
+    );
+  }
+
+  return {
+    predicate: {
+      left,
+      operator: operator as ConditionOperator,
+      right: predicate.right,
+    },
+  };
+}
+
 export function normalizeStepConfig(
   type: AutomationStepType,
   config: Record<string, unknown>,
@@ -296,10 +399,15 @@ export function normalizeStepConfig(
         string,
         unknown
       >;
+    case "condition":
+      return normalizeConditionConfig(config) as unknown as Record<
+        string,
+        unknown
+      >;
     case "end":
       return {};
     default:
-      // Reserved step types pass through unchanged; runner is not built yet.
+      // Reserved step types pass through unchanged until their runners are built.
       return config;
   }
 }

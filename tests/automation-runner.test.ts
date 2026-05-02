@@ -242,6 +242,224 @@ describe("automation runner", () => {
     });
   });
 
+  it("evaluates condition steps and advances to the met branch in one tick", async () => {
+    const { processAutomationRunStep } = await import(
+      "@/lib/workers/automation-runner"
+    );
+    const conditionAutomation: Automation = {
+      ...automation,
+      connections: [
+        { from: "trigger", to: "condition" },
+        { from: "condition", to: "pro_end", type: "condition_met" },
+        { from: "condition", to: "free_end", type: "condition_not_met" },
+      ],
+    };
+    const conditionSteps: AutomationStep[] = [
+      steps[0],
+      {
+        ...steps[1],
+        key: "condition",
+        type: "condition",
+        config: {
+          predicate: {
+            left: "event.plan",
+            operator: "equals",
+            right: "pro",
+          },
+        },
+        position: 1,
+      },
+      { ...steps[3], key: "pro_end", position: 2 },
+      { ...steps[3], key: "free_end", position: 3 },
+    ];
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(conditionAutomation),
+      listSteps: vi.fn().mockResolvedValue(conditionSteps),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "condition" }),
+      setup.deps,
+    );
+
+    expect(setup.updates[0]).toMatchObject({
+      status: "queued",
+      currentStepKey: "pro_end",
+    });
+    expect(setup.updates[0]?.stepStates?.condition).toMatchObject({
+      status: "completed",
+      output: { matched: true, branch: "condition_met" },
+    });
+  });
+
+  it("evaluates condition steps and advances to the not-met branch", async () => {
+    const { processAutomationRunStep } = await import(
+      "@/lib/workers/automation-runner"
+    );
+    const conditionAutomation: Automation = {
+      ...automation,
+      connections: [
+        { from: "condition", to: "pro_end", type: "condition_met" },
+        { from: "condition", to: "free_end", type: "condition_not_met" },
+      ],
+    };
+    const conditionSteps: AutomationStep[] = [
+      {
+        ...steps[1],
+        key: "condition",
+        type: "condition",
+        config: {
+          predicate: {
+            left: "event.plan",
+            operator: "equals",
+            right: "enterprise",
+          },
+        },
+        position: 0,
+      },
+      { ...steps[3], key: "pro_end", position: 1 },
+      { ...steps[3], key: "free_end", position: 2 },
+    ];
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(conditionAutomation),
+      listSteps: vi.fn().mockResolvedValue(conditionSteps),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "condition" }),
+      setup.deps,
+    );
+
+    expect(setup.updates[0]).toMatchObject({
+      status: "queued",
+      currentStepKey: "free_end",
+    });
+    expect(setup.updates[0]?.stepStates?.condition.output).toEqual({
+      matched: false,
+      branch: "condition_not_met",
+    });
+  });
+
+  it("can compare prior step output values in condition predicates", async () => {
+    const { processAutomationRunStep } = await import(
+      "@/lib/workers/automation-runner"
+    );
+    const conditionAutomation: Automation = {
+      ...automation,
+      connections: [
+        { from: "condition", to: "matched", type: "condition_met" },
+        { from: "condition", to: "not_matched", type: "condition_not_met" },
+      ],
+    };
+    const conditionSteps: AutomationStep[] = [
+      {
+        ...steps[1],
+        key: "condition",
+        type: "condition",
+        config: {
+          predicate: {
+            left: "steps.send.output.email_id",
+            operator: "equals",
+            right: "email_1",
+          },
+        },
+        position: 0,
+      },
+      { ...steps[3], key: "matched", position: 1 },
+      { ...steps[3], key: "not_matched", position: 2 },
+    ];
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(conditionAutomation),
+      listSteps: vi.fn().mockResolvedValue(conditionSteps),
+    });
+
+    await processAutomationRunStep(
+      run({
+        currentStepKey: "condition",
+        stepStates: {
+          send: {
+            status: "completed",
+            output: { email_id: "email_1" },
+          },
+        },
+      }),
+      setup.deps,
+    );
+
+    expect(setup.updates[0]).toMatchObject({
+      status: "queued",
+      currentStepKey: "matched",
+    });
+  });
+
+  it("fails condition steps with missing variables at the step level", async () => {
+    const { processAutomationRunStep } = await import(
+      "@/lib/workers/automation-runner"
+    );
+    const conditionSteps: AutomationStep[] = [
+      {
+        ...steps[1],
+        key: "condition",
+        type: "condition",
+        config: {
+          predicate: {
+            left: "event.missing",
+            operator: "equals",
+            right: "pro",
+          },
+        },
+        position: 0,
+      },
+    ];
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue(conditionSteps),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "condition" }),
+      setup.deps,
+    );
+
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "condition",
+      failureReason: "condition variable not found: event.missing",
+    });
+    expect(setup.updates[0]?.stepStates?.condition).toMatchObject({
+      status: "failed",
+      error: "condition variable not found: event.missing",
+    });
+  });
+
+  it("fails condition steps with invalid persisted predicate configs", async () => {
+    const { processAutomationRunStep } = await import(
+      "@/lib/workers/automation-runner"
+    );
+    const conditionSteps: AutomationStep[] = [
+      {
+        ...steps[1],
+        key: "condition",
+        type: "condition",
+        config: { predicate: { left: "event.plan", operator: "between" } },
+        position: 0,
+      },
+    ];
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue(conditionSteps),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "condition" }),
+      setup.deps,
+    );
+
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "condition",
+      failureReason: "condition predicate operator is unsupported",
+    });
+  });
+
   it("fails missing or unpublished templates with a step-level error", async () => {
     const { processAutomationRunStep } = await import(
       "@/lib/workers/automation-runner"

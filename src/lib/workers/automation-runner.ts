@@ -10,8 +10,11 @@ import {
   templates,
 } from "@/lib/db/schema";
 import {
+  type ConditionOperator,
+  type ConditionStepConfig,
   automationRunRepo,
   emailService,
+  normalizeConditionConfig,
   parseDurationToCappedSeconds,
 } from "@opensend/core";
 import { asc, eq } from "drizzle-orm";
@@ -136,9 +139,17 @@ function nextStepKey(
   automation: Automation,
   steps: AutomationStep[],
   currentKey: string,
+  branch: AutomationConnection["type"] = "default",
 ): string | null {
   const connections = (automation.connections ?? []) as AutomationConnection[];
-  const connected = connections.find((edge) => edge.from === currentKey)?.to;
+  const connected =
+    connections.find((edge) => edge.from === currentKey && edge.type === branch)
+      ?.to ??
+    connections.find(
+      (edge) =>
+        edge.from === currentKey &&
+        (edge.type === "default" || edge.type === undefined),
+    )?.to;
   if (connected && steps.some((step) => step.key === connected)) {
     return connected;
   }
@@ -158,8 +169,9 @@ async function advanceRun(
   states: StepStates,
   now: Date,
   output?: Record<string, unknown>,
+  branch: AutomationConnection["type"] = "default",
 ) {
-  const nextKey = nextStepKey(automation, steps, step.key);
+  const nextKey = nextStepKey(automation, steps, step.key, branch);
   const completedStates = setStepState(states, step.key, {
     status: "completed",
     completedAt: iso(now),
@@ -324,6 +336,152 @@ function getSendEmailConfig(step: AutomationStep): {
     subject: readString(config.subject),
     replyTo: readString(config.reply_to),
   };
+}
+
+function buildStepOutputContext(states: StepStates): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(states).map(([key, state]) => [
+      key,
+      { output: state.output ?? {} },
+    ]),
+  );
+}
+
+function buildConditionContext(
+  delivery: CustomEventDelivery | null,
+  contact: Contact | null,
+  states: StepStates,
+): Record<string, unknown> {
+  const eventPayload = delivery?.payload ?? {};
+  const contactContext = contact
+    ? {
+        id: contact.id,
+        email: contact.email,
+        first_name: contact.firstName ?? "",
+        firstName: contact.firstName ?? "",
+        last_name: contact.lastName ?? "",
+        lastName: contact.lastName ?? "",
+        unsubscribed: contact.unsubscribed,
+        custom_properties: contact.customProperties ?? {},
+        customProperties: contact.customProperties ?? {},
+      }
+    : null;
+
+  return {
+    event: eventPayload,
+    contact: contactContext,
+    steps: buildStepOutputContext(states),
+  };
+}
+
+function resolveConditionPath(
+  context: Record<string, unknown>,
+  path: string,
+): unknown {
+  const stepMatch = /^steps\.([A-Za-z0-9_:-]+)\.output(?:\.(.+))?$/.exec(path);
+  if (stepMatch) {
+    const stepContext = getPath(context.steps, [stepMatch[1], "output"]);
+    return stepMatch[2]
+      ? getPath(stepContext, stepMatch[2].split("."))
+      : stepContext;
+  }
+
+  const [root, ...parts] = path.split(".");
+  return getPath(context[root], parts);
+}
+
+function toComparable(value: unknown): string | number | boolean | null {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+  throw new Error(
+    "condition predicate left resolved to a non-comparable value",
+  );
+}
+
+function compareNumbers(
+  left: string | number | boolean | null,
+  right: string | number | boolean | null | undefined,
+  operator: ConditionOperator,
+): boolean {
+  const leftNumber = typeof left === "number" ? left : Number(left);
+  const rightNumber = typeof right === "number" ? right : Number(right);
+  if (!Number.isFinite(leftNumber) || !Number.isFinite(rightNumber)) {
+    throw new Error(`condition ${operator} requires numeric operands`);
+  }
+  if (operator === "greater_than") return leftNumber > rightNumber;
+  if (operator === "greater_than_or_equal") return leftNumber >= rightNumber;
+  if (operator === "less_than") return leftNumber < rightNumber;
+  return leftNumber <= rightNumber;
+}
+
+function evaluateConditionPredicate(
+  config: ConditionStepConfig,
+  context: Record<string, unknown>,
+): boolean {
+  const leftRaw = resolveConditionPath(context, config.predicate.left);
+  if (leftRaw === undefined) {
+    throw new Error(`condition variable not found: ${config.predicate.left}`);
+  }
+
+  const left = toComparable(leftRaw);
+  const right = config.predicate.right;
+  switch (config.predicate.operator) {
+    case "exists":
+      return left !== null;
+    case "equals":
+      return left === right;
+    case "not_equals":
+      return left !== right;
+    case "greater_than":
+    case "greater_than_or_equal":
+    case "less_than":
+    case "less_than_or_equal":
+      return compareNumbers(left, right, config.predicate.operator);
+    case "contains":
+      if (typeof left !== "string" || typeof right !== "string") {
+        throw new Error("condition contains requires string operands");
+      }
+      return left.includes(right);
+  }
+}
+
+async function processConditionStep(
+  deps: AutomationRunnerDeps,
+  run: AutomationRun,
+  automation: Automation,
+  steps: AutomationStep[],
+  step: AutomationStep,
+  states: StepStates,
+  now: Date,
+) {
+  const config = normalizeConditionConfig(step.config ?? {});
+  const delivery = run.triggerEventId
+    ? await deps.getDelivery(run.triggerEventId)
+    : null;
+  const contact = run.contactId ? await deps.getContact(run.contactId) : null;
+  const matched = evaluateConditionPredicate(
+    config,
+    buildConditionContext(delivery, contact, states),
+  );
+  const branch = matched ? "condition_met" : "condition_not_met";
+
+  return await advanceRun(
+    deps,
+    run,
+    automation,
+    steps,
+    step,
+    states,
+    now,
+    { matched, branch },
+    branch,
+  );
 }
 
 async function processSendEmailStep(
@@ -540,6 +698,18 @@ export async function processAutomationRunStep(
         nextStepAt: scheduledFor,
         failureReason: null,
       });
+    }
+
+    if (step.type === "condition") {
+      return await processConditionStep(
+        deps,
+        run,
+        automation,
+        steps,
+        step,
+        states,
+        now,
+      );
     }
 
     if (step.type === "send_email") {
