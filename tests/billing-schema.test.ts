@@ -1,6 +1,7 @@
 import {
   plans,
   stripeCustomers,
+  stripeEventsProcessed,
   subscriptions,
   usagePeriods,
 } from "@/lib/db/schema";
@@ -8,11 +9,12 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
 describe("Billing schema", () => {
-  it("registers all four billing tables with the expected names", () => {
+  it("registers all billing tables with the expected names", () => {
     expect(getTableName(plans)).toBe("plans");
     expect(getTableName(subscriptions)).toBe("subscriptions");
     expect(getTableName(stripeCustomers)).toBe("stripe_customers");
     expect(getTableName(usagePeriods)).toBe("usage_periods");
+    expect(getTableName(stripeEventsProcessed)).toBe("stripe_events_processed");
   });
 
   it("plans table has the columns the paywall epic depends on", () => {
@@ -64,5 +66,15 @@ describe("Billing schema", () => {
     expect(cols.periodStart.notNull).toBe(true);
     expect(cols.periodEnd.notNull).toBe(true);
     expect(cols.emailsSent.notNull).toBe(true);
+  });
+
+  it("stripe_events_processed stores webhook replay idempotency keys", () => {
+    const cols = getTableColumns(stripeEventsProcessed);
+    expect(cols.eventId).toBeDefined();
+    expect(cols.type).toBeDefined();
+    expect(cols.processedAt).toBeDefined();
+    expect(cols.eventId.primary).toBe(true);
+    expect(cols.type.notNull).toBe(true);
+    expect(cols.processedAt.notNull).toBe(true);
   });
 });

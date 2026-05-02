@@ -628,3 +628,15 @@ export const usagePeriods = pgTable(
     index("usage_periods_user_id_idx").on(t.userId),
   ],
 );
+
+export const stripeEventsProcessed = pgTable(
+  "stripe_events_processed",
+  {
+    eventId: varchar("event_id", { length: 255 }).primaryKey(),
+    type: varchar("type", { length: 255 }).notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("stripe_events_processed_processed_at_idx").on(t.processedAt)],
+);
