@@ -3,9 +3,22 @@ import {
   unauthorizedResponse,
   validateApiKey,
 } from "@/lib/api-auth";
-import { db } from "@/lib/db";
-import { apiKeys } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { ApiKeyServiceError, createApiKeyService } from "@opensend/core";
+
+function apiKeyService() {
+  return createApiKeyService({
+    invalidateAuthCache: invalidateApiKeyAuthCache,
+  });
+}
+
+function mapServiceError(err: unknown, fallback: string): Response {
+  if (err instanceof ApiKeyServiceError) {
+    return Response.json({ error: err.message }, { status: 404 });
+  }
+
+  const message = err instanceof Error ? err.message : fallback;
+  return Response.json({ error: message }, { status: 500 });
+}
 
 export async function GET(
   request: Request,
@@ -18,15 +31,7 @@ export async function GET(
 
   const { id } = await params;
   try {
-    const [key] = await db
-      .select()
-      .from(apiKeys)
-      .where(eq(apiKeys.id, id))
-      .limit(1);
-
-    if (!key) {
-      return Response.json({ error: "API key not found" }, { status: 404 });
-    }
+    const key = await apiKeyService().getApiKey(id);
 
     return Response.json({
       object: "api_key",
@@ -36,9 +41,7 @@ export async function GET(
       last_used_at: key.lastUsedAt,
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to get API key";
-    return Response.json({ error: message }, { status: 500 });
+    return mapServiceError(err, "Failed to get API key");
   }
 }
 
@@ -53,27 +56,10 @@ export async function DELETE(
 
   const { id } = await params;
   try {
-    const [existing] = await db
-      .select({ tokenHash: apiKeys.tokenHash })
-      .from(apiKeys)
-      .where(eq(apiKeys.id, id))
-      .limit(1);
-
-    if (!existing) {
-      return Response.json({ error: "API key not found" }, { status: 404 });
-    }
-
-    const [deleted] = await db
-      .delete(apiKeys)
-      .where(eq(apiKeys.id, id))
-      .returning({ id: apiKeys.id });
-
-    await invalidateApiKeyAuthCache(existing.tokenHash);
+    await apiKeyService().deleteApiKey(id);
 
     return new Response(null, { status: 200 });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to delete API key";
-    return Response.json({ error: message }, { status: 500 });
+    return mapServiceError(err, "Failed to delete API key");
   }
 }

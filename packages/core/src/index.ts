@@ -30,6 +30,7 @@ export * from "./webhook-signing";
 export * from "./webhook-events";
 export * from "./services/dns";
 export * from "./services/domain";
+export * from "./services/apiKeys";
 export * from "./services/email";
 export * from "./services/emailProvider";
 export * from "./services/storage";
