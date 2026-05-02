@@ -3,7 +3,7 @@ import {
   createWebhookSchema,
   updateWebhookSchema,
 } from "@/lib/validation/webhooks";
-import { SUPPORTED_WEBHOOK_EVENT_TYPES } from "@namuh/core/src/webhook-events";
+import { SUPPORTED_WEBHOOK_EVENT_TYPES } from "@opensend/core/src/webhook-events";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 

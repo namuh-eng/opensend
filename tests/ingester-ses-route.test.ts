@@ -10,7 +10,7 @@ const mockEmitCloudWatchMetric = vi.fn();
 const mockLogTelemetry = vi.fn();
 const mockRecordTelemetryError = vi.fn();
 
-vi.mock("@namuh/core", () => {
+vi.mock("@opensend/core", () => {
   const testTraceparent =
     "00-11111111111111111111111111111111-2222222222222222-01";
   const getHeader = (

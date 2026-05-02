@@ -69,7 +69,7 @@ vi.mock("@/lib/db", () => ({
   },
 }));
 
-vi.mock("@namuh/core", () => ({
+vi.mock("@opensend/core", () => ({
   AutomationValidationError: TestAutomationValidationError,
   automationRepo: {
     create: mockAutomationCreate,

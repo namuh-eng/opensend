@@ -1,7 +1,7 @@
 import { getServerSession } from "@/lib/api-auth";
 import { getBillingBackend } from "@/lib/billing";
 import { getStripe } from "@/lib/billing/stripe";
-import { stripeCustomerRepo } from "@namuh/core";
+import { stripeCustomerRepo } from "@opensend/core";
 import { NextResponse } from "next/server";
 
 function getRequestOrigin(request: Request) {

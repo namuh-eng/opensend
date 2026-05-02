@@ -1,14 +1,14 @@
 # Contributing
 
-Thanks for your interest in contributing to Namuh Send!
+Thanks for your interest in contributing to OpenSend!
 
 ## Setup
 
 **Quick start** (requires Docker + [Bun](https://bun.sh)):
 
 ```bash
-git clone https://github.com/namuh-eng/namuh-send.git
-cd namuh-send
+git clone https://github.com/namuh-eng/opensend.git
+cd opensend
 cp .env.example .env
 make setup    # ensures DASHBOARD_KEY exists, starts Postgres, installs deps, pushes schema, seeds DB
 make dev      # http://localhost:3015
@@ -30,7 +30,7 @@ curl -X POST http://localhost:3015/api/emails \
   -d '{
     "from": "hello@example.com",
     "to": ["test@example.com"],
-    "subject": "Hello from namuh-send",
+    "subject": "Hello from OpenSend",
     "text": "It works!"
   }'
 ```
@@ -79,7 +79,7 @@ The hooks are versioned in `.githooks/`, so everyone on the repo gets the same g
 
 AWS credentials are **not required** for local development — without them, emails are logged to the console and the full API flow still works. When you're ready to actually send emails, configure `~/.aws/credentials` via `aws configure`.
 
-New AWS accounts start in SES **sandbox mode** — you can only send to verified addresses. This is an AWS limitation, not a Namuh Send bug. See [AWS SES docs](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html) to request production access.
+New AWS accounts start in SES **sandbox mode** — you can only send to verified addresses. This is an AWS limitation, not an OpenSend bug. See [AWS SES docs](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html) to request production access.
 
 ## Code Style
 

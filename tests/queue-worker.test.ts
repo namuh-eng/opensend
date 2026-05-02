@@ -11,7 +11,7 @@ const mockEmitCloudWatchMetric = vi.hoisted(() => vi.fn());
 const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
 
-vi.mock("@namuh/core", () => ({
+vi.mock("@opensend/core", () => ({
   createBackgroundJob: (job: Record<string, unknown>) => ({
     ...job,
     requestedAt: "2026-04-28T00:00:00.000Z",

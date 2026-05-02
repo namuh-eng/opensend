@@ -15,12 +15,12 @@ const server = Bun.serve({
   port,
 });
 
-console.log(`namuh-ingester listening on http://${hostname}:${server.port}`);
+console.log(`opensend-ingester listening on http://${hostname}:${server.port}`);
 
 if (
   (Bun.env.BACKGROUND_WORKER_POLL ?? process.env.BACKGROUND_WORKER_POLL) ===
   "true"
 ) {
   queueWorker.start();
-  console.log("namuh-ingester background job polling enabled");
+  console.log("opensend-ingester background job polling enabled");
 }

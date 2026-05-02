@@ -1,7 +1,7 @@
 import {
   type ParsedStripeInvoice,
   generateStripeSignatureHeader,
-} from "@namuh/core";
+} from "@opensend/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StripeWebhookProcessor } from "../packages/ingester/src/stripe-webhook";
 

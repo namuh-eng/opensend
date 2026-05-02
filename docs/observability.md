@@ -1,12 +1,12 @@
 # Observability runbook
 
-Namuh Send emits an AWS-first observability baseline for the email accept and delivery flow. The implementation uses structured JSON logs, W3C/OpenTelemetry-compatible `traceparent` propagation, and CloudWatch Embedded Metric Format (EMF) records so the same application logs can drive CloudWatch Logs and Metrics.
+OpenSend emits an AWS-first observability baseline for the email accept and delivery flow. The implementation uses structured JSON logs, W3C/OpenTelemetry-compatible `traceparent` propagation, and CloudWatch Embedded Metric Format (EMF) records so the same application logs can drive CloudWatch Logs and Metrics.
 
 ## Telemetry model
 
 Every instrumented request/job has:
 
-- `correlation_id` — stable identifier for support/debugging. API callers can provide `x-correlation-id`; otherwise Namuh Send derives one from the trace id.
+- `correlation_id` — stable identifier for support/debugging. API callers can provide `x-correlation-id`; otherwise OpenSend derives one from the trace id.
 - `trace_id`, `span_id`, `parent_span_id`, `traceparent`, `tracestate` — W3C trace context fields that keep API, SQS, worker, SES, and webhook jobs connected.
 - `event` — machine-readable log event such as `email.accepted`, `queue.publish`, `worker.email.send`, or `ses.event.received`.
 - low-cardinality metric dimensions only: `Service`, `Operation`, `Outcome`, `JobType`, and `EventType`.
@@ -24,7 +24,7 @@ Do not log raw email content or recipient data. The shared telemetry sanitizer e
 
 ## CloudWatch metrics
 
-Metrics are emitted as EMF JSON log records in the `NamuhSend` namespace by default. Override with `CLOUDWATCH_METRICS_NAMESPACE` when an environment needs a distinct namespace.
+Metrics are emitted as EMF JSON log records in the `OpenSend` namespace by default. Override with `CLOUDWATCH_METRICS_NAMESPACE` when an environment needs a distinct namespace.
 
 | Area | Metrics | Dimensions |
 | --- | --- | --- |

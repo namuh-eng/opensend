@@ -1,19 +1,19 @@
-# namuh-send
+# @opensend/sdk
 
-TypeScript SDK for the Namuh Send email API.
+TypeScript SDK for the OpenSend email API.
 
 ## Installation
 
 ```bash
-bun add namuh-send
+bun add @opensend/sdk
 ```
 
 ## Getting Started
 
 ```typescript
-import { NamuhSend } from "namuh-send";
+import { OpenSend } from "@opensend/sdk";
 
-const client = new NamuhSend("re_your_api_key", {
+const client = new OpenSend("re_your_api_key", {
   baseUrl: "https://your-deployment.example.com",
 });
 ```
@@ -133,7 +133,7 @@ The SDK is publish-ready and does not assume a local dev server. Pass your
 deployment origin explicitly:
 
 ```typescript
-const client = new NamuhSend("re_your_api_key", {
+const client = new OpenSend("re_your_api_key", {
   baseUrl: "https://api.your-deployment.example.com",
 });
 ```

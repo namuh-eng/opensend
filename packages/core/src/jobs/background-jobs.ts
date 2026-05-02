@@ -15,7 +15,7 @@ import {
 } from "../observability/telemetry";
 
 const MAX_SQS_DELAY_SECONDS = 900;
-const BACKGROUND_JOB_EVENT_SOURCE = "namuh-send.background-jobs";
+const BACKGROUND_JOB_EVENT_SOURCE = "opensend.background-jobs";
 
 export type BackgroundJobType =
   | "email.send"

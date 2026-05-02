@@ -1,7 +1,7 @@
 import { getServerSession } from "@/lib/api-auth";
 import { getBillingBackend } from "@/lib/billing";
 import { getStripe } from "@/lib/billing/stripe";
-import { planRepo, stripeCustomerRepo } from "@namuh/core";
+import { planRepo, stripeCustomerRepo } from "@opensend/core";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 

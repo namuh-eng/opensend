@@ -3,8 +3,8 @@
 # ABOUTME: Three guard gates (skip flag/env, TTY, gh auth). Never fails the install.
 
 OWNER="namuh-eng"
-REPO="namuh-send"
-PROJECT="namuh-send"
+REPO="opensend"
+PROJECT="opensend"
 
 main() {
   # --- Guard Gate 1: Skip flags ---
@@ -14,7 +14,7 @@ main() {
     fi
   done
 
-  if [ "${SKIP_STAR_PROMPT:-}" = "1" ] || [ "${NAMUH_SEND_SKIP_STAR_PROMPT:-}" = "1" ]; then
+  if [ "${SKIP_STAR_PROMPT:-}" = "1" ] || [ "${OPENSEND_SKIP_STAR_PROMPT:-}" = "1" ]; then
     return 0
   fi
 
