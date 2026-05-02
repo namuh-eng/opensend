@@ -51,6 +51,7 @@ export const updateAutomationSchema = z
 
 export const listAutomationsQuerySchema = z.object({
   status: automationStatusSchema.optional(),
+  search: z.string().trim().min(1).max(255).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   after: z.string().min(1).optional(),
 });

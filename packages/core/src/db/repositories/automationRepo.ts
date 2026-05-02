@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, lt } from "drizzle-orm";
 import {
   type AutomationConnectionDTO,
   type AutomationStepInput,
@@ -234,12 +234,14 @@ export const automationRepo = {
       limit?: number;
       after?: string;
       status?: string;
+      search?: string;
       userId?: string | null;
     } = {},
   ) {
-    const { limit = 20, after, status, userId } = options;
+    const { limit = 20, after, status, search, userId } = options;
     const conditions = [];
     if (status) conditions.push(eq(automations.status, status));
+    if (search) conditions.push(ilike(automations.name, `%${search}%`));
     if (userId) conditions.push(eq(automations.userId, userId));
     if (after) conditions.push(lt(automations.id, after));
 

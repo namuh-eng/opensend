@@ -83,7 +83,9 @@ export function formatRunListItem(run: AutomationRunRow) {
     current_step_key: run.currentStepKey,
     failed_step_key: findFailedStepKey(run.stepStates),
     failure_reason: run.failureReason,
+    next_step_at: run.nextStepAt,
     created_at: run.createdAt,
+    updated_at: run.updatedAt,
   };
 }
 
