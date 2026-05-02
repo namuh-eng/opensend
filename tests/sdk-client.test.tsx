@@ -117,4 +117,51 @@ describe("NamuhSend SDK", () => {
       error: null,
     });
   });
+
+  it("exposes automations and events clients", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "ok" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new NamuhSend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.automations.create({
+      name: "Welcome",
+      steps: [
+        {
+          key: "trigger",
+          type: "trigger",
+          config: { event_name: "user.signed_up" },
+        },
+      ],
+    });
+    await client.automations.listRuns("auto_1", { status: "queued", limit: 5 });
+    await client.events.send({
+      event: "user.signed_up",
+      email: "user@example.com",
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/api/automations",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/api/automations/auto_1/runs?limit=5&status=queued",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/api/events/send",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
 });
