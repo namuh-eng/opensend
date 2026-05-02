@@ -166,6 +166,130 @@ describe("automationRepo.create", () => {
     ).rejects.toMatchObject({ code: "connection_unknown_step" });
   });
 
+  it("accepts condition steps with explicit met and not-met branches", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+            position: 0,
+          },
+          {
+            key: "condition",
+            type: "condition",
+            config: {
+              predicate: {
+                left: "event.plan",
+                operator: "equals",
+                right: "pro",
+              },
+            },
+            position: 1,
+          },
+          { key: "met", type: "end", config: {}, position: 2 },
+          { key: "not_met", type: "end", config: {}, position: 3 },
+        ],
+        connections: [
+          { from: "trigger", to: "condition" },
+          { from: "condition", to: "met", type: "condition_met" },
+          { from: "condition", to: "not_met", type: "condition_not_met" },
+        ],
+      }),
+    ).resolves.toMatchObject({ automation: { id: "auto_1" } });
+  });
+
+  it("rejects unsupported condition predicate configs", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+            position: 0,
+          },
+          {
+            key: "condition",
+            type: "condition",
+            config: {
+              predicate: { left: "event.plan", operator: "between" },
+            },
+            position: 1,
+          },
+          { key: "end", type: "end", config: {}, position: 2 },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "condition_operator_invalid" });
+  });
+
+  it("rejects condition branch labels from non-condition steps", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+            position: 0,
+          },
+          { key: "end", type: "end", config: {}, position: 1 },
+        ],
+        connections: [{ from: "trigger", to: "end", type: "condition_met" }],
+      }),
+    ).rejects.toMatchObject({ code: "connection_branch_from_non_condition" });
+  });
+
+  it("rejects duplicate branch labels from the same step", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+            position: 0,
+          },
+          {
+            key: "condition",
+            type: "condition",
+            config: {
+              predicate: {
+                left: "event.plan",
+                operator: "equals",
+                right: "pro",
+              },
+            },
+            position: 1,
+          },
+          { key: "met", type: "end", config: {}, position: 2 },
+          { key: "also_met", type: "end", config: {}, position: 3 },
+        ],
+        connections: [
+          { from: "condition", to: "met", type: "condition_met" },
+          { from: "condition", to: "also_met", type: "condition_met" },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "connection_branch_duplicate" });
+  });
+
   it("rejects trigger event names that use the reserved resend: prefix", async () => {
     const { automationRepo } = await import(
       "../packages/core/src/db/repositories/automationRepo"

@@ -405,7 +405,11 @@ export const contactsToSegments = pgTable(
 
 // ── Automations ─────────────────────────────────────────────────────
 
-export type AutomationConnection = { from: string; to: string };
+export type AutomationConnection = {
+  from: string;
+  to: string;
+  type?: "default" | "condition_met" | "condition_not_met";
+};
 
 export type AutomationStepStateEntry = {
   status:

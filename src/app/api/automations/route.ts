@@ -14,7 +14,7 @@ import { count, desc, inArray } from "drizzle-orm";
 function toStepInputs(
   steps: Array<{
     key: string;
-    type: "trigger" | "delay" | "send_email" | "end";
+    type: AutomationStepInput["type"];
     config?: Record<string, unknown>;
     position?: number;
   }>,

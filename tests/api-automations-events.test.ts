@@ -198,6 +198,126 @@ describe("automation API routes", () => {
     );
   });
 
+  it("creates an automation with a condition branch payload", async () => {
+    mockAutomationCreate.mockResolvedValue({
+      automation: {
+        ...automation,
+        connections: [
+          { from: "trigger", to: "condition" },
+          { from: "condition", to: "met", type: "condition_met" },
+          {
+            from: "condition",
+            to: "not_met",
+            type: "condition_not_met",
+          },
+        ],
+      },
+      steps: [
+        triggerStep,
+        {
+          ...triggerStep,
+          id: "step_condition",
+          key: "condition",
+          type: "condition",
+          config: {
+            predicate: {
+              left: "event.plan",
+              operator: "equals",
+              right: "pro",
+            },
+          },
+          position: 1,
+        },
+      ],
+    });
+    const { POST } = await import("@/app/api/automations/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/automations", {
+        name: "Branching",
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+          },
+          {
+            key: "condition",
+            type: "condition",
+            config: {
+              predicate: {
+                left: "event.plan",
+                operator: "equals",
+                right: "pro",
+              },
+            },
+          },
+          { key: "met", type: "end", config: {} },
+          { key: "not_met", type: "end", config: {} },
+        ],
+        connections: [
+          { from: "trigger", to: "condition" },
+          { from: "condition", to: "met", type: "condition_met" },
+          {
+            from: "condition",
+            to: "not_met",
+            type: "condition_not_met",
+          },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockAutomationCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connections: expect.arrayContaining([
+          { from: "condition", to: "met", type: "condition_met" },
+        ]),
+      }),
+    );
+  });
+
+  it("returns 422 when repository graph validation rejects condition branches", async () => {
+    mockAutomationCreate.mockRejectedValue(
+      new TestAutomationValidationError(
+        "connection condition -> missing references unknown step key",
+        "connection_unknown_step",
+      ),
+    );
+    const { POST } = await import("@/app/api/automations/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/automations", {
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+          },
+          {
+            key: "condition",
+            type: "condition",
+            config: {
+              predicate: {
+                left: "event.plan",
+                operator: "equals",
+                right: "pro",
+              },
+            },
+          },
+        ],
+        connections: [
+          { from: "condition", to: "missing", type: "condition_met" },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "connection_unknown_step",
+    });
+  });
+
   it("rejects invalid automation create payloads with 422", async () => {
     const { POST } = await import("@/app/api/automations/route");
 

@@ -30,7 +30,7 @@ async function loadSteps(automationId: string) {
 function toStepInputs(
   steps: Array<{
     key: string;
-    type: "trigger" | "delay" | "send_email" | "end";
+    type: AutomationStepInput["type"];
     config?: Record<string, unknown>;
     position?: number;
   }>,
@@ -144,8 +144,27 @@ export async function PATCH(
       if (validated.triggerEventName !== undefined) {
         updates.triggerEventName = validated.triggerEventName;
       }
-      if (validated.connections !== undefined)
-        updates.connections = validated.connections;
+      if (validated.connections !== undefined) {
+        const existingSteps = await loadSteps(existing.id);
+        const normalized = automationRepo.validate({
+          name: validated.name ?? existing.name,
+          status:
+            validated.status ??
+            (existing.status as "draft" | "enabled" | "disabled"),
+          triggerEventName:
+            updates.triggerEventName ?? existing.triggerEventName ?? undefined,
+          steps: existingSteps.map((step) => ({
+            key: step.key,
+            type: step.type as AutomationStepInput["type"],
+            config: step.config ?? {},
+            position: step.position,
+          })),
+          connections: validated.connections,
+          userId: auth.userId,
+        });
+        updates.triggerEventName = normalized.triggerEventName;
+        updates.connections = normalized.connections;
+      }
       if (Object.keys(updates).length > 0) {
         await automationRepo.update(existing.id, updates);
       }
