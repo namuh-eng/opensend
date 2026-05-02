@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockInvalidateApiKeyAuthCache = vi.hoisted(() => vi.fn());
+const mockCreateApiKey = vi.hoisted(() => vi.fn());
+const mockDeleteApiKey = vi.hoisted(() => vi.fn());
 const mockGetCachedDomainById = vi.hoisted(() => vi.fn());
 const mockGetCachedDomainIdentity = vi.hoisted(() => vi.fn());
 const mockInvalidateDomainCaches = vi.hoisted(() => vi.fn());
@@ -19,6 +21,14 @@ const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
+}));
+
+vi.mock("@opensend/core", () => ({
+  ApiKeyServiceError: class ApiKeyServiceError extends Error {},
+  createApiKeyService: () => ({
+    createApiKey: mockCreateApiKey,
+    deleteApiKey: mockDeleteApiKey,
+  }),
 }));
 
 vi.mock("@/lib/api-auth", () => ({
@@ -73,13 +83,11 @@ describe("cache invalidation routes", () => {
     });
   });
 
-  it("invalidates new api-key auth entries after create", async () => {
-    mockDb.insert.mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi
-          .fn()
-          .mockResolvedValue([{ id: "created-key", tokenHash: "hash-123" }]),
-      }),
+  it("delegates api-key create through the thin adapter", async () => {
+    mockCreateApiKey.mockResolvedValue({
+      id: "created-key",
+      token: "re_created",
+      tokenHash: "hash-123",
     });
 
     const route = await import("@/app/api/api-keys/route");
@@ -95,7 +103,16 @@ describe("cache invalidation routes", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mockInvalidateApiKeyAuthCache).toHaveBeenCalledWith("hash-123");
+    await expect(response.json()).resolves.toEqual({
+      id: "created-key",
+      token: "re_created",
+    });
+    expect(mockCreateApiKey).toHaveBeenCalledWith({
+      name: "Primary",
+      permission: undefined,
+      domainId: undefined,
+      userId: "user-1",
+    });
   });
 
   it("invalidates domain caches after create", async () => {
@@ -142,19 +159,8 @@ describe("cache invalidation routes", () => {
     });
   });
 
-  it("invalidates cached api-key auth entries on delete", async () => {
-    mockDb.select.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([{ tokenHash: "hash-456" }]),
-        }),
-      }),
-    });
-    mockDb.delete.mockReturnValue({
-      where: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: "key-1" }]),
-      }),
-    });
+  it("delegates api-key delete through the thin adapter", async () => {
+    mockDeleteApiKey.mockResolvedValue({ id: "key-1", tokenHash: "hash-456" });
 
     const route = await import("@/app/api/api-keys/[id]/route");
     const response = await route.DELETE(new Request("http://localhost"), {
@@ -162,7 +168,7 @@ describe("cache invalidation routes", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockInvalidateApiKeyAuthCache).toHaveBeenCalledWith("hash-456");
+    expect(mockDeleteApiKey).toHaveBeenCalledWith("key-1");
   });
 
   it("invalidates domain caches after patch", async () => {
