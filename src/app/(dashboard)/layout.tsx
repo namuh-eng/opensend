@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { Sidebar } from "@/components/sidebar";
+import { isBillingEnabled } from "@/lib/billing";
 import Link from "next/link";
 
 export default function DashboardLayout({
@@ -8,9 +9,10 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const billingEnabled = isBillingEnabled();
   return (
     <div className="flex min-h-screen">
-      <Sidebar />
+      <Sidebar billingEnabled={billingEnabled} />
       <main className="ml-[250px] flex min-h-screen flex-1 flex-col">
         <div className="flex-1 p-6">{children}</div>
         <footer className="flex items-center justify-end gap-4 border-t border-[rgba(176,199,217,0.145)] px-6 py-3">
