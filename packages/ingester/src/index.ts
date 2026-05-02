@@ -2,6 +2,7 @@ import {
   createBackgroundJob,
   createTelemetryContext,
   emailEventRepo,
+  emailService,
   emitCloudWatchMetric,
   getTelemetryCarrier,
   logTelemetry,
@@ -21,6 +22,10 @@ import {
   parseSnsEnvelope,
   verifySnsSignature,
 } from "./sns-message";
+import {
+  StripeWebhookProcessor,
+  buildPaymentFailedEmail,
+} from "./stripe-webhook";
 
 const app = new Hono();
 
@@ -60,6 +65,98 @@ app.post("/jobs/webhooks", async (c) =>
     async () => await webhookDispatcher.dispatchPendingDeliveries(),
   ),
 );
+
+app.post("/webhooks/stripe", async (c) => {
+  const telemetry = createTelemetryContext({
+    service: "ingester",
+    operation: "POST /webhooks/stripe",
+    headers: {
+      traceparent: c.req.header("traceparent"),
+      tracestate: c.req.header("tracestate"),
+      "x-correlation-id": c.req.header("x-correlation-id"),
+    },
+  });
+
+  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  if (!secret) {
+    logTelemetry("warn", "stripe.webhook.secret_missing", telemetry);
+    return c.text("Stripe webhook secret not configured", 503);
+  }
+
+  const notificationFrom =
+    process.env.BILLING_NOTIFICATION_FROM_EMAIL?.trim() ?? null;
+
+  const processor = new StripeWebhookProcessor({
+    secret,
+    notificationFrom,
+    deps: {
+      emailNotifier: notificationFrom
+        ? async ({ to, invoice }) => {
+            const built = buildPaymentFailedEmail({ invoice });
+            await emailService.send({
+              from: notificationFrom,
+              to: [to],
+              subject: built.subject,
+              html: built.html,
+              text: built.text,
+              tags: [
+                { name: "namuh:source", value: "billing" },
+                { name: "namuh:reason", value: "invoice_payment_failed" },
+              ],
+              idempotencyKey: `stripe:invoice_payment_failed:${invoice.invoiceId}`,
+            });
+          }
+        : undefined,
+      log: (level, event, fields) =>
+        logTelemetry(level, event, telemetry, fields),
+    },
+  });
+
+  let rawBody: string;
+  try {
+    rawBody = await c.req.text();
+  } catch (error) {
+    recordTelemetryError(telemetry, "stripe.webhook.body_read_failed", error);
+    return c.text("Invalid request body", 400);
+  }
+
+  try {
+    const outcome = await processor.process({
+      rawBody,
+      signatureHeader: c.req.header("stripe-signature"),
+    });
+
+    emitCloudWatchMetric(telemetry, {
+      metrics: [{ name: "StripeWebhookEvent", value: 1, unit: "Count" }],
+      dimensions: {
+        Service: "ingester",
+        Operation: "stripe.webhook",
+        Outcome: outcome.status,
+      },
+    });
+
+    if (outcome.status === "rejected") {
+      return c.text(outcome.reason, outcome.httpStatus);
+    }
+    return c.json({
+      ok: true,
+      status: outcome.status,
+      event_id: "eventId" in outcome ? outcome.eventId : null,
+      type: "type" in outcome ? outcome.type : null,
+    });
+  } catch (error) {
+    recordTelemetryError(telemetry, "stripe.webhook.failed", error);
+    emitCloudWatchMetric(telemetry, {
+      metrics: [{ name: "StripeWebhookFailed", value: 1, unit: "Count" }],
+      dimensions: {
+        Service: "ingester",
+        Operation: "stripe.webhook",
+        Outcome: "error",
+      },
+    });
+    return c.text("Internal Server Error", 500);
+  }
+});
 
 app.post("/events/ses", async (c) => {
   const telemetry = createTelemetryContext({
