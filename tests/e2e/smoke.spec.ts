@@ -71,11 +71,11 @@ test("footer exposes feedback, help, and docs links", async ({ page }) => {
   await expect(footer).toBeVisible();
   await expect(footer.getByRole("link", { name: "Feedback" })).toHaveAttribute(
     "href",
-    "mailto:feedback@foreverbrowsing.com?subject=Namuh%20Send%20Feedback",
+    "mailto:feedback@foreverbrowsing.com?subject=OpenSend%20Feedback",
   );
   await expect(footer.getByRole("link", { name: "Help" })).toHaveAttribute(
     "href",
-    "mailto:help@foreverbrowsing.com?subject=Namuh%20Send%20Help",
+    "mailto:help@foreverbrowsing.com?subject=OpenSend%20Help",
   );
   await expect(footer.getByRole("link", { name: "Docs" })).toHaveAttribute(
     "href",

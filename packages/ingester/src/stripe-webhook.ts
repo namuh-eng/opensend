@@ -15,8 +15,8 @@ import {
   stripeCustomerRepo,
   stripeEventRepo,
   subscriptionRepo,
-} from "@namuh/core";
-import { db, user } from "@namuh/core";
+} from "@opensend/core";
+import { db, user } from "@opensend/core";
 import { eq } from "drizzle-orm";
 
 export type StripeWebhookOutcome =

@@ -4,7 +4,7 @@ import {
   createCustomEventSchema,
   listEventsQuerySchema,
 } from "@/lib/validation/events";
-import { AutomationValidationError, customEventRepo } from "@namuh/core";
+import { AutomationValidationError, customEventRepo } from "@opensend/core";
 
 function isUniqueViolation(err: unknown): boolean {
   return (

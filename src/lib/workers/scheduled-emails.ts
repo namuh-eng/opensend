@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { emails } from "@/lib/db/schema";
-import { createBackgroundJob, publishBackgroundJob } from "@namuh/core";
+import { createBackgroundJob, publishBackgroundJob } from "@opensend/core";
 import { and, eq, lte } from "drizzle-orm";
 
 /**

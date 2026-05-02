@@ -18,7 +18,7 @@ vi.mock("@/lib/ses", () => ({
   sendEmail: mockSendEmail,
 }));
 
-vi.mock("@namuh/core", () => {
+vi.mock("@opensend/core", () => {
   const testTraceparent =
     "00-11111111111111111111111111111111-2222222222222222-01";
   const getHeader = (

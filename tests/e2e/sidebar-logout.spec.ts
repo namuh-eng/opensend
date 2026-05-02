@@ -48,7 +48,7 @@ test("signed-in dashboard user can sign out and protected routes redirect to aut
   ).toBeDisabled();
   await expect(page).toHaveURL(/\/auth$/);
   await expect(
-    page.getByRole("heading", { name: "Sign in to namuh" }),
+    page.getByRole("heading", { name: "Sign in to OpenSend" }),
   ).toBeVisible();
 
   await page.goto("/emails");

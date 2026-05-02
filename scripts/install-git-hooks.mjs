@@ -33,4 +33,4 @@ execFileSync("git", ["config", "core.hooksPath", ".githooks"], {
   stdio: "ignore",
 });
 
-console.log("✓ Installed Namuh Send git hooks (.githooks)");
+console.log("✓ Installed OpenSend git hooks (.githooks)");

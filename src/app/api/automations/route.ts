@@ -6,7 +6,7 @@ import {
   type AutomationStepInput,
   AutomationValidationError,
   automationRepo,
-} from "@namuh/core";
+} from "@opensend/core";
 
 function toStepInputs(
   steps: Array<{

@@ -11,7 +11,7 @@ import {
   automationRepo,
   automationRunRepo,
   customEventDeliveryRepo,
-} from "@namuh/core";
+} from "@opensend/core";
 import { eq } from "drizzle-orm";
 
 async function resolveContactId(input: {

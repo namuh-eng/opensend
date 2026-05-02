@@ -1,4 +1,4 @@
-import type { BillingBackend } from "@namuh/core";
+import type { BillingBackend } from "@opensend/core";
 
 const STRIPE_REQUIRED_KEYS = ["STRIPE_SECRET_KEY"] as const;
 

@@ -69,7 +69,7 @@ export default function UnsubscribePage() {
 
         <div className="mt-12 pt-6 border-t border-white/[0.04]">
           <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-medium">
-            Powered by Namuh Send
+            Powered by OpenSend
           </p>
         </div>
       </div>

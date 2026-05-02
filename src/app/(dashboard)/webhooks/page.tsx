@@ -1,7 +1,7 @@
 import { WebhooksList } from "@/components/webhooks-list";
 import { db } from "@/lib/db";
 import { webhooks } from "@/lib/db/schema";
-import { SUPPORTED_WEBHOOK_EVENT_TYPES } from "@namuh/core/src/webhook-events";
+import { SUPPORTED_WEBHOOK_EVENT_TYPES } from "@opensend/core/src/webhook-events";
 import { desc } from "drizzle-orm";
 
 export default async function WebhooksPage() {

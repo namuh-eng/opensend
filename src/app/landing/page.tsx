@@ -36,7 +36,7 @@ const FEATURES: Array<{ title: string; body: string }> = [
   },
   {
     title: "TypeScript SDK",
-    body: "First-class `namuh-send` package on npm with typed payloads, retries, and idempotency keys.",
+    body: "First-class `@opensend/sdk` package on npm with typed payloads, retries, and idempotency keys.",
   },
   {
     title: "Domain verification",

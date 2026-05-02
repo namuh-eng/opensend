@@ -22,7 +22,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/emails",
         description: "Send an email",
-        curl: `curl -X POST https://api.namuh-send.com/api/emails \\
+        curl: `curl -X POST https://api.opensend.com/api/emails \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -36,21 +36,21 @@ const API_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/emails",
         description: "List all emails with pagination",
-        curl: `curl https://api.namuh-send.com/api/emails \\
+        curl: `curl https://api.opensend.com/api/emails \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
       {
         method: "GET",
         path: "/api/emails/:id",
         description: "Retrieve a specific email by ID",
-        curl: `curl https://api.namuh-send.com/api/emails/EMAIL_ID \\
+        curl: `curl https://api.opensend.com/api/emails/EMAIL_ID \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
       {
         method: "POST",
         path: "/api/emails/batch",
         description: "Send a batch of emails",
-        curl: `curl -X POST https://api.namuh-send.com/api/emails/batch \\
+        curl: `curl -X POST https://api.opensend.com/api/emails/batch \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '[
@@ -67,7 +67,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/domains",
         description: "Add a new domain",
-        curl: `curl -X POST https://api.namuh-send.com/api/domains \\
+        curl: `curl -X POST https://api.opensend.com/api/domains \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "mail.example.com" }'`,
@@ -76,28 +76,28 @@ const API_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/domains",
         description: "List all domains",
-        curl: `curl https://api.namuh-send.com/api/domains \\
+        curl: `curl https://api.opensend.com/api/domains \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
       {
         method: "GET",
         path: "/api/domains/:id",
         description: "Retrieve a domain by ID",
-        curl: `curl https://api.namuh-send.com/api/domains/DOMAIN_ID \\
+        curl: `curl https://api.opensend.com/api/domains/DOMAIN_ID \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
       {
         method: "DELETE",
         path: "/api/domains/:id",
         description: "Delete a domain",
-        curl: `curl -X DELETE https://api.namuh-send.com/api/domains/DOMAIN_ID \\
+        curl: `curl -X DELETE https://api.opensend.com/api/domains/DOMAIN_ID \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
       {
         method: "POST",
         path: "/api/domains/:id/auto-configure",
         description: "Auto-configure DNS records for a domain",
-        curl: `curl -X POST https://api.namuh-send.com/api/domains/DOMAIN_ID/auto-configure \\
+        curl: `curl -X POST https://api.opensend.com/api/domains/DOMAIN_ID/auto-configure \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
     ],
@@ -109,7 +109,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/api-keys",
         description: "Create a new API key",
-        curl: `curl -X POST https://api.namuh-send.com/api/api-keys \\
+        curl: `curl -X POST https://api.opensend.com/api/api-keys \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Production Key" }'`,
@@ -118,14 +118,14 @@ const API_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/api-keys",
         description: "List all API keys",
-        curl: `curl https://api.namuh-send.com/api/api-keys \\
+        curl: `curl https://api.opensend.com/api/api-keys \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
       {
         method: "DELETE",
         path: "/api/api-keys/:id",
         description: "Delete an API key",
-        curl: `curl -X DELETE https://api.namuh-send.com/api/api-keys/KEY_ID \\
+        curl: `curl -X DELETE https://api.opensend.com/api/api-keys/KEY_ID \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
     ],
@@ -137,7 +137,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/templates",
         description: "Create a new template",
-        curl: `curl -X POST https://api.namuh-send.com/api/templates \\
+        curl: `curl -X POST https://api.opensend.com/api/templates \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Welcome Email", "html": "<p>Welcome {{name}}</p>" }'`,
@@ -146,21 +146,21 @@ const API_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/templates",
         description: "List all templates",
-        curl: `curl https://api.namuh-send.com/api/templates \\
+        curl: `curl https://api.opensend.com/api/templates \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
       {
         method: "GET",
         path: "/api/templates/:id",
         description: "Retrieve a template by ID",
-        curl: `curl https://api.namuh-send.com/api/templates/TEMPLATE_ID \\
+        curl: `curl https://api.opensend.com/api/templates/TEMPLATE_ID \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
       {
         method: "PATCH",
         path: "/api/templates/:id",
         description: "Update a template",
-        curl: `curl -X PATCH https://api.namuh-send.com/api/templates/TEMPLATE_ID \\
+        curl: `curl -X PATCH https://api.opensend.com/api/templates/TEMPLATE_ID \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Updated Template" }'`,
@@ -169,7 +169,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "DELETE",
         path: "/api/templates/:id",
         description: "Delete a template",
-        curl: `curl -X DELETE https://api.namuh-send.com/api/templates/TEMPLATE_ID \\
+        curl: `curl -X DELETE https://api.opensend.com/api/templates/TEMPLATE_ID \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
     ],
@@ -181,7 +181,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/contacts",
         description: "Create a new contact",
-        curl: `curl -X POST https://api.namuh-send.com/api/contacts \\
+        curl: `curl -X POST https://api.opensend.com/api/contacts \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "email": "user@example.com", "first_name": "Jane" }'`,
@@ -190,7 +190,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/contacts",
         description: "List all contacts",
-        curl: `curl https://api.namuh-send.com/api/contacts \\
+        curl: `curl https://api.opensend.com/api/contacts \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
     ],
@@ -202,7 +202,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/broadcasts",
         description: "Create a new broadcast",
-        curl: `curl -X POST https://api.namuh-send.com/api/broadcasts \\
+        curl: `curl -X POST https://api.opensend.com/api/broadcasts \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "March Newsletter" }'`,
@@ -211,14 +211,14 @@ const API_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/broadcasts",
         description: "List all broadcasts",
-        curl: `curl https://api.namuh-send.com/api/broadcasts \\
+        curl: `curl https://api.opensend.com/api/broadcasts \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
       {
         method: "GET",
         path: "/api/broadcasts/:id",
         description: "Retrieve a broadcast by ID",
-        curl: `curl https://api.namuh-send.com/api/broadcasts/BROADCAST_ID \\
+        curl: `curl https://api.opensend.com/api/broadcasts/BROADCAST_ID \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
     ],
@@ -230,7 +230,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/segments",
         description: "Create a new segment",
-        curl: `curl -X POST https://api.namuh-send.com/api/segments \\
+        curl: `curl -X POST https://api.opensend.com/api/segments \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Active Users" }'`,
@@ -239,7 +239,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/segments",
         description: "List all segments",
-        curl: `curl https://api.namuh-send.com/api/segments \\
+        curl: `curl https://api.opensend.com/api/segments \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
     ],
@@ -251,7 +251,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/topics",
         description: "Create a new topic",
-        curl: `curl -X POST https://api.namuh-send.com/api/topics \\
+        curl: `curl -X POST https://api.opensend.com/api/topics \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Product Updates" }'`,
@@ -260,7 +260,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/topics",
         description: "List all topics",
-        curl: `curl https://api.namuh-send.com/api/topics \\
+        curl: `curl https://api.opensend.com/api/topics \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
     ],
@@ -272,7 +272,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/properties",
         description: "Create a new property",
-        curl: `curl -X POST https://api.namuh-send.com/api/properties \\
+        curl: `curl -X POST https://api.opensend.com/api/properties \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "plan", "type": "string" }'`,
@@ -281,7 +281,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/properties",
         description: "List all properties",
-        curl: `curl https://api.namuh-send.com/api/properties \\
+        curl: `curl https://api.opensend.com/api/properties \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
     ],
@@ -364,7 +364,7 @@ export default function DocsPage() {
             All endpoints require a Bearer token in the Authorization header.
             Base URL:{" "}
             <code className="px-1.5 py-0.5 bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded text-[13px] text-[#F0F0F0] font-mono">
-              https://api.namuh-send.com
+              https://api.opensend.com
             </code>
           </p>
         </div>

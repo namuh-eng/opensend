@@ -11,7 +11,7 @@ import {
   logTelemetry,
   publishBackgroundJob,
   recordTelemetryError,
-} from "@namuh/core";
+} from "@opensend/core";
 import { eq } from "drizzle-orm";
 
 // ── Helpers ───────────────────────────────────────────────────────

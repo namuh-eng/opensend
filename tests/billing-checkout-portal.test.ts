@@ -12,7 +12,7 @@ vi.mock("@/lib/api-auth", () => ({
   getServerSession: mockGetServerSession,
 }));
 
-vi.mock("@namuh/core", () => ({
+vi.mock("@opensend/core", () => ({
   planRepo: {
     findById: mockPlanFindById,
   },

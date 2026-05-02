@@ -397,7 +397,7 @@ class Events {
   }
 }
 
-class NamuhSend {
+class OpenSend {
   public readonly emails: Emails;
   public readonly domains: Domains;
   public readonly apiKeys: ApiKeys;
@@ -421,7 +421,7 @@ class NamuhSend {
   }
 }
 
-export { NamuhSend };
+export { OpenSend };
 export type {
   SDKOptions,
   ApiResponse,

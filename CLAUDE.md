@@ -1,9 +1,9 @@
-# Namuh Send
+# OpenSend
 
 ## What This Is
 Open-source, self-hostable email platform. REST API, TypeScript SDK, React email templates, domain verification (DKIM/SPF/DMARC), webhooks, broadcasts, contacts/segments/topics, and a full admin dashboard. Resend-compatible surface that runs on your own AWS SES quota.
 
-- Repo: `github.com/namuh-eng/namuh-send`
+- Repo: `github.com/namuh-eng/opensend`
 - License: Elastic License 2.0 (ELv2)
 - Primary deploy: Docker Compose (Dockerfile is multi-stage and runs on App Runner, Cloud Run, Fly, Railway, etc.)
 
@@ -27,9 +27,9 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
   - `src/components/` — React UI components
   - `src/lib/` — `auth.ts`, `auth-client.ts`, `api-auth.ts`, `db/`, `ses.ts`, `s3.ts`, `cloudflare.ts`, `webhook-signing.ts`, `date-range.ts`
   - `src/middleware.ts` — per-route rate limiting
-- `packages/core/` — `@namuh/core` — shared DB client, repositories, DTOs, webhook helpers
-- `packages/ingester/` — `@namuh/ingester` — Hono webhook dispatcher for SES/SNS events and scheduled email worker
-- `packages/sdk/` — `namuh-send` — public TypeScript SDK published to npm
+- `packages/core/` — `@opensend/core` — shared DB client, repositories, DTOs, webhook helpers
+- `packages/ingester/` — `@opensend/ingester` — Hono webhook dispatcher for SES/SNS events and scheduled email worker
+- `packages/sdk/` — `@opensend/sdk` — public TypeScript SDK published to npm
 - `tests/` — Vitest unit tests
 - `tests/e2e/` — Playwright E2E tests
 - `drizzle/` — generated migration SQL

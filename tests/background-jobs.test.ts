@@ -79,7 +79,7 @@ describe("background job publisher", () => {
   it("publishes SQS jobs and optional EventBridge lifecycle events", async () => {
     process.env.BACKGROUND_JOBS_QUEUE_URL =
       "https://sqs.us-east-1.amazonaws.com/123/background.fifo";
-    process.env.BACKGROUND_JOBS_EVENT_BUS_NAME = "namuh-send-jobs";
+    process.env.BACKGROUND_JOBS_EVENT_BUS_NAME = "opensend-jobs";
     mockSqsSend.mockResolvedValue({ MessageId: "sqs-message-1" });
     mockEventBridgeSend.mockResolvedValue({ Entries: [{ EventId: "evt-1" }] });
 
@@ -145,8 +145,8 @@ describe("background job publisher", () => {
     expect(mockPutEventsCommand).toHaveBeenCalledWith({
       Entries: [
         expect.objectContaining({
-          EventBusName: "namuh-send-jobs",
-          Source: "namuh-send.background-jobs",
+          EventBusName: "opensend-jobs",
+          Source: "opensend.background-jobs",
           DetailType: "webhook.dispatch",
         }),
       ],

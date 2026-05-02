@@ -21,7 +21,7 @@ export default function AuthPage() {
             n
           </div>
           <h1 className="text-xl font-semibold text-[#F0F0F0]">
-            Sign in to namuh
+            Sign in to OpenSend
           </h1>
           <p className="text-[13px] text-[#A1A4A5] mt-1">
             Continue with your Google account

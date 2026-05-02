@@ -11,7 +11,7 @@ import {
   logTelemetry,
   publishBackgroundJob,
   recordTelemetryError,
-} from "@namuh/core";
+} from "@opensend/core";
 import { and, desc, eq, gt, lt } from "drizzle-orm";
 import { type ZodError, flattenError } from "zod";
 

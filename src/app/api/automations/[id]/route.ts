@@ -7,7 +7,7 @@ import {
   type AutomationStepInput,
   AutomationValidationError,
   automationRepo,
-} from "@namuh/core";
+} from "@opensend/core";
 import { and, asc, eq } from "drizzle-orm";
 
 async function findAutomationForCaller(id: string, userId: string | null) {

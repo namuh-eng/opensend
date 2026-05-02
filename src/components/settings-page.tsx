@@ -34,7 +34,7 @@ function isUsageData(value: unknown): value is UsageData {
 }
 
 const SMTP_CREDENTIALS = [
-  { label: "Host", value: "smtp.namuh-send.com" },
+  { label: "Host", value: "smtp.opensend.com" },
   { label: "Port", value: "465" },
   { label: "Username", value: "resend" },
   { label: "Password", value: "YOUR_API_KEY" },
@@ -152,7 +152,7 @@ export function SettingsPage() {
               EXAMPLE CONFIGURATION
             </p>
             <pre className="text-[13px] text-[#F0F0F0] font-mono whitespace-pre-wrap">
-              {`SMTP_HOST=smtp.namuh-send.com
+              {`SMTP_HOST=smtp.opensend.com
 SMTP_PORT=465
 SMTP_USER=resend
 SMTP_PASS=re_YOUR_API_KEY`}
@@ -208,7 +208,7 @@ SMTP_PASS=re_YOUR_API_KEY`}
                   Successfully unsubscribed
                 </div>
                 <p className="text-gray-400 text-xs mt-6">
-                  Powered by Namuh Send
+                  Powered by OpenSend
                 </p>
               </div>
             </div>

@@ -1,7 +1,7 @@
 import {
   SUPPORTED_WEBHOOK_EVENT_TYPES,
   type SupportedWebhookEventType,
-} from "@namuh/core/src/webhook-events";
+} from "@opensend/core/src/webhook-events";
 import { z } from "zod";
 
 export const webhookStatusSchema = z.enum(["active", "disabled"]);

@@ -8,7 +8,7 @@ const mockFindWebhookById = vi.fn();
 const mockFindEventById = vi.fn();
 const mockSignWebhookPayload = vi.fn();
 
-vi.mock("@namuh/core", () => ({
+vi.mock("@opensend/core", () => ({
   emailEventRepo: {
     findById: mockFindEventById,
   },

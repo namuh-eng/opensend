@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { NamuhSend } from "../packages/sdk/src";
+import { OpenSend } from "../packages/sdk/src";
 
-describe("NamuhSend SDK", () => {
+describe("OpenSend SDK", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it("requires an explicit baseUrl", () => {
-    expect(() => new NamuhSend("re_test", {} as never)).toThrow(
+    expect(() => new OpenSend("re_test", {} as never)).toThrow(
       "A non-empty baseUrl is required",
     );
   });
@@ -22,7 +22,7 @@ describe("NamuhSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new NamuhSend("re_test", {
+    const client = new OpenSend("re_test", {
       baseUrl: "https://api.example.com/",
     });
 
@@ -58,7 +58,7 @@ describe("NamuhSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new NamuhSend("re_test", {
+    const client = new OpenSend("re_test", {
       baseUrl: "https://api.example.com",
     });
 
@@ -87,7 +87,7 @@ describe("NamuhSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new NamuhSend("re_test", {
+    const client = new OpenSend("re_test", {
       baseUrl: "https://api.example.com",
     });
 
@@ -106,7 +106,7 @@ describe("NamuhSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new NamuhSend("re_test", {
+    const client = new OpenSend("re_test", {
       baseUrl: "https://api.example.com",
     });
 
@@ -128,7 +128,7 @@ describe("NamuhSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new NamuhSend("re_test", {
+    const client = new OpenSend("re_test", {
       baseUrl: "https://api.example.com",
     });
 

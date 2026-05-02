@@ -20,7 +20,7 @@ import {
   publishBackgroundJob,
   recordTelemetryError,
   startTelemetrySpan,
-} from "@namuh/core";
+} from "@opensend/core";
 import { webhookDispatcher } from "./dispatcher";
 
 const DEFAULT_MAX_MESSAGES = 5;

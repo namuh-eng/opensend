@@ -1,7 +1,7 @@
 "use client";
 
 import { StatusBadge } from "@/components/status-badge";
-import type { SupportedWebhookEventType } from "@namuh/core/src/webhook-events";
+import type { SupportedWebhookEventType } from "@opensend/core/src/webhook-events";
 
 interface Webhook {
   id: string;

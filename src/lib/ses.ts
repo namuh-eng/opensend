@@ -22,7 +22,7 @@ const useDevStub = process.env.NODE_ENV === "development" && !hasAwsCredentials;
 
 if (useDevStub) {
   console.log(
-    "[namuh-send] AWS credentials not found — emails will be logged to console instead of sent via SES.",
+    "[opensend] AWS credentials not found — emails will be logged to console instead of sent via SES.",
   );
 }
 
