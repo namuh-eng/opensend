@@ -109,9 +109,11 @@ export async function middleware(request: NextRequest) {
 
   // Protect non-API page routes with session check
   if (!pathname.startsWith("/api/")) {
-    // Allow auth page and static assets
+    // Allow auth page, public landing page, and static assets
     if (
       pathname === "/auth" ||
+      pathname === "/landing" ||
+      pathname.startsWith("/landing/") ||
       pathname.startsWith("/_next/") ||
       pathname.startsWith("/favicon")
     ) {
