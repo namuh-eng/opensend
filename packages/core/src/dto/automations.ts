@@ -201,7 +201,7 @@ const UNIT_TO_SECONDS: Record<string, number> = {
   weeks: 604800,
 };
 
-export function parseDurationToSeconds(input: string): number {
+function parseDurationSecondsRaw(input: string): number {
   if (typeof input !== "string") {
     throw new AutomationValidationError(
       "delay duration must be a string",
@@ -227,7 +227,11 @@ export function parseDurationToSeconds(input: string): number {
     );
   }
 
-  const seconds = Math.round(amount * factor);
+  return Math.round(amount * factor);
+}
+
+export function parseDurationToSeconds(input: string): number {
+  const seconds = parseDurationSecondsRaw(input);
   if (seconds > MAX_DELAY_SECONDS) {
     throw new AutomationValidationError(
       `delay duration "${input}" exceeds the ${MAX_DELAY_DAYS}-day cap`,
@@ -235,6 +239,10 @@ export function parseDurationToSeconds(input: string): number {
     );
   }
   return seconds;
+}
+
+export function parseDurationToCappedSeconds(input: string): number {
+  return Math.min(parseDurationSecondsRaw(input), MAX_DELAY_SECONDS);
 }
 
 export function normalizeDelayConfig(
