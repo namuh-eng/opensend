@@ -4,6 +4,7 @@ const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockInvalidateApiKeyAuthCache = vi.hoisted(() => vi.fn());
 const mockCreateApiKey = vi.hoisted(() => vi.fn());
 const mockDeleteApiKey = vi.hoisted(() => vi.fn());
+const mockCreateDomain = vi.hoisted(() => vi.fn());
 const mockGetCachedDomainById = vi.hoisted(() => vi.fn());
 const mockGetCachedDomainIdentity = vi.hoisted(() => vi.fn());
 const mockInvalidateDomainCaches = vi.hoisted(() => vi.fn());
@@ -28,6 +29,9 @@ vi.mock("@opensend/core", () => ({
   createApiKeyService: () => ({
     createApiKey: mockCreateApiKey,
     deleteApiKey: mockDeleteApiKey,
+  }),
+  createDomainService: () => ({
+    createDomain: mockCreateDomain,
   }),
 }));
 
@@ -81,6 +85,7 @@ describe("cache invalidation routes", () => {
       domain: null,
       userId: "user-1",
     });
+    mockCreateDomain.mockReset();
   });
 
   it("delegates api-key create through the thin adapter", async () => {
@@ -115,29 +120,19 @@ describe("cache invalidation routes", () => {
     });
   });
 
-  it("invalidates domain caches after create", async () => {
-    mockCreateDomainIdentity.mockResolvedValue({
-      dkimTokens: ["a", "b", "c"],
-      status: "PENDING",
-    });
-    mockDb.insert.mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([
-          {
-            id: VALID_DOMAIN_ID,
-            name: "example.com",
-            status: "not_started",
-            region: "us-east-1",
-            records: [],
-            trackOpens: false,
-            trackClicks: false,
-            trackingSubdomain: null,
-            tls: "opportunistic",
-            capabilities: [{ name: "sending", enabled: true }],
-            createdAt: new Date("2026-04-28T00:00:00.000Z"),
-          },
-        ]),
-      }),
+  it("delegates domain create through the thin adapter", async () => {
+    mockCreateDomain.mockResolvedValue({
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      status: "not_started",
+      region: "us-east-1",
+      records: [],
+      trackOpens: false,
+      trackClicks: false,
+      trackingSubdomain: null,
+      tls: "opportunistic",
+      capabilities: [{ name: "sending", enabled: true }],
+      createdAt: new Date("2026-04-28T00:00:00.000Z"),
     });
 
     const route = await import("@/app/api/domains/route");
@@ -148,14 +143,21 @@ describe("cache invalidation routes", () => {
           authorization: "Bearer key",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "example.com" }),
+        body: JSON.stringify({ name: "Example.COM" }),
       }),
     );
 
     expect(response.status).toBe(201);
-    expect(mockInvalidateDomainCaches).toHaveBeenCalledWith({
-      id: VALID_DOMAIN_ID,
-      name: "example.com",
+    expect(mockCreateDomain).toHaveBeenCalledWith({
+      name: "Example.COM",
+      region: "us-east-1",
+      customReturnPath: undefined,
+      openTracking: undefined,
+      clickTracking: undefined,
+      trackingSubdomain: undefined,
+      tls: "opportunistic",
+      capabilities: undefined,
+      userId: "user-1",
     });
   });
 

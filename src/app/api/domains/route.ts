@@ -1,19 +1,23 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { checkDomainQuota, quotaExceededResponse } from "@/lib/billing/quota";
-import { db } from "@/lib/db";
-import { domains } from "@/lib/db/schema";
 import { invalidateDomainCaches } from "@/lib/domain-cache";
 import { createDomainIdentity } from "@/lib/ses";
 import { createDomainSchema } from "@/lib/validation/domains";
-import { and, desc, lt } from "drizzle-orm";
-import { NextResponse } from "next/server";
+import { createDomainService } from "@opensend/core";
 
-const defaultCapabilities = [
-  { name: "sending", enabled: true },
-  { name: "receiving", enabled: false },
-];
+function domainService() {
+  return createDomainService({
+    createDomainIdentity,
+    invalidateDomainCaches,
+  });
+}
 
-export async function POST(request: Request) {
+function mapDomainError(error: unknown, fallback: string): Response {
+  console.error(`${fallback}:`, error);
+  return Response.json({ error: fallback }, { status: 500 });
+}
+
+export async function POST(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
 
@@ -21,76 +25,37 @@ export async function POST(request: Request) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   const result = createDomainSchema.safeParse(body);
   if (!result.success) {
-    return NextResponse.json(
+    return Response.json(
       { error: "Validation failed", details: result.error.flatten() },
       { status: 422 },
     );
   }
 
   try {
-    const validated = result.data;
-    const domainName = validated.name.toLowerCase();
-
     const quota = await checkDomainQuota(auth.userId);
     if (!quota.ok) {
       return quotaExceededResponse(quota.info);
     }
 
-    const identity = await createDomainIdentity(domainName);
+    const validated = result.data;
+    const row = await domainService().createDomain({
+      name: validated.name,
+      region: validated.region,
+      customReturnPath: validated.custom_return_path,
+      openTracking: validated.open_tracking,
+      clickTracking: validated.click_tracking,
+      trackingSubdomain: validated.tracking_subdomain,
+      tls: validated.tls,
+      capabilities: validated.capabilities,
+      userId: auth.userId,
+    });
 
-    const dkimRecords = identity.dkimTokens.map((token) => ({
-      type: "CNAME",
-      name: `${token}._domainkey.${domainName}`,
-      value: `${token}.dkim.amazonses.com`,
-      status: "pending" as const,
-      ttl: "Auto",
-    }));
-
-    const spfRecord = {
-      type: "TXT",
-      name: domainName,
-      value: "v=spf1 include:amazonses.com ~all",
-      status: "pending" as const,
-      ttl: "Auto",
-    };
-
-    const mxRecord = {
-      type: "MX",
-      name: domainName,
-      value: `feedback-smtp.${validated.region}.amazonses.com`,
-      status: "pending" as const,
-      ttl: "Auto",
-      priority: 10,
-    };
-
-    const allRecords = [...dkimRecords, spfRecord, mxRecord];
-
-    const [row] = await db
-      .insert(domains)
-      .values({
-        name: domainName,
-        region: validated.region,
-        status: "not_started",
-        dkimTokens: identity.dkimTokens,
-        records: allRecords,
-        customReturnPath: validated.custom_return_path || null,
-        trackOpens: validated.open_tracking ?? false,
-        trackClicks: validated.click_tracking ?? false,
-        trackingSubdomain: validated.tracking_subdomain || null,
-        tls: validated.tls,
-        capabilities: validated.capabilities || defaultCapabilities,
-        userId: auth.userId,
-      })
-      .returning();
-
-    await invalidateDomainCaches({ id: row.id, name: row.name });
-
-    return NextResponse.json(
+    return Response.json(
       {
         object: "domain",
         id: row.id,
@@ -108,44 +73,24 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
-    console.error("Failed to create domain:", error);
-    return NextResponse.json(
-      { error: "Failed to create domain" },
-      { status: 500 },
-    );
+    return mapDomainError(error, "Failed to create domain");
   }
 }
 
-export async function GET(request: Request) {
+export async function GET(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
 
   const url = new URL(request.url);
-  const limit = Math.min(
-    Math.max(Number(url.searchParams.get("limit")) || 20, 1),
-    100,
-  );
+  const limit = Number(url.searchParams.get("limit")) || 20;
   const after = url.searchParams.get("after") || "";
 
   try {
-    const conditions = [];
-    if (after) {
-      conditions.push(lt(domains.id, after));
-    }
+    const result = await domainService().listDomains({ limit, after });
 
-    const results = await db
-      .select()
-      .from(domains)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(domains.id))
-      .limit(limit + 1);
-
-    const hasMore = results.length > limit;
-    const rows = hasMore ? results.slice(0, limit) : results;
-
-    return NextResponse.json({
+    return Response.json({
       object: "list",
-      data: rows.map((r) => ({
+      data: result.data.map((r) => ({
         id: r.id,
         name: r.name,
         status: r.status,
@@ -153,13 +98,9 @@ export async function GET(request: Request) {
         capabilities: r.capabilities,
         created_at: r.createdAt,
       })),
-      has_more: hasMore,
+      has_more: result.hasMore,
     });
   } catch (error) {
-    console.error("Failed to fetch domains:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch domains" },
-      { status: 500 },
-    );
+    return mapDomainError(error, "Failed to fetch domains");
   }
 }
