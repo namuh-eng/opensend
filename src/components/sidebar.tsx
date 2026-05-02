@@ -194,6 +194,27 @@ const NAV_ITEMS = [
     ),
   },
   {
+    label: "Billing",
+    href: "/settings/billing",
+    requiresBilling: true,
+    icon: (
+      <svg
+        aria-hidden="true"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect width="20" height="14" x="2" y="5" rx="2" />
+        <line x1="2" x2="22" y1="10" y2="10" />
+      </svg>
+    ),
+  },
+  {
     label: "Settings",
     href: "/settings",
     icon: (
@@ -215,7 +236,11 @@ const NAV_ITEMS = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  billingEnabled?: boolean;
+}
+
+export function Sidebar({ billingEnabled = false }: SidebarProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = authClient.useSession();
@@ -276,7 +301,9 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 py-2 px-2 overflow-y-auto">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter(
+          (item) => billingEnabled || !item.requiresBilling,
+        ).map((item) => {
           const isActive =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
