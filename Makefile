@@ -50,9 +50,8 @@ db-push:
 # One-command local setup (requires Docker)
 setup:
 	@test -f .env || (cp .env.example .env && echo "  ✓ Created .env from .env.example")
-	@node -e "const fs=require('fs'); const crypto=require('crypto'); const path='.env'; let env=fs.readFileSync(path,'utf8'); if(/^DASHBOARD_KEY=$$/m.test(env)){ env=env.replace(/^DASHBOARD_KEY=$$/m, 'DASHBOARD_KEY='+crypto.randomUUID()); fs.writeFileSync(path, env); console.log('  ✓ Generated DASHBOARD_KEY in .env'); }"
 	@echo "→ Starting Postgres..." && docker compose up postgres -d
-	@echo "→ Waiting for Postgres..." && until docker compose exec -T postgres pg_isready -U namuh >/dev/null 2>&1; do sleep 1; done && echo "  ✓ Postgres is ready"
+	@echo "→ Waiting for Postgres..." && until docker compose exec -T postgres pg_isready -U opensend >/dev/null 2>&1; do sleep 1; done && echo "  ✓ Postgres is ready"
 	@echo "→ Installing dependencies and git hooks..." && bun install
 	@echo "→ Pushing schema..." && bunx drizzle-kit push --config drizzle.config.ts
 	@echo "→ Seeding database..." && bunx tsx scripts/seed.ts
