@@ -13,7 +13,7 @@ import {
   automationRunRepo,
   emailService,
   parseDurationToCappedSeconds,
-} from "@namuh/core";
+} from "@opensend/core";
 import { asc, eq } from "drizzle-orm";
 
 type AutomationRun = typeof automationRuns.$inferSelect;
