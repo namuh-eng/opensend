@@ -37,6 +37,51 @@ export type SendEmailPayload = EmailOptions & {
 };
 export type CreateDomainPayload = DomainOptions;
 
+export interface AutomationStepPayload {
+  key: string;
+  type: "trigger" | "delay" | "send_email" | "end";
+  config?: Record<string, unknown>;
+  position?: number;
+}
+
+export interface AutomationConnectionPayload {
+  from: string;
+  to: string;
+}
+
+export interface CreateAutomationPayload {
+  name?: string;
+  status?: "draft" | "enabled" | "disabled";
+  trigger_event_name?: string;
+  triggerEventName?: string;
+  steps: AutomationStepPayload[];
+  connections?: AutomationConnectionPayload[];
+}
+
+export type UpdateAutomationPayload = Partial<CreateAutomationPayload>;
+
+export interface SendEventPayload {
+  event: string;
+  contact_id?: string;
+  contactId?: string;
+  email?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface CreateEventPayload {
+  name: string;
+  schema?: Record<string, unknown>;
+}
+
+export interface ListOptions {
+  limit?: number;
+  after?: string;
+}
+
+export interface AutomationRunListOptions extends ListOptions {
+  status?: string;
+}
+
 function normalizeBaseUrl(baseUrl?: string): string {
   if (!baseUrl?.trim()) {
     throw new Error("A non-empty baseUrl is required");
@@ -262,11 +307,103 @@ class Contacts {
   }
 }
 
+class Automations {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(
+    payload: CreateAutomationPayload,
+  ): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>("POST", "/api/automations", payload);
+  }
+
+  async list(
+    options: ListOptions & { status?: string } = {},
+  ): Promise<ApiResponse<unknown>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.status) params.set("status", options.status);
+    const query = params.toString();
+    return this.http.request<unknown>(
+      "GET",
+      query ? `/api/automations?${query}` : "/api/automations",
+    );
+  }
+
+  async get(id: string): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>("GET", `/api/automations/${id}`);
+  }
+
+  async update(
+    id: string,
+    payload: UpdateAutomationPayload,
+  ): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>(
+      "PATCH",
+      `/api/automations/${id}`,
+      payload,
+    );
+  }
+
+  async delete(id: string): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>("DELETE", `/api/automations/${id}`);
+  }
+
+  async listRuns(
+    id: string,
+    options: AutomationRunListOptions = {},
+  ): Promise<ApiResponse<unknown>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.status) params.set("status", options.status);
+    const query = params.toString();
+    return this.http.request<unknown>(
+      "GET",
+      query
+        ? `/api/automations/${id}/runs?${query}`
+        : `/api/automations/${id}/runs`,
+    );
+  }
+
+  async getRun(id: string, runId: string): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>(
+      "GET",
+      `/api/automations/${id}/runs/${runId}`,
+    );
+  }
+}
+
+class Events {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(payload: CreateEventPayload): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>("POST", "/api/events", payload);
+  }
+
+  async list(options: ListOptions = {}): Promise<ApiResponse<unknown>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    const query = params.toString();
+    return this.http.request<unknown>(
+      "GET",
+      query ? `/api/events?${query}` : "/api/events",
+    );
+  }
+
+  async send(payload: SendEventPayload): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>("POST", "/api/events/send", payload);
+  }
+}
+
 class NamuhSend {
   public readonly emails: Emails;
   public readonly domains: Domains;
   public readonly apiKeys: ApiKeys;
   public readonly contacts: Contacts;
+  public readonly automations: Automations;
+  public readonly events: Events;
 
   constructor(apiKey: string, options: SDKOptions) {
     if (!apiKey) {
@@ -279,6 +416,8 @@ class NamuhSend {
     this.domains = new Domains(http);
     this.apiKeys = new ApiKeys(http);
     this.contacts = new Contacts(http);
+    this.automations = new Automations(http);
+    this.events = new Events(http);
   }
 }
 
