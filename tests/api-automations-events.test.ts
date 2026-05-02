@@ -34,6 +34,7 @@ function queryRows<T>(rows: T[]) {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     orderBy: vi.fn().mockReturnThis(),
+    groupBy: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue(rows),
     // biome-ignore lint/suspicious/noThenProperty: mocks Drizzle thenable builders
     then: (resolve: (value: T[]) => unknown) => Promise.resolve(resolve(rows)),
