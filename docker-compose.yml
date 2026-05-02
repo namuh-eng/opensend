@@ -1,3 +1,5 @@
+name: opensend-staging
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -5,13 +7,13 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      POSTGRES_USER: namuh
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-namuh}
-      POSTGRES_DB: namuh_send
+      POSTGRES_USER: opensend
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opensend}
+      POSTGRES_DB: opensend
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U namuh"]
+      test: ["CMD-SHELL", "pg_isready -U opensend"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,7 +23,7 @@ services:
       context: .
       target: migrator
     environment:
-      DATABASE_URL: postgresql://namuh:${POSTGRES_PASSWORD:-namuh}@postgres:5432/namuh_send
+      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:-opensend}@postgres:5432/opensend
     depends_on:
       postgres:
         condition: service_healthy
@@ -35,7 +37,7 @@ services:
     ports:
       - "${PORT:-3015}:8080"
     environment:
-      DATABASE_URL: postgresql://namuh:${POSTGRES_PASSWORD:-namuh}@postgres:5432/namuh_send
+      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:-opensend}@postgres:5432/opensend
       DASHBOARD_KEY: ${DASHBOARD_KEY:?Set DASHBOARD_KEY in .env}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
@@ -66,7 +68,7 @@ services:
     ports:
       - "${INGESTER_PORT:-3016}:3016"
     environment:
-      DATABASE_URL: postgresql://namuh:${POSTGRES_PASSWORD:-namuh}@postgres:5432/namuh_send
+      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:-opensend}@postgres:5432/opensend
       PORT: 3016
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}

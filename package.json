@@ -6,7 +6,7 @@
   "workspaces": ["packages/*", "services/*"],
   "scripts": {
     "postinstall": "bash scripts/postinstall-star.sh 2>/dev/null || true && node scripts/install-git-hooks.mjs",
-    "dev": "next dev --port 3015",
+    "dev": "next dev --port ${PORT:-3015}",
     "build": "next build",
     "build:ingester": "bun build ./packages/ingester/src/server.ts --target bun --outfile ./packages/ingester/dist/server.js",
     "start": "next start",
