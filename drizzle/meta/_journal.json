@@ -43,6 +43,13 @@
       "when": 1777660079407,
       "tag": "0005_automations_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777692459103,
+      "tag": "0006_billing_foundation",
+      "breakpoints": true
     }
   ]
 }
