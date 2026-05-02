@@ -1,4 +1,9 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  quotaExceededResponse,
+  releaseEmailQuota,
+  reserveEmailQuota,
+} from "@/lib/billing/quota";
 import { db } from "@/lib/db";
 import { emails, templates } from "@/lib/db/schema";
 import { normalizeAttachmentsForStorage } from "@/lib/email-attachments";
@@ -151,6 +156,7 @@ export async function POST(request: Request): Promise<Response> {
     ? new Date(validated.scheduled_at)
     : null;
 
+  let quotaReserved = false;
   try {
     let finalHtml = validated.html || "";
     let finalSubject = validated.subject;
@@ -215,41 +221,78 @@ export async function POST(request: Request): Promise<Response> {
 
     const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();
 
-    // Store in DB before publishing async work so the worker has a durable row.
-    const [email] = await db
-      .insert(emails)
-      .values({
-        from: validated.from,
-        to,
-        cc: cc ?? [],
-        bcc: bcc ?? [],
-        replyTo: replyTo ?? [],
-        subject: finalSubject,
-        html: finalHtml,
-        text: validated.text ?? "",
-        tags: validated.tags ?? [],
-        headers: (validated.headers as Record<string, string>) ?? {},
-        attachments: normalizeAttachmentsForStorage(validated.attachments),
-        status: shouldQueueNow ? "queued" : "scheduled",
-        scheduledAt: scheduledAt,
-        topicId: validated.topic_id || null,
-        idempotencyKey: idempotencyKey,
-        userId: auth.userId, // Link to the user who owns the API key
-      })
-      .returning({ id: emails.id });
+    // Quota gate: post-validation and committed in the same transaction as the
+    // durable email row. SQS publish remains after commit so workers can read it.
+    const email = await db.transaction(async (tx) => {
+      const quota = await reserveEmailQuota(
+        auth.userId,
+        1,
+        new Date(),
+        process.env,
+        tx,
+      );
+      if (!quota.ok) {
+        return quota;
+      }
+      quotaReserved = !quota.bypassed;
+
+      const [created] = await tx
+        .insert(emails)
+        .values({
+          from: validated.from,
+          to,
+          cc: cc ?? [],
+          bcc: bcc ?? [],
+          replyTo: replyTo ?? [],
+          subject: finalSubject,
+          html: finalHtml,
+          text: validated.text ?? "",
+          tags: validated.tags ?? [],
+          headers: (validated.headers as Record<string, string>) ?? {},
+          attachments: normalizeAttachmentsForStorage(validated.attachments),
+          status: shouldQueueNow ? "queued" : "scheduled",
+          scheduledAt: scheduledAt,
+          topicId: validated.topic_id || null,
+          idempotencyKey: idempotencyKey,
+          userId: auth.userId, // Link to the user who owns the API key
+        })
+        .returning({ id: emails.id });
+
+      return { ok: true as const, email: created };
+    });
+
+    if (!email.ok) {
+      logTelemetry("info", "email.quota_exceeded", telemetry, {
+        plan: email.info.plan,
+        limit: email.info.limit,
+        used: email.info.used,
+      });
+      recordAcceptMetric(telemetry, {
+        durationMs: performance.now() - startedAt,
+        outcome: "invalid",
+      });
+      return quotaExceededResponse(email.info, {
+        headers: {
+          "x-correlation-id": telemetry.correlationId,
+          traceparent: telemetry.traceparent,
+        },
+      });
+    }
+
+    const createdEmail = email.email;
 
     if (shouldQueueNow) {
       try {
         await publishBackgroundJob(
           createBackgroundJob({
-            id: `email.send:${email.id}`,
+            id: `email.send:${createdEmail.id}`,
             type: "email.send",
             source: "api",
-            emailId: email.id,
+            emailId: createdEmail.id,
             trace: getTelemetryCarrier(telemetry),
           }),
           {
-            deduplicationId: `email.send:${email.id}`,
+            deduplicationId: `email.send:${createdEmail.id}`,
             groupId: "email.send",
           },
         );
@@ -257,13 +300,13 @@ export async function POST(request: Request): Promise<Response> {
         await db
           .update(emails)
           .set({ status: "failed" })
-          .where(eq(emails.id, email.id));
+          .where(eq(emails.id, createdEmail.id));
         recordTelemetryError(
           telemetry,
           "email.accept.queue_publish_failed",
           error,
           {
-            email_id: email.id,
+            email_id: createdEmail.id,
           },
         );
         throw error;
@@ -273,12 +316,13 @@ export async function POST(request: Request): Promise<Response> {
     const outcome = shouldQueueNow ? "queued" : "scheduled";
     const durationMs = performance.now() - startedAt;
     logTelemetry("info", "email.accepted", telemetry, {
-      email_id: email.id,
+      email_id: createdEmail.id,
       status: outcome,
       duration_ms: Math.round(durationMs),
     });
     recordAcceptMetric(telemetry, { durationMs, outcome });
-    return jsonWithTelemetry({ id: email.id }, telemetry);
+    quotaReserved = false;
+    return jsonWithTelemetry({ id: createdEmail.id }, telemetry);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to send email";
     recordTelemetryError(telemetry, "email.accept.failed", err);
@@ -286,6 +330,9 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "failed",
     });
+    if (quotaReserved) {
+      await releaseEmailQuota(auth.userId, 1);
+    }
     return jsonWithTelemetry({ error: message }, telemetry, { status: 500 });
   }
 }

@@ -4,6 +4,7 @@ import {
   unauthorizedResponse,
   validateApiKey,
 } from "@/lib/api-auth";
+import { checkApiKeyQuota, quotaExceededResponse } from "@/lib/billing/quota";
 import { db } from "@/lib/db";
 import { apiKeys } from "@/lib/db/schema";
 import { and, desc, lt } from "drizzle-orm";
@@ -90,6 +91,11 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
+    const quota = await checkApiKeyQuota(auth.userId);
+    if (!quota.ok) {
+      return quotaExceededResponse(quota.info);
+    }
+
     const rawKey = `re_${randomUUID().replace(/-/g, "")}`;
     const tokenHash = createHash("sha256").update(rawKey).digest("hex");
     const tokenPreview = `${rawKey.slice(0, 6)}...${rawKey.slice(-4)}`;
@@ -102,6 +108,7 @@ export async function POST(request: Request): Promise<Response> {
         tokenPreview,
         permission: body.permission ?? "full_access",
         domain: body.domain_id ?? null,
+        userId: auth.userId,
       })
       .returning();
 
