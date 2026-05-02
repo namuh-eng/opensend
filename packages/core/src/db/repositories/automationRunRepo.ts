@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lt, lte } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, lte } from "drizzle-orm";
 import { AutomationValidationError } from "../../dto/automations";
 import { db } from "../client";
 import { automationRuns, automations } from "../schema";
@@ -95,15 +95,13 @@ export const automationRunRepo = {
           lte(automationRuns.nextStepAt, cursor),
           statuses.length === 1
             ? eq(automationRuns.status, statuses[0])
-            : undefined,
+            : inArray(automationRuns.status, statuses),
         ),
       )
       .orderBy(asc(automationRuns.nextStepAt))
       .limit(limit);
 
-    if (statuses.length <= 1) return rows;
-    const allowed = new Set(statuses);
-    return rows.filter((row) => allowed.has(row.status));
+    return rows;
   },
 
   async update(id: string, data: Partial<typeof automationRuns.$inferInsert>) {

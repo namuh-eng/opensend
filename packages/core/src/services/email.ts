@@ -20,6 +20,7 @@ export class EmailService {
     scheduledAt?: Date | null;
     topicId?: string | null;
     idempotencyKey?: string | null;
+    userId?: string | null;
   }) {
     // Check idempotency if key provided
     if (params.idempotencyKey) {
@@ -48,6 +49,7 @@ export class EmailService {
       scheduledAt: params.scheduledAt,
       topicId: params.topicId,
       idempotencyKey: params.idempotencyKey,
+      userId: params.userId,
     });
 
     if (shouldQueueNow) {

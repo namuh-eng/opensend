@@ -1,0 +1,619 @@
+import { db } from "@/lib/db";
+import {
+  type AutomationConnection,
+  type AutomationStepStateEntry,
+  type automationRuns,
+  automationSteps,
+  automations,
+  contacts,
+  customEventDeliveries,
+  templates,
+} from "@/lib/db/schema";
+import {
+  automationRunRepo,
+  emailService,
+  parseDurationToCappedSeconds,
+} from "@namuh/core";
+import { asc, eq } from "drizzle-orm";
+
+type AutomationRun = typeof automationRuns.$inferSelect;
+type Automation = typeof automations.$inferSelect;
+type AutomationStep = typeof automationSteps.$inferSelect;
+type CustomEventDelivery = typeof customEventDeliveries.$inferSelect;
+type Contact = typeof contacts.$inferSelect;
+type Template = typeof templates.$inferSelect;
+
+type StepStates = Record<string, AutomationStepStateEntry>;
+
+type RunnerSendEmailInput = {
+  from: string;
+  to: string[];
+  subject: string;
+  html?: string;
+  text?: string;
+  replyTo?: string[];
+  tags?: Array<{ name: string; value: string }>;
+  idempotencyKey?: string | null;
+  userId?: string | null;
+};
+
+export interface AutomationRunnerDeps {
+  now: () => Date;
+  getAutomation: (id: string) => Promise<Automation | null>;
+  listSteps: (automationId: string) => Promise<AutomationStep[]>;
+  getDelivery: (id: string) => Promise<CustomEventDelivery | null>;
+  getContact: (id: string) => Promise<Contact | null>;
+  getTemplate: (id: string) => Promise<Template | null>;
+  sendEmail: (input: RunnerSendEmailInput) => Promise<{ id: string }>;
+  updateRun: (
+    id: string,
+    data: Partial<typeof automationRuns.$inferInsert>,
+  ) => Promise<AutomationRun | null>;
+}
+
+export interface ProcessScheduledAutomationsResult {
+  processed: number;
+  advanced: number;
+  failed: number;
+  skipped: number;
+}
+
+const defaultDeps: AutomationRunnerDeps = {
+  now: () => new Date(),
+  async getAutomation(id) {
+    return (
+      (await db.query.automations.findFirst({
+        where: eq(automations.id, id),
+      })) ?? null
+    );
+  },
+  async listSteps(automationId) {
+    return await db
+      .select()
+      .from(automationSteps)
+      .where(eq(automationSteps.automationId, automationId))
+      .orderBy(asc(automationSteps.position));
+  },
+  async getDelivery(id) {
+    return (
+      (await db.query.customEventDeliveries.findFirst({
+        where: eq(customEventDeliveries.id, id),
+      })) ?? null
+    );
+  },
+  async getContact(id) {
+    return (
+      (await db.query.contacts.findFirst({ where: eq(contacts.id, id) })) ??
+      null
+    );
+  },
+  async getTemplate(id) {
+    return (
+      (await db.query.templates.findFirst({ where: eq(templates.id, id) })) ??
+      null
+    );
+  },
+  async sendEmail(input) {
+    return await emailService.send(input);
+  },
+  async updateRun(id, data) {
+    const [updated] = await automationRunRepo.update(id, data);
+    return updated ?? null;
+  },
+};
+
+function iso(date: Date): string {
+  return date.toISOString();
+}
+
+function cloneStepStates(run: AutomationRun): StepStates {
+  return { ...(run.stepStates ?? {}) };
+}
+
+function setStepState(
+  states: StepStates,
+  key: string,
+  patch: AutomationStepStateEntry,
+): StepStates {
+  return {
+    ...states,
+    [key]: {
+      ...(states[key] ?? { status: "pending" }),
+      ...patch,
+    },
+  };
+}
+
+function findStep(
+  steps: AutomationStep[],
+  key: string | null,
+): AutomationStep | null {
+  if (key) return steps.find((step) => step.key === key) ?? null;
+  return steps.find((step) => step.type === "trigger") ?? steps[0] ?? null;
+}
+
+function nextStepKey(
+  automation: Automation,
+  steps: AutomationStep[],
+  currentKey: string,
+): string | null {
+  const connections = (automation.connections ?? []) as AutomationConnection[];
+  const connected = connections.find((edge) => edge.from === currentKey)?.to;
+  if (connected && steps.some((step) => step.key === connected)) {
+    return connected;
+  }
+
+  const ordered = [...steps].sort((a, b) => a.position - b.position);
+  const currentIndex = ordered.findIndex((step) => step.key === currentKey);
+  if (currentIndex < 0) return null;
+  return ordered[currentIndex + 1]?.key ?? null;
+}
+
+async function advanceRun(
+  deps: AutomationRunnerDeps,
+  run: AutomationRun,
+  automation: Automation,
+  steps: AutomationStep[],
+  step: AutomationStep,
+  states: StepStates,
+  now: Date,
+  output?: Record<string, unknown>,
+) {
+  const nextKey = nextStepKey(automation, steps, step.key);
+  const completedStates = setStepState(states, step.key, {
+    status: "completed",
+    completedAt: iso(now),
+    ...(output ? { output } : {}),
+  });
+
+  const startedAtPatch =
+    step.type === "trigger" && !run.startedAt ? { startedAt: now } : {};
+
+  if (!nextKey) {
+    return await deps.updateRun(run.id, {
+      status: "completed",
+      currentStepKey: null,
+      stepStates: completedStates,
+      completedAt: now,
+      nextStepAt: null,
+      failureReason: null,
+      ...startedAtPatch,
+    });
+  }
+
+  return await deps.updateRun(run.id, {
+    status: "queued",
+    currentStepKey: nextKey,
+    stepStates: completedStates,
+    nextStepAt: now,
+    failureReason: null,
+    ...startedAtPatch,
+  });
+}
+
+async function failRun(
+  deps: AutomationRunnerDeps,
+  run: AutomationRun,
+  stepKey: string,
+  states: StepStates,
+  now: Date,
+  reason: string,
+) {
+  const failedStates = setStepState(states, stepKey, {
+    status: "failed",
+    completedAt: iso(now),
+    error: reason,
+  });
+  return await deps.updateRun(run.id, {
+    status: "failed",
+    currentStepKey: stepKey,
+    stepStates: failedStates,
+    completedAt: now,
+    nextStepAt: null,
+    failureReason: reason,
+  });
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getPath(source: unknown, path: string[]): unknown {
+  let current = source;
+  for (const part of path) {
+    if (typeof current !== "object" || current === null || !(part in current)) {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[part];
+  }
+  return current;
+}
+
+function buildVariableContext(
+  delivery: CustomEventDelivery | null,
+  contact: Contact,
+): Record<string, unknown> {
+  const eventPayload = delivery?.payload ?? {};
+  const customProperties = contact.customProperties ?? {};
+  const contactContext: Record<string, unknown> = {
+    id: contact.id,
+    email: contact.email,
+    first_name: contact.firstName ?? "",
+    firstName: contact.firstName ?? "",
+    last_name: contact.lastName ?? "",
+    lastName: contact.lastName ?? "",
+    unsubscribed: contact.unsubscribed,
+    custom_properties: customProperties,
+    customProperties,
+  };
+
+  return {
+    ...(typeof eventPayload === "object" && eventPayload !== null
+      ? eventPayload
+      : {}),
+    ...customProperties,
+    email: contact.email,
+    first_name: contact.firstName ?? "",
+    firstName: contact.firstName ?? "",
+    last_name: contact.lastName ?? "",
+    lastName: contact.lastName ?? "",
+    event: eventPayload,
+    contact: contactContext,
+  };
+}
+
+function resolveReference(
+  value: unknown,
+  context: Record<string, unknown>,
+): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  const directPath = /^(event|contact)\.([A-Za-z0-9_.-]+)$/.exec(trimmed);
+  if (directPath) {
+    return getPath(context[directPath[1]], directPath[2].split("."));
+  }
+  return value.replace(/{{\s*([^}]+?)\s*}}/g, (_match, token: string) => {
+    const path = token.trim().split(".");
+    const resolved = getPath(context, path);
+    return resolved === undefined || resolved === null ? "" : String(resolved);
+  });
+}
+
+function renderTemplate(
+  content: string | null,
+  variables: Record<string, unknown>,
+) {
+  let rendered = content ?? "";
+  for (const [key, value] of Object.entries(variables)) {
+    if (typeof value === "object") continue;
+    rendered = rendered.replace(
+      new RegExp(
+        `{{\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*}}`,
+        "g",
+      ),
+      value === undefined || value === null ? "" : String(value),
+    );
+  }
+  return rendered;
+}
+
+function normalizeReplyTo(value: string | null): string[] | undefined {
+  return value ? [value] : undefined;
+}
+
+function getSendEmailConfig(step: AutomationStep): {
+  templateId: string | null;
+  variables: Record<string, unknown>;
+  from: string | null;
+  subject: string | null;
+  replyTo: string | null;
+} {
+  const config = step.config ?? {};
+  const template =
+    typeof config.template === "object" && config.template !== null
+      ? (config.template as Record<string, unknown>)
+      : {};
+  const variables =
+    typeof template.variables === "object" && template.variables !== null
+      ? (template.variables as Record<string, unknown>)
+      : {};
+  return {
+    templateId: readString(template.id),
+    variables,
+    from: readString(config.from),
+    subject: readString(config.subject),
+    replyTo: readString(config.reply_to),
+  };
+}
+
+async function processSendEmailStep(
+  deps: AutomationRunnerDeps,
+  run: AutomationRun,
+  automation: Automation,
+  steps: AutomationStep[],
+  step: AutomationStep,
+  states: StepStates,
+  now: Date,
+) {
+  if (!run.contactId) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "send_email requires a contact",
+    );
+  }
+
+  const contact = await deps.getContact(run.contactId);
+  if (!contact) {
+    return await failRun(deps, run, step.key, states, now, "contact not found");
+  }
+
+  if (contact.unsubscribed) {
+    const nextKey = nextStepKey(automation, steps, step.key);
+    const skippedStates = setStepState(states, step.key, {
+      status: "skipped",
+      startedAt: states[step.key]?.startedAt ?? iso(now),
+      completedAt: iso(now),
+      output: { reason: "contact_unsubscribed", contact_id: contact.id },
+    });
+    if (!nextKey) {
+      return await deps.updateRun(run.id, {
+        status: "completed",
+        currentStepKey: null,
+        stepStates: skippedStates,
+        completedAt: now,
+        nextStepAt: null,
+        failureReason: null,
+      });
+    }
+    return await deps.updateRun(run.id, {
+      status: "queued",
+      currentStepKey: nextKey,
+      stepStates: skippedStates,
+      nextStepAt: now,
+      failureReason: null,
+    });
+  }
+
+  const config = getSendEmailConfig(step);
+  if (!config.templateId) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "send_email step missing template id",
+    );
+  }
+
+  const template = await deps.getTemplate(config.templateId);
+  if (!template || template.status !== "published") {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "send_email template is missing or unpublished",
+    );
+  }
+
+  const delivery = run.triggerEventId
+    ? await deps.getDelivery(run.triggerEventId)
+    : null;
+  const context = buildVariableContext(delivery, contact);
+  const explicitVariables = Object.fromEntries(
+    Object.entries(config.variables).map(([key, value]) => [
+      key,
+      resolveReference(value, context),
+    ]),
+  );
+  const variables = { ...context, ...explicitVariables };
+  const from = String(
+    resolveReference(config.from ?? template.from ?? "", context) ?? "",
+  ).trim();
+  const subjectSource = config.subject ?? template.subject ?? "";
+  const subject = renderTemplate(
+    String(resolveReference(subjectSource, context) ?? ""),
+    variables,
+  ).trim();
+  const replyTo = String(
+    resolveReference(config.replyTo ?? template.replyTo ?? "", context) ?? "",
+  ).trim();
+
+  if (!from) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "send_email from address is missing",
+    );
+  }
+  if (!subject) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "send_email subject is missing",
+    );
+  }
+
+  const email = await deps.sendEmail({
+    from,
+    to: [contact.email],
+    subject,
+    html: renderTemplate(template.html, variables),
+    text: renderTemplate(template.text, variables),
+    replyTo: normalizeReplyTo(replyTo),
+    tags: [
+      { name: "automation_id", value: automation.id },
+      { name: "automation_run_id", value: run.id },
+    ],
+    idempotencyKey: `automation:${run.id}:${step.key}`,
+    userId: run.userId ?? automation.userId ?? null,
+  });
+
+  return await advanceRun(deps, run, automation, steps, step, states, now, {
+    email_id: email.id,
+  });
+}
+
+export async function processAutomationRunStep(
+  run: AutomationRun,
+  deps: AutomationRunnerDeps = defaultDeps,
+): Promise<AutomationRun | null> {
+  const now = deps.now();
+  const automation = await deps.getAutomation(run.automationId);
+  if (!automation) {
+    return await deps.updateRun(run.id, {
+      status: "failed",
+      completedAt: now,
+      nextStepAt: null,
+      failureReason: "automation not found",
+    });
+  }
+
+  const steps = await deps.listSteps(run.automationId);
+  const step = findStep(steps, run.currentStepKey);
+  if (!step) {
+    return await deps.updateRun(run.id, {
+      status: "completed",
+      currentStepKey: null,
+      completedAt: now,
+      nextStepAt: null,
+    });
+  }
+
+  const states = setStepState(cloneStepStates(run), step.key, {
+    status: "running",
+    startedAt: run.stepStates?.[step.key]?.startedAt ?? iso(now),
+  });
+
+  try {
+    if (step.type === "trigger") {
+      return await advanceRun(deps, run, automation, steps, step, states, now);
+    }
+
+    if (step.type === "delay") {
+      const existing = run.stepStates?.[step.key];
+      if (existing?.status === "waiting") {
+        return await advanceRun(
+          deps,
+          run,
+          automation,
+          steps,
+          step,
+          states,
+          now,
+        );
+      }
+
+      const duration = readString(step.config?.duration);
+      if (!duration) {
+        return await failRun(
+          deps,
+          run,
+          step.key,
+          states,
+          now,
+          "delay duration is missing",
+        );
+      }
+      const seconds = parseDurationToCappedSeconds(duration);
+      const scheduledFor = new Date(now.getTime() + seconds * 1000);
+      const waitingStates = setStepState(states, step.key, {
+        status: "waiting",
+        scheduledFor: iso(scheduledFor),
+      });
+      return await deps.updateRun(run.id, {
+        status: "waiting",
+        currentStepKey: step.key,
+        stepStates: waitingStates,
+        nextStepAt: scheduledFor,
+        failureReason: null,
+      });
+    }
+
+    if (step.type === "send_email") {
+      return await processSendEmailStep(
+        deps,
+        run,
+        automation,
+        steps,
+        step,
+        states,
+        now,
+      );
+    }
+
+    if (step.type === "end") {
+      const completedStates = setStepState(states, step.key, {
+        status: "completed",
+        completedAt: iso(now),
+      });
+      return await deps.updateRun(run.id, {
+        status: "completed",
+        currentStepKey: null,
+        stepStates: completedStates,
+        completedAt: now,
+        nextStepAt: null,
+        failureReason: null,
+      });
+    }
+
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      `unsupported automation step type: ${step.type}`,
+    );
+  } catch (error) {
+    const reason =
+      error instanceof Error ? error.message : "automation step failed";
+    return await failRun(deps, run, step.key, states, now, reason);
+  }
+}
+
+export async function processScheduledAutomations(
+  options: { limit?: number; now?: Date } = {},
+): Promise<ProcessScheduledAutomationsResult> {
+  const now = options.now ?? new Date();
+  const due = await automationRunRepo.listDue({
+    limit: options.limit ?? 50,
+    statuses: ["queued", "waiting"],
+    before: now,
+  });
+
+  const result: ProcessScheduledAutomationsResult = {
+    processed: due.length,
+    advanced: 0,
+    failed: 0,
+    skipped: 0,
+  };
+
+  for (const run of due) {
+    const updated = await processAutomationRunStep(run, {
+      ...defaultDeps,
+      now: () => now,
+    });
+    if (updated?.status === "failed") result.failed += 1;
+    else if (updated) result.advanced += 1;
+
+    const states = updated?.stepStates ?? {};
+    if (Object.values(states).some((state) => state.status === "skipped")) {
+      result.skipped += 1;
+    }
+  }
+
+  return result;
+}

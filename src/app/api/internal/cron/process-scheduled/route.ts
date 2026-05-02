@@ -1,3 +1,4 @@
+import { processScheduledAutomations } from "@/lib/workers/automation-runner";
 import { processScheduledBroadcasts } from "@/lib/workers/broadcast-sender";
 import { processScheduledEmails } from "@/lib/workers/scheduled-emails";
 import { NextResponse } from "next/server";
@@ -18,15 +19,17 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [emailResult, broadcastResult] = await Promise.all([
+    const [emailResult, broadcastResult, automationResult] = await Promise.all([
       processScheduledEmails(),
       processScheduledBroadcasts(),
+      processScheduledAutomations(),
     ]);
 
     return NextResponse.json({
       ok: true,
       emails: emailResult,
       broadcasts: broadcastResult,
+      automations: automationResult,
     });
   } catch (error) {
     console.error("Cron: Scheduled processing failed:", error);
