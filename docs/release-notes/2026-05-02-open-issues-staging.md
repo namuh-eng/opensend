@@ -1,7 +1,7 @@
 # OpenSend staging release notes — 2026-05-02 open-issue sweep
 
 Base branch: `staging`
-Current staging head after this sweep: `03c09345`
+Current staging head after this sweep: `0b90e926`
 
 ## Landed on staging
 
@@ -137,9 +137,49 @@ What to test:
 - List/revoke/use API keys through the existing dashboard/API flows to confirm the thin-adapter extraction did not regress behavior.
 - Treat this as a control-plane split pilot only; the full #71 package/service split remains open.
 
+### PR #161 — Update staging release notes after PR #157-#160 merges
+Merge commit: `bb66f4d`
+
+What changed:
+- Added this staging release-note/test checklist document for the open-issue sweep.
+- Recorded landed PRs, known baseline CI status, and remaining open issue state after the previous merge wave.
+
+Validation:
+- Docs-only diff.
+- GitHub typecheck, lint, and unit tests passed.
+- The shared `Onboarding acceptance` job remained red from the known Drizzle baseline.
+
+### PR #162 — Backend condition step branching for automations
+Issue: #120 — automations: post-MVP advanced step parity
+Merge commit: `0b90e926`
+
+What changed:
+- Added backend support for `condition` automation steps with a bounded single-predicate DSL.
+- Added branch labels on automation connections: `default`, `condition_met`, and `condition_not_met`.
+- Added graph validation so condition branches must originate from condition steps and duplicate branch labels are rejected.
+- Added runner evaluation for event/contact/prior-step-output predicates and stores condition output as `{ matched, branch }` before advancing the selected branch.
+- Added deterministic step-level failure behavior for missing variables, invalid predicate configs, and non-comparable operands.
+- Left dashboard advanced-canvas UI out of scope; this is the backend slice only.
+
+Validation:
+- Local `bun run check:full` passed.
+- Local full Vitest suite passed: `84` files / `679` tests.
+- Local targeted condition tests passed: `tests/automation-runner.test.ts`, `tests/api-automations-events.test.ts`, `tests/core-automation-repo.test.ts` (`31` tests).
+- GitHub checks before merge: typecheck, lint, and unit tests passed.
+- The shared `Onboarding acceptance` job was red from the known staging baseline at `bunx drizzle-kit push --config drizzle.config.ts`; recent staging CI shows the same failure on unrelated staging heads.
+
+What to test:
+- Create an automation payload with a condition step and both condition branches; verify it is accepted and persisted.
+- Try duplicate/misplaced condition branch labels and verify API validation returns a structured 422.
+- Run a condition automation where the predicate matches and verify the run advances to the `condition_met` target with output `{ matched: true, branch: "condition_met" }`.
+- Run a condition automation where the predicate does not match and verify the run advances to `condition_not_met`.
+- Verify invalid/missing predicate variables fail the current step deterministically with a useful failure reason.
+
 ## Staging CI status after final merge
 
-GitHub Actions run `25255889751` on staging head `03c09345` completed with:
+Latest staging head after this sweep: `0b90e926`.
+
+PR #162 pre-merge GitHub checks completed with:
 
 - `Lint (change-scoped)`: success
 - `Unit tests (Vitest)`: success
@@ -148,15 +188,17 @@ GitHub Actions run `25255889751` on staging head `03c09345` completed with:
 
 Known residual blocker:
 - `Onboarding acceptance` fails during `bunx drizzle-kit push --config drizzle.config.ts` while pulling schema from Postgres.
-- The same onboarding failure was present on staging before these PRs landed, so it is tracked as a shared CI/onboarding baseline issue rather than a regression introduced by #157/#158/#159/#160.
+- The same onboarding failure was present on staging before and after the open-issue PR wave, so it is tracked as a shared CI/onboarding baseline issue rather than a regression introduced by #157/#158/#159/#160/#162.
 
 ## Remaining open issues after this sweep
 
-- #57 — Automations epic: still open as the umbrella; #119 dashboard MVP landed, but full trigger/step/run/event parity is not complete.
-- #120 — Automations post-MVP advanced step parity: still open for advanced step behavior after MVP surfaces settle.
+- #120 — Automations post-MVP advanced step parity: still open as a tracker; PR #162 landed the first backend condition-branching slice only. Remaining work includes additional advanced step behavior and UI/editor parity.
 - #71 — Package/service split tracker: still open; #157 landed the API-key thin-adapter pilot only.
 - #132 — Stripe paywall epic: still open as the hosted billing umbrella; #136/#137 slices landed, but full hosted billing/paywall flow is not complete.
 - #17 — Multi-region SES failover: intentionally not implemented in this sweep because it needs an account/provider architecture decision. Prefer AWS SES Global Endpoints if available; otherwise implement explicit dual-region failover as a separate planned slice.
+
+Closed during/after this sweep:
+- #57 — Automations MVP epic was closed after QA verified the MVP `trigger -> delay -> send_email -> end` path. Post-MVP parity remains tracked by #120.
 
 ## Human staging checklist
 
@@ -165,5 +207,6 @@ Known residual blocker:
 - Test quota gating with billing disabled, under quota, and over quota.
 - Test billing/pricing dashboard states for disabled/self-host, hosted active plan, and missing subscription data.
 - Test automations list/run viewer for empty, active, completed, and failed run states.
+- Test automation condition branching API/runner behavior for matched, not-matched, invalid predicate, and missing-variable cases.
 - Test API-key create/list/revoke flows, including quota-exceeded creation.
 - Confirm `/landing` remains public and dashboard routes remain protected.
