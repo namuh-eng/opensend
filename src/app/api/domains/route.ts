@@ -1,4 +1,5 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { checkDomainQuota, quotaExceededResponse } from "@/lib/billing/quota";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
 import { invalidateDomainCaches } from "@/lib/domain-cache";
@@ -34,6 +35,11 @@ export async function POST(request: Request) {
   try {
     const validated = result.data;
     const domainName = validated.name.toLowerCase();
+
+    const quota = await checkDomainQuota(auth.userId);
+    if (!quota.ok) {
+      return quotaExceededResponse(quota.info);
+    }
 
     const identity = await createDomainIdentity(domainName);
 
@@ -78,6 +84,7 @@ export async function POST(request: Request) {
         trackingSubdomain: validated.tracking_subdomain || null,
         tls: validated.tls,
         capabilities: validated.capabilities || defaultCapabilities,
+        userId: auth.userId,
       })
       .returning();
 

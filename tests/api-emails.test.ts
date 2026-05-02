@@ -12,6 +12,9 @@ const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
   select: vi.fn(),
   query: vi.fn(),
+  transaction: vi.fn(async (callback: (tx: typeof mockDb) => unknown) =>
+    callback(mockDb),
+  ),
 }));
 
 vi.mock("@/lib/ses", () => ({
@@ -162,6 +165,9 @@ describe("POST /api/emails", () => {
     mockEmitCloudWatchMetric.mockReset();
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
+    mockDb.transaction.mockImplementation(
+      async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
+    );
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
       reason: "queue_url_missing",
@@ -396,6 +402,9 @@ describe("POST /api/emails/batch", () => {
     mockEmitCloudWatchMetric.mockReset();
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
+    mockDb.transaction.mockImplementation(
+      async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
+    );
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
       reason: "queue_url_missing",

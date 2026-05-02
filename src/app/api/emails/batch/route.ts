@@ -1,4 +1,5 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { quotaExceededResponse, reserveEmailQuota } from "@/lib/billing/quota";
 import { db } from "@/lib/db";
 import { emails } from "@/lib/db/schema";
 import { normalizeAttachmentsForStorage } from "@/lib/email-attachments";
@@ -114,79 +115,121 @@ export async function POST(request: Request): Promise<Response> {
   const validatedItems = result.data;
 
   try {
-    // Send emails with controlled concurrency (5 at a time)
-    const CONCURRENCY = 5;
+    const reservation = await db.transaction(async (tx) => {
+      // Quota gate: reserve the entire batch atomically in the same transaction
+      // that persists all accepted rows. If the batch would overrun, no rows are
+      // inserted and the whole request returns 402.
+      const quota = await reserveEmailQuota(
+        auth.userId,
+        validatedItems.length,
+        new Date(),
+        process.env,
+        tx,
+      );
+      if (!quota.ok) {
+        return quota;
+      }
+      const persisted: Array<{ id: string; shouldQueueNow: boolean }> = [];
+
+      for (const item of validatedItems) {
+        const to = normalizeToArray(item.to) as string[];
+        const cc = normalizeToArray(item.cc);
+        const bcc = normalizeToArray(item.bcc);
+        const replyTo = normalizeToArray(item.reply_to);
+        const scheduledAt = item.scheduled_at
+          ? new Date(item.scheduled_at)
+          : null;
+
+        const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();
+
+        const [email] = await tx
+          .insert(emails)
+          .values({
+            from: item.from,
+            to,
+            cc: cc ?? [],
+            bcc: bcc ?? [],
+            replyTo: replyTo ?? [],
+            subject: item.subject,
+            html: item.html ?? "",
+            text: item.text ?? "",
+            tags: item.tags ?? [],
+            headers: (item.headers as Record<string, string>) ?? {},
+            attachments: normalizeAttachmentsForStorage(item.attachments),
+            status: shouldQueueNow ? "queued" : "scheduled",
+            scheduledAt: scheduledAt,
+            topicId: item.topic_id || null,
+            userId: auth.userId,
+          })
+          .returning({ id: emails.id });
+
+        persisted.push({ id: email.id, shouldQueueNow });
+      }
+
+      return { ok: true as const, emails: persisted };
+    });
+
+    if (!reservation.ok) {
+      logTelemetry("info", "email.batch_quota_exceeded", telemetry, {
+        plan: reservation.info.plan,
+        limit: reservation.info.limit,
+        used: reservation.info.used,
+        requested: validatedItems.length,
+      });
+      recordBatchMetric(telemetry, {
+        durationMs: performance.now() - startedAt,
+        outcome: "invalid",
+      });
+      return quotaExceededResponse(reservation.info, {
+        headers: {
+          "x-correlation-id": telemetry.correlationId,
+          traceparent: telemetry.traceparent,
+        },
+      });
+    }
+
     const results: Array<{ id: string }> = [];
+    const CONCURRENCY = 5;
+    const queuedEmails = reservation.emails.filter(
+      (email) => email.shouldQueueNow,
+    );
 
-    for (let i = 0; i < validatedItems.length; i += CONCURRENCY) {
-      const chunk = validatedItems.slice(i, i + CONCURRENCY);
-      const chunkResults = await Promise.all(
-        chunk.map(async (item) => {
-          const to = normalizeToArray(item.to) as string[];
-          const cc = normalizeToArray(item.cc);
-          const bcc = normalizeToArray(item.bcc);
-          const replyTo = normalizeToArray(item.reply_to);
-          const scheduledAt = item.scheduled_at
-            ? new Date(item.scheduled_at)
-            : null;
-
-          const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();
-
-          const [email] = await db
-            .insert(emails)
-            .values({
-              from: item.from,
-              to,
-              cc: cc ?? [],
-              bcc: bcc ?? [],
-              replyTo: replyTo ?? [],
-              subject: item.subject,
-              html: item.html ?? "",
-              text: item.text ?? "",
-              tags: item.tags ?? [],
-              headers: (item.headers as Record<string, string>) ?? {},
-              attachments: normalizeAttachmentsForStorage(item.attachments),
-              status: shouldQueueNow ? "queued" : "scheduled",
-              scheduledAt: scheduledAt,
-              topicId: item.topic_id || null,
-            })
-            .returning({ id: emails.id });
-
-          if (shouldQueueNow) {
-            try {
-              await publishBackgroundJob(
-                createBackgroundJob({
-                  id: `email.send:${email.id}`,
-                  type: "email.send",
-                  source: "api",
-                  emailId: email.id,
-                  trace: getTelemetryCarrier(telemetry),
-                }),
-                {
-                  deduplicationId: `email.send:${email.id}`,
-                  groupId: "email.send",
-                },
-              );
-            } catch (error) {
-              await db
-                .update(emails)
-                .set({ status: "failed" })
-                .where(eq(emails.id, email.id));
-              recordTelemetryError(
-                telemetry,
-                "email.batch_accept.queue_publish_failed",
-                error,
-                { email_id: email.id },
-              );
-              throw error;
-            }
+    for (let i = 0; i < queuedEmails.length; i += CONCURRENCY) {
+      const chunk = queuedEmails.slice(i, i + CONCURRENCY);
+      await Promise.all(
+        chunk.map(async (email) => {
+          try {
+            await publishBackgroundJob(
+              createBackgroundJob({
+                id: `email.send:${email.id}`,
+                type: "email.send",
+                source: "api",
+                emailId: email.id,
+                trace: getTelemetryCarrier(telemetry),
+              }),
+              {
+                deduplicationId: `email.send:${email.id}`,
+                groupId: "email.send",
+              },
+            );
+          } catch (error) {
+            await db
+              .update(emails)
+              .set({ status: "failed" })
+              .where(eq(emails.id, email.id));
+            recordTelemetryError(
+              telemetry,
+              "email.batch_accept.queue_publish_failed",
+              error,
+              { email_id: email.id },
+            );
+            throw error;
           }
-
-          return { id: email.id };
         }),
       );
-      results.push(...chunkResults);
     }
+
+    results.push(...reservation.emails.map((email) => ({ id: email.id })));
 
     const durationMs = performance.now() - startedAt;
     logTelemetry("info", "email.batch_accepted", telemetry, {
