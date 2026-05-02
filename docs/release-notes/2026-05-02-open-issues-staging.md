@@ -1,7 +1,7 @@
 # OpenSend staging release notes — 2026-05-02 open-issue sweep
 
 Base branch: `staging`
-Current staging head after this sweep: `0b90e926`
+Current staging head after this sweep: `aa36a6f`
 
 ## Landed on staging
 
@@ -175,11 +175,35 @@ What to test:
 - Run a condition automation where the predicate does not match and verify the run advances to `condition_not_met`.
 - Verify invalid/missing predicate variables fail the current step deterministically with a useful failure reason.
 
+
+### PR #164 — Domains thin-adapter extraction
+Issue: #71 — Tracking: split monolith into `@namuh/core`, `@namuh/sdk`, `@namuh/ingester`
+Merge commit: `aa36a6f`
+
+What changed:
+- Extracted `POST /api/domains` domain create business logic into `packages/core/src/services/domain.ts` behind injectable dependencies.
+- Added reusable domain list/create service methods so the Next.js route can stay focused on auth, parsing, quota gating, and HTTP response mapping.
+- Preserved adapter-side billing quota enforcement and existing domain response shapes/status codes.
+- Added focused domain service coverage and updated route thin-adapter tests.
+
+Validation:
+- Worker evidence before merge: `bun run test tests/domain-service.test.ts tests/api-domains.test.ts tests/quota-routes.test.ts tests/cache-invalidation-routes.test.ts`, `make check`, and `make test` passed.
+- Controller recheck: `make check` passed locally; `tests/domain-service.test.ts` + `tests/cache-invalidation-routes.test.ts` passed locally.
+- GitHub checks before merge: typecheck, lint, and unit tests passed.
+- The shared `Onboarding acceptance` job was red from the known staging baseline at `bunx drizzle-kit push --config drizzle.config.ts`; recent staging CI showed the same unrelated failure on staging.
+
+What to test:
+- Create a domain through `POST /api/domains` and confirm SES identity/DNS records are produced and the domain is associated with the authenticated user.
+- List domains through `GET /api/domains` and confirm pagination/response shape stayed compatible.
+- Try domain creation for a user over quota and confirm the quota response still blocks before SES identity creation.
+- Verify domain cache invalidation still runs after successful creation.
+- Treat this as another #71 thin-adapter slice only; the broader control-plane split remains open.
+
 ## Staging CI status after final merge
 
-Latest staging head after this sweep: `0b90e926`.
+Latest staging head after this sweep: `aa36a6f`.
 
-PR #162 pre-merge GitHub checks completed with:
+PR #164 pre-merge GitHub checks completed with:
 
 - `Lint (change-scoped)`: success
 - `Unit tests (Vitest)`: success
@@ -188,12 +212,12 @@ PR #162 pre-merge GitHub checks completed with:
 
 Known residual blocker:
 - `Onboarding acceptance` fails during `bunx drizzle-kit push --config drizzle.config.ts` while pulling schema from Postgres.
-- The same onboarding failure was present on staging before and after the open-issue PR wave, so it is tracked as a shared CI/onboarding baseline issue rather than a regression introduced by #157/#158/#159/#160/#162.
+- The same onboarding failure was present on staging before and after the open-issue PR wave, so it is tracked as a shared CI/onboarding baseline issue rather than a regression introduced by #157/#158/#159/#160/#162/#164.
 
 ## Remaining open issues after this sweep
 
 - #120 — Automations post-MVP advanced step parity: still open as a tracker; PR #162 landed the first backend condition-branching slice only. Remaining work includes additional advanced step behavior and UI/editor parity.
-- #71 — Package/service split tracker: still open; #157 landed the API-key thin-adapter pilot only.
+- #71 — Package/service split tracker: still open; #157 landed the API-key thin-adapter pilot and #164 landed the domains thin-adapter slice, but the full control-plane split remains incomplete.
 - #132 — Stripe paywall epic: still open as the hosted billing umbrella; #136/#137 slices landed, but full hosted billing/paywall flow is not complete.
 - #17 — Multi-region SES failover: intentionally not implemented in this sweep because it needs an account/provider architecture decision. Prefer AWS SES Global Endpoints if available; otherwise implement explicit dual-region failover as a separate planned slice.
 
@@ -209,4 +233,5 @@ Closed during/after this sweep:
 - Test automations list/run viewer for empty, active, completed, and failed run states.
 - Test automation condition branching API/runner behavior for matched, not-matched, invalid predicate, and missing-variable cases.
 - Test API-key create/list/revoke flows, including quota-exceeded creation.
+- Test domain create/list API flows, including quota-exceeded creation, SES DNS record output, pagination bounds, and dashboard domain UX.
 - Confirm `/landing` remains public and dashboard routes remain protected.
