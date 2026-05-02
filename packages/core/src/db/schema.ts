@@ -373,3 +373,145 @@ export const webhookDeliveries = pgTable(
     index("webhook_deliveries_status_idx").on(t.status),
   ],
 );
+
+// ── Automations ─────────────────────────────────────────────────────
+
+export type AutomationConnection = { from: string; to: string };
+
+export type AutomationStepStateEntry = {
+  status:
+    | "pending"
+    | "running"
+    | "waiting"
+    | "completed"
+    | "failed"
+    | "skipped";
+  startedAt?: string;
+  completedAt?: string;
+  scheduledFor?: string;
+  error?: string;
+  output?: Record<string, unknown>;
+};
+
+export const automations = pgTable(
+  "automations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull().default("Untitled"),
+    status: varchar("status", { length: 50 }).notNull().default("draft"),
+    triggerEventName: varchar("trigger_event_name", { length: 255 }),
+    connections: jsonb("connections").$type<AutomationConnection[]>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    document: jsonb("document"),
+    userId: text("user_id"),
+  },
+  (t) => [
+    index("automations_status_trigger_idx").on(t.status, t.triggerEventName),
+    index("automations_user_id_idx").on(t.userId),
+  ],
+);
+
+export const automationSteps = pgTable(
+  "automation_steps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    automationId: uuid("automation_id")
+      .notNull()
+      .references(() => automations.id, { onDelete: "cascade" }),
+    key: varchar("key", { length: 64 }).notNull(),
+    type: varchar("type", { length: 50 }).notNull(),
+    config: jsonb("config").notNull().$type<Record<string, unknown>>(),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("automation_steps_automation_id_key_idx").on(
+      t.automationId,
+      t.key,
+    ),
+    index("automation_steps_automation_id_position_idx").on(
+      t.automationId,
+      t.position,
+    ),
+  ],
+);
+
+export const customEvents = pgTable(
+  "custom_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    schema: jsonb("schema"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    userId: text("user_id"),
+  },
+  (t) => [uniqueIndex("custom_events_user_name_idx").on(t.userId, t.name)],
+);
+
+export const customEventDeliveries = pgTable(
+  "custom_event_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventName: varchar("event_name", { length: 255 }).notNull(),
+    contactId: uuid("contact_id"),
+    email: varchar("email", { length: 512 }),
+    payload: jsonb("payload").notNull().$type<Record<string, unknown>>(),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    userId: text("user_id"),
+  },
+  (t) => [
+    index("custom_event_deliveries_event_name_idx").on(t.eventName),
+    index("custom_event_deliveries_received_at_idx").on(t.receivedAt),
+  ],
+);
+
+export const automationRuns = pgTable(
+  "automation_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    automationId: uuid("automation_id")
+      .notNull()
+      .references(() => automations.id, { onDelete: "cascade" }),
+    triggerEventId: uuid("trigger_event_id"),
+    contactId: uuid("contact_id"),
+    status: varchar("status", { length: 50 }).notNull().default("queued"),
+    currentStepKey: varchar("current_step_key", { length: 64 }),
+    stepStates:
+      jsonb("step_states").$type<Record<string, AutomationStepStateEntry>>(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    nextStepAt: timestamp("next_step_at", { withTimezone: true }),
+    failureReason: text("failure_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    userId: text("user_id"),
+  },
+  (t) => [
+    index("automation_runs_status_next_step_at_idx").on(t.status, t.nextStepAt),
+    index("automation_runs_automation_id_created_at_idx").on(
+      t.automationId,
+      t.createdAt,
+    ),
+  ],
+);

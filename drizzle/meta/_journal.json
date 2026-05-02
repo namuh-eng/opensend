@@ -36,6 +36,13 @@
       "when": 1777363632831,
       "tag": "0004_add_email_sent_at",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777660079407,
+      "tag": "0005_automations_foundation",
+      "breakpoints": true
     }
   ]
 }

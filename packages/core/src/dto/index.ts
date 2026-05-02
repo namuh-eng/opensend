@@ -239,3 +239,5 @@ export interface ContactListResponse {
   data: ContactListItem[];
   has_more: boolean;
 }
+
+export * from "./automations";
