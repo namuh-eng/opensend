@@ -73,6 +73,13 @@ async function checkRate(
 }
 
 // Rate limit tiers by route pattern
+function isSendApiPost(pathname: string, method: string): boolean {
+  return (
+    method === "POST" &&
+    (pathname === "/api/emails" || pathname === "/api/emails/batch")
+  );
+}
+
 function getLimits(
   pathname: string,
   method: string,
@@ -145,23 +152,34 @@ export async function middleware(request: NextRequest) {
   const result = await checkRate(rateLimitKey, max, windowMs, rateLimit);
 
   if (!result.allowed) {
+    const message =
+      result.status === 429
+        ? "Rate limit exceeded. Try again later."
+        : result.error;
+    const headers = new Headers({ "X-RateLimit-Backend": backend });
+    if (result.status === 429) {
+      headers.set("Retry-After", String(result.retryAfter));
+    }
+
+    if (isSendApiPost(pathname, request.method)) {
+      const code =
+        result.status === 429
+          ? "rate_limit_exceeded"
+          : "rate_limit_unavailable";
+      return NextResponse.json(
+        {
+          name: code,
+          code,
+          message,
+          statusCode: result.status,
+        },
+        { status: result.status, headers },
+      );
+    }
+
     return NextResponse.json(
-      {
-        error:
-          result.status === 429
-            ? "Rate limit exceeded. Try again later."
-            : result.error,
-      },
-      {
-        status: result.status,
-        headers:
-          result.status === 429
-            ? {
-                "Retry-After": String(result.retryAfter),
-                "X-RateLimit-Backend": backend,
-              }
-            : { "X-RateLimit-Backend": backend },
-      },
+      { error: message },
+      { status: result.status, headers },
     );
   }
 

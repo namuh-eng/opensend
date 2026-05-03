@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockSendEmail = vi.hoisted(() => vi.fn());
 const mockPublishBackgroundJob = vi.hoisted(() => vi.fn());
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
+const mockGetApiKeyAuthHeaderError = vi.hoisted(() => vi.fn());
 const mockEmitCloudWatchMetric = vi.hoisted(() => vi.fn());
 const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
@@ -82,11 +83,16 @@ vi.mock("@/lib/db", () => ({
   db: mockDb,
 }));
 
-vi.mock("@/lib/api-auth", () => ({
-  validateApiKey: mockValidateApiKey,
-  unauthorizedResponse: () =>
-    Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
-}));
+vi.mock("@/lib/api-auth", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/api-auth")>("@/lib/api-auth");
+  return {
+    validateApiKey: mockValidateApiKey,
+    getApiKeyAuthHeaderError: mockGetApiKeyAuthHeaderError,
+    publicApiKeyUnauthorizedResponse: actual.publicApiKeyUnauthorizedResponse,
+    unauthorizedResponse: actual.unauthorizedResponse,
+  };
+});
 
 // Mock drizzle-orm operators
 vi.mock("drizzle-orm", async () => {
@@ -131,7 +137,20 @@ function makeRequest(
 // ── Auth Middleware Tests ──────────────────────────────────────────
 
 describe("API Key Authentication", () => {
-  it("returns 401 when no auth header", async () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockGetApiKeyAuthHeaderError.mockImplementation(
+      (authHeader: string | null | undefined) => {
+        if (!authHeader) return "missing_api_key";
+        const parts = authHeader.split(" ");
+        return parts.length === 2 && parts[0] === "Bearer" && parts[1]
+          ? null
+          : "malformed_api_key";
+      },
+    );
+  });
+
+  it("returns 401 with a machine-readable code when no auth header", async () => {
     mockValidateApiKey.mockResolvedValue(null);
     const { POST } = await import("@/app/api/emails/route");
     const req = makeRequest("POST", {
@@ -142,16 +161,56 @@ describe("API Key Authentication", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "missing_api_key",
+      code: "missing_api_key",
+      statusCode: 401,
+      message: expect.any(String),
+    });
   });
 
-  it("returns 401 for invalid key", async () => {
+  it("returns 401 with a malformed key code for bad Authorization shape", async () => {
     mockValidateApiKey.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/emails/route");
-    const req = new Request("http://localhost:3015/api/emails", {
-      headers: { Authorization: "Bearer bad_key" },
-    });
-    const res = await GET(req);
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "a@b.com",
+        to: ["c@d.com"],
+        subject: "X",
+        html: "<p>Y</p>",
+      },
+      { Authorization: "Basic nope" },
+    );
+    const res = await POST(req);
     expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "malformed_api_key",
+      code: "malformed_api_key",
+      statusCode: 401,
+    });
+  });
+
+  it("returns 401 with an invalid key code for send requests", async () => {
+    mockValidateApiKey.mockResolvedValue(null);
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "a@b.com",
+        to: ["c@d.com"],
+        subject: "X",
+        html: "<p>Y</p>",
+      },
+      { Authorization: "Bearer bad_key" },
+    );
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "invalid_api_key",
+      code: "invalid_api_key",
+      statusCode: 401,
+    });
   });
 });
 
@@ -165,6 +224,7 @@ describe("POST /api/emails", () => {
     mockEmitCloudWatchMetric.mockReset();
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
+    mockGetApiKeyAuthHeaderError.mockReturnValue(null);
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
@@ -190,7 +250,10 @@ describe("POST /api/emails", () => {
     expect(res.status).toBe(422);
     const json = await res.json();
     expect(json).toEqual({
-      error: "Validation failed",
+      name: "validation_error",
+      code: "validation_error",
+      message: "Validation failed.",
+      statusCode: 422,
       details: {
         formErrors: [],
         fieldErrors: {
@@ -198,6 +261,28 @@ describe("POST /api/emails", () => {
           subject: [expect.any(String)],
         },
       },
+    });
+  });
+
+  it("returns 400 with invalid_json for malformed JSON", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const req = new Request("http://localhost:3015/api/emails", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer re_test123",
+        "Content-Type": "application/json",
+      },
+      body: "{",
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "invalid_json",
+      code: "invalid_json",
+      message: "Request body must be valid JSON.",
+      statusCode: 400,
     });
   });
 
@@ -402,6 +487,7 @@ describe("POST /api/emails/batch", () => {
     mockEmitCloudWatchMetric.mockReset();
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
+    mockGetApiKeyAuthHeaderError.mockReturnValue(null);
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
@@ -426,8 +512,34 @@ describe("POST /api/emails/batch", () => {
     const res = await POST(req);
     expect(res.status).toBe(422);
     const json = await res.json();
-    expect(json.error).toBe("Validation failed");
+    expect(json).toMatchObject({
+      name: "validation_error",
+      code: "validation_error",
+      message: "Validation failed.",
+      statusCode: 422,
+    });
     expect(json.details.formErrors[0]).toContain("100");
+  });
+
+  it("returns 400 with invalid_json for malformed batch JSON", async () => {
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const req = new Request("http://localhost:3015/api/emails/batch", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer re_test123",
+        "Content-Type": "application/json",
+      },
+      body: "[",
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "invalid_json",
+      code: "invalid_json",
+      statusCode: 400,
+    });
   });
 
   it("sends batch and returns array of ids", async () => {

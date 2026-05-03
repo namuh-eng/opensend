@@ -15,6 +15,7 @@ const mockDb = vi.hoisted(() => ({
 vi.mock("@/lib/db", () => ({ db: mockDb }));
 vi.mock("@/lib/api-auth", () => ({
   validateApiKey: mockValidateApiKey,
+  getApiKeyAuthHeaderError: () => null,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
@@ -29,7 +30,17 @@ vi.mock("@/lib/billing/quota", () => ({
     used: number;
     plan: string;
     upgrade_url: string;
-  }) => Response.json({ error: "quota_exceeded", ...info }, { status: 402 }),
+  }) =>
+    Response.json(
+      {
+        name: "quota_exceeded",
+        code: "quota_exceeded",
+        message: "Quota exceeded.",
+        statusCode: 402,
+        details: info,
+      },
+      { status: 402 },
+    ),
 }));
 vi.mock("@/lib/ses", () => ({
   createDomainIdentity: mockCreateDomainIdentity,
@@ -106,11 +117,16 @@ describe("quota route gates", () => {
 
     expect(res.status).toBe(402);
     await expect(res.json()).resolves.toMatchObject({
-      error: "quota_exceeded",
-      limit: 3,
-      used: 3,
-      plan: "free",
-      upgrade_url: "/dashboard/billing",
+      name: "quota_exceeded",
+      code: "quota_exceeded",
+      message: "Quota exceeded.",
+      statusCode: 402,
+      details: {
+        limit: 3,
+        used: 3,
+        plan: "free",
+        upgrade_url: "/dashboard/billing",
+      },
     });
     expect(mockReserveEmailQuota).toHaveBeenCalledWith(
       "user-1",
