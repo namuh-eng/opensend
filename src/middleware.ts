@@ -114,6 +114,8 @@ function getLimits(
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const isPublicUnsubscribeRoute = pathname.startsWith("/unsubscribe/");
+
   // Protect non-API page routes with session check
   if (!pathname.startsWith("/api/")) {
     // Allow auth page, public landing page, and static assets
@@ -126,11 +128,16 @@ export async function middleware(request: NextRequest) {
     ) {
       return NextResponse.next();
     }
-    const sessionCookie = getSessionCookie(request);
-    if (!sessionCookie) {
-      return NextResponse.redirect(new URL("/auth", request.url));
+    if (isPublicUnsubscribeRoute) {
+      // Public one-click links must not require auth, but still flow through
+      // the same anonymous IP rate-limit path used for API routes below.
+    } else {
+      const sessionCookie = getSessionCookie(request);
+      if (!sessionCookie) {
+        return NextResponse.redirect(new URL("/auth", request.url));
+      }
+      return NextResponse.next();
     }
-    return NextResponse.next();
   }
 
   const backend = getRateLimitBackend();

@@ -6,8 +6,15 @@ import {
 import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
 import { quotaExceededResponse, reserveEmailQuota } from "@/lib/billing/quota";
 import { db } from "@/lib/db";
-import { emails } from "@/lib/db/schema";
+import { contacts, emails } from "@/lib/db/schema";
 import { normalizeAttachmentsForStorage } from "@/lib/email-attachments";
+import {
+  buildOneClickUnsubscribeHeaders,
+  createUnsubscribeUrl,
+  getPublicBaseUrl,
+  hasUnsubscribePlaceholder,
+  replaceUnsubscribePlaceholder,
+} from "@/lib/unsubscribe";
 import { batchSendEmailSchema } from "@/lib/validation/emails";
 import {
   createBackgroundJob,
@@ -18,7 +25,7 @@ import {
   publishBackgroundJob,
   recordTelemetryError,
 } from "@opensend/core";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -63,6 +70,48 @@ function recordBatchMetric(
       Outcome: input.outcome,
     },
   });
+}
+
+async function applyManagedUnsubscribe(input: {
+  userId: string | null;
+  to: string[];
+  html: string;
+  text: string;
+  headers: Record<string, string>;
+  baseUrl: string;
+}): Promise<{ html: string; text: string; headers: Record<string, string> }> {
+  if (
+    input.to.length !== 1 ||
+    (!hasUnsubscribePlaceholder(input.html) &&
+      !hasUnsubscribePlaceholder(input.text))
+  ) {
+    return { html: input.html, text: input.text, headers: input.headers };
+  }
+
+  const recipient = input.to[0];
+  if (!recipient) {
+    return { html: input.html, text: input.text, headers: input.headers };
+  }
+
+  const contact = await db.query.contacts.findFirst({
+    where: input.userId
+      ? and(eq(contacts.email, recipient), eq(contacts.userId, input.userId))
+      : eq(contacts.email, recipient),
+  });
+
+  if (!contact || contact.unsubscribed) {
+    return { html: input.html, text: input.text, headers: input.headers };
+  }
+
+  const unsubscribeUrl = createUnsubscribeUrl(contact.id, input.baseUrl);
+  return {
+    html: replaceUnsubscribePlaceholder(input.html, unsubscribeUrl),
+    text: replaceUnsubscribePlaceholder(input.text, unsubscribeUrl),
+    headers: {
+      ...input.headers,
+      ...buildOneClickUnsubscribeHeaders(unsubscribeUrl),
+    },
+  };
 }
 
 // ── POST /api/emails/batch ────────────────────────────────────────
@@ -160,6 +209,14 @@ export async function POST(request: Request): Promise<Response> {
           : null;
 
         const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();
+        const managedUnsubscribe = await applyManagedUnsubscribe({
+          userId: auth.userId,
+          to,
+          html: item.html ?? "",
+          text: item.text ?? "",
+          headers: (item.headers as Record<string, string>) ?? {},
+          baseUrl: getPublicBaseUrl(request),
+        });
 
         const [email] = await tx
           .insert(emails)
@@ -170,10 +227,10 @@ export async function POST(request: Request): Promise<Response> {
             bcc: bcc ?? [],
             replyTo: replyTo ?? [],
             subject: item.subject,
-            html: item.html ?? "",
-            text: item.text ?? "",
+            html: managedUnsubscribe.html,
+            text: managedUnsubscribe.text,
             tags: item.tags ?? [],
-            headers: (item.headers as Record<string, string>) ?? {},
+            headers: managedUnsubscribe.headers,
             attachments: normalizeAttachmentsForStorage(item.attachments),
             status: shouldQueueNow ? "queued" : "scheduled",
             scheduledAt: scheduledAt,

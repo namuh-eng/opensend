@@ -112,7 +112,8 @@ vi.mock("drizzle-orm", async () => {
 const AUTH_RESULT = {
   apiKeyId: "key-uuid",
   permission: "full_access",
-  domainId: null,
+  domain: null,
+  userId: "user-1",
 };
 
 function makeRequest(
@@ -430,6 +431,52 @@ describe("POST /api/emails", () => {
     expect(mockPublishBackgroundJob).toHaveBeenCalledOnce();
   });
 
+  it("injects one-click unsubscribe headers and replaces the managed URL placeholder for known contact sends", async () => {
+    process.env.UNSUBSCRIBE_SECRET = "test-unsubscribe-secret";
+    Object.assign(mockDb.query, {
+      contacts: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "00000000-0000-4000-8000-000000000173",
+          email: "known@test.com",
+          unsubscribed: false,
+        }),
+      },
+    });
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-uuid" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: "known@test.com",
+        subject: "Managed unsubscribe",
+        html: '<p><a href="{{{RESEND_UNSUBSCRIBE_URL}}}">Unsubscribe</a></p>',
+        headers: { "X-Custom": "ok" },
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    const persisted = valuesMock.mock.calls[0][0];
+    expect(persisted.html).toContain(
+      "http://localhost:3015/unsubscribe/00000000-0000-4000-8000-000000000173?token=",
+    );
+    expect(persisted.html).not.toContain("{{{RESEND_UNSUBSCRIBE_URL}}}");
+    expect(persisted.headers).toMatchObject({
+      "X-Custom": "ok",
+      "List-Unsubscribe": expect.stringContaining(
+        "<http://localhost:3015/unsubscribe/00000000-0000-4000-8000-000000000173?token=",
+      ),
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    });
+  });
+
   it("stores attachment ids and queues delivery without direct SES", async () => {
     mockSendEmail.mockResolvedValue({ id: "ses-msg-id" });
     const valuesMock = vi.fn().mockReturnValue({
@@ -539,6 +586,51 @@ describe("POST /api/emails/batch", () => {
       name: "invalid_json",
       code: "invalid_json",
       statusCode: 400,
+    });
+  });
+
+  it("injects managed unsubscribe headers for batch items with known contact placeholders", async () => {
+    process.env.UNSUBSCRIBE_SECRET = "test-unsubscribe-secret";
+    Object.assign(mockDb.query, {
+      contacts: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "00000000-0000-4000-8000-000000000174",
+          email: "batch@test.com",
+          unsubscribed: false,
+        }),
+      },
+    });
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-batch-1" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const req = makeRequest(
+      "POST",
+      [
+        {
+          from: "sender@domain.com",
+          to: "batch@test.com",
+          subject: "Batch",
+          text: "Leave: {{{RESEND_UNSUBSCRIBE_URL}}}",
+        },
+      ],
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    const persisted = valuesMock.mock.calls[0][0];
+    expect(persisted.text).toContain(
+      "http://localhost:3015/unsubscribe/00000000-0000-4000-8000-000000000174?token=",
+    );
+    expect(persisted.headers).toMatchObject({
+      "List-Unsubscribe": expect.stringContaining(
+        "<http://localhost:3015/unsubscribe/00000000-0000-4000-8000-000000000174?token=",
+      ),
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
   });
 
