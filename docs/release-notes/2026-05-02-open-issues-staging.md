@@ -1,7 +1,7 @@
 # OpenSend staging release notes — 2026-05-02 open-issue sweep
 
 Base branch: `staging`
-Current staging head after this sweep: `aa36a6f`
+Current staging head after this sweep: `b59ea10`
 
 ## Landed on staging
 
@@ -198,11 +198,56 @@ What to test:
 - Verify domain cache invalidation still runs after successful creation.
 - Treat this as another #71 thin-adapter slice only; the broader control-plane split remains open.
 
+### PR #165 — Record domains thin-adapter staging merge
+Merge commit: `e7babaf`
+
+What changed:
+- Updated this release-note/checklist document after the PR #164 domains thin-adapter merge.
+- Recorded the #164 validation evidence, staging CI status, and new domain-specific human validation checklist.
+
+Validation:
+- Docs-only diff.
+- GitHub typecheck, lint, and unit tests passed.
+- The shared `Onboarding acceptance` job remained red from the known Drizzle baseline.
+
+What to test:
+- No product behavior changed in this docs-only PR.
+- Use the #164 domain checklist below for human staging validation.
+
+### PR #168 — Automation wait-for-event resume behavior
+Issue: #120 — automations: post-MVP advanced step parity
+Merge commit: `b59ea10`
+Feature commit: `db118fb`
+
+What changed:
+- Implemented backend support for `wait_for_event` automation steps that pause a run until a matching contact-scoped event arrives.
+- Stored wait metadata in the existing automation run step-state JSON instead of adding another table for this bounded slice.
+- Updated custom event ingestion so matching events resume waiting automation runs for the same user/contact/event name.
+- Preserved deterministic timeout behavior: expired waits fail the current step with a useful timeout reason, while runs without matching events remain in `waiting` state.
+- Kept request/cron routes non-blocking; no sleeps or long polling were introduced.
+
+Validation:
+- Feature commit evidence: `make check && make test` passed.
+- Targeted Vitest coverage added/updated for `tests/automation-runner.test.ts`, `tests/api-automations-events.test.ts`, and `tests/core-automation-repo.test.ts`.
+- GitHub checks before merge: typecheck, lint, and unit tests passed.
+- The shared `Onboarding acceptance` job remained red from the known staging Drizzle baseline.
+- Not covered by Playwright because this slice is backend-only; dashboard/editor parity remains under #120.
+
+What to test:
+- Create or seed an automation with a `wait_for_event` step configured for an allowed custom event name and an optional timeout.
+- Trigger the automation and confirm the run enters `waiting` with `currentStepKey` set to the wait step and `nextStepAt` set when a timeout is configured.
+- Send a non-matching event name for the same contact/user and confirm the run stays waiting.
+- Send the matching event for a different contact and confirm the original run stays waiting.
+- Send the matching event for the same user/contact and confirm the waiting step completes and the run advances to the next step.
+- Let a wait pass its timeout, run the automation worker/cron path, and confirm the current step fails with a timeout reason rather than hanging indefinitely.
+- Try invalid `wait_for_event` configs: reserved `resend:` event names, empty event names, non-positive timeout, and timeout above the 30-day max; confirm structured validation errors.
+- Re-smoke the existing `trigger -> delay -> send_email -> end` and condition-branch automation paths to confirm wait support did not regress earlier automation behavior.
+
 ## Staging CI status after final merge
 
-Latest staging head after this sweep: `aa36a6f`.
+Latest staging head after this sweep: `b59ea10`.
 
-PR #164 pre-merge GitHub checks completed with:
+PR #168 pre-merge GitHub checks completed with:
 
 - `Lint (change-scoped)`: success
 - `Unit tests (Vitest)`: success
@@ -211,11 +256,11 @@ PR #164 pre-merge GitHub checks completed with:
 
 Known residual blocker:
 - `Onboarding acceptance` fails during `bunx drizzle-kit push --config drizzle.config.ts` while pulling schema from Postgres.
-- The same onboarding failure was present on staging before and after the open-issue PR wave, so it is tracked as a shared CI/onboarding baseline issue rather than a regression introduced by #157/#158/#159/#160/#162/#164.
+- The same onboarding failure was present on staging before and after the open-issue PR wave, so it is tracked as a shared CI/onboarding baseline issue rather than a regression introduced by #157/#158/#159/#160/#162/#164/#168.
 
 ## Remaining open issues after this sweep
 
-- #120 — Automations post-MVP advanced step parity: still open as a tracker; PR #162 landed the first backend condition-branching slice only. Remaining work includes additional advanced step behavior and UI/editor parity.
+- #120 — Automations post-MVP advanced step parity: still open as a tracker; PR #162 landed backend condition branching and PR #168 landed backend wait-for-event resume behavior. Remaining work includes additional advanced step behavior and UI/editor parity.
 - #71 — Package/service split tracker: still open; #157 landed the API-key thin-adapter pilot and #164 landed the domains thin-adapter slice, but the full control-plane split remains incomplete.
 - #132 — Stripe paywall epic: still open as the hosted billing umbrella; #136/#137 slices landed, but full hosted billing/paywall flow is not complete.
 - #17 — Multi-region SES failover: intentionally not implemented in this sweep because it needs an account/provider architecture decision. Prefer AWS SES Global Endpoints if available; otherwise implement explicit dual-region failover as a separate planned slice.
@@ -231,6 +276,7 @@ Closed during/after this sweep:
 - Test billing/pricing dashboard states for disabled/self-host, hosted active plan, and missing subscription data.
 - Test automations list/run viewer for empty, active, completed, and failed run states.
 - Test automation condition branching API/runner behavior for matched, not-matched, invalid predicate, and missing-variable cases.
+- Test automation wait-for-event behavior for waiting, non-matching event, wrong-contact event, matching event resume, timeout failure, and invalid config validation.
 - Test API-key create/list/revoke flows, including quota-exceeded creation.
 - Test domain create/list API flows, including quota-exceeded creation, SES DNS record output, pagination bounds, and dashboard domain UX.
 - Confirm `/landing` remains public and dashboard routes remain protected.
