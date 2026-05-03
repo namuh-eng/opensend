@@ -232,6 +232,62 @@ describe("automationRepo.create", () => {
     ).rejects.toMatchObject({ code: "condition_operator_invalid" });
   });
 
+  it("accepts wait_for_event steps with bounded timeout config", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+            position: 0,
+          },
+          {
+            key: "wait",
+            type: "wait_for_event",
+            config: { event_name: "invoice.paid", timeout_seconds: 3600 },
+            position: 1,
+          },
+          { key: "end", type: "end", config: {}, position: 2 },
+        ],
+        connections: [
+          { from: "trigger", to: "wait" },
+          { from: "wait", to: "end" },
+        ],
+      }),
+    ).resolves.toMatchObject({ automation: { id: "auto_1" } });
+  });
+
+  it("rejects invalid wait_for_event timeout config", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+            position: 0,
+          },
+          {
+            key: "wait",
+            type: "wait_for_event",
+            config: { event_name: "invoice.paid", timeout_seconds: 0 },
+            position: 1,
+          },
+          { key: "end", type: "end", config: {}, position: 2 },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "wait_for_event_timeout_invalid" });
+  });
+
   it("rejects condition branch labels from non-condition steps", async () => {
     const { automationRepo } = await import(
       "../packages/core/src/db/repositories/automationRepo"

@@ -81,6 +81,25 @@ export const automationRunRepo = {
     return { data, hasMore };
   },
 
+  async listWaitingByContact(input: {
+    contactId: string;
+    userId?: string | null;
+    limit?: number;
+  }) {
+    const conditions = [
+      eq(automationRuns.status, "waiting"),
+      eq(automationRuns.contactId, input.contactId),
+    ];
+    if (input.userId) conditions.push(eq(automationRuns.userId, input.userId));
+
+    return await db
+      .select()
+      .from(automationRuns)
+      .where(and(...conditions))
+      .orderBy(asc(automationRuns.updatedAt))
+      .limit(input.limit ?? 50);
+  },
+
   async listDue(
     options: { limit?: number; statuses?: string[]; before?: Date } = {},
   ) {

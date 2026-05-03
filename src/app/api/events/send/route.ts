@@ -6,6 +6,7 @@ import {
 import { db } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { sendEventSchema } from "@/lib/validation/events";
+import { resumeWaitingRunsForEvent } from "@/lib/workers/automation-runner";
 import {
   AutomationValidationError,
   automationRepo,
@@ -70,6 +71,7 @@ export async function POST(request: Request): Promise<Response> {
       email: event.email?.toLowerCase().trim() ?? null,
       userId: auth.userId,
     });
+    const resumedRuns = await resumeWaitingRunsForEvent(delivery);
 
     const matching = await automationRepo.findEnabledByTriggerEventName(
       event.event,
@@ -92,6 +94,7 @@ export async function POST(request: Request): Promise<Response> {
       {
         object: "event_delivery",
         delivery: formatCustomEventDelivery(delivery),
+        resumed_runs: resumedRuns.map(formatRunListItem),
         automation_runs: runs.map(formatRunListItem),
       },
       { status: 202 },

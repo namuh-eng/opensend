@@ -153,6 +153,7 @@ function deps(overrides: Partial<AutomationRunnerDeps> = {}) {
     getContact: vi.fn().mockResolvedValue(contact),
     getTemplate: vi.fn().mockResolvedValue(template),
     sendEmail,
+    listWaitingRunsByContact: vi.fn().mockResolvedValue([]),
     updateRun: vi.fn(async (_id, data) => {
       updates.push(data as Partial<AutomationRun>);
       return { ...run(), ...data } as AutomationRun;
@@ -290,6 +291,238 @@ describe("automation runner", () => {
       status: "completed",
       output: { matched: true, branch: "condition_met" },
     });
+  });
+
+  it("enters wait_for_event waiting state without downstream work in the same tick", async () => {
+    const { processAutomationRunStep } = await import(
+      "@/lib/workers/automation-runner"
+    );
+    const waitAutomation: Automation = {
+      ...automation,
+      connections: [
+        { from: "trigger", to: "wait" },
+        { from: "wait", to: "send" },
+      ],
+    };
+    const waitSteps: AutomationStep[] = [
+      steps[0],
+      {
+        ...steps[1],
+        key: "wait",
+        type: "wait_for_event",
+        config: { event_name: "invoice.paid", timeout_seconds: 900 },
+        position: 1,
+      },
+      steps[2],
+    ];
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(waitAutomation),
+      listSteps: vi.fn().mockResolvedValue(waitSteps),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "wait" }), setup.deps);
+
+    expect(setup.sendEmail).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "waiting",
+      currentStepKey: "wait",
+      nextStepAt: new Date("2026-05-02T00:15:00.000Z"),
+    });
+    expect(setup.updates[0]?.stepStates?.wait).toMatchObject({
+      status: "waiting",
+      scheduledFor: "2026-05-02T00:15:00.000Z",
+      output: {
+        waiting_for_event: "invoice.paid",
+        timeout_at: "2026-05-02T00:15:00.000Z",
+      },
+    });
+  });
+
+  it("fails a due wait_for_event timeout deterministically", async () => {
+    const { processAutomationRunStep } = await import(
+      "@/lib/workers/automation-runner"
+    );
+    const waitSteps: AutomationStep[] = [
+      {
+        ...steps[1],
+        key: "wait",
+        type: "wait_for_event",
+        config: { event_name: "invoice.paid", timeout_seconds: 60 },
+        position: 0,
+      },
+    ];
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue(waitSteps),
+    });
+
+    await processAutomationRunStep(
+      run({
+        currentStepKey: "wait",
+        status: "waiting",
+        nextStepAt: now,
+        stepStates: {
+          wait: {
+            status: "waiting",
+            scheduledFor: now.toISOString(),
+            output: { waiting_for_event: "invoice.paid" },
+          },
+        },
+      }),
+      setup.deps,
+    );
+
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "wait",
+      failureReason: "wait_for_event timed out waiting for invoice.paid",
+    });
+  });
+
+  it("resumes a matching wait_for_event run and stores payload output", async () => {
+    const { resumeWaitingRunsForEvent } = await import(
+      "@/lib/workers/automation-runner"
+    );
+    const waitAutomation: Automation = {
+      ...automation,
+      connections: [{ from: "wait", to: "send" }],
+    };
+    const waitSteps: AutomationStep[] = [
+      {
+        ...steps[1],
+        key: "wait",
+        type: "wait_for_event",
+        config: { event_name: "invoice.paid", timeout_seconds: 3600 },
+        position: 0,
+      },
+      steps[2],
+    ];
+    const waitingRun = run({
+      currentStepKey: "wait",
+      status: "waiting",
+      stepStates: {
+        wait: {
+          status: "waiting",
+          scheduledFor: "2026-05-02T01:00:00.000Z",
+          output: { waiting_for_event: "invoice.paid" },
+        },
+      },
+    });
+    const invoiceDelivery: Delivery = {
+      ...delivery,
+      id: "41111111-1111-1111-1111-111111111112",
+      eventName: "invoice.paid",
+      payload: { invoice_id: "inv_1", plan: "pro" },
+    };
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(waitAutomation),
+      listSteps: vi.fn().mockResolvedValue(waitSteps),
+      listWaitingRunsByContact: vi.fn().mockResolvedValue([waitingRun]),
+    });
+
+    const resumed = await resumeWaitingRunsForEvent(
+      invoiceDelivery,
+      setup.deps,
+    );
+
+    expect(resumed).toHaveLength(1);
+    expect(setup.updates[0]).toMatchObject({
+      status: "queued",
+      currentStepKey: "send",
+      nextStepAt: now,
+    });
+    expect(setup.updates[0]?.stepStates?.wait).toMatchObject({
+      status: "completed",
+      output: {
+        waiting_for_event: "invoice.paid",
+        waited_event: {
+          delivery_id: invoiceDelivery.id,
+          event_name: "invoice.paid",
+          payload: { invoice_id: "inv_1", plan: "pro" },
+          contact_id: contact.id,
+          email: "user@example.com",
+          received_at: now.toISOString(),
+          matched_at: now.toISOString(),
+        },
+      },
+    });
+  });
+
+  it("does not resume wait_for_event runs for non-matching events", async () => {
+    const { resumeWaitingRunsForEvent } = await import(
+      "@/lib/workers/automation-runner"
+    );
+    const waitSteps: AutomationStep[] = [
+      {
+        ...steps[1],
+        key: "wait",
+        type: "wait_for_event",
+        config: { event_name: "invoice.paid" },
+        position: 0,
+      },
+    ];
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue(waitSteps),
+      listWaitingRunsByContact: vi.fn().mockResolvedValue([
+        run({
+          currentStepKey: "wait",
+          status: "waiting",
+          stepStates: {
+            wait: {
+              status: "waiting",
+              output: { waiting_for_event: "invoice.paid" },
+            },
+          },
+        }),
+      ]),
+    });
+
+    const resumed = await resumeWaitingRunsForEvent(delivery, setup.deps);
+
+    expect(resumed).toEqual([]);
+    expect(setup.updates).toHaveLength(0);
+  });
+
+  it("resolves waited event output for downstream send_email variables", async () => {
+    const { processAutomationRunStep } = await import(
+      "@/lib/workers/automation-runner"
+    );
+    const waitSendStep: AutomationStep = {
+      ...steps[2],
+      config: {
+        template: {
+          id: "31111111-1111-1111-1111-111111111111",
+          variables: { plan: "wait_events.wait.payload.plan" },
+        },
+        subject: "Invoice {{wait_events.wait.payload.invoice_id}} paid",
+      },
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([waitSendStep]),
+    });
+
+    await processAutomationRunStep(
+      run({
+        currentStepKey: "send",
+        stepStates: {
+          wait: {
+            status: "completed",
+            output: {
+              waited_event: {
+                payload: { invoice_id: "inv_1", plan: "enterprise" },
+              },
+            },
+          },
+        },
+      }),
+      setup.deps,
+    );
+
+    expect(setup.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: "Invoice inv_1 paid",
+        html: "<p>Ada picked enterprise</p>",
+      }),
+    );
   });
 
   it("evaluates condition steps and advances to the not-met branch", async () => {
