@@ -12,9 +12,11 @@ import {
 import {
   type ConditionOperator,
   type ConditionStepConfig,
+  type WaitForEventStepConfig,
   automationRunRepo,
   emailService,
   normalizeConditionConfig,
+  normalizeWaitForEventConfig,
   parseDurationToCappedSeconds,
 } from "@opensend/core";
 import { asc, eq } from "drizzle-orm";
@@ -48,6 +50,11 @@ export interface AutomationRunnerDeps {
   getContact: (id: string) => Promise<Contact | null>;
   getTemplate: (id: string) => Promise<Template | null>;
   sendEmail: (input: RunnerSendEmailInput) => Promise<{ id: string }>;
+  listWaitingRunsByContact: (input: {
+    contactId: string;
+    userId?: string | null;
+    limit?: number;
+  }) => Promise<AutomationRun[]>;
   updateRun: (
     id: string,
     data: Partial<typeof automationRuns.$inferInsert>,
@@ -98,6 +105,9 @@ const defaultDeps: AutomationRunnerDeps = {
   },
   async sendEmail(input) {
     return await emailService.send(input);
+  },
+  async listWaitingRunsByContact(input) {
+    return await automationRunRepo.listWaitingByContact(input);
   },
   async updateRun(id, data) {
     const [updated] = await automationRunRepo.update(id, data);
@@ -244,6 +254,7 @@ function getPath(source: unknown, path: string[]): unknown {
 function buildVariableContext(
   delivery: CustomEventDelivery | null,
   contact: Contact,
+  states: StepStates = {},
 ): Record<string, unknown> {
   const eventPayload = delivery?.payload ?? {};
   const customProperties = contact.customProperties ?? {};
@@ -271,6 +282,8 @@ function buildVariableContext(
     lastName: contact.lastName ?? "",
     event: eventPayload,
     contact: contactContext,
+    steps: buildStepOutputContext(states),
+    wait_events: buildWaitEventContext(states),
   };
 }
 
@@ -280,7 +293,8 @@ function resolveReference(
 ): unknown {
   if (typeof value !== "string") return value;
   const trimmed = value.trim();
-  const directPath = /^(event|contact)\.([A-Za-z0-9_.-]+)$/.exec(trimmed);
+  const directPath =
+    /^(event|contact|wait_events|steps)\.([A-Za-z0-9_.:-]+)$/.exec(trimmed);
   if (directPath) {
     return getPath(context[directPath[1]], directPath[2].split("."));
   }
@@ -344,6 +358,14 @@ function buildStepOutputContext(states: StepStates): Record<string, unknown> {
       key,
       { output: state.output ?? {} },
     ]),
+  );
+}
+
+function buildWaitEventContext(states: StepStates): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(states)
+      .filter(([, state]) => state.output?.waited_event !== undefined)
+      .map(([key, state]) => [key, state.output?.waited_event ?? {}]),
   );
 }
 
@@ -484,6 +506,64 @@ async function processConditionStep(
   );
 }
 
+function scheduledTimeoutFor(
+  now: Date,
+  config: WaitForEventStepConfig,
+): Date | null {
+  return typeof config.timeout_seconds === "number"
+    ? new Date(now.getTime() + config.timeout_seconds * 1000)
+    : null;
+}
+
+async function processWaitForEventStep(
+  deps: AutomationRunnerDeps,
+  run: AutomationRun,
+  step: AutomationStep,
+  states: StepStates,
+  now: Date,
+) {
+  const config = normalizeWaitForEventConfig(step.config ?? {});
+  const existing = run.stepStates?.[step.key];
+  if (existing?.status === "waiting") {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      `wait_for_event timed out waiting for ${config.event_name}`,
+    );
+  }
+
+  if (!run.contactId) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "wait_for_event requires a contact",
+    );
+  }
+
+  const scheduledFor = scheduledTimeoutFor(now, config);
+  const waitingStates = setStepState(states, step.key, {
+    status: "waiting",
+    ...(scheduledFor ? { scheduledFor: iso(scheduledFor) } : {}),
+    output: {
+      waiting_for_event: config.event_name,
+      ...(scheduledFor ? { timeout_at: iso(scheduledFor) } : {}),
+    },
+  });
+  return await deps.updateRun(run.id, {
+    status: "waiting",
+    currentStepKey: step.key,
+    stepStates: waitingStates,
+    nextStepAt: scheduledFor,
+    failureReason: null,
+  });
+}
+
 async function processSendEmailStep(
   deps: AutomationRunnerDeps,
   run: AutomationRun,
@@ -563,7 +643,7 @@ async function processSendEmailStep(
   const delivery = run.triggerEventId
     ? await deps.getDelivery(run.triggerEventId)
     : null;
-  const context = buildVariableContext(delivery, contact);
+  const context = buildVariableContext(delivery, contact, states);
   const explicitVariables = Object.fromEntries(
     Object.entries(config.variables).map(([key, value]) => [
       key,
@@ -712,6 +792,10 @@ export async function processAutomationRunStep(
       );
     }
 
+    if (step.type === "wait_for_event") {
+      return await processWaitForEventStep(deps, run, step, states, now);
+    }
+
     if (step.type === "send_email") {
       return await processSendEmailStep(
         deps,
@@ -752,6 +836,76 @@ export async function processAutomationRunStep(
       error instanceof Error ? error.message : "automation step failed";
     return await failRun(deps, run, step.key, states, now, reason);
   }
+}
+
+function waitedEventOutput(
+  delivery: CustomEventDelivery,
+  matchedAt: Date,
+): Record<string, unknown> {
+  return {
+    delivery_id: delivery.id,
+    event_name: delivery.eventName,
+    payload: delivery.payload ?? {},
+    contact_id: delivery.contactId,
+    email: delivery.email,
+    received_at: iso(delivery.receivedAt),
+    matched_at: iso(matchedAt),
+  };
+}
+
+export async function resumeWaitingRunsForEvent(
+  delivery: CustomEventDelivery,
+  deps: AutomationRunnerDeps = defaultDeps,
+): Promise<AutomationRun[]> {
+  if (!delivery.contactId) return [];
+
+  const now = deps.now();
+  const waitingRuns = await deps.listWaitingRunsByContact({
+    contactId: delivery.contactId,
+    userId: delivery.userId,
+    limit: 50,
+  });
+  const resumed: AutomationRun[] = [];
+
+  for (const run of waitingRuns) {
+    if (run.contactId !== delivery.contactId || !run.currentStepKey) continue;
+
+    const automation = await deps.getAutomation(run.automationId);
+    if (!automation) continue;
+
+    const steps = await deps.listSteps(run.automationId);
+    const step = findStep(steps, run.currentStepKey);
+    if (!step || step.type !== "wait_for_event") continue;
+
+    const existing = run.stepStates?.[step.key];
+    if (existing?.status !== "waiting" || existing.output?.waited_event) {
+      continue;
+    }
+
+    const config = normalizeWaitForEventConfig(step.config ?? {});
+    if (config.event_name !== delivery.eventName) continue;
+
+    const states = setStepState(cloneStepStates(run), step.key, {
+      status: "running",
+      startedAt: existing.startedAt ?? iso(now),
+    });
+    const updated = await advanceRun(
+      deps,
+      run,
+      automation,
+      steps,
+      step,
+      states,
+      now,
+      {
+        ...(existing.output ?? {}),
+        waited_event: waitedEventOutput(delivery, now),
+      },
+    );
+    if (updated) resumed.push(updated);
+  }
+
+  return resumed;
 }
 
 export async function processScheduledAutomations(

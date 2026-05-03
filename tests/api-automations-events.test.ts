@@ -10,6 +10,7 @@ const mockCustomEventCreate = vi.hoisted(() => vi.fn());
 const mockCustomEventList = vi.hoisted(() => vi.fn());
 const mockDeliveryRecord = vi.hoisted(() => vi.fn());
 const mockRunCreateFromTrigger = vi.hoisted(() => vi.fn());
+const mockResumeWaitingRunsForEvent = vi.hoisted(() => vi.fn());
 const mockDbSelect = vi.hoisted(() => vi.fn());
 const mockDbInsert = vi.hoisted(() => vi.fn());
 const mockDbUpdate = vi.hoisted(() => vi.fn());
@@ -53,6 +54,10 @@ vi.mock("@/lib/api-auth", () => ({
   validateApiKey: mockValidateApiKey,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
+}));
+
+vi.mock("@/lib/workers/automation-runner", () => ({
+  resumeWaitingRunsForEvent: mockResumeWaitingRunsForEvent,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -155,6 +160,7 @@ describe("automation API routes", () => {
     vi.resetModules();
     vi.clearAllMocks();
     mockValidateApiKey.mockResolvedValue(auth);
+    mockResumeWaitingRunsForEvent.mockResolvedValue([]);
     mockDbSelect.mockReturnValue(queryRows([triggerStep]));
   });
 
@@ -277,6 +283,84 @@ describe("automation API routes", () => {
     );
   });
 
+  it("creates an automation with a valid wait_for_event step", async () => {
+    mockAutomationCreate.mockResolvedValue({
+      automation,
+      steps: [
+        triggerStep,
+        {
+          ...triggerStep,
+          id: "step_wait",
+          key: "wait",
+          type: "wait_for_event",
+          config: { event_name: "invoice.paid", timeout_seconds: 600 },
+          position: 1,
+        },
+      ],
+    });
+    const { POST } = await import("@/app/api/automations/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/automations", {
+        name: "Wait",
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+          },
+          {
+            key: "wait",
+            type: "wait_for_event",
+            config: { event_name: "invoice.paid", timeout_seconds: 600 },
+          },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockAutomationCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: expect.arrayContaining([
+          expect.objectContaining({
+            type: "wait_for_event",
+            config: { event_name: "invoice.paid", timeout_seconds: 600 },
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it("rejects invalid wait_for_event config with field-level errors", async () => {
+    const { POST } = await import("@/app/api/automations/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/automations", {
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+          },
+          {
+            key: "wait",
+            type: "wait_for_event",
+            config: { event_name: "", timeout_seconds: 0 },
+          },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    const json = await response.json();
+    expect(json.details.fieldErrors.steps).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("event_name"),
+        expect.stringContaining("timeout_seconds"),
+      ]),
+    );
+  });
+
   it("returns 422 when repository graph validation rejects condition branches", async () => {
     mockAutomationCreate.mockRejectedValue(
       new TestAutomationValidationError(
@@ -361,6 +445,7 @@ describe("events API routes", () => {
     vi.resetModules();
     vi.clearAllMocks();
     mockValidateApiKey.mockResolvedValue(auth);
+    mockResumeWaitingRunsForEvent.mockResolvedValue([]);
   });
 
   it("creates and lists custom events", async () => {
@@ -415,7 +500,7 @@ describe("events API routes", () => {
     const both = await POST(
       jsonRequest("http://localhost/api/events/send", {
         event: "user.signed_up",
-        contact_id: "11111111-1111-1111-1111-111111111111",
+        contact_id: "11111111-1111-4111-8111-111111111111",
         email: "u@example.com",
       }),
     );
@@ -485,6 +570,64 @@ describe("events API routes", () => {
       "user.signed_up",
       "user_1",
     );
+    expect(mockResumeWaitingRunsForEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "delivery_1" }),
+    );
     expect(mockRunCreateFromTrigger).toHaveBeenCalledTimes(2);
+  });
+
+  it("includes wait_for_event resumed runs when sending a matching event", async () => {
+    mockContactFindFirst.mockResolvedValue({ id: "contact_1" });
+    mockDeliveryRecord.mockResolvedValue({
+      id: "delivery_1",
+      eventName: "invoice.paid",
+      contactId: "contact_1",
+      email: "user@example.com",
+      payload: { invoice_id: "inv_1" },
+      receivedAt: now,
+    });
+    mockResumeWaitingRunsForEvent.mockResolvedValue([
+      {
+        id: "run_wait",
+        automationId: "auto_1",
+        status: "queued",
+        triggerEventId: "trigger_delivery",
+        contactId: "contact_1",
+        stepStates: {
+          wait: {
+            status: "completed",
+            output: {
+              waited_event: {
+                delivery_id: "delivery_1",
+                payload: { invoice_id: "inv_1" },
+              },
+            },
+          },
+        },
+        startedAt: now,
+        completedAt: null,
+        currentStepKey: "send",
+        failureReason: null,
+        nextStepAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+    mockFindEnabledByTriggerEventName.mockResolvedValue([]);
+    const { POST } = await import("@/app/api/events/send/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/events/send", {
+        event: "invoice.paid",
+        contact_id: "11111111-1111-4111-8111-111111111111",
+        payload: { invoice_id: "inv_1" },
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      resumed_runs: [{ id: "run_wait", current_step_key: "send" }],
+      automation_runs: [],
+    });
   });
 });

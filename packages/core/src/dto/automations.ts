@@ -78,12 +78,18 @@ export interface ConditionStepConfig {
   predicate: ConditionPredicateConfig;
 }
 
+export interface WaitForEventStepConfig {
+  event_name: string;
+  timeout_seconds?: number;
+}
+
 export type AutomationStepConfig =
   | TriggerStepConfig
   | DelayStepConfig
   | SendEmailStepConfig
   | EndStepConfig
-  | ConditionStepConfig;
+  | ConditionStepConfig
+  | WaitForEventStepConfig;
 
 export interface AutomationStepInput {
   key: string;
@@ -175,6 +181,7 @@ const CONDITION_OPERATORS: ReadonlySet<ConditionOperator> = new Set([
 ]);
 const MAX_DELAY_DAYS = 30;
 export const MAX_DELAY_SECONDS = MAX_DELAY_DAYS * 24 * 60 * 60;
+export const MAX_WAIT_FOR_EVENT_TIMEOUT_SECONDS = MAX_DELAY_SECONDS;
 
 export class AutomationValidationError extends Error {
   readonly code: string;
@@ -382,6 +389,32 @@ export function normalizeConditionConfig(
   };
 }
 
+export function normalizeWaitForEventConfig(
+  raw: Record<string, unknown>,
+): WaitForEventStepConfig {
+  const eventName =
+    typeof raw.event_name === "string" ? raw.event_name.trim() : "";
+  assertEventNameAllowed(eventName);
+
+  const config: WaitForEventStepConfig = { event_name: eventName };
+  if (raw.timeout_seconds !== undefined) {
+    if (
+      typeof raw.timeout_seconds !== "number" ||
+      !Number.isInteger(raw.timeout_seconds) ||
+      raw.timeout_seconds < 1 ||
+      raw.timeout_seconds > MAX_WAIT_FOR_EVENT_TIMEOUT_SECONDS
+    ) {
+      throw new AutomationValidationError(
+        `wait_for_event timeout_seconds must be an integer between 1 and ${MAX_WAIT_FOR_EVENT_TIMEOUT_SECONDS}`,
+        "wait_for_event_timeout_invalid",
+      );
+    }
+    config.timeout_seconds = raw.timeout_seconds;
+  }
+
+  return config;
+}
+
 export function normalizeStepConfig(
   type: AutomationStepType,
   config: Record<string, unknown>,
@@ -401,6 +434,11 @@ export function normalizeStepConfig(
       >;
     case "condition":
       return normalizeConditionConfig(config) as unknown as Record<
+        string,
+        unknown
+      >;
+    case "wait_for_event":
+      return normalizeWaitForEventConfig(config) as unknown as Record<
         string,
         unknown
       >;

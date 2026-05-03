@@ -8,6 +8,7 @@ export const automationStepTypeSchema = z.enum([
   "send_email",
   "end",
   "condition",
+  "wait_for_event",
 ]);
 
 const conditionComparableValueSchema = z.union([
@@ -54,6 +55,20 @@ const conditionStepConfigSchema = z.object({
   predicate: conditionPredicateSchema,
 });
 
+const waitForEventStepConfigSchema = z.object({
+  event_name: z
+    .string()
+    .trim()
+    .min(1, "event_name is required")
+    .max(255, "event_name must be at most 255 characters"),
+  timeout_seconds: z
+    .number()
+    .int("timeout_seconds must be an integer")
+    .min(1, "timeout_seconds must be at least 1")
+    .max(30 * 24 * 60 * 60, "timeout_seconds must be at most 30 days")
+    .optional(),
+});
+
 const automationStepConfigSchema = z.record(z.string(), z.unknown());
 
 export const automationStepSchema = z
@@ -73,6 +88,18 @@ export const automationStepSchema = z
   .superRefine((step, ctx) => {
     if (step.type === "condition") {
       const parsed = conditionStepConfigSchema.safeParse(step.config);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          ctx.addIssue({
+            ...issue,
+            path: ["config", ...issue.path],
+          });
+        }
+      }
+    }
+
+    if (step.type === "wait_for_event") {
+      const parsed = waitForEventStepConfigSchema.safeParse(step.config);
       if (!parsed.success) {
         for (const issue of parsed.error.issues) {
           ctx.addIssue({
