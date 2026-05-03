@@ -43,7 +43,7 @@ Rows are ordered roughly by priority within each area. The inspector's tie-break
 | Contacts | CRUD, unsub state | TBD | ? | ? | ? | ? | P1 | | |
 | Broadcasts | create/preview/send | TBD | ? | ? | ? | ? | P1 | | |
 | Segments | filter by attributes | TBD | ? | ? | ? | ? | P2 | | |
-| Unsubscribe management | hosted page + List-Unsubscribe header | TBD | ? | ? | ? | ? | P0 | | |
+| Unsubscribe management | hosted page + List-Unsubscribe header ([docs](https://resend.com/docs/dashboard/emails/add-unsubscribe-to-transactional-emails)); broadcasts auto-handle `{{{RESEND_UNSUBSCRIBE_URL}}}` ([docs](https://resend.com/docs/dashboard/broadcasts/introduction)) | partial: hosted `/unsubscribe/[contactId]` page calls auth-protected contact PATCH (`src/app/unsubscribe/[contactId]/page.tsx:17`, `src/app/api/contacts/[id]/route.ts:70`); send APIs only persist caller headers (`src/app/api/emails/route.ts:293`, `src/app/api/emails/batch/route.ts:176`); broadcast footer placeholder is not wired to a generated URL (`src/components/broadcast-editor.tsx:97`, `src/components/broadcast-editor.tsx:1310`) | partial | behind | behind | n/a | P0 | #173 | 2026-05-03 |
 
 ## Domains
 
