@@ -99,6 +99,69 @@ describe("OpenSend SDK", () => {
     );
   });
 
+  it("exposes machine-readable API error fields without dropping message or status", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          name: "validation_error",
+          code: "validation_error",
+          message: "Validation failed.",
+          statusCode: 422,
+          details: { fieldErrors: { to: ["Required"] }, formErrors: [] },
+        }),
+        { status: 422, statusText: "Unprocessable Entity" },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new OpenSend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    const response = await client.emails.send({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+    });
+
+    expect(response).toEqual({
+      data: null,
+      error: {
+        name: "validation_error",
+        code: "validation_error",
+        message: "Validation failed.",
+        statusCode: 422,
+      },
+    });
+  });
+
+  it("keeps legacy string error parsing for older routes", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ error: "Missing or invalid API key" }), {
+        status: 401,
+        statusText: "Unauthorized",
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new OpenSend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    const response = await client.emails.list();
+
+    expect(response).toEqual({
+      data: null,
+      error: {
+        message: "Missing or invalid API key",
+        statusCode: 401,
+      },
+    });
+  });
+
   it("treats empty successful responses as null data", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

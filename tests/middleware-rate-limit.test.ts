@@ -78,7 +78,10 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("retry-after")).toBe("17");
     expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
     await expect(response.json()).resolves.toEqual({
-      error: "Rate limit exceeded. Try again later.",
+      name: "rate_limit_exceeded",
+      code: "rate_limit_exceeded",
+      message: "Rate limit exceeded. Try again later.",
+      statusCode: 429,
     });
   });
 
@@ -94,7 +97,10 @@ describe("middleware rate limiting", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
     await expect(response.json()).resolves.toEqual({
-      error: "Rate limiting is temporarily unavailable.",
+      name: "rate_limit_unavailable",
+      code: "rate_limit_unavailable",
+      message: "Rate limiting is temporarily unavailable.",
+      statusCode: 503,
     });
   });
 });

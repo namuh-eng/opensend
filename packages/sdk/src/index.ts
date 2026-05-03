@@ -27,9 +27,16 @@ interface SDKOptions {
   baseUrl: string;
 }
 
+interface ApiError {
+  message: string;
+  statusCode: number;
+  name?: string;
+  code?: string;
+}
+
 interface ApiResponse<T> {
   data: T | null;
-  error: { message: string; statusCode: number } | null;
+  error: ApiError | null;
 }
 
 export type SendEmailPayload = EmailOptions & {
@@ -101,6 +108,43 @@ function normalizeBaseUrl(baseUrl?: string): string {
   return normalized.toString().replace(/\/$/, "");
 }
 
+function getStringProperty(
+  value: Record<string, unknown>,
+  key: string,
+): string | null {
+  const property = value[key];
+  return typeof property === "string" ? property : null;
+}
+
+function parseApiErrorBody(parsedBody: unknown, response: Response): ApiError {
+  const errorBody =
+    parsedBody && typeof parsedBody === "object"
+      ? (parsedBody as Record<string, unknown>)
+      : null;
+
+  if (!errorBody) {
+    return {
+      message: response.statusText || "Request failed",
+      statusCode: response.status,
+    };
+  }
+
+  const message =
+    getStringProperty(errorBody, "message") ??
+    getStringProperty(errorBody, "error") ??
+    response.statusText ??
+    "Request failed";
+  const name = getStringProperty(errorBody, "name");
+  const code = getStringProperty(errorBody, "code");
+
+  return {
+    message,
+    statusCode: response.status,
+    ...(name ? { name } : {}),
+    ...(code ? { code } : {}),
+  };
+}
+
 async function renderReactToHtml(element: unknown): Promise<string | null> {
   try {
     const { renderToStaticMarkup } = await import("react-dom/server");
@@ -139,20 +183,9 @@ class HttpClient {
       const parsedBody = rawBody ? (JSON.parse(rawBody) as unknown) : null;
 
       if (!response.ok) {
-        const errorBody =
-          parsedBody && typeof parsedBody === "object" ? parsedBody : null;
-
         return {
           data: null,
-          error: {
-            message:
-              errorBody &&
-              "error" in errorBody &&
-              typeof errorBody.error === "string"
-                ? errorBody.error
-                : response.statusText || "Request failed",
-            statusCode: response.status,
-          },
+          error: parseApiErrorBody(parsedBody, response),
         };
       }
 
@@ -163,6 +196,8 @@ class HttpClient {
         error: {
           message: error instanceof Error ? error.message : "Unknown error",
           statusCode: 500,
+          name: "internal_server_error",
+          code: "internal_server_error",
         },
       };
     }
@@ -424,6 +459,7 @@ class OpenSend {
 export { OpenSend };
 export type {
   SDKOptions,
+  ApiError,
   ApiResponse,
   EmailOptions,
   EmailResponse,

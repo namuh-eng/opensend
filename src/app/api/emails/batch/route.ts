@@ -1,4 +1,9 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  getApiKeyAuthHeaderError,
+  publicApiKeyUnauthorizedResponse,
+  validateApiKey,
+} from "@/lib/api-auth";
+import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
 import { quotaExceededResponse, reserveEmailQuota } from "@/lib/billing/quota";
 import { db } from "@/lib/db";
 import { emails } from "@/lib/db/schema";
@@ -74,16 +79,23 @@ export async function POST(request: Request): Promise<Response> {
     route: "/api/emails/batch",
   });
 
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const authHeader = request.headers.get("authorization");
+  const authHeaderError = getApiKeyAuthHeaderError(authHeader);
+  const auth = authHeaderError ? null : await validateApiKey(authHeader);
   if (!auth) {
     recordBatchMetric(telemetry, {
       durationMs: performance.now() - startedAt,
       outcome: "unauthorized",
     });
-    const response = unauthorizedResponse();
-    response.headers.set("x-correlation-id", telemetry.correlationId);
-    response.headers.set("traceparent", telemetry.traceparent);
-    return response;
+    return publicApiKeyUnauthorizedResponse(
+      authHeaderError ?? "invalid_api_key",
+      {
+        headers: {
+          "x-correlation-id": telemetry.correlationId,
+          traceparent: telemetry.traceparent,
+        },
+      },
+    );
   }
 
   let body: unknown;
@@ -94,9 +106,11 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
     });
-    return jsonWithTelemetry({ error: "Invalid JSON body" }, telemetry, {
-      status: 400,
-    });
+    return jsonWithTelemetry(
+      publicApiError("invalid_json", "Request body must be valid JSON.", 400),
+      telemetry,
+      { status: 400 },
+    );
   }
 
   const result = batchSendEmailSchema.safeParse(body);
@@ -106,7 +120,12 @@ export async function POST(request: Request): Promise<Response> {
       outcome: "invalid",
     });
     return jsonWithTelemetry(
-      { error: "Validation failed", details: result.error.flatten() },
+      publicApiError(
+        "validation_error",
+        "Validation failed.",
+        422,
+        zodValidationDetails(result.error),
+      ),
       telemetry,
       { status: 422 },
     );
@@ -243,8 +262,6 @@ export async function POST(request: Request): Promise<Response> {
     });
     return jsonWithTelemetry({ data: results }, telemetry);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to send batch emails";
     recordTelemetryError(telemetry, "email.batch_accept.failed", err);
     emitCloudWatchMetric(telemetry, {
       metrics: [
@@ -261,6 +278,14 @@ export async function POST(request: Request): Promise<Response> {
         Outcome: "failed",
       },
     });
-    return jsonWithTelemetry({ error: message }, telemetry, { status: 500 });
+    return jsonWithTelemetry(
+      publicApiError(
+        "internal_server_error",
+        "Failed to send batch emails.",
+        500,
+      ),
+      telemetry,
+      { status: 500 },
+    );
   }
 }

@@ -1,3 +1,4 @@
+import { publicApiErrorResponse } from "@/lib/api-errors";
 import { db } from "@/lib/db";
 import {
   apiKeys,
@@ -344,16 +345,14 @@ export function quotaExceededResponse(
   info: QuotaExceededInfo,
   init?: ResponseInit,
 ): Response {
-  const headers = new Headers(init?.headers);
-  return Response.json(
-    {
-      error: "quota_exceeded",
+  return publicApiErrorResponse("quota_exceeded", "Quota exceeded.", 402, {
+    ...init,
+    details: {
       resource: info.resource,
       limit: info.limit,
       used: info.used,
       plan: info.plan,
       upgrade_url: info.upgrade_url,
     },
-    { ...init, status: 402, headers },
-  );
+  });
 }

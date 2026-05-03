@@ -1,0 +1,66 @@
+import { type ZodError, flattenError } from "zod";
+
+export type PublicApiErrorCode =
+  | "invalid_json"
+  | "validation_error"
+  | "missing_api_key"
+  | "malformed_api_key"
+  | "invalid_api_key"
+  | "invalid_idempotency_key"
+  | "idempotency_conflict"
+  | "not_found"
+  | "quota_exceeded"
+  | "rate_limit_exceeded"
+  | "rate_limit_unavailable"
+  | "internal_server_error";
+
+export type PublicApiErrorDetails =
+  | { formErrors: string[]; fieldErrors: Record<string, string[]> }
+  | Record<string, string | number | boolean | null>;
+
+export interface PublicApiErrorEnvelope {
+  name: PublicApiErrorCode;
+  code: PublicApiErrorCode;
+  message: string;
+  statusCode: number;
+  details?: PublicApiErrorDetails;
+}
+
+export function publicApiError(
+  code: PublicApiErrorCode,
+  message: string,
+  statusCode: number,
+  details?: PublicApiErrorDetails,
+): PublicApiErrorEnvelope {
+  return details === undefined
+    ? { name: code, code, message, statusCode }
+    : { name: code, code, message, statusCode, details };
+}
+
+export function publicApiErrorResponse(
+  code: PublicApiErrorCode,
+  message: string,
+  statusCode: number,
+  init?: ResponseInit & { details?: PublicApiErrorDetails },
+): Response {
+  const headers = new Headers(init?.headers);
+  return Response.json(
+    publicApiError(code, message, statusCode, init?.details),
+    {
+      ...init,
+      status: statusCode,
+      headers,
+    },
+  );
+}
+
+export function zodValidationDetails(error: ZodError): {
+  formErrors: string[];
+  fieldErrors: Record<string, string[]>;
+} {
+  const flattened = flattenError(error);
+  return {
+    formErrors: flattened.formErrors,
+    fieldErrors: flattened.fieldErrors,
+  };
+}

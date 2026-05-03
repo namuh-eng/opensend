@@ -1,4 +1,10 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  getApiKeyAuthHeaderError,
+  publicApiKeyUnauthorizedResponse,
+  unauthorizedResponse,
+  validateApiKey,
+} from "@/lib/api-auth";
+import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
 import {
   quotaExceededResponse,
   releaseEmailQuota,
@@ -18,7 +24,7 @@ import {
   recordTelemetryError,
 } from "@opensend/core";
 import { and, desc, eq, gt, lt } from "drizzle-orm";
-import { type ZodError, flattenError } from "zod";
+import type { ZodError } from "zod";
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -78,16 +84,23 @@ export async function POST(request: Request): Promise<Response> {
     route: "/api/emails",
   });
 
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const authHeader = request.headers.get("authorization");
+  const authHeaderError = getApiKeyAuthHeaderError(authHeader);
+  const auth = authHeaderError ? null : await validateApiKey(authHeader);
   if (!auth) {
     recordAcceptMetric(telemetry, {
       durationMs: performance.now() - startedAt,
       outcome: "unauthorized",
     });
-    const response = unauthorizedResponse();
-    response.headers.set("x-correlation-id", telemetry.correlationId);
-    response.headers.set("traceparent", telemetry.traceparent);
-    return response;
+    return publicApiKeyUnauthorizedResponse(
+      authHeaderError ?? "invalid_api_key",
+      {
+        headers: {
+          "x-correlation-id": telemetry.correlationId,
+          traceparent: telemetry.traceparent,
+        },
+      },
+    );
   }
 
   const idempotencyKey = request.headers.get("idempotency-key");
@@ -100,7 +113,11 @@ export async function POST(request: Request): Promise<Response> {
       outcome: "invalid",
     });
     return jsonWithTelemetry(
-      { error: "Invalid idempotency key length" },
+      publicApiError(
+        "invalid_idempotency_key",
+        "Idempotency-Key must be between 1 and 255 characters.",
+        400,
+      ),
       telemetry,
       { status: 400 },
     );
@@ -114,9 +131,11 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
     });
-    return jsonWithTelemetry({ error: "Invalid JSON body" }, telemetry, {
-      status: 400,
-    });
+    return jsonWithTelemetry(
+      publicApiError("invalid_json", "Request body must be valid JSON.", 400),
+      telemetry,
+      { status: 400 },
+    );
   }
 
   const result = sendEmailSchema.safeParse(body);
@@ -126,7 +145,12 @@ export async function POST(request: Request): Promise<Response> {
       outcome: "invalid",
     });
     return jsonWithTelemetry(
-      { error: "Validation failed", details: flattenError(result.error) },
+      publicApiError(
+        "validation_error",
+        "Validation failed.",
+        422,
+        zodValidationDetails(result.error),
+      ),
       telemetry,
       { status: 422 },
     );
@@ -144,7 +168,16 @@ export async function POST(request: Request): Promise<Response> {
         durationMs: performance.now() - startedAt,
         outcome: "queued",
       });
-      return jsonWithTelemetry({ id: existing.id }, telemetry, { status: 409 });
+      return jsonWithTelemetry(
+        publicApiError(
+          "idempotency_conflict",
+          "A request with this idempotency key has already been accepted.",
+          409,
+          { id: existing.id },
+        ),
+        telemetry,
+        { status: 409 },
+      );
     }
   }
 
@@ -171,9 +204,11 @@ export async function POST(request: Request): Promise<Response> {
           durationMs: performance.now() - startedAt,
           outcome: "invalid",
         });
-        return jsonWithTelemetry({ error: "Template not found" }, telemetry, {
-          status: 404,
-        });
+        return jsonWithTelemetry(
+          publicApiError("not_found", "Template not found.", 404),
+          telemetry,
+          { status: 404 },
+        );
       }
 
       // Validate required variables
@@ -194,10 +229,17 @@ export async function POST(request: Request): Promise<Response> {
             outcome: "invalid",
           });
           return jsonWithTelemetry(
-            {
-              error: "Validation failed",
-              message: `Missing required template variable: ${requiredVar}`,
-            },
+            publicApiError(
+              "validation_error",
+              `Missing required template variable: ${requiredVar}`,
+              422,
+              {
+                formErrors: [],
+                fieldErrors: {
+                  template: [`Missing required variable: ${requiredVar}`],
+                },
+              },
+            ),
             telemetry,
             { status: 422 },
           );
@@ -324,7 +366,6 @@ export async function POST(request: Request): Promise<Response> {
     quotaReserved = false;
     return jsonWithTelemetry({ id: createdEmail.id }, telemetry);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to send email";
     recordTelemetryError(telemetry, "email.accept.failed", err);
     recordAcceptMetric(telemetry, {
       durationMs: performance.now() - startedAt,
@@ -333,7 +374,11 @@ export async function POST(request: Request): Promise<Response> {
     if (quotaReserved) {
       await releaseEmailQuota(auth.userId, 1);
     }
-    return jsonWithTelemetry({ error: message }, telemetry, { status: 500 });
+    return jsonWithTelemetry(
+      publicApiError("internal_server_error", "Failed to send email.", 500),
+      telemetry,
+      { status: 500 },
+    );
   }
 }
 
@@ -442,5 +487,5 @@ export async function DELETE(request: Request): Promise<Response> {
 
 // Error fallback for Zod (kept explicit for strict typing in route handlers)
 export function formatZodError(error: ZodError): Record<string, unknown> {
-  return flattenError(error);
+  return zodValidationDetails(error);
 }
