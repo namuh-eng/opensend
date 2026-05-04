@@ -25,6 +25,7 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/api-auth", () => ({
   authorizeDashboardOrApiKey: mockValidateApiKey,
+  validateApiKey: mockValidateApiKey,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
