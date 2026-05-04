@@ -22,10 +22,22 @@ export const domainCapabilitySchema = z.object({
   enabled: z.boolean(),
 });
 
+export const returnPathLabelSchema = z
+  .string()
+  .trim()
+  .min(1, "Return path is required")
+  .max(63, "Return path must be 63 characters or less")
+  .regex(/^[A-Za-z]/, "Return path must start with a letter")
+  .regex(/[A-Za-z0-9]$/, "Return path must end with a letter or number")
+  .regex(
+    /^[A-Za-z0-9-]+$/,
+    "Return path can only contain letters, numbers, and hyphens",
+  );
+
 export const createDomainSchema = z.object({
   name: z.string().trim().min(1, "Domain name is required").max(255),
   region: domainRegionSchema.optional().default("us-east-1"),
-  custom_return_path: z.string().trim().min(1).max(255).optional(),
+  custom_return_path: returnPathLabelSchema.optional(),
   open_tracking: z.boolean().optional(),
   click_tracking: z.boolean().optional(),
   tracking_subdomain: z.string().trim().min(1).max(255).optional(),

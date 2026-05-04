@@ -108,6 +108,22 @@ describe("Domain API validation", () => {
     expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
+  it("returns 422 for invalid custom return path labels", async () => {
+    const { POST } = await import("@/app/api/domains/route");
+    const req = makeRequest("http://localhost:3015/api/domains", "POST", {
+      name: "example.com",
+      custom_return_path: "outbound.example",
+    });
+
+    const res = await POST(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error).toBe("Validation failed");
+    expect(json.details.fieldErrors.custom_return_path).toBeDefined();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
   it("returns 422 for invalid domain update payload", async () => {
     const { PATCH } = await import("@/app/api/domains/[id]/route");
     const req = makeRequest(
@@ -213,6 +229,7 @@ describe("Domain API validation", () => {
     mockDb.query.domains.findFirst.mockResolvedValue({
       id: VALID_DOMAIN_ID,
       name: "example.com",
+      customReturnPath: "outbound",
     });
     mockCreateDomainIdentity.mockResolvedValue({
       dkimTokens: ["dkim-1", "dkim-2", "dkim-3"],
@@ -249,10 +266,10 @@ describe("Domain API validation", () => {
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
     expect(json.cloudflare_records).toBe(1);
-    expect(mockAutoConfigureDomain).toHaveBeenCalledWith("example.com", [
-      "dkim-1",
-      "dkim-2",
-      "dkim-3",
-    ]);
+    expect(mockAutoConfigureDomain).toHaveBeenCalledWith(
+      "example.com",
+      ["dkim-1", "dkim-2", "dkim-3"],
+      "outbound",
+    );
   });
 });

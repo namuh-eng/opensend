@@ -53,6 +53,7 @@ export async function POST(
     const { records: cfRecords, warnings } = await autoConfigureDomain(
       domain.name,
       dkimTokens,
+      domain.customReturnPath,
     );
 
     const allRecords = cfRecords.map((record) => ({
