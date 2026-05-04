@@ -9,6 +9,11 @@ type DomainRecord = NonNullable<DomainRow["records"]>[number];
 type DomainCapability = NonNullable<DomainRow["capabilities"]>[number];
 
 export const DEFAULT_RETURN_PATH = "send";
+export const DMARC_RECORD_VALUE = "v=DMARC1; p=none;";
+
+export function buildDmarcRecordName(domainName: string): string {
+  return `_dmarc.${domainName}`;
+}
 
 export function getEffectiveReturnPathLabel(
   customReturnPath: string | null | undefined,
@@ -135,7 +140,15 @@ function buildDomainRecords(
     priority: 10,
   };
 
-  return [...dkimRecords, spfRecord, mxRecord];
+  const dmarcRecord: DomainRecord = {
+    type: "TXT",
+    name: buildDmarcRecordName(domainName),
+    value: DMARC_RECORD_VALUE,
+    status: "pending",
+    ttl: "Auto",
+  };
+
+  return [...dkimRecords, spfRecord, mxRecord, dmarcRecord];
 }
 
 function toDomainDetail(row: DomainRow): DomainDetail {

@@ -637,6 +637,10 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
       (r.type === "TXT" && r.value.includes("v=spf1")),
   );
 
+  const dmarcRecords = records.filter(
+    (r) => r.type === "TXT" && r.name.startsWith("_dmarc."),
+  );
+
   return (
     <div className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-6">
       {/* Header */}
@@ -716,7 +720,21 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
         />
       </div>
 
-      {/* Section 3: Enable Receiving */}
+      {/* Section 3: DMARC guidance */}
+      <div className="mb-8 border-t border-[rgba(176,199,217,0.145)] pt-6">
+        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-1">
+          DMARC Policy
+        </h3>
+        <p className="text-[13px] text-[#A1A4A5] mb-4">
+          Publish this starter TXT record so receivers can evaluate SPF and DKIM
+          alignment before you enforce a stricter policy.
+        </p>
+        <DNSRecordTable
+          records={dmarcRecords.length > 0 ? dmarcRecords : null}
+        />
+      </div>
+
+      {/* Section 4: Enable Receiving */}
       <div className="border-t border-[rgba(176,199,217,0.145)] pt-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-[14px] font-semibold text-[#F0F0F0]">

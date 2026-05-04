@@ -135,6 +135,13 @@ describe("domain service", () => {
         ttl: "Auto",
         priority: 10,
       },
+      {
+        type: "TXT",
+        name: "_dmarc.example.com",
+        value: "v=DMARC1; p=none;",
+        status: "pending",
+        ttl: "Auto",
+      },
     ]);
     expect(result).toMatchObject({
       id: "created-domain",
@@ -193,6 +200,13 @@ describe("domain service", () => {
         status: "pending",
         ttl: "Auto",
         priority: 10,
+      },
+      {
+        type: "TXT",
+        name: "_dmarc.example.com",
+        value: "v=DMARC1; p=none;",
+        status: "pending",
+        ttl: "Auto",
       },
     ]);
   });

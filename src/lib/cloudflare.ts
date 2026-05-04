@@ -1,3 +1,5 @@
+import { DMARC_RECORD_VALUE, buildDmarcRecordName } from "@opensend/core";
+
 // ── Types ──────────────────────────────────────────────────────────
 
 export interface DNSRecord {
@@ -167,10 +169,13 @@ export async function autoConfigureDomain(
   const warnings: string[] = [];
   const results: DNSRecordResult[] = [];
 
-  // Check existing MX and TXT records before creating anything
-  const [existingMX, existingTXT] = await Promise.all([
+  const dmarcRecordName = buildDmarcRecordName(domain);
+
+  // Check existing MX, SPF TXT, and DMARC TXT records before creating anything
+  const [existingMX, existingTXT, existingDmarcTXT] = await Promise.all([
     listDNSRecords({ name: returnPathRecordName, type: "MX" }),
     listDNSRecords({ name: returnPathRecordName, type: "TXT" }),
+    listDNSRecords({ name: dmarcRecordName, type: "TXT" }),
   ]);
 
   // DKIM CNAME records — skip gracefully if already exist
@@ -214,6 +219,22 @@ export async function autoConfigureDomain(
       ttl: 300,
     });
     results.push(spfRecord);
+  }
+
+  // DMARC TXT record — create starter guidance only when missing. Never
+  // overwrite an existing customer DMARC policy.
+  if (existingDmarcTXT.length > 0) {
+    warnings.push(
+      "DMARC record already exists — skipped to avoid overwriting your policy",
+    );
+  } else {
+    const dmarcRecord = await createDNSRecord({
+      type: "TXT",
+      name: dmarcRecordName,
+      content: DMARC_RECORD_VALUE,
+      ttl: 300,
+    });
+    results.push(dmarcRecord);
   }
 
   // MX record — skip entirely if any MX records already exist to avoid
