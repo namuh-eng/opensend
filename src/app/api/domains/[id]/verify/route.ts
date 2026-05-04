@@ -1,4 +1,7 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  authorizeDashboardOrApiKey,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
 import {
@@ -14,7 +17,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
 
   const parsedParams = verifyDomainParamsSchema.safeParse(await params);

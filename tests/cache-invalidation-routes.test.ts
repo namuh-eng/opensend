@@ -36,6 +36,7 @@ vi.mock("@opensend/core", () => ({
 }));
 
 vi.mock("@/lib/api-auth", () => ({
+  authorizeDashboardOrApiKey: mockValidateApiKey,
   invalidateApiKeyAuthCache: mockInvalidateApiKeyAuthCache,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),

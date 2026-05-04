@@ -1,4 +1,7 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  authorizeDashboardOrApiKey,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
 import { autoConfigureDomain } from "@/lib/cloudflare";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
@@ -16,7 +19,9 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(_req.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    _req.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
 
   const parsedParams = autoConfigureDomainParamsSchema.safeParse(await params);

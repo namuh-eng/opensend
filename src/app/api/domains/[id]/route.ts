@@ -1,4 +1,7 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  authorizeDashboardOrApiKey,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
 import { deleteDNSRecord, listDNSRecords } from "@/lib/cloudflare";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
@@ -23,7 +26,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(_req.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    _req.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
 
   const parsedParams = domainRouteParamsSchema.safeParse(await params);
@@ -69,7 +74,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(req.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    req.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
 
   let body: unknown;
@@ -171,7 +178,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(_req.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    _req.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
 
   const parsedParams = domainRouteParamsSchema.safeParse(await params);

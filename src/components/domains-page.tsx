@@ -235,17 +235,9 @@ export function DomainsPage({ domains }: DomainsPageProps) {
           onAction={async () => {
             setAdding(true);
             try {
-              const apiKey =
-                typeof window !== "undefined"
-                  ? localStorage.getItem("api_key")
-                  : null;
-              const headers: Record<string, string> = {
-                "Content-Type": "application/json",
-              };
-              if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
               const res = await fetch("/api/domains", {
                 method: "POST",
-                headers,
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name: newDomain.trim() }),
               });
               if (res.ok) {

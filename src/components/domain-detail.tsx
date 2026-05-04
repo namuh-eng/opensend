@@ -32,34 +32,11 @@ interface DomainDetailProps {
   domain: DomainDetailData;
 }
 
-function getStoredApiKey(): string | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    return window.localStorage.getItem("api_key");
-  } catch {
-    return null;
-  }
-}
-
-function withApiKeyHeaders(
-  headers?: Record<string, string>,
-): Record<string, string> {
-  const apiKey = getStoredApiKey();
-
-  return apiKey
-    ? { ...headers, Authorization: `Bearer ${apiKey}` }
-    : { ...(headers ?? {}) };
-}
-
 async function apiRequest(
   input: string,
   init?: Omit<RequestInit, "headers"> & { headers?: Record<string, string> },
 ): Promise<Response> {
-  const response = await fetch(input, {
-    ...init,
-    headers: withApiKeyHeaders(init?.headers),
-  });
+  const response = await fetch(input, init);
 
   if (!response.ok) {
     let message = "Request failed";
