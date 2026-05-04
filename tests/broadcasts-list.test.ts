@@ -95,6 +95,7 @@ function mockFetchSuccess(
 describe("BroadcastsList", () => {
   beforeEach(async () => {
     vi.resetModules();
+    vi.clearAllMocks();
     const mod = await import("@/components/broadcasts-list");
     BroadcastsList = mod.BroadcastsList;
   });
