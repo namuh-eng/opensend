@@ -1,56 +1,40 @@
-import { randomBytes } from "node:crypto";
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { db } from "@/lib/db";
-import { webhooks } from "@/lib/db/schema";
 import { createWebhookSchema } from "@/lib/validation/webhooks";
-import { desc, lt } from "drizzle-orm";
+import { createWebhookService } from "@opensend/core";
+
+function webhookService() {
+  return createWebhookService();
+}
+
+function mapWebhookError(error: unknown, fallback: string): Response {
+  const message = error instanceof Error ? error.message : fallback;
+  return Response.json({ error: message }, { status: 500 });
+}
 
 export async function GET(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
 
   const url = new URL(request.url);
-  const limit = Math.min(
-    Math.max(Number(url.searchParams.get("limit")) || 20, 1),
-    100,
-  );
+  const limit = Number(url.searchParams.get("limit")) || 20;
   const after = url.searchParams.get("after") || "";
 
   try {
-    const query = db
-      .select({
-        id: webhooks.id,
-        url: webhooks.url,
-        eventTypes: webhooks.eventTypes,
-        status: webhooks.status,
-        createdAt: webhooks.createdAt,
-      })
-      .from(webhooks);
-
-    if (after) {
-      query.where(lt(webhooks.id, after));
-    }
-
-    const results = await query.orderBy(desc(webhooks.id)).limit(limit + 1);
-
-    const hasMore = results.length > limit;
-    const dataRows = hasMore ? results.slice(0, limit) : results;
+    const result = await webhookService().listWebhooks({ limit, after });
 
     return Response.json({
       object: "list",
-      data: dataRows.map((w) => ({
-        id: w.id,
-        endpoint: w.url,
-        events: w.eventTypes,
-        status: w.status === "active" ? "enabled" : "disabled",
-        created_at: w.createdAt,
+      data: result.data.map((webhook) => ({
+        id: webhook.id,
+        endpoint: webhook.endpoint,
+        events: webhook.events,
+        status: webhook.status,
+        created_at: webhook.createdAt,
       })),
-      has_more: hasMore,
+      has_more: result.hasMore,
     });
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to list webhooks";
-    return Response.json({ error: message }, { status: 500 });
+  } catch (error) {
+    return mapWebhookError(error, "Failed to list webhooks");
   }
 }
 
@@ -74,9 +58,8 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const validated = result.data;
-  const endpoint = validated.endpoint ?? (validated as { url?: string }).url;
-  const events =
-    validated.events ?? (validated as { event_types?: string[] }).event_types;
+  const endpoint = validated.endpoint ?? validated.url;
+  const events = validated.events ?? validated.event_types;
 
   if (!endpoint || !events) {
     return Response.json(
@@ -86,32 +69,21 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const signingSecret = `whsec_${randomBytes(24).toString("base64url")}`;
-
-    const [webhook] = await db
-      .insert(webhooks)
-      .values({
-        url: endpoint,
-        eventTypes: events,
-        signingSecret,
-      })
-      .returning();
+    const webhook = await webhookService().createWebhook({ endpoint, events });
 
     return Response.json(
       {
         object: "webhook",
         id: webhook.id,
-        endpoint: webhook.url,
-        events: webhook.eventTypes,
-        status: webhook.status === "active" ? "enabled" : "disabled",
+        endpoint: webhook.endpoint,
+        events: webhook.events,
+        status: webhook.status,
         signing_secret: webhook.signingSecret,
         created_at: webhook.createdAt,
       },
       { status: 201 },
     );
-  } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to create webhook";
-    return Response.json({ error: message }, { status: 500 });
+  } catch (error) {
+    return mapWebhookError(error, "Failed to create webhook");
   }
 }
