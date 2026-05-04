@@ -10,6 +10,7 @@ const mockDelete = vi.hoisted(() => vi.fn());
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockCountFn = vi.hoisted(() => vi.fn());
 const mockValidateDashboardKey = vi.hoisted(() => vi.fn());
+const mockCreateWebhookService = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
 
@@ -206,6 +207,16 @@ describe("route smoke coverage", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    vi.doMock("@opensend/core", () => ({
+      createWebhookService: mockCreateWebhookService,
+    }));
+    mockCreateWebhookService.mockReturnValue({
+      listWebhooks: vi.fn().mockResolvedValue({ data: [], hasMore: false }),
+      createWebhook: vi.fn(),
+      getWebhook: vi.fn(),
+      updateWebhook: vi.fn(),
+      deleteWebhook: vi.fn(),
+    });
     vi.doMock("@/lib/api-auth", async () => {
       const actual =
         await vi.importActual<typeof import("@/lib/api-auth")>(
@@ -754,39 +765,84 @@ describe("route smoke coverage", () => {
     expect(detailDelete.status).toBe(200);
   });
 
-  it("covers webhook routes for happy path and 404s", async () => {
+  it("covers webhook routes for compatibility, pagination, status mapping, and 404s", async () => {
+    const listWebhooks = vi.fn().mockResolvedValue({
+      data: [
+        {
+          id: "wh-1",
+          endpoint: "https://example.com/webhook",
+          events: ["email.sent"],
+          status: "enabled",
+          createdAt: "2026-04-23T00:00:00.000Z",
+        },
+      ],
+      hasMore: true,
+    });
+    const createWebhook = vi.fn().mockResolvedValue({
+      id: "wh-2",
+      endpoint: "https://example.com/created",
+      events: ["email.delivered"],
+      status: "enabled",
+      signingSecret: "whsec_test_secret",
+      createdAt: "2026-04-23T00:00:00.000Z",
+    });
+    const getWebhook = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: "wh-1",
+        endpoint: "https://example.com/webhook",
+        events: ["email.sent"],
+        status: "enabled",
+        createdAt: "2026-04-23T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce(undefined);
+    const updateWebhook = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: "wh-1",
+        endpoint: "https://example.com/webhook",
+        events: ["email.sent"],
+        status: "disabled",
+        createdAt: "2026-04-23T00:00:00.000Z",
+      })
+      .mockResolvedValueOnce(undefined);
+    const deleteWebhook = vi
+      .fn()
+      .mockResolvedValueOnce({ id: "wh-1" })
+      .mockResolvedValueOnce(undefined);
+
+    mockCreateWebhookService.mockReturnValue({
+      listWebhooks,
+      createWebhook,
+      getWebhook,
+      updateWebhook,
+      deleteWebhook,
+    });
+
     const listRoute = await import("@/app/api/webhooks/route");
     const detailRoute = await import("@/app/api/webhooks/[id]/route");
 
-    mockSelect.mockImplementationOnce(() =>
-      makeChain([
-        {
-          id: "wh-1",
-          url: "https://example.com/webhook",
-          eventTypes: ["email.sent"],
-          status: "active",
-          createdAt: "2026-04-23T00:00:00.000Z",
-        },
-      ]),
-    );
     const listRes = await listRoute.GET(
-      makeNextRequest("http://localhost/api/webhooks?limit=10", {
+      makeNextRequest("http://localhost/api/webhooks?limit=500&after=wh-3", {
         headers: { authorization: "Bearer token" },
       }),
     );
     expect(listRes.status).toBe(200);
-
-    mockInsert.mockImplementationOnce(() =>
-      makeChain([
+    await expect(listRes.json()).resolves.toEqual({
+      object: "list",
+      data: [
         {
-          id: "wh-2",
-          url: "https://example.com/created",
-          eventTypes: ["email.delivered"],
-          status: "active",
-          createdAt: "2026-04-23T00:00:00.000Z",
+          id: "wh-1",
+          endpoint: "https://example.com/webhook",
+          events: ["email.sent"],
+          status: "enabled",
+          created_at: "2026-04-23T00:00:00.000Z",
         },
-      ]),
-    );
+      ],
+      has_more: true,
+    });
+    expect(listWebhooks).toHaveBeenCalledWith({ limit: 500, after: "wh-3" });
+
     const createRes = await listRoute.POST(
       makeNextRequest("http://localhost/api/webhooks", {
         method: "POST",
@@ -801,21 +857,20 @@ describe("route smoke coverage", () => {
       }),
     );
     expect(createRes.status).toBe(201);
-    const createJson = await createRes.json();
-    expect(createJson.object).toBe("webhook");
+    await expect(createRes.json()).resolves.toEqual({
+      object: "webhook",
+      id: "wh-2",
+      endpoint: "https://example.com/created",
+      events: ["email.delivered"],
+      status: "enabled",
+      signing_secret: "whsec_test_secret",
+      created_at: "2026-04-23T00:00:00.000Z",
+    });
+    expect(createWebhook).toHaveBeenCalledWith({
+      endpoint: "https://example.com/created",
+      events: ["email.delivered"],
+    });
 
-    // Detail GET
-    mockSelect.mockImplementationOnce(() =>
-      makeChain([
-        {
-          id: "wh-1",
-          url: "https://example.com/webhook",
-          eventTypes: ["email.sent"],
-          status: "active",
-          createdAt: "2026-04-23T00:00:00.000Z",
-        },
-      ]),
-    );
     const detailGetRes = await detailRoute.GET(
       makeNextRequest("http://localhost/api/webhooks/wh-1", {
         headers: { authorization: "Bearer token" },
@@ -824,7 +879,6 @@ describe("route smoke coverage", () => {
     );
     expect(detailGetRes.status).toBe(200);
 
-    mockSelect.mockImplementationOnce(() => makeChain([]));
     const notFoundRes = await detailRoute.GET(
       makeNextRequest("http://localhost/api/webhooks/missing", {
         headers: { authorization: "Bearer token" },
@@ -833,7 +887,6 @@ describe("route smoke coverage", () => {
     );
     expect(notFoundRes.status).toBe(404);
 
-    mockUpdate.mockImplementationOnce(() => makeChain([{ id: "wh-1" }]));
     const patchRes = await detailRoute.PATCH(
       makeNextRequest("http://localhost/api/webhooks/wh-1", {
         method: "PATCH",
@@ -846,10 +899,33 @@ describe("route smoke coverage", () => {
       { params: Promise.resolve({ id: "wh-1" }) },
     );
     expect(patchRes.status).toBe(200);
-    const patchJson = await patchRes.json();
-    expect(patchJson.object).toBe("webhook");
+    await expect(patchRes.json()).resolves.toMatchObject({
+      object: "webhook",
+      id: "wh-1",
+      endpoint: "https://example.com/webhook",
+      events: ["email.sent"],
+      status: "disabled",
+    });
+    expect(updateWebhook).toHaveBeenCalledWith("wh-1", {
+      endpoint: undefined,
+      events: undefined,
+      status: undefined,
+      active: false,
+    });
 
-    mockDelete.mockImplementationOnce(() => makeChain([{ id: "wh-1" }]));
+    const patchNotFoundRes = await detailRoute.PATCH(
+      makeNextRequest("http://localhost/api/webhooks/missing", {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "enabled" }),
+      }),
+      { params: Promise.resolve({ id: "missing" }) },
+    );
+    expect(patchNotFoundRes.status).toBe(404);
+
     const deleteRes = await detailRoute.DELETE(
       makeNextRequest("http://localhost/api/webhooks/wh-1", {
         method: "DELETE",
@@ -858,9 +934,21 @@ describe("route smoke coverage", () => {
       { params: Promise.resolve({ id: "wh-1" }) },
     );
     expect(deleteRes.status).toBe(200);
-    const deleteJson = await deleteRes.json();
-    expect(deleteJson.deleted).toBe(true);
-  });
+    await expect(deleteRes.json()).resolves.toEqual({
+      object: "webhook",
+      id: "wh-1",
+      deleted: true,
+    });
+
+    const deleteNotFoundRes = await detailRoute.DELETE(
+      makeNextRequest("http://localhost/api/webhooks/missing", {
+        method: "DELETE",
+        headers: { authorization: "Bearer token" },
+      }),
+      { params: Promise.resolve({ id: "missing" }) },
+    );
+    expect(deleteNotFoundRes.status).toBe(404);
+  }, 10000);
 
   it("rejects unsupported webhook event types in create and update routes", async () => {
     const listRoute = await import("@/app/api/webhooks/route");
@@ -899,7 +987,7 @@ describe("route smoke coverage", () => {
 
     expect(patchRes.status).toBe(422);
     expect(mockUpdate).not.toHaveBeenCalled();
-  });
+  }, 10000);
 
   it("covers broadcasts and templates detail routes with happy path and 404s", async () => {
     const broadcastsRoute = await import("@/app/api/broadcasts/[id]/route");
