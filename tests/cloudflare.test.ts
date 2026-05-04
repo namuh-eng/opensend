@@ -320,7 +320,7 @@ describe("Cloudflare DNS Client", () => {
   });
 
   describe("autoConfigureDomain", () => {
-    it("creates DKIM, SPF, and MX records for a domain with no existing records", async () => {
+    it("creates DKIM, SPF, DMARC, and MX records for a domain with no existing records", async () => {
       // listDNSRecords for MX → empty
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -331,27 +331,36 @@ describe("Cloudflare DNS Client", () => {
         ok: true,
         json: async () => ({ success: true, result: [] }),
       });
-      // Three DKIM records, one SPF record, one MX record
-      for (let i = 0; i < 5; i++) {
+      // listDNSRecords for DMARC TXT → empty
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, result: [] }),
+      });
+      // Three DKIM records, one SPF record, one DMARC record, one MX record
+      for (let i = 0; i < 6; i++) {
         mockFetch.mockResolvedValueOnce({
           ok: true,
           json: async () => ({
             success: true,
             result: {
               id: `dns-record-${i}`,
-              type: i < 3 ? "CNAME" : i === 3 ? "TXT" : "MX",
+              type: i < 3 ? "CNAME" : i === 5 ? "MX" : "TXT",
               name:
                 i < 3
                   ? `token${i + 1}._domainkey.example.com`
-                  : "send.example.com",
+                  : i === 4
+                    ? "_dmarc.example.com"
+                    : "send.example.com",
               content:
                 i < 3
                   ? `token${i + 1}.dkim.amazonses.com`
                   : i === 3
                     ? "v=spf1 include:amazonses.com ~all"
-                    : "feedback-smtp.us-east-1.amazonses.com",
+                    : i === 4
+                      ? "v=DMARC1; p=none;"
+                      : "feedback-smtp.us-east-1.amazonses.com",
               ttl: 300,
-              ...(i === 4 ? { priority: 10 } : {}),
+              ...(i === 5 ? { priority: 10 } : {}),
             },
           }),
         });
@@ -363,25 +372,27 @@ describe("Cloudflare DNS Client", () => {
         dkimTokens,
       );
 
-      expect(records).toHaveLength(5);
+      expect(records).toHaveLength(6);
       expect(warnings).toHaveLength(0);
-      // 2 GETs (list) + 3 DKIM + 1 SPF + 1 MX
-      expect(mockFetch).toHaveBeenCalledTimes(7);
+      // 3 GETs (list) + 3 DKIM + 1 SPF + 1 DMARC + 1 MX
+      expect(mockFetch).toHaveBeenCalledTimes(9);
       expect(mockFetch.mock.calls[0][0]).toContain("name=send.example.com");
       expect(mockFetch.mock.calls[0][0]).toContain("type=MX");
       expect(mockFetch.mock.calls[1][0]).toContain("name=send.example.com");
       expect(mockFetch.mock.calls[1][0]).toContain("type=TXT");
+      expect(mockFetch.mock.calls[2][0]).toContain("name=_dmarc.example.com");
+      expect(mockFetch.mock.calls[2][0]).toContain("type=TXT");
 
       // Verify each DKIM CNAME record was created correctly
       for (let i = 0; i < 3; i++) {
-        const call = mockFetch.mock.calls[i + 2];
+        const call = mockFetch.mock.calls[i + 3];
         const body = JSON.parse(call[1].body);
         expect(body.type).toBe("CNAME");
         expect(body.name).toBe(`token${i + 1}._domainkey.example.com`);
         expect(body.content).toBe(`token${i + 1}.dkim.amazonses.com`);
       }
 
-      const spfCall = mockFetch.mock.calls[5];
+      const spfCall = mockFetch.mock.calls[6];
       const spfBody = JSON.parse(spfCall[1].body);
       expect(spfBody).toEqual({
         type: "TXT",
@@ -390,7 +401,16 @@ describe("Cloudflare DNS Client", () => {
         ttl: 300,
       });
 
-      const mxCall = mockFetch.mock.calls[6];
+      const dmarcCall = mockFetch.mock.calls[7];
+      const dmarcBody = JSON.parse(dmarcCall[1].body);
+      expect(dmarcBody).toEqual({
+        type: "TXT",
+        name: "_dmarc.example.com",
+        content: "v=DMARC1; p=none;",
+        ttl: 300,
+      });
+
+      const mxCall = mockFetch.mock.calls[8];
       const mxBody = JSON.parse(mxCall[1].body);
       expect(mxBody).toEqual({
         type: "MX",
@@ -412,27 +432,36 @@ describe("Cloudflare DNS Client", () => {
         ok: true,
         json: async () => ({ success: true, result: [] }),
       });
-      // One DKIM record, one SPF record, one MX record
-      for (let i = 0; i < 3; i++) {
+      // listDNSRecords for DMARC TXT → empty
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, result: [] }),
+      });
+      // One DKIM record, one SPF record, one DMARC record, one MX record
+      for (let i = 0; i < 4; i++) {
         mockFetch.mockResolvedValueOnce({
           ok: true,
           json: async () => ({
             success: true,
             result: {
               id: `custom-dns-record-${i}`,
-              type: i === 0 ? "CNAME" : i === 1 ? "TXT" : "MX",
+              type: i === 0 ? "CNAME" : i === 3 ? "MX" : "TXT",
               name:
                 i === 0
                   ? "token1._domainkey.example.com"
-                  : "outbound.example.com",
+                  : i === 2
+                    ? "_dmarc.example.com"
+                    : "outbound.example.com",
               content:
                 i === 0
                   ? "token1.dkim.amazonses.com"
                   : i === 1
                     ? "v=spf1 include:amazonses.com ~all"
-                    : "feedback-smtp.us-east-1.amazonses.com",
+                    : i === 2
+                      ? "v=DMARC1; p=none;"
+                      : "feedback-smtp.us-east-1.amazonses.com",
               ttl: 300,
-              ...(i === 2 ? { priority: 10 } : {}),
+              ...(i === 3 ? { priority: 10 } : {}),
             },
           }),
         });
@@ -443,10 +472,10 @@ describe("Cloudflare DNS Client", () => {
       expect(mockFetch.mock.calls[0][0]).toContain("name=outbound.example.com");
       expect(mockFetch.mock.calls[1][0]).toContain("name=outbound.example.com");
 
-      const spfBody = JSON.parse(mockFetch.mock.calls[3][1].body);
+      const spfBody = JSON.parse(mockFetch.mock.calls[4][1].body);
       expect(spfBody.name).toBe("outbound.example.com");
 
-      const mxBody = JSON.parse(mockFetch.mock.calls[4][1].body);
+      const mxBody = JSON.parse(mockFetch.mock.calls[6][1].body);
       expect(mxBody.name).toBe("outbound.example.com");
     });
 
@@ -484,6 +513,11 @@ describe("Cloudflare DNS Client", () => {
           ],
         }),
       });
+      // listDNSRecords for DMARC TXT → empty
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, result: [] }),
+      });
       // 3 DKIM creates
       for (let i = 0; i < 3; i++) {
         mockFetch.mockResolvedValueOnce({
@@ -514,6 +548,20 @@ describe("Cloudflare DNS Client", () => {
           },
         }),
       });
+      // DMARC create
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          result: {
+            id: "dmarc",
+            type: "TXT",
+            name: "_dmarc.example.com",
+            content: "v=DMARC1; p=none;",
+            ttl: 300,
+          },
+        }),
+      });
 
       const { records, warnings } = await autoConfigureDomain("example.com", [
         "token1",
@@ -521,11 +569,89 @@ describe("Cloudflare DNS Client", () => {
         "token3",
       ]);
 
-      // 3 DKIM + 1 SPF update (no MX)
-      expect(records).toHaveLength(4);
+      // 3 DKIM + 1 SPF update + 1 DMARC create (no MX)
+      expect(records).toHaveLength(5);
       expect(warnings).toHaveLength(2);
       expect(warnings[0]).toMatch(/Merged amazonses.com into existing SPF/);
       expect(warnings[1]).toMatch(/Existing MX records found/);
+    });
+
+    it("skips an existing DMARC record without overwriting the policy", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, result: [] }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, result: [] }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          result: [
+            {
+              id: "existing-dmarc",
+              type: "TXT",
+              name: "_dmarc.example.com",
+              content: "v=DMARC1; p=reject; rua=mailto:dmarc@example.com",
+              ttl: 3600,
+            },
+          ],
+        }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          result: {
+            id: "dkim-1",
+            type: "CNAME",
+            name: "token1._domainkey.example.com",
+            content: "token1.dkim.amazonses.com",
+            ttl: 300,
+          },
+        }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          result: {
+            id: "spf-1",
+            type: "TXT",
+            name: "send.example.com",
+            content: "v=spf1 include:amazonses.com ~all",
+            ttl: 300,
+          },
+        }),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          result: {
+            id: "mx-1",
+            type: "MX",
+            name: "send.example.com",
+            content: "feedback-smtp.us-east-1.amazonses.com",
+            ttl: 300,
+            priority: 10,
+          },
+        }),
+      });
+
+      const { warnings } = await autoConfigureDomain("example.com", ["token1"]);
+
+      expect(warnings).toContain(
+        "DMARC record already exists — skipped to avoid overwriting your policy",
+      );
+      const postBodies = mockFetch.mock.calls
+        .filter(([, init]) => init?.method === "POST")
+        .map(([, init]) => JSON.parse(init.body));
+      expect(postBodies).not.toContainEqual(
+        expect.objectContaining({ name: "_dmarc.example.com" }),
+      );
     });
 
     it("throws when domain is empty", async () => {

@@ -33,6 +33,8 @@ vi.mock("@opensend/core", () => ({
   createDomainService: () => ({
     createDomain: mockCreateDomain,
   }),
+  DMARC_RECORD_VALUE: "v=DMARC1; p=none;",
+  buildDmarcRecordName: (domainName: string) => `_dmarc.${domainName}`,
   getEffectiveReturnPathLabel: (customReturnPath: string | null | undefined) =>
     customReturnPath?.trim() || "send",
 }));

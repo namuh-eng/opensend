@@ -45,6 +45,13 @@ const domainWithRecords: DomainDetailData = {
       status: "verified",
       ttl: "Auto",
     },
+    {
+      type: "TXT",
+      name: "_dmarc.updates.foreverbrowsing.com",
+      value: "v=DMARC1; p=none;",
+      status: "verified",
+      ttl: "Auto",
+    },
   ],
   events: [
     {
@@ -92,6 +99,14 @@ describe("Domain DNS Records Tab (feature-025)", () => {
     const sendingToggle = screen.getByTestId("sending-toggle");
     expect(sendingToggle).toBeTruthy();
     expect(sendingToggle.getAttribute("data-state")).toBe("checked");
+  });
+
+  it("renders DMARC as a separate policy section", () => {
+    render(<DomainDetail domain={domainWithRecords} />);
+    expect(screen.getByText("DMARC Policy")).toBeTruthy();
+    expect(screen.getByText(/evaluate SPF and DKIM alignment/)).toBeTruthy();
+    expect(screen.getByText("_dmarc.updates.foreverbrowsing.com")).toBeTruthy();
+    expect(screen.getByText("v=DMARC1; p=none;")).toBeTruthy();
   });
 
   it("renders Enable Receiving section with toggle", () => {

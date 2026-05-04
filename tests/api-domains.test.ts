@@ -170,7 +170,15 @@ describe("Domain API validation", () => {
       id: VALID_DOMAIN_ID,
       name: "example.com",
       status: "pending",
-      records: [{ status: "pending" }],
+      records: [
+        {
+          type: "TXT",
+          name: "_dmarc.example.com",
+          value: "v=DMARC1; p=none;",
+          status: "pending",
+          ttl: "Auto",
+        },
+      ],
     };
     const updated = {
       ...domain,
@@ -201,6 +209,13 @@ describe("Domain API validation", () => {
 
     expect(res.status).toBe(200);
     expect(json.status).toBe("verified");
+    expect(json.records).toContainEqual({
+      type: "TXT",
+      name: "_dmarc.example.com",
+      value: "v=DMARC1; p=none;",
+      status: "pending",
+      ttl: "Auto",
+    });
     expect(mockDb.query.domains.findFirst).toHaveBeenCalledTimes(1);
     expect(mockQueueEvent).toHaveBeenCalledTimes(1);
   });
@@ -230,6 +245,15 @@ describe("Domain API validation", () => {
       id: VALID_DOMAIN_ID,
       name: "example.com",
       customReturnPath: "outbound",
+      records: [
+        {
+          type: "TXT",
+          name: "_dmarc.example.com",
+          value: "v=DMARC1; p=none;",
+          status: "pending",
+          ttl: "Auto",
+        },
+      ],
     });
     mockCreateDomainIdentity.mockResolvedValue({
       dkimTokens: ["dkim-1", "dkim-2", "dkim-3"],
@@ -238,8 +262,13 @@ describe("Domain API validation", () => {
       records: [
         {
           type: "TXT",
-          name: "example.com",
+          name: "outbound.example.com",
           content: "v=spf1 include:amazonses.com ~all",
+        },
+        {
+          type: "TXT",
+          name: "_dmarc.example.com",
+          content: "v=DMARC1; p=none;",
         },
       ],
       warnings: [],
@@ -265,7 +294,14 @@ describe("Domain API validation", () => {
 
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
-    expect(json.cloudflare_records).toBe(1);
+    expect(json.cloudflare_records).toBe(2);
+    expect(json.records).toContainEqual({
+      type: "TXT",
+      name: "_dmarc.example.com",
+      value: "v=DMARC1; p=none;",
+      status: "pending",
+      ttl: "Auto",
+    });
     expect(mockAutoConfigureDomain).toHaveBeenCalledWith(
       "example.com",
       ["dkim-1", "dkim-2", "dkim-3"],
