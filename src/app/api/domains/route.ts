@@ -3,7 +3,10 @@ import { checkDomainQuota, quotaExceededResponse } from "@/lib/billing/quota";
 import { invalidateDomainCaches } from "@/lib/domain-cache";
 import { createDomainIdentity } from "@/lib/ses";
 import { createDomainSchema } from "@/lib/validation/domains";
-import { createDomainService } from "@opensend/core";
+import {
+  createDomainService,
+  getEffectiveReturnPathLabel,
+} from "@opensend/core";
 
 function domainService() {
   return createDomainService({
@@ -63,6 +66,8 @@ export async function POST(request: Request): Promise<Response> {
         status: row.status,
         region: row.region,
         records: row.records || [],
+        custom_return_path: row.customReturnPath,
+        return_path: getEffectiveReturnPathLabel(row.customReturnPath),
         open_tracking: row.trackOpens,
         click_tracking: row.trackClicks,
         tracking_subdomain: row.trackingSubdomain,

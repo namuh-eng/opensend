@@ -41,6 +41,13 @@ function headers(token: string) {
   };
 }
 
+function buildReturnPathRecordName(
+  domainName: string,
+  customReturnPath: string | null | undefined,
+): string {
+  return `${customReturnPath?.trim() || "send"}.${domainName}`;
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   const data = (await response.json()) as CloudflareResponse<T>;
   if (!response.ok || !data.success) {
@@ -147,18 +154,23 @@ export interface AutoConfigureResult {
 export async function autoConfigureDomain(
   domain: string,
   dkimTokens: string[],
+  customReturnPath?: string | null,
 ): Promise<AutoConfigureResult> {
   if (!domain) throw new Error("domain is required");
   if (!dkimTokens || dkimTokens.length === 0)
     throw new Error("DKIM tokens are required");
 
+  const returnPathRecordName = buildReturnPathRecordName(
+    domain,
+    customReturnPath,
+  );
   const warnings: string[] = [];
   const results: DNSRecordResult[] = [];
 
   // Check existing MX and TXT records before creating anything
   const [existingMX, existingTXT] = await Promise.all([
-    listDNSRecords({ name: domain, type: "MX" }),
-    listDNSRecords({ name: domain, type: "TXT" }),
+    listDNSRecords({ name: returnPathRecordName, type: "MX" }),
+    listDNSRecords({ name: returnPathRecordName, type: "TXT" }),
   ]);
 
   // DKIM CNAME records — skip gracefully if already exist
@@ -197,7 +209,7 @@ export async function autoConfigureDomain(
   } else {
     const spfRecord = await createDNSRecord({
       type: "TXT",
-      name: domain,
+      name: returnPathRecordName,
       content: "v=spf1 include:amazonses.com ~all",
       ttl: 300,
     });
@@ -213,7 +225,7 @@ export async function autoConfigureDomain(
   } else {
     const mxRecord = await createDNSRecord({
       type: "MX",
-      name: domain,
+      name: returnPathRecordName,
       content: "feedback-smtp.us-east-1.amazonses.com",
       ttl: 300,
       priority: 10,

@@ -341,7 +341,9 @@ describe("Cloudflare DNS Client", () => {
               id: `dns-record-${i}`,
               type: i < 3 ? "CNAME" : i === 3 ? "TXT" : "MX",
               name:
-                i < 3 ? `token${i + 1}._domainkey.example.com` : "example.com",
+                i < 3
+                  ? `token${i + 1}._domainkey.example.com`
+                  : "send.example.com",
               content:
                 i < 3
                   ? `token${i + 1}.dkim.amazonses.com`
@@ -365,6 +367,10 @@ describe("Cloudflare DNS Client", () => {
       expect(warnings).toHaveLength(0);
       // 2 GETs (list) + 3 DKIM + 1 SPF + 1 MX
       expect(mockFetch).toHaveBeenCalledTimes(7);
+      expect(mockFetch.mock.calls[0][0]).toContain("name=send.example.com");
+      expect(mockFetch.mock.calls[0][0]).toContain("type=MX");
+      expect(mockFetch.mock.calls[1][0]).toContain("name=send.example.com");
+      expect(mockFetch.mock.calls[1][0]).toContain("type=TXT");
 
       // Verify each DKIM CNAME record was created correctly
       for (let i = 0; i < 3; i++) {
@@ -379,7 +385,7 @@ describe("Cloudflare DNS Client", () => {
       const spfBody = JSON.parse(spfCall[1].body);
       expect(spfBody).toEqual({
         type: "TXT",
-        name: "example.com",
+        name: "send.example.com",
         content: "v=spf1 include:amazonses.com ~all",
         ttl: 300,
       });
@@ -388,11 +394,60 @@ describe("Cloudflare DNS Client", () => {
       const mxBody = JSON.parse(mxCall[1].body);
       expect(mxBody).toEqual({
         type: "MX",
-        name: "example.com",
+        name: "send.example.com",
         content: "feedback-smtp.us-east-1.amazonses.com",
         ttl: 300,
         priority: 10,
       });
+    });
+
+    it("uses a custom return path label for SPF and MX records", async () => {
+      // listDNSRecords for MX → empty
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, result: [] }),
+      });
+      // listDNSRecords for TXT → empty
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ success: true, result: [] }),
+      });
+      // One DKIM record, one SPF record, one MX record
+      for (let i = 0; i < 3; i++) {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            success: true,
+            result: {
+              id: `custom-dns-record-${i}`,
+              type: i === 0 ? "CNAME" : i === 1 ? "TXT" : "MX",
+              name:
+                i === 0
+                  ? "token1._domainkey.example.com"
+                  : "outbound.example.com",
+              content:
+                i === 0
+                  ? "token1.dkim.amazonses.com"
+                  : i === 1
+                    ? "v=spf1 include:amazonses.com ~all"
+                    : "feedback-smtp.us-east-1.amazonses.com",
+              ttl: 300,
+              ...(i === 2 ? { priority: 10 } : {}),
+            },
+          }),
+        });
+      }
+
+      await autoConfigureDomain("example.com", ["token1"], "outbound");
+
+      expect(mockFetch.mock.calls[0][0]).toContain("name=outbound.example.com");
+      expect(mockFetch.mock.calls[1][0]).toContain("name=outbound.example.com");
+
+      const spfBody = JSON.parse(mockFetch.mock.calls[3][1].body);
+      expect(spfBody.name).toBe("outbound.example.com");
+
+      const mxBody = JSON.parse(mockFetch.mock.calls[4][1].body);
+      expect(mxBody.name).toBe("outbound.example.com");
     });
 
     it("skips MX and merges SPF when existing records are present", async () => {
@@ -405,7 +460,7 @@ describe("Cloudflare DNS Client", () => {
             {
               id: "existing-mx",
               type: "MX",
-              name: "example.com",
+              name: "send.example.com",
               content: "mx01.mail.icloud.com",
               ttl: 3600,
               priority: 10,
@@ -422,7 +477,7 @@ describe("Cloudflare DNS Client", () => {
             {
               id: "existing-spf",
               type: "TXT",
-              name: "example.com",
+              name: "send.example.com",
               content: "v=spf1 include:icloud.com ~all",
               ttl: 3600,
             },
@@ -453,7 +508,7 @@ describe("Cloudflare DNS Client", () => {
           result: {
             id: "existing-spf",
             type: "TXT",
-            name: "example.com",
+            name: "send.example.com",
             content: "v=spf1 include:icloud.com include:amazonses.com ~all",
             ttl: 3600,
           },

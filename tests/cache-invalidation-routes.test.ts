@@ -33,6 +33,8 @@ vi.mock("@opensend/core", () => ({
   createDomainService: () => ({
     createDomain: mockCreateDomain,
   }),
+  getEffectiveReturnPathLabel: (customReturnPath: string | null | undefined) =>
+    customReturnPath?.trim() || "send",
 }));
 
 vi.mock("@/lib/api-auth", () => ({
@@ -134,6 +136,7 @@ describe("cache invalidation routes", () => {
       tls: "opportunistic",
       capabilities: [{ name: "sending", enabled: true }],
       createdAt: new Date("2026-04-28T00:00:00.000Z"),
+      customReturnPath: null,
     });
 
     const route = await import("@/app/api/domains/route");
@@ -149,6 +152,10 @@ describe("cache invalidation routes", () => {
     );
 
     expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      custom_return_path: null,
+      return_path: "send",
+    });
     expect(mockCreateDomain).toHaveBeenCalledWith({
       name: "Example.COM",
       region: "us-east-1",

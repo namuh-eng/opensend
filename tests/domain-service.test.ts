@@ -82,7 +82,7 @@ describe("domain service", () => {
     const result = await service.createDomain({
       name: "Example.COM",
       region: "eu-west-1",
-      customReturnPath: "bounce.example.com",
+      customReturnPath: "outbound",
       openTracking: true,
       clickTracking: true,
       trackingSubdomain: "track.example.com",
@@ -97,7 +97,7 @@ describe("domain service", () => {
       region: "eu-west-1",
       status: "not_started",
       dkimTokens: ["dkim-a", "dkim-b"],
-      customReturnPath: "bounce.example.com",
+      customReturnPath: "outbound",
       trackOpens: true,
       trackClicks: true,
       trackingSubdomain: "track.example.com",
@@ -122,14 +122,14 @@ describe("domain service", () => {
       },
       {
         type: "TXT",
-        name: "example.com",
+        name: "outbound.example.com",
         value: "v=spf1 include:amazonses.com ~all",
         status: "pending",
         ttl: "Auto",
       },
       {
         type: "MX",
-        name: "example.com",
+        name: "outbound.example.com",
         value: "feedback-smtp.eu-west-1.amazonses.com",
         status: "pending",
         ttl: "Auto",
@@ -140,6 +140,7 @@ describe("domain service", () => {
       id: "created-domain",
       name: "example.com",
       region: "eu-west-1",
+      customReturnPath: "outbound",
       trackOpens: true,
       trackClicks: true,
     });
@@ -177,6 +178,23 @@ describe("domain service", () => {
       ],
       userId: null,
     });
+    expect(inserted[0]?.records).toEqual([
+      {
+        type: "TXT",
+        name: "send.example.com",
+        value: "v=spf1 include:amazonses.com ~all",
+        status: "pending",
+        ttl: "Auto",
+      },
+      {
+        type: "MX",
+        name: "send.example.com",
+        value: "feedback-smtp.us-east-1.amazonses.com",
+        status: "pending",
+        ttl: "Auto",
+        priority: 10,
+      },
+    ]);
   });
 
   it("lists with normalized pagination and maps public list fields", async () => {

@@ -8,6 +8,21 @@ type DomainInsert = typeof domains.$inferInsert;
 type DomainRecord = NonNullable<DomainRow["records"]>[number];
 type DomainCapability = NonNullable<DomainRow["capabilities"]>[number];
 
+export const DEFAULT_RETURN_PATH = "send";
+
+export function getEffectiveReturnPathLabel(
+  customReturnPath: string | null | undefined,
+): string {
+  return customReturnPath?.trim() || DEFAULT_RETURN_PATH;
+}
+
+export function buildReturnPathRecordName(
+  domainName: string,
+  customReturnPath: string | null | undefined,
+): string {
+  return `${getEffectiveReturnPathLabel(customReturnPath)}.${domainName}`;
+}
+
 export type CreateDomainIdentityResult = {
   dkimTokens: string[];
   status?: string;
@@ -38,6 +53,7 @@ export type DomainDetail = Pick<
   | "tls"
   | "capabilities"
   | "createdAt"
+  | "customReturnPath"
 >;
 
 export type DomainServiceListItem = Pick<
@@ -87,6 +103,7 @@ function buildDomainRecords(
   domainName: string,
   region: string,
   dkimTokens: string[],
+  customReturnPath: string | null | undefined,
 ): DomainRecord[] {
   const dkimRecords: DomainRecord[] = dkimTokens.map((token) => ({
     type: "CNAME",
@@ -96,9 +113,14 @@ function buildDomainRecords(
     ttl: "Auto",
   }));
 
+  const returnPathRecordName = buildReturnPathRecordName(
+    domainName,
+    customReturnPath,
+  );
+
   const spfRecord: DomainRecord = {
     type: "TXT",
-    name: domainName,
+    name: returnPathRecordName,
     value: "v=spf1 include:amazonses.com ~all",
     status: "pending",
     ttl: "Auto",
@@ -106,7 +128,7 @@ function buildDomainRecords(
 
   const mxRecord: DomainRecord = {
     type: "MX",
-    name: domainName,
+    name: returnPathRecordName,
     value: `feedback-smtp.${region}.amazonses.com`,
     status: "pending",
     ttl: "Auto",
@@ -129,6 +151,7 @@ function toDomainDetail(row: DomainRow): DomainDetail {
     tls: row.tls,
     capabilities: row.capabilities,
     createdAt: row.createdAt,
+    customReturnPath: row.customReturnPath,
   };
 }
 
@@ -179,6 +202,7 @@ export function createDomainService({
         domainName,
         region,
         identity.dkimTokens,
+        input.customReturnPath,
       );
 
       const [row] = await repository.create({

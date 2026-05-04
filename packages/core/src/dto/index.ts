@@ -137,6 +137,8 @@ export interface DomainResponse {
   status: string;
   region: string;
   records: DomainRecord[];
+  custom_return_path?: string | null;
+  return_path?: string;
   open_tracking?: boolean;
   click_tracking?: boolean;
   tracking_subdomain?: string | null;

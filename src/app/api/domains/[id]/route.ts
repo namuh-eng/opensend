@@ -14,6 +14,7 @@ import {
   domainRouteParamsSchema,
   updateDomainSchema,
 } from "@/lib/validation/domains";
+import { getEffectiveReturnPathLabel } from "@opensend/core";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -54,6 +55,8 @@ export async function GET(
       status: domain.status,
       region: domain.region,
       records: domain.records || [],
+      custom_return_path: domain.customReturnPath,
+      return_path: getEffectiveReturnPathLabel(domain.customReturnPath),
       open_tracking: domain.trackOpens,
       click_tracking: domain.trackClicks,
       tracking_subdomain: domain.trackingSubdomain,

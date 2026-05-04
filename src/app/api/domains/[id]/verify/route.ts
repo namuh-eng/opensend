@@ -11,6 +11,7 @@ import {
 } from "@/lib/domain-cache";
 import { queueEvent } from "@/lib/events";
 import { verifyDomainParamsSchema } from "@/lib/validation/domains";
+import { getEffectiveReturnPathLabel } from "@opensend/core";
 import { eq } from "drizzle-orm";
 
 export async function POST(
@@ -106,6 +107,8 @@ export async function POST(
       name: updated.name,
       status: updated.status,
       records: updated.records || [],
+      custom_return_path: updated.customReturnPath,
+      return_path: getEffectiveReturnPathLabel(updated.customReturnPath),
       created_at: updated.createdAt,
     });
   } catch (err) {
