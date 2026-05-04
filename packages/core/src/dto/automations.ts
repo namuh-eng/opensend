@@ -83,13 +83,26 @@ export interface WaitForEventStepConfig {
   timeout_seconds?: number;
 }
 
+export type ContactUpdateValue = string | number | boolean | null;
+
+export interface ContactUpdateStepConfig {
+  fields?: {
+    email?: ContactUpdateValue;
+    first_name?: ContactUpdateValue;
+    last_name?: ContactUpdateValue;
+    unsubscribed?: ContactUpdateValue;
+  };
+  properties?: Record<string, ContactUpdateValue>;
+}
+
 export type AutomationStepConfig =
   | TriggerStepConfig
   | DelayStepConfig
   | SendEmailStepConfig
   | EndStepConfig
   | ConditionStepConfig
-  | WaitForEventStepConfig;
+  | WaitForEventStepConfig
+  | ContactUpdateStepConfig;
 
 export interface AutomationStepInput {
   key: string;
@@ -169,6 +182,18 @@ export interface AutomationRunDTO {
 const RESERVED_EVENT_PREFIX = "resend:";
 const CONDITION_PATH_PATTERN =
   /^(event|contact)\.[A-Za-z0-9_.-]+$|^steps\.[A-Za-z0-9_:-]+\.output(\.[A-Za-z0-9_.-]+)?$/;
+const CONTACT_UPDATE_RESERVED_PROPERTY_KEYS = new Set([
+  "email",
+  "first_name",
+  "firstName",
+  "last_name",
+  "lastName",
+  "unsubscribed",
+  "segments",
+  "topics",
+  "topic_subscriptions",
+  "topicSubscriptions",
+]);
 const CONDITION_OPERATORS: ReadonlySet<ConditionOperator> = new Set([
   "equals",
   "not_equals",
@@ -415,6 +440,154 @@ export function normalizeWaitForEventConfig(
   return config;
 }
 
+function isContactUpdateValue(value: unknown): value is ContactUpdateValue {
+  return (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  );
+}
+
+function normalizeContactUpdateValue(
+  value: unknown,
+  code: string,
+  field: string,
+): ContactUpdateValue {
+  if (!isContactUpdateValue(value)) {
+    throw new AutomationValidationError(
+      `contact_update ${field} must be a string, number, boolean, or null`,
+      code,
+    );
+  }
+  return value;
+}
+
+function assertNoUnknownKeys(
+  source: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  code: string,
+  label: string,
+): void {
+  const unknown = Object.keys(source).find((key) => !allowed.has(key));
+  if (unknown) {
+    throw new AutomationValidationError(
+      `${label} contains unsupported key "${unknown}"`,
+      code,
+    );
+  }
+}
+
+export function normalizeContactUpdateConfig(
+  raw: Record<string, unknown>,
+): ContactUpdateStepConfig {
+  assertNoUnknownKeys(
+    raw,
+    new Set(["fields", "properties"]),
+    "contact_update_config_invalid",
+    "contact_update config",
+  );
+
+  const config: ContactUpdateStepConfig = {};
+  if (raw.fields !== undefined) {
+    if (
+      typeof raw.fields !== "object" ||
+      raw.fields === null ||
+      Array.isArray(raw.fields)
+    ) {
+      throw new AutomationValidationError(
+        "contact_update fields must be an object",
+        "contact_update_fields_invalid",
+      );
+    }
+
+    const fieldsRaw = raw.fields as Record<string, unknown>;
+    assertNoUnknownKeys(
+      fieldsRaw,
+      new Set(["email", "first_name", "last_name", "unsubscribed"]),
+      "contact_update_field_invalid",
+      "contact_update fields",
+    );
+
+    const fields: NonNullable<ContactUpdateStepConfig["fields"]> = {};
+    if ("email" in fieldsRaw) {
+      fields.email = normalizeContactUpdateValue(
+        fieldsRaw.email,
+        "contact_update_email_invalid",
+        "email",
+      );
+    }
+    if ("first_name" in fieldsRaw) {
+      fields.first_name = normalizeContactUpdateValue(
+        fieldsRaw.first_name,
+        "contact_update_first_name_invalid",
+        "first_name",
+      );
+    }
+    if ("last_name" in fieldsRaw) {
+      fields.last_name = normalizeContactUpdateValue(
+        fieldsRaw.last_name,
+        "contact_update_last_name_invalid",
+        "last_name",
+      );
+    }
+    if ("unsubscribed" in fieldsRaw) {
+      fields.unsubscribed = normalizeContactUpdateValue(
+        fieldsRaw.unsubscribed,
+        "contact_update_unsubscribed_invalid",
+        "unsubscribed",
+      );
+    }
+    if (Object.keys(fields).length > 0) config.fields = fields;
+  }
+
+  if (raw.properties !== undefined) {
+    if (
+      typeof raw.properties !== "object" ||
+      raw.properties === null ||
+      Array.isArray(raw.properties)
+    ) {
+      throw new AutomationValidationError(
+        "contact_update properties must be an object",
+        "contact_update_properties_invalid",
+      );
+    }
+
+    const propertiesRaw = raw.properties as Record<string, unknown>;
+    const properties: Record<string, ContactUpdateValue> = {};
+    for (const [key, value] of Object.entries(propertiesRaw)) {
+      const trimmedKey = key.trim();
+      if (!trimmedKey) {
+        throw new AutomationValidationError(
+          "contact_update property keys must be non-empty",
+          "contact_update_property_key_invalid",
+        );
+      }
+      if (CONTACT_UPDATE_RESERVED_PROPERTY_KEYS.has(trimmedKey)) {
+        throw new AutomationValidationError(
+          `contact_update properties cannot modify reserved contact field "${trimmedKey}"`,
+          "contact_update_property_reserved",
+        );
+      }
+      properties[trimmedKey] = normalizeContactUpdateValue(
+        value,
+        "contact_update_property_value_invalid",
+        `property ${trimmedKey}`,
+      );
+    }
+    if (Object.keys(properties).length > 0) config.properties = properties;
+  }
+
+  if (!config.fields && !config.properties) {
+    throw new AutomationValidationError(
+      "contact_update requires at least one field or property",
+      "contact_update_empty",
+    );
+  }
+
+  return config;
+}
+
 export function normalizeStepConfig(
   type: AutomationStepType,
   config: Record<string, unknown>,
@@ -439,6 +612,11 @@ export function normalizeStepConfig(
       >;
     case "wait_for_event":
       return normalizeWaitForEventConfig(config) as unknown as Record<
+        string,
+        unknown
+      >;
+    case "contact_update":
+      return normalizeContactUpdateConfig(config) as unknown as Record<
         string,
         unknown
       >;

@@ -46,7 +46,14 @@ export type CreateDomainPayload = DomainOptions;
 
 export interface AutomationStepPayload {
   key: string;
-  type: "trigger" | "delay" | "send_email" | "end";
+  type:
+    | "trigger"
+    | "delay"
+    | "send_email"
+    | "end"
+    | "condition"
+    | "wait_for_event"
+    | "contact_update";
   config?: Record<string, unknown>;
   position?: number;
 }

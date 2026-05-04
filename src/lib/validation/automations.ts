@@ -9,6 +9,7 @@ export const automationStepTypeSchema = z.enum([
   "end",
   "condition",
   "wait_for_event",
+  "contact_update",
 ]);
 
 const conditionComparableValueSchema = z.union([
@@ -55,6 +56,67 @@ const conditionStepConfigSchema = z.object({
   predicate: conditionPredicateSchema,
 });
 
+const contactUpdateValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]);
+
+const contactUpdateFieldsSchema = z
+  .object({
+    email: contactUpdateValueSchema.optional(),
+    first_name: contactUpdateValueSchema.optional(),
+    last_name: contactUpdateValueSchema.optional(),
+    unsubscribed: contactUpdateValueSchema.optional(),
+  })
+  .strict();
+
+const contactUpdateReservedPropertyKeys = new Set([
+  "email",
+  "first_name",
+  "firstName",
+  "last_name",
+  "lastName",
+  "unsubscribed",
+  "segments",
+  "topics",
+  "topic_subscriptions",
+  "topicSubscriptions",
+]);
+
+const contactUpdatePropertiesSchema = z
+  .record(z.string().trim().min(1), contactUpdateValueSchema)
+  .superRefine((properties, ctx) => {
+    for (const key of Object.keys(properties)) {
+      if (contactUpdateReservedPropertyKeys.has(key.trim())) {
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message: `properties cannot modify reserved contact field ${key}`,
+        });
+      }
+    }
+  });
+
+const contactUpdateStepConfigSchema = z
+  .object({
+    fields: contactUpdateFieldsSchema.optional(),
+    properties: contactUpdatePropertiesSchema.optional(),
+  })
+  .strict()
+  .superRefine((config, ctx) => {
+    if (
+      (!config.fields || Object.keys(config.fields).length === 0) &&
+      (!config.properties || Object.keys(config.properties).length === 0)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "contact_update requires at least one field or property",
+      });
+    }
+  });
+
 const waitForEventStepConfigSchema = z.object({
   event_name: z
     .string()
@@ -100,6 +162,18 @@ export const automationStepSchema = z
 
     if (step.type === "wait_for_event") {
       const parsed = waitForEventStepConfigSchema.safeParse(step.config);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          ctx.addIssue({
+            ...issue,
+            path: ["config", ...issue.path],
+          });
+        }
+      }
+    }
+
+    if (step.type === "contact_update") {
+      const parsed = contactUpdateStepConfigSchema.safeParse(step.config);
       if (!parsed.success) {
         for (const issue of parsed.error.issues) {
           ctx.addIssue({

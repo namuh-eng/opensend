@@ -288,6 +288,86 @@ describe("automationRepo.create", () => {
     ).rejects.toMatchObject({ code: "wait_for_event_timeout_invalid" });
   });
 
+  it("accepts contact_update steps with explicit safe field and property mappings", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.updated" },
+          },
+          {
+            key: "update",
+            type: "contact_update",
+            config: {
+              fields: {
+                email: "event.email",
+                first_name: "contact.first_name",
+                last_name: "steps.enrich.output.last_name",
+                unsubscribed: false,
+              },
+              properties: { plan: "wait_events.wait.payload.plan" },
+            },
+          },
+        ],
+        connections: [{ from: "trigger", to: "update" }],
+      }),
+    ).resolves.toMatchObject({ automation: { id: "auto_1" } });
+  });
+
+  it("rejects contact_update configs with dangerous generic property fields", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.updated" },
+          },
+          {
+            key: "update",
+            type: "contact_update",
+            config: {
+              properties: { unsubscribed: "event.unsubscribed" },
+            },
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "contact_update_property_reserved" });
+  });
+
+  it("rejects contact_update configs with unsupported top-level or field keys", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.updated" },
+          },
+          {
+            key: "update",
+            type: "contact_update",
+            config: { fields: { segments: ["vip"] } },
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "contact_update_field_invalid" });
+  });
+
   it("rejects condition branch labels from non-condition steps", async () => {
     const { automationRepo } = await import(
       "../packages/core/src/db/repositories/automationRepo"
