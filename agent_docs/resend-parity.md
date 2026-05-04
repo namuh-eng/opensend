@@ -30,7 +30,7 @@ Rows are ordered roughly by priority within each area. The inspector's tie-break
 | Batch send (`POST /emails/batch`) | up to 100/req | TBD | ? | ? | ? | ? | P1 | | |
 | Scheduled send (`scheduled_at`) | natural-language + ISO | TBD | ? | ? | ? | ? | P1 | | |
 | Cancel scheduled send | `PATCH /emails/:id` | TBD | ? | ? | ? | ? | P2 | | |
-| Idempotency keys | `Idempotency-Key` header | TBD | ? | ? | ? | ? | P0 | | |
+| Idempotency keys | `Idempotency-Key` header on single and batch send; 24-hour expiry and 256-char max ([docs](https://resend.com/docs/dashboard/emails/idempotency-keys)) | partial: single send validates, checks, and stores `idempotency-key` (`src/app/api/emails/route.ts:155`, `src/app/api/emails/route.ts:210`, `src/app/api/emails/route.ts:361`); batch send ignores the header and does not persist a request key (`src/app/api/emails/batch/route.ts:119`, `src/app/api/emails/batch/route.ts:221`); SDK has no request-options/header path (`packages/sdk/src/index.ts:165`, `packages/sdk/src/index.ts:210`, `packages/sdk/src/index.ts:223`) | partial | behind | behind | n/a | P0 | #176 | 2026-05-04 |
 | Reply-To list | array | TBD | ? | ? | ? | ? | P2 | | |
 | Attachments | base64 + URL fetch | TBD | ? | ? | ? | ? | P1 | | |
 | Tags / metadata | `tags[]` for analytics filter | TBD | ? | ? | ? | ? | P1 | | |
