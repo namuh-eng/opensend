@@ -147,6 +147,49 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  const idempotencyKey = request.headers.get("idempotency-key");
+  if (
+    idempotencyKey &&
+    (idempotencyKey.length < 1 || idempotencyKey.length > 255)
+  ) {
+    recordBatchMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "invalid",
+    });
+    return jsonWithTelemetry(
+      publicApiError(
+        "invalid_idempotency_key",
+        "Idempotency-Key must be between 1 and 255 characters.",
+        400,
+      ),
+      telemetry,
+      { status: 400 },
+    );
+  }
+
+  if (idempotencyKey) {
+    const existing = await db.query.emails.findFirst({
+      where: eq(emails.idempotencyKey, idempotencyKey),
+    });
+    if (existing) {
+      recordBatchMetric(telemetry, {
+        durationMs: performance.now() - startedAt,
+        outcome: "accepted",
+        count: 0,
+      });
+      return jsonWithTelemetry(
+        publicApiError(
+          "idempotency_conflict",
+          "A request with this idempotency key has already been accepted.",
+          409,
+          { id: existing.id },
+        ),
+        telemetry,
+        { status: 409 },
+      );
+    }
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -199,7 +242,7 @@ export async function POST(request: Request): Promise<Response> {
       }
       const persisted: Array<{ id: string; shouldQueueNow: boolean }> = [];
 
-      for (const item of validatedItems) {
+      for (const [index, item] of validatedItems.entries()) {
         const to = normalizeToArray(item.to) as string[];
         const cc = normalizeToArray(item.cc);
         const bcc = normalizeToArray(item.bcc);
@@ -235,6 +278,7 @@ export async function POST(request: Request): Promise<Response> {
             status: shouldQueueNow ? "queued" : "scheduled",
             scheduledAt: scheduledAt,
             topicId: item.topic_id || null,
+            idempotencyKey: index === 0 ? idempotencyKey : null,
             userId: auth.userId,
           })
           .returning({ id: emails.id });
