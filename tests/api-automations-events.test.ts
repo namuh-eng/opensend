@@ -361,6 +361,96 @@ describe("automation API routes", () => {
     );
   });
 
+  it("creates an automation with a valid contact_update step", async () => {
+    mockAutomationCreate.mockResolvedValue({
+      automation,
+      steps: [
+        triggerStep,
+        {
+          ...triggerStep,
+          id: "step_update",
+          key: "update",
+          type: "contact_update",
+          config: {
+            fields: { first_name: "event.first_name", unsubscribed: true },
+            properties: { plan: "event.plan" },
+          },
+          position: 1,
+        },
+      ],
+    });
+    const { POST } = await import("@/app/api/automations/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/automations", {
+        name: "Update contact",
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+          },
+          {
+            key: "update",
+            type: "contact_update",
+            config: {
+              fields: { first_name: "event.first_name", unsubscribed: true },
+              properties: { plan: "event.plan" },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockAutomationCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: expect.arrayContaining([
+          expect.objectContaining({
+            type: "contact_update",
+            config: {
+              fields: { first_name: "event.first_name", unsubscribed: true },
+              properties: { plan: "event.plan" },
+            },
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it("rejects invalid contact_update config with field-level errors", async () => {
+    const { POST } = await import("@/app/api/automations/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/automations", {
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+          },
+          {
+            key: "update",
+            type: "contact_update",
+            config: {
+              fields: { segments: ["vip"] },
+              properties: { unsubscribed: "event.unsubscribed" },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    const json = await response.json();
+    expect(json.details.fieldErrors.steps).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("segments"),
+        expect.stringContaining("reserved contact field"),
+      ]),
+    );
+  });
+
   it("returns 422 when repository graph validation rejects condition branches", async () => {
     mockAutomationCreate.mockRejectedValue(
       new TestAutomationValidationError(

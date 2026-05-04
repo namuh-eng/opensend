@@ -12,10 +12,12 @@ import {
 import {
   type ConditionOperator,
   type ConditionStepConfig,
+  type ContactUpdateStepConfig,
   type WaitForEventStepConfig,
   automationRunRepo,
   emailService,
   normalizeConditionConfig,
+  normalizeContactUpdateConfig,
   normalizeWaitForEventConfig,
   parseDurationToCappedSeconds,
 } from "@opensend/core";
@@ -50,6 +52,10 @@ export interface AutomationRunnerDeps {
   getContact: (id: string) => Promise<Contact | null>;
   getTemplate: (id: string) => Promise<Template | null>;
   sendEmail: (input: RunnerSendEmailInput) => Promise<{ id: string }>;
+  updateContact: (
+    id: string,
+    data: Partial<typeof contacts.$inferInsert>,
+  ) => Promise<Contact | null>;
   listWaitingRunsByContact: (input: {
     contactId: string;
     userId?: string | null;
@@ -105,6 +111,14 @@ const defaultDeps: AutomationRunnerDeps = {
   },
   async sendEmail(input) {
     return await emailService.send(input);
+  },
+  async updateContact(id, data) {
+    const [updated] = await db
+      .update(contacts)
+      .set(data)
+      .where(eq(contacts.id, id))
+      .returning();
+    return updated ?? null;
   },
   async listWaitingRunsByContact(input) {
     return await automationRunRepo.listWaitingByContact(input);
@@ -564,6 +578,216 @@ async function processWaitForEventStep(
   });
 }
 
+function isUniqueViolation(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  if ("code" in error && (error as { code?: unknown }).code === "23505") {
+    return true;
+  }
+  return "cause" in error && isUniqueViolation(error.cause);
+}
+
+function resolveContactUpdateScalar(
+  value: unknown,
+  context: Record<string, unknown>,
+): unknown {
+  return resolveReference(value, context);
+}
+
+function toOptionalString(value: unknown, field: string): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string") {
+    throw new Error(`contact_update ${field} must resolve to a string or null`);
+  }
+  return value.trim() || null;
+}
+
+function toRequiredEmail(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new Error(
+      "contact_update email must resolve to a valid email string",
+    );
+  }
+  const email = value.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 512) {
+    throw new Error(
+      "contact_update email must resolve to a valid email string",
+    );
+  }
+  return email;
+}
+
+function toBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(`contact_update ${field} must resolve to a boolean`);
+  }
+  return value;
+}
+
+function toPropertyString(value: unknown, key: string): string {
+  if (value === null) return "";
+  if (
+    typeof value !== "string" &&
+    typeof value !== "number" &&
+    typeof value !== "boolean"
+  ) {
+    throw new Error(
+      `contact_update property ${key} must resolve to a string, number, boolean, or null`,
+    );
+  }
+  return String(value);
+}
+
+function buildContactUpdate(
+  config: ContactUpdateStepConfig,
+  contact: Contact,
+  context: Record<string, unknown>,
+): {
+  data: Partial<typeof contacts.$inferInsert>;
+  changedFields: string[];
+} {
+  const data: Partial<typeof contacts.$inferInsert> = {};
+  const changedFields = new Set<string>();
+  const fields = config.fields ?? {};
+
+  if ("email" in fields) {
+    const email = toRequiredEmail(
+      resolveContactUpdateScalar(fields.email, context),
+    );
+    if (email !== contact.email) {
+      data.email = email;
+      changedFields.add("email");
+    }
+  }
+
+  if ("first_name" in fields) {
+    const firstName = toOptionalString(
+      resolveContactUpdateScalar(fields.first_name, context),
+      "first_name",
+    );
+    if ((contact.firstName ?? null) !== firstName) {
+      data.firstName = firstName;
+      changedFields.add("first_name");
+    }
+  }
+
+  if ("last_name" in fields) {
+    const lastName = toOptionalString(
+      resolveContactUpdateScalar(fields.last_name, context),
+      "last_name",
+    );
+    if ((contact.lastName ?? null) !== lastName) {
+      data.lastName = lastName;
+      changedFields.add("last_name");
+    }
+  }
+
+  if ("unsubscribed" in fields) {
+    const unsubscribed = toBoolean(
+      resolveContactUpdateScalar(fields.unsubscribed, context),
+      "unsubscribed",
+    );
+    if (contact.unsubscribed !== unsubscribed) {
+      data.unsubscribed = unsubscribed;
+      changedFields.add("unsubscribed");
+    }
+  }
+
+  if (config.properties) {
+    const currentProperties = contact.customProperties ?? {};
+    const nextProperties: Record<string, string> = { ...currentProperties };
+    let propertiesChanged = false;
+    for (const [key, rawValue] of Object.entries(config.properties)) {
+      const value = toPropertyString(
+        resolveContactUpdateScalar(rawValue, context),
+        key,
+      );
+      if (nextProperties[key] !== value) {
+        nextProperties[key] = value;
+        propertiesChanged = true;
+        changedFields.add(`properties.${key}`);
+      }
+    }
+    if (propertiesChanged) {
+      data.customProperties = nextProperties;
+    }
+  }
+
+  return { data, changedFields: [...changedFields] };
+}
+
+async function processContactUpdateStep(
+  deps: AutomationRunnerDeps,
+  run: AutomationRun,
+  automation: Automation,
+  steps: AutomationStep[],
+  step: AutomationStep,
+  states: StepStates,
+  now: Date,
+) {
+  if (!run.contactId) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "contact_update requires a contact",
+    );
+  }
+
+  const contact = await deps.getContact(run.contactId);
+  if (!contact) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "contact_update contact not found",
+    );
+  }
+
+  const config = normalizeContactUpdateConfig(step.config ?? {});
+  const delivery = run.triggerEventId
+    ? await deps.getDelivery(run.triggerEventId)
+    : null;
+  const context = buildVariableContext(delivery, contact, states);
+  const { data, changedFields } = buildContactUpdate(config, contact, context);
+
+  if (changedFields.length > 0) {
+    try {
+      const updated = await deps.updateContact(contact.id, data);
+      if (!updated) {
+        return await failRun(
+          deps,
+          run,
+          step.key,
+          states,
+          now,
+          "contact_update contact not found",
+        );
+      }
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        return await failRun(
+          deps,
+          run,
+          step.key,
+          states,
+          now,
+          "contact_update email already exists",
+        );
+      }
+      throw error;
+    }
+  }
+
+  return await advanceRun(deps, run, automation, steps, step, states, now, {
+    contact_id: contact.id,
+    changed_fields: changedFields,
+  });
+}
+
 async function processSendEmailStep(
   deps: AutomationRunnerDeps,
   run: AutomationRun,
@@ -794,6 +1018,18 @@ export async function processAutomationRunStep(
 
     if (step.type === "wait_for_event") {
       return await processWaitForEventStep(deps, run, step, states, now);
+    }
+
+    if (step.type === "contact_update") {
+      return await processContactUpdateStep(
+        deps,
+        run,
+        automation,
+        steps,
+        step,
+        states,
+        now,
+      );
     }
 
     if (step.type === "send_email") {

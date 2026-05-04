@@ -6,7 +6,11 @@ import type {
   customEventDeliveries,
   templates,
 } from "@/lib/db/schema";
-import type { AutomationRunnerDeps } from "@/lib/workers/automation-runner";
+import {
+  type AutomationRunnerDeps,
+  processAutomationRunStep,
+  resumeWaitingRunsForEvent,
+} from "@/lib/workers/automation-runner";
 import { describe, expect, it, vi } from "vitest";
 
 type AutomationRun = typeof automationRuns.$inferSelect;
@@ -153,6 +157,7 @@ function deps(overrides: Partial<AutomationRunnerDeps> = {}) {
     getContact: vi.fn().mockResolvedValue(contact),
     getTemplate: vi.fn().mockResolvedValue(template),
     sendEmail,
+    updateContact: vi.fn().mockResolvedValue(contact),
     listWaitingRunsByContact: vi.fn().mockResolvedValue([]),
     updateRun: vi.fn(async (_id, data) => {
       updates.push(data as Partial<AutomationRun>);
@@ -165,9 +170,6 @@ function deps(overrides: Partial<AutomationRunnerDeps> = {}) {
 
 describe("automation runner", () => {
   it("advances trigger then schedules delay next_step_at without sleeping", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const setup = deps();
 
     await processAutomationRunStep(run(), setup.deps);
@@ -196,9 +198,6 @@ describe("automation runner", () => {
   });
 
   it("resumes a due delayed run and calls the email publishing boundary", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const setup = deps();
 
     await processAutomationRunStep(
@@ -244,9 +243,6 @@ describe("automation runner", () => {
   });
 
   it("evaluates condition steps and advances to the met branch in one tick", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const conditionAutomation: Automation = {
       ...automation,
       connections: [
@@ -294,9 +290,6 @@ describe("automation runner", () => {
   });
 
   it("enters wait_for_event waiting state without downstream work in the same tick", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const waitAutomation: Automation = {
       ...automation,
       connections: [
@@ -339,9 +332,6 @@ describe("automation runner", () => {
   });
 
   it("fails a due wait_for_event timeout deterministically", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const waitSteps: AutomationStep[] = [
       {
         ...steps[1],
@@ -379,9 +369,6 @@ describe("automation runner", () => {
   });
 
   it("resumes a matching wait_for_event run and stores payload output", async () => {
-    const { resumeWaitingRunsForEvent } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const waitAutomation: Automation = {
       ...automation,
       connections: [{ from: "wait", to: "send" }],
@@ -448,9 +435,6 @@ describe("automation runner", () => {
   });
 
   it("does not resume wait_for_event runs for non-matching events", async () => {
-    const { resumeWaitingRunsForEvent } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const waitSteps: AutomationStep[] = [
       {
         ...steps[1],
@@ -483,9 +467,6 @@ describe("automation runner", () => {
   });
 
   it("resolves waited event output for downstream send_email variables", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const waitSendStep: AutomationStep = {
       ...steps[2],
       config: {
@@ -526,9 +507,6 @@ describe("automation runner", () => {
   });
 
   it("evaluates condition steps and advances to the not-met branch", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const conditionAutomation: Automation = {
       ...automation,
       connections: [
@@ -574,9 +552,6 @@ describe("automation runner", () => {
   });
 
   it("can compare prior step output values in condition predicates", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const conditionAutomation: Automation = {
       ...automation,
       connections: [
@@ -626,9 +601,6 @@ describe("automation runner", () => {
   });
 
   it("fails condition steps with missing variables at the step level", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const conditionSteps: AutomationStep[] = [
       {
         ...steps[1],
@@ -665,9 +637,6 @@ describe("automation runner", () => {
   });
 
   it("fails condition steps with invalid persisted predicate configs", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const conditionSteps: AutomationStep[] = [
       {
         ...steps[1],
@@ -693,10 +662,154 @@ describe("automation runner", () => {
     });
   });
 
-  it("fails missing or unpublished templates with a step-level error", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
+  it("updates the current contact with resolved fields and minimal output", async () => {
+    const updateAutomation: Automation = {
+      ...automation,
+      connections: [{ from: "update", to: "end" }],
+    };
+    const updateStep: AutomationStep = {
+      ...steps[1],
+      key: "update",
+      type: "contact_update",
+      config: {
+        fields: {
+          email: "event.new_email",
+          first_name: "wait_events.wait.payload.first_name",
+          unsubscribed: true,
+        },
+        properties: {
+          plan: "event.plan",
+          invoice: "wait_events.wait.payload.invoice_id",
+        },
+      },
+      position: 0,
+    };
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(updateAutomation),
+      listSteps: vi.fn().mockResolvedValue([updateStep, steps[3]]),
+      getDelivery: vi.fn().mockResolvedValue({
+        ...delivery,
+        payload: { plan: "pro", new_email: "NEW@example.com" },
+      }),
+    });
+
+    await processAutomationRunStep(
+      run({
+        currentStepKey: "update",
+        stepStates: {
+          wait: {
+            status: "completed",
+            output: {
+              waited_event: {
+                payload: { first_name: "Grace", invoice_id: "inv_1" },
+              },
+            },
+          },
+        },
+      }),
+      setup.deps,
     );
+
+    expect(setup.deps.updateContact).toHaveBeenCalledWith(contact.id, {
+      email: "new@example.com",
+      firstName: "Grace",
+      unsubscribed: true,
+      customProperties: { plan: "pro", invoice: "inv_1" },
+    });
+    expect(setup.updates[0]).toMatchObject({
+      status: "queued",
+      currentStepKey: "end",
+    });
+    expect(setup.updates[0]?.stepStates?.update.output).toEqual({
+      contact_id: contact.id,
+      changed_fields: [
+        "email",
+        "first_name",
+        "unsubscribed",
+        "properties.plan",
+        "properties.invoice",
+      ],
+    });
+  });
+
+  it("fails contact_update without a current contact", async () => {
+    const updateStep: AutomationStep = {
+      ...steps[1],
+      key: "update",
+      type: "contact_update",
+      config: { fields: { first_name: "event.first_name" } },
+      position: 0,
+    };
+    const setup = deps({ listSteps: vi.fn().mockResolvedValue([updateStep]) });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "update", contactId: null }),
+      setup.deps,
+    );
+
+    expect(setup.deps.updateContact).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "update",
+      failureReason: "contact_update requires a contact",
+    });
+  });
+
+  it("fails contact_update when email resolves invalid", async () => {
+    const updateStep: AutomationStep = {
+      ...steps[1],
+      key: "update",
+      type: "contact_update",
+      config: { fields: { email: "event.bad_email" } },
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([updateStep]),
+      getDelivery: vi.fn().mockResolvedValue({
+        ...delivery,
+        payload: { bad_email: "not-an-email" },
+      }),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "update" }),
+      setup.deps,
+    );
+
+    expect(setup.deps.updateContact).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      failureReason:
+        "contact_update email must resolve to a valid email string",
+    });
+  });
+
+  it("fails contact_update email unique conflicts deterministically", async () => {
+    const updateStep: AutomationStep = {
+      ...steps[1],
+      key: "update",
+      type: "contact_update",
+      config: { fields: { email: "taken@example.com" } },
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([updateStep]),
+      updateContact: vi.fn().mockRejectedValue({ code: "23505" }),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "update" }),
+      setup.deps,
+    );
+
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "update",
+      failureReason: "contact_update email already exists",
+    });
+  });
+
+  it("fails missing or unpublished templates with a step-level error", async () => {
     const setup = deps({
       getTemplate: vi.fn().mockResolvedValue({ ...template, status: "draft" }),
     });
@@ -716,9 +829,6 @@ describe("automation runner", () => {
   });
 
   it("skips send_email for unsubscribed contacts", async () => {
-    const { processAutomationRunStep } = await import(
-      "@/lib/workers/automation-runner"
-    );
     const setup = deps({
       getContact: vi.fn().mockResolvedValue({ ...contact, unsubscribed: true }),
     });
