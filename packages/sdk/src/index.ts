@@ -27,6 +27,10 @@ interface SDKOptions {
   baseUrl: string;
 }
 
+export interface RequestOptions {
+  idempotencyKey?: string;
+}
+
 interface ApiError {
   message: string;
   statusCode: number;
@@ -166,12 +170,16 @@ class HttpClient {
     method: string,
     path: string,
     body?: unknown,
+    requestOptions: RequestOptions = {},
   ): Promise<ApiResponse<T>> {
     try {
       const headers: Record<string, string> = {
         Authorization: `Bearer ${this.apiKey}`,
         "Content-Type": "application/json",
       };
+      if (requestOptions.idempotencyKey !== undefined) {
+        headers["Idempotency-Key"] = requestOptions.idempotencyKey;
+      }
 
       const options: RequestInit = { method, headers };
       if (body !== undefined) {
@@ -207,7 +215,10 @@ class HttpClient {
 class Emails {
   constructor(private readonly http: HttpClient) {}
 
-  async send(payload: SendEmailPayload): Promise<ApiResponse<EmailResponse>> {
+  async send(
+    payload: SendEmailPayload,
+    options: RequestOptions = {},
+  ): Promise<ApiResponse<EmailResponse>> {
     const { react, ...rest } = payload;
 
     if (react != null) {
@@ -217,16 +228,23 @@ class Emails {
       }
     }
 
-    return this.http.request<EmailResponse>("POST", "/api/emails", rest);
+    return this.http.request<EmailResponse>(
+      "POST",
+      "/api/emails",
+      rest,
+      options,
+    );
   }
 
   async sendBatch(
     payload: SendEmailPayload[],
+    options: RequestOptions = {},
   ): Promise<ApiResponse<BatchEmailResponse>> {
     return this.http.request<BatchEmailResponse>(
       "POST",
       "/api/emails/batch",
       payload,
+      options,
     );
   }
 

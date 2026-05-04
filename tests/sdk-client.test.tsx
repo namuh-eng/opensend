@@ -48,6 +48,51 @@ describe("OpenSend SDK", () => {
     });
   });
 
+  it("forwards Idempotency-Key for single and batch send request options", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ id: "email_789" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new OpenSend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+    const payload = {
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+    };
+
+    await client.emails.send(payload, { idempotencyKey: "send-key-1" });
+    await client.emails.sendBatch([payload], { idempotencyKey: "batch-key-1" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/api/emails",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Idempotency-Key": "send-key-1",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/api/emails/batch",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Idempotency-Key": "batch-key-1",
+        }),
+      }),
+    );
+  });
+
   it("renders react payloads to html before sending", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ id: "email_456" }), {

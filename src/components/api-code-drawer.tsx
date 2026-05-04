@@ -52,10 +52,11 @@ const { data, error } = await resend.emails.send({
   to: ['user@gmail.com'],
   subject: 'Hello World',
   html: '<p>Congrats on sending your <strong>first email</strong>!</p>',
-});`,
+}, { idempotencyKey: 'welcome-user-123' });`,
       curl: `curl -X POST https://api.example.com/emails \\
   -H "Authorization: Bearer re_123456789" \\
   -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: welcome-user-123" \\
   -d '{
     "from": "you@example.com",
     "to": ["user@gmail.com"],
@@ -84,10 +85,11 @@ const { data, error } = await resend.batch.send([
     subject: 'Hello User 2',
     html: '<p>Hello User 2</p>',
   },
-]);`,
+], { idempotencyKey: 'batch-campaign-123' });`,
       curl: `curl -X POST https://api.example.com/emails/batch \\
   -H "Authorization: Bearer re_123456789" \\
   -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: batch-campaign-123" \\
   -d '[
     {
       "from": "you@example.com",

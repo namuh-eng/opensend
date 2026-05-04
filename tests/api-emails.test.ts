@@ -9,6 +9,7 @@ const mockGetApiKeyAuthHeaderError = vi.hoisted(() => vi.fn());
 const mockEmitCloudWatchMetric = vi.hoisted(() => vi.fn());
 const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
+const mockReserveEmailQuota = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
   select: vi.fn(),
@@ -82,6 +83,16 @@ vi.mock("@opensend/core", () => {
 vi.mock("@/lib/db", () => ({
   db: mockDb,
 }));
+
+vi.mock("@/lib/billing/quota", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/billing/quota")>(
+    "@/lib/billing/quota",
+  );
+  return {
+    ...actual,
+    reserveEmailQuota: mockReserveEmailQuota,
+  };
+});
 
 vi.mock("@/lib/api-auth", async () => {
   const actual =
@@ -225,7 +236,14 @@ describe("POST /api/emails", () => {
     mockEmitCloudWatchMetric.mockReset();
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
+    mockReserveEmailQuota.mockReset();
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
     mockGetApiKeyAuthHeaderError.mockReturnValue(null);
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+    mockDb.insert = vi.fn();
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
@@ -534,7 +552,14 @@ describe("POST /api/emails/batch", () => {
     mockEmitCloudWatchMetric.mockReset();
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
+    mockReserveEmailQuota.mockReset();
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
     mockGetApiKeyAuthHeaderError.mockReturnValue(null);
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+    mockDb.insert = vi.fn();
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
@@ -587,6 +612,101 @@ describe("POST /api/emails/batch", () => {
       code: "invalid_json",
       statusCode: 400,
     });
+  });
+
+  it("returns 400 for an invalid batch Idempotency-Key before reserving quota", async () => {
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const req = makeRequest(
+      "POST",
+      [
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Test",
+          html: "<p>Test</p>",
+        },
+      ],
+      {
+        Authorization: "Bearer re_test123",
+        "Idempotency-Key": "x".repeat(256),
+      },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "invalid_idempotency_key",
+      code: "invalid_idempotency_key",
+      statusCode: 400,
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits duplicate batch Idempotency-Key retries before quota, rows, or queue", async () => {
+    const findFirst = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "email-1" });
+    Object.assign(mockDb.query, {
+      emails: { findFirst },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+
+    let callCount = 0;
+    const valuesMock = vi.fn().mockImplementation(() => ({
+      returning: vi.fn().mockResolvedValue([{ id: `email-${++callCount}` }]),
+    }));
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const emailsArr = [
+      {
+        from: "sender@domain.com",
+        to: ["user1@test.com"],
+        subject: "Test 1",
+        html: "<p>1</p>",
+      },
+      {
+        from: "sender@domain.com",
+        to: ["user2@test.com"],
+        subject: "Test 2",
+        html: "<p>2</p>",
+      },
+    ];
+
+    const first = await POST(
+      makeRequest("POST", emailsArr, {
+        Authorization: "Bearer re_test123",
+        "Idempotency-Key": "batch-key-1",
+      }),
+    );
+    const retry = await POST(
+      makeRequest("POST", emailsArr, {
+        Authorization: "Bearer re_test123",
+        "Idempotency-Key": "batch-key-1",
+      }),
+    );
+
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({
+      data: [{ id: "email-1" }, { id: "email-2" }],
+    });
+    expect(retry.status).toBe(409);
+    await expect(retry.json()).resolves.toMatchObject({
+      name: "idempotency_conflict",
+      code: "idempotency_conflict",
+      statusCode: 409,
+      details: { id: "email-1" },
+    });
+
+    expect(mockReserveEmailQuota).toHaveBeenCalledTimes(1);
+    expect(mockDb.insert).toHaveBeenCalledTimes(2);
+    expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(2);
+    expect(
+      valuesMock.mock.calls.map(([value]) => value.idempotencyKey),
+    ).toEqual(["batch-key-1", null]);
   });
 
   it("injects managed unsubscribe headers for batch items with known contact placeholders", async () => {
