@@ -49,7 +49,7 @@ Rows are ordered roughly by priority within each area. The inspector's tie-break
 
 | Feature | Resend | OpenSend | Feature | DX | Reliability | Price | Priority | Issue # | Last reviewed |
 |---|---|---|---|---|---|---|---|---|---|
-| Custom domain add | DNS records emitted, verify endpoint | TBD | ? | ? | ? | ? | P0 | | |
+| Custom domain add | `POST /domains` returns copyable DNS records and supports default `send` plus custom return-path labels ([docs](https://resend.com/docs/api-reference/domains/create-domain), [docs](https://resend.com/docs/dashboard/domains/introduction#custom-return-path)) | partial: create API provisions SES identity and returns records (`src/app/api/domains/route.ts:46`, `src/app/api/domains/route.ts:58`); verify endpoint exists (`src/app/api/domains/[id]/verify/route.ts:16`); service persists `customReturnPath` but record generation ignores it and emits SPF/MX at the root domain (`packages/core/src/services/domain.ts:86`, `packages/core/src/services/domain.ts:174`, `packages/core/src/services/domain.ts:190`); Cloudflare auto-configure also checks/creates root-domain SPF/MX (`src/lib/cloudflare.ts:147`, `src/lib/cloudflare.ts:158`) | partial | behind | behind | n/a | P0 | #185 | 2026-05-04 |
 | DKIM/SPF/DMARC | auto-configured records | TBD | ? | ? | ? | ? | P0 | | |
 | Multi-region domain | EU + US-East + others | TBD | ? | ? | ? | ? | needs Jaeyun | | |
 | Subdomain delegation (CNAME) | `send.foo.com` pattern | TBD | ? | ? | ? | ? | P2 | | |
