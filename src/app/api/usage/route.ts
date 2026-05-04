@@ -1,21 +1,13 @@
-import {
-  getServerSession,
-  unauthorizedResponse,
-  validateDashboardKey,
-} from "@/lib/api-auth";
+import { getServerSession, unauthorizedResponse } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { contacts, domains, emails, segments } from "@/lib/db/schema";
 import { gte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 // Dashboard-only internal endpoint
-export async function GET(request: Request) {
-  const hasDashboardKey = validateDashboardKey(
-    request.headers.get("authorization"),
-  );
-  const session = hasDashboardKey ? null : await getServerSession();
-
-  if (!hasDashboardKey && !session) return unauthorizedResponse();
+export async function GET() {
+  const session = await getServerSession();
+  if (!session) return unauthorizedResponse();
 
   try {
     const now = new Date();

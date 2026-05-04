@@ -51,14 +51,26 @@ The Fargate task definition must expose/container-map the ingester on port `3016
 
 ## Deploy the ingester
 
-Use `scripts/deploy.sh` rather than a raw `aws ecs update-service`. The Fargate deploy script contract is:
+Use `scripts/deploy.sh` rather than a raw `aws ecs update-service`. The script
+runs migrations before service redeploys so app code does not start against an
+older database schema. The Fargate deploy script contract is:
 
 - build `packages/ingester/Dockerfile` for `linux/amd64`
 - push the image to ECR repo `<product>-ingester`
+- run a one-off migrator task before service redeploys
 - force a new deployment of ECS service `<product>-ingester` in cluster `namuh`
 - wait for `aws ecs wait services-stable` before reporting success
 
-Deploy only the ingester:
+Supported deploy targets:
+
+```bash
+bash scripts/deploy.sh migrate   # DB-only migration/repair
+bash scripts/deploy.sh app       # app image + migrations + app service redeploy
+bash scripts/deploy.sh ingester  # ingester image + migrations + ingester service redeploy
+bash scripts/deploy.sh all       # app + ingester images + migrations + both redeploys
+```
+
+Override names when production service or repository names differ from repo defaults:
 
 ```bash
 PRODUCT=opensend \
@@ -66,14 +78,6 @@ ECS_CLUSTER=namuh \
 IMAGE_TAG=latest \
 PLATFORM=linux/amd64 \
 bash scripts/deploy.sh ingester
-```
-
-Supported deploy targets:
-
-```bash
-bash scripts/deploy.sh app       # app image + app service redeploy
-bash scripts/deploy.sh ingester  # ingester image + ingester service redeploy
-bash scripts/deploy.sh all       # app + ingester images + both redeploys
 ```
 
 The deploy script assumes the ECS services, target groups, listener rules, log groups, ECR repositories, and Secrets Manager wiring already exist. Use this runbook's external residuals checklist when bringing up a new product or debugging a failed deployment.
@@ -188,6 +192,7 @@ This repo change does not create or mutate external AWS resources on its own. Be
 - the `<product>-ingester` ECR repository exists
 - the `<product>-ingester` ECS service exists in cluster `namuh`
 - the ingester task definition has the same RDS, AWS, Cloudflare, queue, and token secrets as production requires
+- the app, ingester, and migrator ECS tasks have shared RDS and Secrets Manager wiring
 - the ALB listener has a host-based rule for `events.<product>.namuh.co`
 - the ingester target group forwards to port `3016` and has a passing health check
 - the SQS queue exists with a redrive policy and DLQ

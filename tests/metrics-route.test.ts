@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockSelect = vi.hoisted(() => vi.fn());
-const mockValidateDashboardKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockReadDashboardAggregateCache = vi.hoisted(() => vi.fn());
 const mockWriteDashboardAggregateCache = vi.hoisted(() => vi.fn());
@@ -51,7 +50,6 @@ vi.mock("@/lib/api-auth", () => ({
       status: 401,
       headers: { "content-type": "application/json" },
     }),
-  validateDashboardKey: mockValidateDashboardKey,
 }));
 
 vi.mock("@/lib/cache/dashboard-aggregates", () => ({
@@ -164,7 +162,6 @@ describe("metrics route filters", () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 3, 23, 15, 45, 30));
-    mockValidateDashboardKey.mockReturnValue(true);
     mockGetServerSession.mockResolvedValue({
       session: { id: "session-1" },
       user: { id: "user-1" },
@@ -187,7 +184,7 @@ describe("metrics route filters", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("x-namuh-cache")).toBe("miss");
+    expect(response.headers.get("x-opensend-cache")).toBe("miss");
 
     const firstWhere = whereArgs[0] as {
       kind: string;
@@ -309,7 +306,7 @@ describe("metrics route filters", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("x-namuh-cache")).toBe("hit");
+    expect(response.headers.get("x-opensend-cache")).toBe("hit");
     expect(mockSelect).not.toHaveBeenCalled();
     expect(mockWriteDashboardAggregateCache).not.toHaveBeenCalled();
 

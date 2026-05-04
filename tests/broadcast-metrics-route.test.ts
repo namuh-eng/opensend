@@ -80,7 +80,7 @@ describe("broadcast metrics route cache", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("x-namuh-cache")).toBe("hit");
+    expect(response.headers.get("x-opensend-cache")).toBe("hit");
     expect(mockSelect).not.toHaveBeenCalled();
     expect(mockWriteDashboardAggregateCache).not.toHaveBeenCalled();
   });
@@ -110,7 +110,7 @@ describe("broadcast metrics route cache", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.headers.get("x-namuh-cache")).toBe("miss");
+    expect(response.headers.get("x-opensend-cache")).toBe("miss");
     expect(mockWriteDashboardAggregateCache).toHaveBeenCalledOnce();
     expect(mockWriteDashboardAggregateCache).toHaveBeenCalledWith(
       "dashboard-aggregate:v1:broadcast-metrics:b1",

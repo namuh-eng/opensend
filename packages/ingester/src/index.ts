@@ -180,6 +180,25 @@ app.post("/events/ses", async (c) => {
       logTelemetry("info", "ses.sns.subscription_confirmation", telemetry, {
         sns_message_id: snsMessage.MessageId,
       });
+      if (snsMessage.SubscribeURL) {
+        try {
+          const r = await fetch(snsMessage.SubscribeURL);
+          logTelemetry("info", "ses.sns.subscription_confirmed", telemetry, {
+            sns_message_id: snsMessage.MessageId,
+            confirm_status: r.status,
+          });
+        } catch (err) {
+          logTelemetry(
+            "error",
+            "ses.sns.subscription_confirm_failed",
+            telemetry,
+            {
+              sns_message_id: snsMessage.MessageId,
+              error: err instanceof Error ? err.message : String(err),
+            },
+          );
+        }
+      }
       return c.text("OK");
     }
 

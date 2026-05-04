@@ -97,7 +97,7 @@ jobs:
         run: docker compose up postgres -d
 
       - name: Wait for Postgres
-        run: until docker compose exec -T postgres pg_isready -U namuh >/dev/null 2>&1; do sleep 1; done
+        run: until docker compose exec -T postgres pg_isready -U opensend >/dev/null 2>&1; do sleep 1; done
 
       - name: Push schema with documented local DATABASE_URL
         run: bunx drizzle-kit push --config drizzle.config.ts

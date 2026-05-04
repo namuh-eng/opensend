@@ -1,10 +1,6 @@
 // ABOUTME: Metrics API endpoint — returns aggregated email stats, daily chart data, and per-domain breakdown
 
-import {
-  getServerSession,
-  unauthorizedResponse,
-  validateDashboardKey,
-} from "@/lib/api-auth";
+import { getServerSession, unauthorizedResponse } from "@/lib/api-auth";
 import {
   DASHBOARD_METRICS_CACHE_TTL_SECONDS,
   getMetricsAggregateCacheKey,
@@ -48,12 +44,8 @@ const senderDomainSql = sql<string>`substring(${emails.from} from '@([^>]+)')`;
 
 // Dashboard-only internal endpoint
 export async function GET(request: NextRequest) {
-  const hasDashboardKey = validateDashboardKey(
-    request.headers.get("authorization"),
-  );
-  const session = hasDashboardKey ? null : await getServerSession();
-
-  if (!hasDashboardKey && !session) return unauthorizedResponse();
+  const session = await getServerSession();
+  if (!session) return unauthorizedResponse();
 
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -65,7 +57,7 @@ export async function GET(request: NextRequest) {
     const cached = await readDashboardAggregateCache<unknown>(cacheKey);
     if (cached) {
       return NextResponse.json(cached, {
-        headers: { "x-namuh-cache": "hit" },
+        headers: { "x-opensend-cache": "hit" },
       });
     }
 
@@ -216,7 +208,7 @@ export async function GET(request: NextRequest) {
     );
 
     return NextResponse.json(payload, {
-      headers: { "x-namuh-cache": "miss" },
+      headers: { "x-opensend-cache": "miss" },
     });
   } catch (error) {
     console.error("Failed to fetch metrics:", error);

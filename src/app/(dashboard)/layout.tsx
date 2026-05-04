@@ -17,13 +17,13 @@ export default function DashboardLayout({
         <div className="flex-1 p-6">{children}</div>
         <footer className="flex items-center justify-end gap-4 border-t border-[rgba(176,199,217,0.145)] px-6 py-3">
           <a
-            href="mailto:feedback@example.com?subject=OpenSend%20Feedback"
+            href="mailto:feedback@example.com?subject=Opensend%20Feedback"
             className="text-[13px] text-[#A1A4A5] transition-colors hover:text-[#F0F0F0]"
           >
             Feedback
           </a>
           <a
-            href="mailto:help@example.com?subject=OpenSend%20Help"
+            href="mailto:help@example.com?subject=Opensend%20Help"
             className="text-[13px] text-[#A1A4A5] transition-colors hover:text-[#F0F0F0]"
           >
             Help

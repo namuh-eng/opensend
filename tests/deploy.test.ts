@@ -1,4 +1,4 @@
-// ABOUTME: Static deployment tests for the app + ingester App Runner split
+// ABOUTME: Static deployment tests for the app + ingester ECS Fargate split
 // ABOUTME: Verifies repo-visible Docker, compose, deploy script, and runbook wiring
 
 import { existsSync, readFileSync } from "node:fs";
@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 
 const root = join(__dirname, "..");
 
-describe("deploy-001: App Runner deployment configuration", () => {
+describe("deploy-001: ECS Fargate deployment configuration", () => {
   it("next.config.js has standalone output for Docker deployment", () => {
     const config = readFileSync(join(root, "next.config.js"), "utf-8");
     expect(config).toContain('output: "standalone"');
@@ -29,20 +29,63 @@ describe("deploy-001: App Runner deployment configuration", () => {
     expect(dockerfile).toContain("ENV PORT=8080");
   });
 
-  it("deploy script updates both App Runner services to the requested image tag", () => {
+  it("Dockerfile includes a migration runner image", () => {
+    const dockerfile = readFileSync(join(root, "Dockerfile"), "utf-8");
+    expect(dockerfile).toContain("FROM base AS migrator");
+    expect(dockerfile).toContain("COPY drizzle ./drizzle");
+    expect(dockerfile).toContain("COPY src/lib/db/migrate.ts");
+    expect(dockerfile).toContain('CMD ["bun", "src/lib/db/migrate.ts"]');
+  });
+
+  it("deploy script builds, pushes, and force-redeploys ECS services", () => {
     const scriptPath = join(root, "scripts", "deploy.sh");
     expect(existsSync(scriptPath)).toBe(true);
     const script = readFileSync(scriptPath, "utf-8");
-    expect(script).toContain('deploy_service "${APP_RUNNER_SERVICE}"');
-    expect(script).toContain('deploy_service "${INGESTER_APP_RUNNER_SERVICE}"');
-    expect(script).toContain("aws apprunner update-service");
-    expect(script).toContain("Service.SourceConfiguration");
-    expect(script).toContain(
-      'image_repository["ImageIdentifier"] = os.environ["IMAGE_IDENTIFIER"]',
+    expect(script).toContain("aws ecr get-login-password");
+    expect(script).toContain("buildx build");
+    expect(script).toContain("linux/amd64");
+    expect(script).toContain("aws ecs update-service");
+    expect(script).toContain("--force-new-deployment");
+    expect(script).toContain("aws ecs wait services-stable");
+  });
+
+  it("deploy script runs migrations before ECS service redeploys", () => {
+    const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
+    expect(script).toContain("bash scripts/deploy.sh migrate");
+    expect(script).toContain("APP_MIGRATOR_TARGET");
+    expect(script).toContain("aws ecs register-task-definition");
+    expect(script).toContain("aws ecs run-task");
+
+    const allDeployBlock = script.slice(
+      script.indexOf("  all)"),
+      script.indexOf("  *)"),
     );
-    expect(script).toContain(
-      'image_configuration["Port"] = os.environ["PORT"]',
+    expect(allDeployBlock.indexOf("run_migrations")).toBeGreaterThan(-1);
+    expect(allDeployBlock.indexOf("redeploy")).toBeGreaterThan(-1);
+    expect(allDeployBlock.indexOf("run_migrations")).toBeLessThan(
+      allDeployBlock.indexOf("redeploy"),
     );
+  });
+
+  it("has an idempotent repair migration for production domain columns", () => {
+    const migration = readFileSync(
+      join(root, "drizzle", "0010_repair_domain_columns.sql"),
+      "utf-8",
+    );
+    expect(migration).toContain('CREATE TABLE IF NOT EXISTS "email_events"');
+    expect(migration).toContain('CREATE TABLE IF NOT EXISTS "received_emails"');
+    expect(migration).toContain(
+      'CREATE TABLE IF NOT EXISTS "webhook_deliveries"',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN IF NOT EXISTS "custom_return_path"',
+    );
+    expect(migration).toContain(
+      'ADD COLUMN IF NOT EXISTS "tracking_subdomain"',
+    );
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS "capabilities"');
+    expect(migration).toContain('ADD COLUMN IF NOT EXISTS "sent_at"');
+    expect(migration).toContain("CREATE UNIQUE INDEX IF NOT EXISTS");
   });
 
   it("package.json has build scripts for the app and ingester", () => {

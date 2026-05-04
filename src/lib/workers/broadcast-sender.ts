@@ -121,7 +121,7 @@ export async function processScheduledBroadcasts() {
           );
 
           await db.insert(emails).values({
-            from: broadcast.from || "system@namuh.com",
+            from: broadcast.from || "system@opensend.com",
             to: [contact.email],
             subject,
             html,

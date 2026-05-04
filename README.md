@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">OpenSend</h1>
+  <h1 align="center">Opensend</h1>
   <p align="center">
     Open-source email infrastructure for developers.
     <br />
@@ -21,14 +21,14 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/screenshot-dashboard.png" alt="OpenSend Dashboard" width="800" />
+  <img src="docs/assets/screenshot-dashboard.png" alt="Opensend Dashboard" width="800" />
 </p>
 
 ---
 
-## What is OpenSend?
+## What is Opensend?
 
-OpenSend is a **self-hostable email platform** that gives you the same developer experience as Resend — REST API, TypeScript SDK, React email templates, domain verification, webhooks, and a full dashboard — running on your own infrastructure.
+Opensend is a **self-hostable email platform** that gives you the same developer experience as Resend — REST API, TypeScript SDK, React email templates, domain verification, webhooks, and a full dashboard — running on your own infrastructure.
 
 **Use it if you want:**
 - Full control over your email infrastructure
@@ -38,33 +38,40 @@ OpenSend is a **self-hostable email platform** that gives you the same developer
 
 ## One-Click Deploy
 
-The fastest way to get OpenSend running:
+The fastest way to get Opensend running:
 
 ```bash
 git clone https://github.com/namuh-eng/opensend.git
 cd opensend
 cp .env.example .env
-# Edit .env — set DASHBOARD_KEY (required); AWS credentials are only needed for real email sending
+# Edit .env — AWS credentials are only needed for real email sending
 docker compose up -d
 ```
 
-That's it. Open **http://localhost:3015** and enter your dashboard key.
+That's it. Open **http://localhost:3015** and sign in with Google (configure `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` in `.env`).
 
-> The `migrate` service runs database migrations automatically on first boot.
+> The `migrate` service runs database migrations automatically on first boot. Compose also launches the standalone ingester on port `3016` (`http://localhost:3016/health`) for SES/SNS events and background workers.
+>
+> Outside Docker Compose, migrations are not automatic unless your deploy path
+> runs the migrator. Team ECS/Fargate production uses `bash scripts/deploy.sh`,
+> which runs a one-off migrator task before service redeploys.
 
 ## Features
 
-- **REST API** — Send emails via a simple POST request with API key auth
-- **TypeScript SDK** — [`@opensend/sdk`](./packages/sdk) npm package with full type safety
+- **REST API** — Send emails via a simple POST request with API key auth, including a `/api/emails/batch` endpoint for bulk sends
+- **TypeScript SDK** — [`opensend`](./packages/sdk) npm package with full type safety
 - **React Email Templates** — Pass React components via the SDK's `react` prop
 - **Domain Verification** — DKIM, SPF, DMARC auto-configured via Cloudflare DNS
 - **API Key Management** — `full_access` and `sending_access` permission scopes
 - **Broadcasts** — Block editor with slash commands, audience targeting, review panel
 - **Templates** — Create, edit, publish with variable substitution (`{{name}}`)
-- **Audience** — Contacts, segments, topics, custom properties
-- **Webhooks** — Register endpoints for 17 event types (delivered, bounced, opened, etc.)
-- **Metrics** — Delivery, open, click, bounce rates with date range filtering
+- **Audience** — Contacts, segments, topics, custom properties, plus CSV import
+- **Inbound Email** — Receive replies through `/api/emails/receiving`
+- **Webhooks** — Register endpoints with HMAC-signed, Svix-compatible delivery for `email.sent`, `email.delivered`, and `email.bounced` events (event list is free-form, so additional types can be added without schema changes)
+- **Multi-tenant Auth** — Better Auth with Google OAuth, organization invites via `/api/invites`
+- **Metrics & Usage** — Delivery, open, click, bounce rates with date range filtering, plus per-tenant usage at `/api/usage`
 - **Logs** — Full send/delivery/event audit trail
+- **Health Check** — `/api/health` for uptime probes
 - **API Docs** — Auto-generated interactive docs at `/docs`
 - **Dashboard** — 10-page admin UI with dark mode
 
@@ -79,7 +86,7 @@ curl -X POST http://localhost:3015/api/emails \
   -d '{
     "from": "hello@yourdomain.com",
     "to": ["recipient@example.com"],
-    "subject": "Hello from OpenSend",
+    "subject": "Hello from Opensend",
     "html": "<h1>It works!</h1>"
   }'
 ```
@@ -101,20 +108,20 @@ For now, the Next.js routes under `src/app/api` remain the current public API an
 ### TypeScript SDK
 
 ```bash
-bun add @opensend/sdk
+bun add opensend
 ```
 
 ```typescript
-import { OpenSend } from "@opensend/sdk";
+import { Opensend } from "opensend";
 
-const client = new OpenSend("YOUR_API_KEY", {
+const client = new Opensend("YOUR_API_KEY", {
   baseUrl: "https://your-deployment.example.com",
 });
 
 const { data } = await client.emails.send({
   from: "hello@yourdomain.com",
   to: "recipient@example.com",
-  subject: "Hello from OpenSend",
+  subject: "Hello from Opensend",
   html: "<h1>It works!</h1>",
 });
 
@@ -142,16 +149,13 @@ cp .env.example .env
 Edit `.env` with your configuration:
 
 ```bash
-# Required
-DASHBOARD_KEY=your-secret-key          # Generate: node -e "console.log(crypto.randomUUID())"
-
 # Required for sending emails
 AWS_ACCESS_KEY_ID=your-aws-key
 AWS_SECRET_ACCESS_KEY=your-aws-secret
 AWS_REGION=us-east-1
 
 # Optional
-POSTGRES_PASSWORD=your-db-password     # Default: namuh
+POSTGRES_PASSWORD=your-db-password     # Default: opensend
 POSTGRES_PORT=5432                     # Change this and DATABASE_URL together if 5432 is taken
 PORT=3015                              # Default: 3015
 CLOUDFLARE_API_TOKEN=your-cf-token     # For auto DNS setup
@@ -159,7 +163,7 @@ CLOUDFLARE_ZONE_ID=your-zone-id
 S3_BUCKET_NAME=your-bucket             # For email attachments
 BACKGROUND_JOBS_QUEUE_URL=...          # Optional locally; required for async production sending
 BACKGROUND_WORKER_POLL=true            # Set on the ingester worker when SQS is configured
-CLOUDWATCH_METRICS_NAMESPACE=OpenSend  # Optional CloudWatch EMF namespace override
+CLOUDWATCH_METRICS_NAMESPACE=Opensend  # Optional CloudWatch EMF namespace override
 ```
 
 `.env.example` keeps `DATABASE_URL` on `localhost` for host-run commands like `bun run dev` and `bun run db:push`. Docker Compose injects its own internal `postgres` hostname for the containerized app and migration services.
@@ -181,7 +185,7 @@ git clone https://github.com/namuh-eng/opensend.git
 cd opensend
 bun install
 cp .env.example .env
-# Edit .env — set DASHBOARD_KEY (required). Leave DATABASE_URL as localhost unless you're using another Postgres instance.
+# Edit .env — leave DATABASE_URL as localhost unless you're using another Postgres instance.
 bun run db:push
 bun run db:seed          # Optional: creates sample data
 bun run dev              # Development (port 3015)
@@ -195,7 +199,7 @@ To suppress the optional GitHub star prompt during install, use `SKIP_STAR_PROMP
 
 New AWS accounts start in SES **sandbox mode** — emails can only be sent to verified addresses. To send to anyone:
 
-1. Verify a sender domain in the OpenSend dashboard
+1. Verify a sender domain in the Opensend dashboard
 2. Request production access in [AWS SES Console](https://console.aws.amazon.com/ses/) → Account dashboard → Request production access
 
 ### Production Deployment
@@ -203,15 +207,29 @@ New AWS accounts start in SES **sandbox mode** — emails can only be sent to ve
 For production, we recommend:
 
 - **Database**: Use a managed PostgreSQL (AWS RDS, Supabase, Neon, etc.) instead of the Docker Compose Postgres
+- **Migrations**: Run committed Drizzle migrations before deploying app code that expects new columns. The Dockerfile has a `migrator` target that runs `src/lib/db/migrate.ts`; team ECS deploys run it automatically via `bash scripts/deploy.sh`.
 - **Reverse proxy**: Put Nginx or Caddy in front for TLS termination
 - **Secrets**: Store credentials in your cloud provider's secrets manager
 - **Rate limiting**: Use a shared Redis/ElastiCache instance instead of the disabled local default
 - **Background jobs**: Use SQS with a redrive policy/DLQ, plus EventBridge to trigger scheduled-email and webhook retry scans
 - **Observability**: Emit structured JSON logs, trace/correlation headers, and CloudWatch EMF metrics for send and worker flows
 
+Team production on AWS ECS/Fargate:
+
+```bash
+bash scripts/deploy.sh migrate   # DB-only migration/repair
+bash scripts/deploy.sh app       # app image + migrations + app redeploy
+bash scripts/deploy.sh ingester  # ingester image + migrations + ingester redeploy
+bash scripts/deploy.sh all       # app + ingester images + migrations + both redeploys
+```
+
+If a list page works but a detail page shows 404 after a deploy, check for
+schema drift before assuming a missing Next.js route. A server component may be
+catching a database error and rendering `notFound()`.
+
 ### Shared rate limiting (staging/production)
 
-OpenSend now treats API rate limiting as an explicit runtime contract:
+Opensend now treats API rate limiting as an explicit runtime contract:
 
 - `RATE_LIMIT_BACKEND=disabled` skips API rate limiting entirely. This is the default for local single-process development only.
 - `RATE_LIMIT_BACKEND=redis` enables the middleware-backed shared limiter. If Redis is misconfigured or unavailable, API requests fail with `503` instead of silently falling back to per-process memory.
@@ -243,7 +261,7 @@ Local dev remains Docker-friendly if no queue is configured: publishes are logge
 
 ### Observability
 
-Email accept and worker flows emit structured JSON logs with `x-correlation-id`, W3C/OpenTelemetry-compatible `traceparent`, sanitized span events, and CloudWatch EMF metrics for accept latency, send outcomes, queue depth, retries, and worker failures. Set `CLOUDWATCH_METRICS_NAMESPACE` to override the default `OpenSend` namespace.
+Email accept and worker flows emit structured JSON logs with `x-correlation-id`, W3C/OpenTelemetry-compatible `traceparent`, sanitized span events, and CloudWatch EMF metrics for accept latency, send outcomes, queue depth, retries, and worker failures. Set `CLOUDWATCH_METRICS_NAMESPACE` to override the default `Opensend` namespace.
 
 See [`docs/observability.md`](docs/observability.md) for PII-safe logging rules, metric names, alarms, and the runbook for tracing an email from API acceptance to SES/provider result.
 
@@ -277,31 +295,44 @@ For the ECS Fargate split-service shape, ALB host-based events routing, SNS cuto
 
 ## Architecture
 
+Opensend is a Bun workspace monorepo. The Next.js app and a standalone Hono ingester service share a typed core package.
+
 ```
-src/
-├── app/          # Next.js App Router — pages and API routes
-├── components/   # React components (dashboard UI)
-├── lib/          # Core services: db, ses, s3, cloudflare
-└── types/        # TypeScript type definitions
+src/                 # Next.js app (App Router)
+├── app/             # Pages, dashboard segment, API routes
+├── components/      # React UI
+├── lib/             # auth, api-auth, db, ses, s3, cloudflare,
+│                    # webhook-signing, cache, crypto, templates,
+│                    # validation, workers, events, domain-cache,
+│                    # email-attachments, date-range
+└── middleware.ts    # Per-route rate limiting
+
 packages/
-└── sdk/          # Published TypeScript SDK (@opensend/sdk)
-tests/
-├── *.test.ts     # Unit tests (Vitest)
-└── e2e/          # E2E tests (Playwright)
-drizzle/          # Database migration files
+├── core/            # @opensend/core — shared DB client, repos, DTOs, webhook helpers
+├── ingester/        # @opensend/ingester — Hono service for SES/SNS events,
+│                    #   scheduled-email worker, webhook retry scan (port 3016)
+└── sdk/             # opensend — published TypeScript SDK
+
+tests/               # Vitest unit tests
+tests/e2e/           # Playwright E2E tests
+drizzle/             # Generated migration SQL
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Framework | Next.js 16 (App Router) |
+| Framework | Next.js 16 (App Router, Turbopack) |
 | Language | TypeScript (strict mode) |
 | Styling | Tailwind CSS + Radix UI |
+| Auth | Better Auth (multi-tenant, Google OAuth) |
 | Database | PostgreSQL + Drizzle ORM |
-| Email | AWS SES |
+| Email | AWS SES v2 |
 | Storage | AWS S3 |
 | DNS | Cloudflare API |
+| Ingester | Hono on Bun (standalone service) |
+| Background Jobs | AWS SQS + EventBridge |
+| Cache / Rate Limit | Redis (TLS) |
 | Tests | Vitest + Playwright |
 | Linting | Biome |
 
@@ -311,7 +342,7 @@ For local contributor onboarding, use the same Docker-backed path as [CONTRIBUTI
 
 ```bash
 cp .env.example .env
-make setup    # ensures DASHBOARD_KEY exists, starts Postgres, installs deps, pushes schema, seeds DB
+make setup    # starts Postgres, installs deps, pushes schema, seeds DB
 make dev      # http://localhost:3015
 ```
 
@@ -338,11 +369,12 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full development guide.
 
 ## Roadmap
 
+- [x] Webhook signature verification (Svix-compatible HMAC headers)
+- [x] Email scheduling (EventBridge → SQS scheduled-email scan)
+- [x] Team support (multi-tenant auth + organization invites)
 - [ ] SMTP relay support (send without AWS SES)
-- [ ] Webhook signature verification
-- [ ] Email scheduling
-- [ ] Multi-user / team support
-- [ ] Built-in analytics (opens, clicks) without external dependencies
+- [ ] Built-in open/click analytics without external dependencies
+- [ ] Additional webhook event types (opened, clicked, complained, delivery_delayed)
 
 ## Contributing
 
@@ -350,7 +382,7 @@ We welcome contributions! See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup ins
 
 ## License
 
-[Elastic License 2.0](./LICENSE) — free to use, modify, and self-host. The only restriction: you cannot offer OpenSend as a hosted email service to third parties.
+[Elastic License 2.0](./LICENSE) — free to use, modify, and self-host. The only restriction: you cannot offer Opensend as a hosted email service to third parties.
 
 ---
 

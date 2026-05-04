@@ -1,11 +1,11 @@
-# OpenSend
+# Opensend
 
 ## What This Is
 Open-source, self-hostable email platform. REST API, TypeScript SDK, React email templates, domain verification (DKIM/SPF/DMARC), webhooks, broadcasts, contacts/segments/topics, and a full admin dashboard. Resend-compatible surface that runs on your own AWS SES quota.
 
 - Repo: `github.com/namuh-eng/opensend`
 - License: Elastic License 2.0 (ELv2)
-- Primary deploy: Docker Compose (Dockerfile is multi-stage and runs on App Runner, Cloud Run, Fly, Railway, etc.)
+- Primary deploy: Docker Compose for self-hosters; team production runs on **AWS ECS Fargate** (the multi-stage Dockerfile also runs on Cloud Run, Fly, Railway, etc.)
 
 ## Tech Stack
 - **Framework**: Next.js 16 (App Router, Turbopack) — pre-installed, do not change
@@ -29,7 +29,7 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
   - `src/middleware.ts` — per-route rate limiting
 - `packages/core/` — `@opensend/core` — shared DB client, repositories, DTOs, webhook helpers
 - `packages/ingester/` — `@opensend/ingester` — Hono webhook dispatcher for SES/SNS events and scheduled email worker
-- `packages/sdk/` — `@opensend/sdk` — public TypeScript SDK published to npm
+- `packages/sdk/` — `opensend` — public TypeScript SDK published to npm
 - `services/api/` — `@opensend/api` — Bun + Hono control-plane API skeleton on local port 3026; Next.js `src/app/api` routes remain the public API until later thin-adapter PRs
 - `tests/` — Vitest unit tests
 - `tests/e2e/` — Playwright E2E tests
@@ -46,7 +46,8 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 - `bun run dev` — Next.js dev server on port 3015
 - `bun run build` — production build
 - `bun run db:generate` — Drizzle migration files
-- `bun run db:migrate` — apply migrations
+- `bun run db:migrate` — apply migrations for the configured `DATABASE_URL`
+- `bash scripts/deploy.sh migrate` — team prod: build/push the migrator image and run an ECS one-off migration task only
 - `bun run db:push` — push schema (dev)
 - `bun run db:seed` — seed sample data
 - `docker compose up -d` — full stack with Postgres + auto-migration
@@ -68,12 +69,11 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 - **AWS CLI** is pre-configured via `~/.aws/credentials`. `aws` commands and `@aws-sdk/*` packages work out of the box. Use `us-east-1` for SES.
 - `.env` keys (see `.env.example` for the contributor-facing set):
   - `DATABASE_URL` — Postgres connection string
-  - `DASHBOARD_KEY` — master dashboard gate key
   - `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ZONE_ID` — DNS management
   - `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_REGION` — SES + S3
   - `S3_BUCKET_NAME` — email attachment storage
   - Google OAuth client credentials for Better Auth
-- **Deployment**: Docker Compose is the reference deploy. Team production uses `bash scripts/deploy.sh` (service name, URL, and ECR details live in local memory).
+- **Deployment**: Docker Compose is the reference deploy. Team production uses `bash scripts/deploy.sh` (ECS/Fargate); `app`, `ingester`, and `all` run migrations before service redeploy, and `migrate` runs migrations only.
 
 ## Security — Secrets Management
 - **Never hardcode** passwords, tokens, or API keys in scripts or source.
@@ -85,6 +85,29 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
   ```
 - `scripts/` is gitignored (except `start.sh`, `postinstall-star.sh`, `seed.ts`) because infra scripts carry environment-specific values. Do not re-commit them.
 - **Rate limiting** is enforced via Next.js middleware (`src/middleware.ts`) on all `/api/*` routes with tiered limits (strictest on email sending).
+
+## Team Production — AWS ECS Fargate (namuh.co)
+Team prod runs on **ECS Fargate**, not App Runner. App Runner deployment is deprecated and the old `resend-clone-*` resources are being torn down.
+
+- **Region**: `us-east-1`. **Cluster**: `namuh`. **ALB**: `namuh-alb` (shared across all products via host-based listener rules).
+- **Subdomain pattern per product**:
+  - `<product>.namuh.co` → app/dashboard target group (port 8080)
+  - `api.<product>.namuh.co` → app target group (same service handles `/api/*`)
+  - `events.<product>.namuh.co` → ingester target group (port 3016)
+- **ACM cert** has SANs for `namuh.co`, `*.namuh.co`, `*.opensend.namuh.co`. Add new SANs and re-validate when adding products.
+- **DNS authoritative on Cloudflare**, NOT Route53. Zone `namuh.co` ID = `182dba68b02c180d4eb127eb0b025284`. Always use the Cloudflare API for namuh.co records. Do not create Route53 hosted zones for it.
+- **Deploy**: `bash scripts/deploy.sh [app|ingester|all|migrate]` — builds/pushes images, runs the migrator ECS task before app/ingester redeploys, force-redeploys selected ECS services, waits until stable. Use `migrate` alone for DB-only repairs.
+- **ECR repos**: `<product>-app`, `<product>-ingester`. The app repo also carries the `<tag>-migrator` image built from the Dockerfile `migrator` target. **ECS services**: `<product>-app`, `<product>-ingester`. **Log groups**: `/ecs/<product>-app`, `/ecs/<product>-ingester`.
+
+## Production Gotchas (must-know)
+- **Run prod migrations before redeploying app code that expects new columns**: `scripts/deploy.sh` now does this automatically, but never bypass it with a raw `aws ecs update-service` after schema changes. Use `bash scripts/deploy.sh migrate` for DB-only fixes. The migrator image runs `src/lib/db/migrate.ts` via the Drizzle migrator API; avoid switching back to `drizzle-kit migrate` without re-testing in ECS. If a dashboard list page works but a detail page 404s, suspect swallowed DB/schema errors before assuming a missing route.
+- **Cloudflare zone ID secret was wrong historically**: `resend-clone/cloudflare/zone-id` previously pointed at the wrong zone (`foreverbrowsing.com`), causing both ACM validation CNAMEs and customer DKIM auto-setup records to be silently written to the wrong zone. Fixed 2026-04-30; verify the secret value matches the namuh.co zone ID before trusting `cloudflare.ts` output.
+- **Docker build platform**: Fargate is `linux/amd64`. M-chip Macs default to `arm64`, which silently produces tasks that fail to start. Always `docker buildx build --platform linux/amd64 ... --push`.
+- **`bun install` in containers needs `--ignore-scripts`**: postinstall calls `node scripts/install-git-hooks.mjs` which is not present at the `deps` Dockerfile stage. Without `--ignore-scripts` the build fails.
+- **Next.js middleware cannot import the `redis` npm package directly**: it pulls in `node:crypto` which is unavailable in the default Edge Runtime, causing every request (including ALB health checks) to 500. Fix is `experimental.nodeMiddleware: true` in `next.config.js` plus `runtime: "nodejs"` on `export const config` in `src/middleware.ts`. Same trap applies to any node-only npm package imported from middleware.
+- **`curl` and `wget` are denied** by the agent settings deny-list. For HTTPS calls in scripts, use `bun -e "const r = await fetch(...); console.log(await r.text())"` instead.
+- **Long unconditional `sleep` is blocked**. To poll a long-running condition, use `until <check>; do sleep 20; done` and pair it with `run_in_background` so you get a notification when it resolves.
+- **`scripts/` is gitignored except for** `start.sh`, `postinstall-star.sh`, `seed.ts`, `install-git-hooks.mjs`, `check-changed-files.mjs`, `deploy.sh`. Anything else under `scripts/` (including `aws-bootstrap.sh`, ad-hoc deploy helpers, task-definition JSON) stays out of git by design — those carry env-specific ARNs.
 
 ## Learnings Workflow (namuhflow)
 - **Before starting work**: read `agent_docs/learnings/` for prior decisions, mistakes, and patterns.

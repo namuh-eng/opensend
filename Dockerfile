@@ -5,7 +5,8 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages ./packages
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --ignore-scripts
+
 
 FROM base AS builder
 WORKDIR /app
@@ -20,8 +21,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY drizzle ./drizzle
 COPY drizzle.config.ts ./
 COPY src/lib/db/schema.ts ./src/lib/db/schema.ts
+COPY src/lib/db/migrate.ts ./src/lib/db/migrate.ts
 COPY package.json ./
-CMD ["bunx", "drizzle-kit", "migrate", "--config", "drizzle.config.ts"]
+CMD ["bun", "src/lib/db/migrate.ts"]
 
 # Production app
 FROM base AS runner

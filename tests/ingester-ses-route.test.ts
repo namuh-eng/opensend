@@ -201,13 +201,13 @@ function createSignedEnvelope(options?: {
           "TopicArn",
           "Type",
         ];
-  const stringToSign = fields
+  const stringToSign = `${fields
     .filter((field) => {
       const value = base[field as keyof typeof base];
       return typeof value === "string" && value.length > 0;
     })
     .flatMap((field) => [field, base[field as keyof typeof base] as string])
-    .join("\n");
+    .join("\n")}\n`;
   const algorithm = signatureVersion === "1" ? "RSA-SHA1" : "RSA-SHA256";
   const signature = sign(
     algorithm,

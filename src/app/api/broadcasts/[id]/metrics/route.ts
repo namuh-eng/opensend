@@ -24,7 +24,7 @@ export async function GET(
     const cached = await readDashboardAggregateCache<unknown>(cacheKey);
     if (cached) {
       return NextResponse.json(cached, {
-        headers: { "x-namuh-cache": "hit" },
+        headers: { "x-opensend-cache": "hit" },
       });
     }
 
@@ -88,7 +88,7 @@ export async function GET(
     );
 
     return NextResponse.json(payload, {
-      headers: { "x-namuh-cache": "miss" },
+      headers: { "x-opensend-cache": "miss" },
     });
   } catch (error) {
     console.error("Failed to fetch broadcast metrics:", error);

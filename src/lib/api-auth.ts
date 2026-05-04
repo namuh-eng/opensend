@@ -142,23 +142,6 @@ export async function validateApiKey(
 }
 
 /**
- * Validate the dashboard master key from the Authorization header.
- * Used for internal dashboard endpoints (e.g. /api/api-keys).
- */
-export function validateDashboardKey(
-  authHeader: string | null | undefined,
-): boolean {
-  const dashboardKey = process.env.DASHBOARD_KEY;
-  if (!dashboardKey) return false;
-
-  if (!authHeader) return false;
-  const parts = authHeader.split(" ");
-  if (parts.length !== 2 || parts[0] !== "Bearer") return false;
-
-  return parts[1] === dashboardKey;
-}
-
-/**
  * Helper to create a 401 JSON response.
  */
 export function publicApiKeyUnauthorizedResponse(
@@ -184,8 +167,7 @@ export async function getServerSession() {
 
 /**
  * Validate access for dashboard-managed routes that should accept either:
- * - a regular API key,
- * - the dashboard master key, or
+ * - a regular API key, or
  * - an authenticated dashboard session.
  */
 export async function authorizeDashboardOrApiKey(
@@ -194,10 +176,6 @@ export async function authorizeDashboardOrApiKey(
   const apiKeyAuth = await validateApiKey(authHeader);
   if (apiKeyAuth) {
     return apiKeyAuth;
-  }
-
-  if (validateDashboardKey(authHeader)) {
-    return { dashboard: true };
   }
 
   const session = await getServerSession();

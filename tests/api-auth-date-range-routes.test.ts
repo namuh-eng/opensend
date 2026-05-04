@@ -9,7 +9,6 @@ const mockUpdate = vi.hoisted(() => vi.fn());
 const mockDelete = vi.hoisted(() => vi.fn());
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockCountFn = vi.hoisted(() => vi.fn());
-const mockValidateDashboardKey = vi.hoisted(() => vi.fn());
 const mockCreateWebhookService = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
@@ -63,7 +62,6 @@ describe("lib/api-auth", () => {
     vi.resetModules();
     vi.clearAllMocks();
     vi.doUnmock("@/lib/api-auth");
-    process.env.DASHBOARD_KEY = undefined;
   });
 
   it("validates a bearer API key by sha256 token hash", async () => {
@@ -96,20 +94,6 @@ describe("lib/api-auth", () => {
     expect(await validateApiKey("Basic abc")).toBeNull();
     expect(await validateApiKey("Bearer ")).toBeNull();
     expect(await validateApiKey("Bearer wrong")).toBeNull();
-  });
-
-  it("validates the dashboard key from env", async () => {
-    process.env.DASHBOARD_KEY = "dashboard-secret";
-    const { validateDashboardKey } = await import("@/lib/api-auth");
-
-    expect(validateDashboardKey("Bearer dashboard-secret")).toBe(true);
-    expect(validateDashboardKey("Bearer wrong")).toBe(false);
-    expect(validateDashboardKey(null)).toBe(false);
-  });
-
-  it("fails dashboard validation when env is missing", async () => {
-    const { validateDashboardKey } = await import("@/lib/api-auth");
-    expect(validateDashboardKey("Bearer dashboard-secret")).toBe(false);
   });
 
   it("builds the standard unauthorized response", async () => {
@@ -225,7 +209,6 @@ describe("route smoke coverage", () => {
       return {
         ...actual,
         validateApiKey: mockValidateApiKey,
-        validateDashboardKey: mockValidateDashboardKey,
         getServerSession: mockGetServerSession,
         authorizeDashboardOrApiKey: mockAuthorizeDashboardOrApiKey,
       };
@@ -238,15 +221,13 @@ describe("route smoke coverage", () => {
       apiKeyId: "key-1",
       permission: "full_access",
     });
-    mockValidateDashboardKey.mockReturnValue(true);
     mockGetServerSession.mockResolvedValue({
       session: { id: "session-1" },
       user: { id: "user-1" },
     });
   });
 
-  it("covers metrics auth failure, session auth, and dashboard key auth", async () => {
-    mockValidateDashboardKey.mockReturnValueOnce(false);
+  it("covers metrics auth failure and session auth", async () => {
     mockGetServerSession.mockResolvedValueOnce(null);
     const metricsRoute = await import("@/app/api/metrics/route");
     const unauthorized = await metricsRoute.GET(
@@ -254,7 +235,6 @@ describe("route smoke coverage", () => {
     );
     expect(unauthorized.status).toBe(401);
 
-    mockValidateDashboardKey.mockReturnValueOnce(false);
     mockSelect
       .mockReturnValueOnce(
         makeChain([
@@ -301,45 +281,15 @@ describe("route smoke coverage", () => {
       { domain: "example.com", count: 10, rate: 70 },
     ]);
 
-    mockSelect
-      .mockReturnValueOnce(
-        makeChain([
-          {
-            total: 0,
-            delivered: 0,
-            bounced: 0,
-            hard_bounced: 0,
-            soft_bounced: 0,
-            undetermined_bounced: 0,
-            complained: 0,
-          },
-        ]),
-      )
-      .mockReturnValueOnce(makeChain([]))
-      .mockReturnValueOnce(makeChain([]))
-      .mockReturnValueOnce(makeChain([]))
-      .mockReturnValueOnce(makeChain([]));
-    mockValidateDashboardKey.mockReturnValueOnce(true);
-    const dashboardKeyResponse = await metricsRoute.GET(
-      makeNextRequest("http://localhost/api/metrics", {
-        headers: { authorization: "Bearer token" },
-      }) as never,
-    );
-
-    expect(dashboardKeyResponse.status).toBe(200);
     expect(mockGetServerSession).toHaveBeenCalledTimes(2);
   });
 
-  it("covers usage auth failure, session auth, and dashboard key auth", async () => {
-    mockValidateDashboardKey.mockReturnValueOnce(false);
+  it("covers usage auth failure and session auth", async () => {
     mockGetServerSession.mockResolvedValueOnce(null);
     const usageRoute = await import("@/app/api/usage/route");
-    const unauthorized = await usageRoute.GET(
-      makeNextRequest("http://localhost/api/usage"),
-    );
+    const unauthorized = await usageRoute.GET();
     expect(unauthorized.status).toBe(401);
 
-    mockValidateDashboardKey.mockReturnValueOnce(false);
     mockGetServerSession.mockResolvedValueOnce({
       session: { id: "session-1" },
       user: { id: "user-1" },
@@ -351,35 +301,15 @@ describe("route smoke coverage", () => {
     mockCountFn.mockResolvedValueOnce(4);
     mockCountFn.mockResolvedValueOnce(2);
 
-    const sessionResponse = await usageRoute.GET(
-      makeNextRequest("http://localhost/api/usage"),
-    );
+    const sessionResponse = await usageRoute.GET();
 
     expect(sessionResponse.status).toBe(200);
-    let json = await sessionResponse.json();
+    const json = await sessionResponse.json();
     expect(json.transactional.monthlyUsed).toBe(42);
     expect(json.transactional.dailyUsed).toBe(3);
     expect(json.marketing.contactsUsed).toBe(120);
     expect(json.marketing.segmentsUsed).toBe(4);
     expect(json.team.domainsUsed).toBe(2);
-
-    mockValidateDashboardKey.mockReturnValueOnce(true);
-    mockCountFn.mockResolvedValue(0);
-    mockCountFn.mockResolvedValueOnce(7);
-    mockCountFn.mockResolvedValueOnce(1);
-    mockCountFn.mockResolvedValueOnce(8);
-    mockCountFn.mockResolvedValueOnce(2);
-    mockCountFn.mockResolvedValueOnce(1);
-
-    const dashboardKeyResponse = await usageRoute.GET(
-      makeNextRequest("http://localhost/api/usage", {
-        headers: { authorization: "Bearer token" },
-      }),
-    );
-
-    expect(dashboardKeyResponse.status).toBe(200);
-    json = await dashboardKeyResponse.json();
-    expect(json.transactional.monthlyUsed).toBe(7);
     expect(mockGetServerSession).toHaveBeenCalledTimes(2);
   });
 

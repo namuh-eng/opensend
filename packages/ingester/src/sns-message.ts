@@ -122,7 +122,7 @@ function buildStringToSign(message: SnsEnvelope) {
     lines.push(field, value);
   }
 
-  return lines.join("\n");
+  return `${lines.join("\n")}\n`;
 }
 
 function assertTrustedSigningCertUrl(signingCertUrl: string) {

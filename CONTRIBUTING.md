@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to OpenSend!
+Thanks for your interest in contributing to Opensend!
 
 ## Setup
 
@@ -50,7 +50,7 @@ curl -X POST http://localhost:3015/api/emails \
   -d '{
     "from": "hello@example.com",
     "to": ["test@example.com"],
-    "subject": "Hello from OpenSend",
+    "subject": "Hello from Opensend",
     "text": "It works!"
   }'
 ```
@@ -64,7 +64,7 @@ If you install dependencies with `--ignore-scripts`, run `bun run hooks:install`
 <summary>Manual setup (without make setup)</summary>
 
 1. Copy `.env.example` to `.env`.
-2. Start Postgres: `docker compose up postgres -d` (or point `DATABASE_URL` at your own instance). If port `5432` is already taken, set `POSTGRES_PORT` and update `DATABASE_URL` in `.env`.
+2. Start Postgres: `docker compose up postgres -d` (or point `DATABASE_URL` at your own instance). If port `5432` is already taken, change both `POSTGRES_PORT` and the port inside `DATABASE_URL` in `.env`.
 3. Push schema and seed: `bun run db:push && bun run db:seed`
 4. Start dev server: `bun run dev` (set `PORT` in `.env` if `3015` is taken)
 
@@ -99,7 +99,7 @@ The hooks are versioned in `.githooks/`, so everyone on the repo gets the same g
 
 AWS credentials are **not required** for local development — without them, emails are logged to the console and the full API flow still works. When you're ready to actually send emails, configure `~/.aws/credentials` via `aws configure`.
 
-New AWS accounts start in SES **sandbox mode** — you can only send to verified addresses. This is an AWS limitation, not an OpenSend bug. See [AWS SES docs](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html) to request production access.
+New AWS accounts start in SES **sandbox mode** — you can only send to verified addresses. This is an AWS limitation, not an Opensend bug. See [AWS SES docs](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html) to request production access.
 
 ## Code Style
 

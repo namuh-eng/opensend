@@ -221,7 +221,7 @@ SMTP_PASS=re_YOUR_API_KEY`}
                   Successfully unsubscribed
                 </div>
                 <p className="text-gray-400 text-xs mt-6">
-                  Powered by OpenSend
+                  Powered by Opensend
                 </p>
               </div>
             </div>

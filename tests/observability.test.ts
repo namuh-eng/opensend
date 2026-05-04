@@ -115,7 +115,7 @@ describe("observability telemetry helpers", () => {
       }>;
     };
     expect(aws.CloudWatchMetrics[0]).toMatchObject({
-      Namespace: "OpenSend",
+      Namespace: "Opensend",
       Dimensions: [["Service", "Operation", "Outcome"]],
       Metrics: [
         { Name: "SendOutcome", Unit: "Count" },

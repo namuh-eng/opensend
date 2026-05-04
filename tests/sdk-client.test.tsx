@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { OpenSend } from "../packages/sdk/src";
+import { Opensend } from "../packages/sdk/src";
 
-describe("OpenSend SDK", () => {
+describe("Opensend SDK", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it("requires an explicit baseUrl", () => {
-    expect(() => new OpenSend("re_test", {} as never)).toThrow(
+    expect(() => new Opensend("re_test", {} as never)).toThrow(
       "A non-empty baseUrl is required",
     );
   });
@@ -22,7 +22,7 @@ describe("OpenSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new OpenSend("re_test", {
+    const client = new Opensend("re_test", {
       baseUrl: "https://api.example.com/",
     });
 
@@ -58,7 +58,7 @@ describe("OpenSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new OpenSend("re_test", {
+    const client = new Opensend("re_test", {
       baseUrl: "https://api.example.com",
     });
     const payload = {
@@ -103,7 +103,7 @@ describe("OpenSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new OpenSend("re_test", {
+    const client = new Opensend("re_test", {
       baseUrl: "https://api.example.com",
     });
 
@@ -132,7 +132,7 @@ describe("OpenSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new OpenSend("re_test", {
+    const client = new Opensend("re_test", {
       baseUrl: "https://api.example.com",
     });
 
@@ -160,7 +160,7 @@ describe("OpenSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new OpenSend("re_test", {
+    const client = new Opensend("re_test", {
       baseUrl: "https://api.example.com",
     });
 
@@ -192,7 +192,7 @@ describe("OpenSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new OpenSend("re_test", {
+    const client = new Opensend("re_test", {
       baseUrl: "https://api.example.com",
     });
 
@@ -214,7 +214,7 @@ describe("OpenSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new OpenSend("re_test", {
+    const client = new Opensend("re_test", {
       baseUrl: "https://api.example.com",
     });
 
@@ -236,7 +236,7 @@ describe("OpenSend SDK", () => {
 
     vi.stubGlobal("fetch", fetchMock);
 
-    const client = new OpenSend("re_test", {
+    const client = new Opensend("re_test", {
       baseUrl: "https://api.example.com",
     });
 

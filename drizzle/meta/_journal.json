@@ -64,6 +64,20 @@
       "when": 1777712479232,
       "tag": "0008_session_ip_user_agent",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777939200000,
+      "tag": "0009_session_better_auth_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777939200001,
+      "tag": "0010_repair_domain_columns",
+      "breakpoints": true
     }
   ]
 }

@@ -18,10 +18,10 @@ export default function AuthPage() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="w-10 h-10 rounded-lg bg-purple-600 flex items-center justify-center text-sm font-semibold text-white mx-auto mb-4">
-            n
+            o
           </div>
           <h1 className="text-xl font-semibold text-[#F0F0F0]">
-            Sign in to OpenSend
+            Sign in to Opensend
           </h1>
           <p className="text-[13px] text-[#A1A4A5] mt-1">
             Continue with your Google account

@@ -457,7 +457,7 @@ class Events {
   }
 }
 
-class OpenSend {
+class Opensend {
   public readonly emails: Emails;
   public readonly domains: Domains;
   public readonly apiKeys: ApiKeys;
@@ -481,7 +481,7 @@ class OpenSend {
   }
 }
 
-export { OpenSend };
+export { Opensend };
 export type {
   SDKOptions,
   ApiError,

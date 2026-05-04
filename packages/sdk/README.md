@@ -1,19 +1,19 @@
-# @opensend/sdk
+# opensend
 
-TypeScript SDK for the OpenSend email API.
+TypeScript SDK for the Opensend email API.
 
 ## Installation
 
 ```bash
-bun add @opensend/sdk
+bun add opensend
 ```
 
 ## Getting Started
 
 ```typescript
-import { OpenSend } from "@opensend/sdk";
+import { Opensend } from "opensend";
 
-const client = new OpenSend("re_your_api_key", {
+const client = new Opensend("re_your_api_key", {
   baseUrl: "https://your-deployment.example.com",
 });
 ```
@@ -57,7 +57,7 @@ const { data } = await client.emails.send({
 
 Pass a per-request `idempotencyKey` option to prevent accidental duplicate
 acceptance when retrying sends. Keys must match the API contract: 1-255
-characters. OpenSend preserves the existing send contract for duplicate keys: the
+characters. Opensend preserves the existing send contract for duplicate keys: the
 API returns `409 idempotency_conflict` with the originally accepted email id in
 `details.id`; batch duplicates are rejected before reserving quota, creating
 additional rows, or publishing more queue jobs.
@@ -172,7 +172,7 @@ The SDK is publish-ready and does not assume a local dev server. Pass your
 deployment origin explicitly:
 
 ```typescript
-const client = new OpenSend("re_your_api_key", {
+const client = new Opensend("re_your_api_key", {
   baseUrl: "https://api.your-deployment.example.com",
 });
 ```

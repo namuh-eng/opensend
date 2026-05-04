@@ -4,7 +4,7 @@ const TRACE_ID_BYTES = 16;
 const SPAN_ID_BYTES = 8;
 const TRACE_FLAGS_SAMPLED = "01";
 const TRACEPARENT_VERSION = "00";
-const DEFAULT_NAMESPACE = "OpenSend";
+const DEFAULT_NAMESPACE = "Opensend";
 const MAX_SANITIZE_DEPTH = 4;
 
 const TRACEPARENT_PATTERN =

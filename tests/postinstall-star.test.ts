@@ -59,7 +59,7 @@ describe("postinstall-star", () => {
     // Tests that want the skip behavior set the var explicitly via `env`.
     const {
       SKIP_STAR_PROMPT: _skip,
-      OPENSEND_SKIP_STAR_PROMPT: _oskip,
+      OPENSEND_SKIP_STAR_PROMPT: _nskip,
       ...inherited
     } = process.env;
     try {

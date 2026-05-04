@@ -1,7 +1,7 @@
 {
-  "name": "@opensend/sdk",
+  "name": "opensend",
   "version": "1.0.0",
-  "description": "TypeScript SDK for the OpenSend email API",
+  "description": "TypeScript SDK for the Opensend email API",
   "main": "dist/sdk/src/index.js",
   "types": "dist/sdk/src/index.d.ts",
   "exports": {
