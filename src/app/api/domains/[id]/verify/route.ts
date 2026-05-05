@@ -1,5 +1,6 @@
 import {
   authorizeDashboardOrApiKey,
+  getServerSession,
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { db } from "@/lib/db";
@@ -12,7 +13,7 @@ import {
 import { queueEvent } from "@/lib/events";
 import { verifyDomainParamsSchema } from "@/lib/validation/domains";
 import { getEffectiveReturnPathLabel } from "@opensend/core";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 export async function POST(
   request: Request,
@@ -22,6 +23,10 @@ export async function POST(
     request.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+
+  const session = "dashboard" in auth ? await getServerSession() : null;
+  const userId = "userId" in auth ? auth.userId : session?.user?.id;
+  if (!userId) return unauthorizedResponse();
 
   const parsedParams = verifyDomainParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
@@ -36,7 +41,7 @@ export async function POST(
   try {
     const domain = await getCachedDomainById(id);
 
-    if (!domain) {
+    if (!domain || domain.userId !== userId) {
       return Response.json({ error: "Domain not found" }, { status: 404 });
     }
 
@@ -79,7 +84,7 @@ export async function POST(
       .set({
         status: verificationStatus,
       })
-      .where(eq(domains.id, id))
+      .where(and(eq(domains.id, id), eq(domains.userId, userId)))
       .returning();
 
     if (!updated) {

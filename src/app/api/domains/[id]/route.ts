@@ -1,5 +1,6 @@
 import {
   authorizeDashboardOrApiKey,
+  getServerSession,
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { deleteDNSRecord, listDNSRecords } from "@/lib/cloudflare";
@@ -15,7 +16,7 @@ import {
   updateDomainSchema,
 } from "@/lib/validation/domains";
 import { getEffectiveReturnPathLabel } from "@opensend/core";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 const defaultCapabilities = [
@@ -32,6 +33,10 @@ export async function GET(
   );
   if (!auth) return unauthorizedResponse();
 
+  const session = "dashboard" in auth ? await getServerSession() : null;
+  const userId = "userId" in auth ? auth.userId : session?.user?.id;
+  if (!userId) return unauthorizedResponse();
+
   const parsedParams = domainRouteParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
     return NextResponse.json(
@@ -44,7 +49,7 @@ export async function GET(
     const { id } = parsedParams.data;
     const domain = await getCachedDomainById(id);
 
-    if (!domain) {
+    if (!domain || domain.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -82,6 +87,10 @@ export async function PATCH(
   );
   if (!auth) return unauthorizedResponse();
 
+  const session = "dashboard" in auth ? await getServerSession() : null;
+  const userId = "userId" in auth ? auth.userId : session?.user?.id;
+  if (!userId) return unauthorizedResponse();
+
   let body: unknown;
   try {
     body = await req.json();
@@ -111,7 +120,7 @@ export async function PATCH(
     const updates: Record<string, unknown> = {};
     const existingDomain = await getCachedDomainById(id);
 
-    if (!existingDomain) {
+    if (!existingDomain || existingDomain.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -154,7 +163,7 @@ export async function PATCH(
     const [updated] = await db
       .update(domains)
       .set(updates)
-      .where(eq(domains.id, id))
+      .where(and(eq(domains.id, id), eq(domains.userId, userId)))
       .returning();
 
     if (!updated) {
@@ -186,6 +195,10 @@ export async function DELETE(
   );
   if (!auth) return unauthorizedResponse();
 
+  const session = "dashboard" in auth ? await getServerSession() : null;
+  const userId = "userId" in auth ? auth.userId : session?.user?.id;
+  if (!userId) return unauthorizedResponse();
+
   const parsedParams = domainRouteParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
     return NextResponse.json(
@@ -198,7 +211,7 @@ export async function DELETE(
     const { id } = parsedParams.data;
     const domain = await getCachedDomainById(id);
 
-    if (!domain) {
+    if (!domain || domain.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -227,7 +240,7 @@ export async function DELETE(
 
     const [deleted] = await db
       .delete(domains)
-      .where(eq(domains.id, id))
+      .where(and(eq(domains.id, id), eq(domains.userId, userId)))
       .returning({ id: domains.id });
 
     await invalidateDomainCaches({ id, name: domain.name });
