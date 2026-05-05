@@ -15,7 +15,7 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
 
   it("Dockerfile exists with multi-stage build", () => {
     const dockerfile = readFileSync(join(root, "Dockerfile"), "utf-8");
-    expect(dockerfile).toContain("FROM oven/bun:1.3-alpine AS base");
+    expect(dockerfile).toContain("FROM oven/bun:1.3.8-alpine AS base");
     expect(dockerfile).toContain("AS deps");
     expect(dockerfile).toContain("AS builder");
     expect(dockerfile).toContain("AS runner");
