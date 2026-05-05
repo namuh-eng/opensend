@@ -86,7 +86,7 @@ vi.mock("@opensend/core", () => {
         : null;
     },
     webhookRepo: {
-      list: mockWebhookList,
+      listForDispatch: mockWebhookList,
     },
   };
 });

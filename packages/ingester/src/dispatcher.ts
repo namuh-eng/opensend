@@ -50,7 +50,7 @@ export class WebhookDispatcher {
     if (!delivery) return null;
 
     const [webhook, event] = await Promise.all([
-      webhookRepo.findById(delivery.webhookId),
+      webhookRepo.findByIdForDispatch(delivery.webhookId),
       emailEventRepo.findById(delivery.eventId),
     ]);
 

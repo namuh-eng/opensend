@@ -2,8 +2,18 @@ import { and, desc, eq, lt } from "drizzle-orm";
 import { db } from "../client";
 import { webhooks } from "../schema";
 
+function ownedWebhookWhere(id: string, userId: string) {
+  return and(eq(webhooks.id, id), eq(webhooks.userId, userId));
+}
+
 export const webhookRepo = {
-  async findById(id: string) {
+  async findById(id: string, userId: string) {
+    return await db.query.webhooks.findFirst({
+      where: ownedWebhookWhere(id, userId),
+    });
+  },
+
+  async findByIdForDispatch(id: string) {
     return await db.query.webhooks.findFirst({
       where: eq(webhooks.id, id),
     });
@@ -13,22 +23,45 @@ export const webhookRepo = {
     return await db.insert(webhooks).values(data).returning();
   },
 
-  async update(id: string, data: Partial<typeof webhooks.$inferInsert>) {
+  async update(
+    id: string,
+    userId: string,
+    data: Partial<typeof webhooks.$inferInsert>,
+  ) {
     return await db
       .update(webhooks)
       .set(data)
-      .where(eq(webhooks.id, id))
+      .where(ownedWebhookWhere(id, userId))
       .returning();
   },
 
-  async delete(id: string) {
+  async delete(id: string, userId: string) {
     return await db
       .delete(webhooks)
-      .where(eq(webhooks.id, id))
+      .where(ownedWebhookWhere(id, userId))
       .returning({ id: webhooks.id });
   },
 
-  async list(options: { limit?: number; after?: string } = {}) {
+  async list(options: { userId: string; limit?: number; after?: string }) {
+    const { userId, limit = 20, after } = options;
+    const conditions = [eq(webhooks.userId, userId)];
+
+    if (after) conditions.push(lt(webhooks.id, after));
+
+    const results = await db
+      .select()
+      .from(webhooks)
+      .where(and(...conditions))
+      .orderBy(desc(webhooks.id))
+      .limit(limit + 1);
+
+    const hasMore = results.length > limit;
+    const data = hasMore ? results.slice(0, limit) : results;
+
+    return { data, hasMore };
+  },
+
+  async listForDispatch(options: { limit?: number; after?: string } = {}) {
     const { limit = 20, after } = options;
     const conditions = [];
 

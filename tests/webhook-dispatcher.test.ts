@@ -37,7 +37,7 @@ vi.mock("@opensend/core", () => ({
     findDispatchable: mockFindDispatchable,
   },
   webhookRepo: {
-    findById: mockFindWebhookById,
+    findByIdForDispatch: mockFindWebhookById,
   },
 }));
 

@@ -773,7 +773,11 @@ describe("route smoke coverage", () => {
       ],
       has_more: true,
     });
-    expect(listWebhooks).toHaveBeenCalledWith({ limit: 500, after: "wh-3" });
+    expect(listWebhooks).toHaveBeenCalledWith({
+      userId: "user-1",
+      limit: 500,
+      after: "wh-3",
+    });
 
     const createRes = await listRoute.POST(
       makeNextRequest("http://localhost/api/webhooks", {
@@ -799,6 +803,7 @@ describe("route smoke coverage", () => {
       created_at: "2026-04-23T00:00:00.000Z",
     });
     expect(createWebhook).toHaveBeenCalledWith({
+      userId: "user-1",
       endpoint: "https://example.com/created",
       events: ["email.delivered"],
     });
@@ -838,7 +843,7 @@ describe("route smoke coverage", () => {
       events: ["email.sent"],
       status: "disabled",
     });
-    expect(updateWebhook).toHaveBeenCalledWith("wh-1", {
+    expect(updateWebhook).toHaveBeenCalledWith("wh-1", "user-1", {
       endpoint: undefined,
       events: undefined,
       status: undefined,

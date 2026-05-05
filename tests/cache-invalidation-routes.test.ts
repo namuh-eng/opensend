@@ -29,6 +29,8 @@ vi.mock("@opensend/core", () => ({
   createApiKeyService: () => ({
     createApiKey: mockCreateApiKey,
     deleteApiKey: mockDeleteApiKey,
+    getApiKey: vi.fn(),
+    listApiKeys: vi.fn(),
   }),
   createDomainService: () => ({
     createDomain: mockCreateDomain,
@@ -180,7 +182,7 @@ describe("cache invalidation routes", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockDeleteApiKey).toHaveBeenCalledWith("key-1");
+    expect(mockDeleteApiKey).toHaveBeenCalledWith("key-1", "user-1");
   });
 
   it("invalidates domain caches after patch", async () => {

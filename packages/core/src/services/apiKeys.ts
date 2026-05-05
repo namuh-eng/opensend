@@ -56,13 +56,13 @@ export class ApiKeyServiceError extends Error {
 }
 
 export type ApiKeyRepository = {
-  list(options: { limit?: number; after?: string }): Promise<{
+  list(options: { userId: string; limit?: number; after?: string }): Promise<{
     data: ApiKeyRow[];
     hasMore: boolean;
   }>;
   create(data: ApiKeyInsert): Promise<ApiKeyRow[]>;
-  findById(id: string): Promise<ApiKeyRow | undefined>;
-  delete(id: string): Promise<Array<{ id: string }>>;
+  findById(id: string, userId: string): Promise<ApiKeyRow | undefined>;
+  delete(id: string, userId: string): Promise<Array<{ id: string }>>;
 };
 
 export type ApiKeyServiceDependencies = {
@@ -94,10 +94,12 @@ export function createApiKeyService({
 }: ApiKeyServiceDependencies = {}) {
   return {
     async listApiKeys(options: {
+      userId: string;
       limit?: number;
       after?: string;
     }): Promise<ApiKeyListResult> {
       const result = await repository.list({
+        userId: options.userId,
         limit: normalizeLimit(options.limit),
         after: options.after || undefined,
       });
@@ -146,8 +148,8 @@ export function createApiKeyService({
       };
     },
 
-    async getApiKey(id: string): Promise<ApiKeyDetail> {
-      const key = await repository.findById(id);
+    async getApiKey(id: string, userId: string): Promise<ApiKeyDetail> {
+      const key = await repository.findById(id, userId);
       if (!key) {
         throw new ApiKeyServiceError("not_found", "API key not found");
       }
@@ -160,13 +162,16 @@ export function createApiKeyService({
       };
     },
 
-    async deleteApiKey(id: string): Promise<DeleteApiKeyResult> {
-      const existing = await repository.findById(id);
+    async deleteApiKey(
+      id: string,
+      userId: string,
+    ): Promise<DeleteApiKeyResult> {
+      const existing = await repository.findById(id, userId);
       if (!existing) {
         throw new ApiKeyServiceError("not_found", "API key not found");
       }
 
-      const [deleted] = await repository.delete(id);
+      const [deleted] = await repository.delete(id, userId);
       await invalidateAuthCache(existing.tokenHash);
 
       return {
