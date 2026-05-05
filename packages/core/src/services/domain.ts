@@ -72,7 +72,11 @@ export type DomainListResult = {
 };
 
 export type DomainRepository = {
-  list(options: { limit?: number; after?: string }): Promise<{
+  list(options: {
+    limit?: number;
+    after?: string;
+    userId?: string | null;
+  }): Promise<{
     data: DomainRow[];
     hasMore: boolean;
   }>;
@@ -195,10 +199,12 @@ export function createDomainService({
     async listDomains(options: {
       limit?: number;
       after?: string;
+      userId: string;
     }): Promise<DomainListResult> {
       const result = await repository.list({
         limit: normalizeLimit(options.limit),
         after: options.after || undefined,
+        userId: options.userId,
       });
 
       return {

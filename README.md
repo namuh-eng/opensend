@@ -34,7 +34,18 @@ Opensend is a **self-hostable email platform** that gives you the same developer
 - Full control over your email infrastructure
 - No per-email pricing — send as much as your SES quota allows
 - A drop-in Resend-compatible API for your existing code
-- An admin dashboard for domains, templates, broadcasts, and analytics
+- An admin dashboard for domains, templates, broadcasts, automations, and analytics
+
+## Two ways to use Opensend
+
+| | **Opensend Cloud** | **Self-host** |
+|---|---|---|
+| Where it runs | Managed at `opensend.namuh.co` | Your infrastructure |
+| Setup | Sign in with Google, add a domain | `docker compose up -d` |
+| Pricing | Free tier with 10k sends/mo, paid plans from $19/mo | Free; you pay AWS SES |
+| Best for | Teams that want zero ops | Teams that want full control |
+
+> Opensend Cloud is in early access. Pricing tiers (Starter / Growth / Scale) are wired through Stripe; the Free tier needs no card.
 
 ## One-Click Deploy
 
@@ -59,15 +70,18 @@ That's it. Open **http://localhost:3015** and sign in with Google (configure `GO
 ## Features
 
 - **REST API** — Send emails via a simple POST request with API key auth, including a `/api/emails/batch` endpoint for bulk sends
+- **Idempotency Keys** — Opt-in `Idempotency-Key` header (or per-row keys on batch sends) so retries collapse safely
 - **TypeScript SDK** — [`opensend`](./packages/sdk) npm package with full type safety
 - **React Email Templates** — Pass React components via the SDK's `react` prop
-- **Domain Verification** — DKIM, SPF, DMARC auto-configured via Cloudflare DNS
+- **Domain Verification** — DKIM, SPF, DMARC records auto-written to Cloudflare DNS, with click-tracking subdomains and custom return paths supported
 - **API Key Management** — `full_access` and `sending_access` permission scopes
 - **Broadcasts** — Block editor with slash commands, audience targeting, review panel
+- **Automations** — Multi-step flows triggered by contact updates and custom events, executed by the ingester worker
 - **Templates** — Create, edit, publish with variable substitution (`{{name}}`)
 - **Audience** — Contacts, segments, topics, custom properties, plus CSV import
+- **Suppressions** — Per-tenant suppression list at `/api/suppressions` so bounces and complaints stop future sends automatically
 - **Inbound Email** — Receive replies through `/api/emails/receiving`
-- **Webhooks** — Register endpoints with HMAC-signed, Svix-compatible delivery for `email.sent`, `email.delivered`, and `email.bounced` events (event list is free-form, so additional types can be added without schema changes)
+- **Webhooks** — Register endpoints with HMAC-signed, Svix-compatible delivery. Event types include `email.accepted`, `email.sent`, `email.delivered`, `email.opened`, `email.clicked`, `email.bounced`, `email.complained`, `email.delivery_delayed`, `email.failed`, plus batch and quota variants. Event list is free-form, so additional types can be added without schema changes.
 - **Multi-tenant Auth** — Better Auth with Google OAuth, organization invites via `/api/invites`
 - **Metrics & Usage** — Delivery, open, click, bounce rates with date range filtering, plus per-tenant usage at `/api/usage`
 - **Logs** — Full send/delivery/event audit trail
@@ -330,6 +344,7 @@ drizzle/             # Generated migration SQL
 | Email | AWS SES v2 |
 | Storage | AWS S3 |
 | DNS | Cloudflare API |
+| Billing (Cloud) | Stripe |
 | Ingester | Hono on Bun (standalone service) |
 | Background Jobs | AWS SQS + EventBridge |
 | Cache / Rate Limit | Redis (TLS) |
@@ -372,9 +387,9 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full development guide.
 - [x] Webhook signature verification (Svix-compatible HMAC headers)
 - [x] Email scheduling (EventBridge → SQS scheduled-email scan)
 - [x] Team support (multi-tenant auth + organization invites)
+- [x] Built-in open/click analytics without external dependencies
+- [x] Additional webhook event types (opened, clicked, complained, delivery_delayed)
 - [ ] SMTP relay support (send without AWS SES)
-- [ ] Built-in open/click analytics without external dependencies
-- [ ] Additional webhook event types (opened, clicked, complained, delivery_delayed)
 
 ## Contributing
 

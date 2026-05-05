@@ -1,9 +1,10 @@
 import { DomainDetail } from "@/components/domain-detail";
+import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
 import { domainRouteParamsSchema } from "@/lib/validation/domains";
-import { eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { and, eq } from "drizzle-orm";
+import { notFound, redirect } from "next/navigation";
 
 interface DomainEvent {
   type: string;
@@ -15,6 +16,12 @@ export default async function DomainDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const session = await getServerSession();
+  if (!session?.user?.id) {
+    redirect("/auth");
+  }
+  const userId = session.user.id;
+
   const parsedParams = domainRouteParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
     notFound();
@@ -25,7 +32,7 @@ export default async function DomainDetailPage({
   const rows = await db
     .select()
     .from(domains)
-    .where(eq(domains.id, id))
+    .where(and(eq(domains.id, id), eq(domains.userId, userId)))
     .limit(1);
 
   if (rows.length === 0) {

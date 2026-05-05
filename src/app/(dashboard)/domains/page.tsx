@@ -1,9 +1,17 @@
 import { DomainsPage } from "@/components/domains-page";
+import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 
 export default async function DomainsServerPage() {
+  const session = await getServerSession();
+  if (!session?.user?.id) {
+    redirect("/auth");
+  }
+  const userId = session.user.id;
+
   let domainRows: {
     id: string;
     name: string;
@@ -22,6 +30,7 @@ export default async function DomainsServerPage() {
         createdAt: domains.createdAt,
       })
       .from(domains)
+      .where(eq(domains.userId, userId))
       .orderBy(desc(domains.createdAt))
       .limit(200);
 

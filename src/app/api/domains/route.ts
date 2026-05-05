@@ -1,4 +1,9 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  authorizeDashboardOrApiKey,
+  getServerSession,
+  unauthorizedResponse,
+  validateApiKey,
+} from "@/lib/api-auth";
 import { checkDomainQuota, quotaExceededResponse } from "@/lib/billing/quota";
 import { invalidateDomainCaches } from "@/lib/domain-cache";
 import { createDomainIdentity } from "@/lib/ses";
@@ -83,15 +88,25 @@ export async function POST(request: Request): Promise<Response> {
 }
 
 export async function GET(request: Request): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
+
+  const session = "dashboard" in auth ? await getServerSession() : null;
+  const userId = "userId" in auth ? auth.userId : session?.user?.id;
+  if (!userId) return unauthorizedResponse();
 
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit")) || 20;
   const after = url.searchParams.get("after") || "";
 
   try {
-    const result = await domainService().listDomains({ limit, after });
+    const result = await domainService().listDomains({
+      limit,
+      after,
+      userId,
+    });
 
     return Response.json({
       object: "list",

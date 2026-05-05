@@ -187,6 +187,7 @@ describe("cache invalidation routes", () => {
     mockGetCachedDomainById.mockResolvedValue({
       id: VALID_DOMAIN_ID,
       name: "example.com",
+      userId: "user-1",
       capabilities: [{ name: "sending", enabled: true }],
     });
     mockDb.update.mockReturnValue({
@@ -221,10 +222,36 @@ describe("cache invalidation routes", () => {
     });
   });
 
+  it("returns 404 for cross-tenant domain patch", async () => {
+    mockGetCachedDomainById.mockResolvedValue({
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      userId: "other-user",
+      capabilities: [{ name: "sending", enabled: true }],
+    });
+
+    const route = await import("@/app/api/domains/[id]/route");
+    const response = await route.PATCH(
+      new Request("http://localhost", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ click_tracking: true }),
+      }),
+      {
+        params: Promise.resolve({ id: VALID_DOMAIN_ID }),
+      },
+    );
+
+    expect(response.status).toBe(404);
+    expect(mockDb.update).not.toHaveBeenCalled();
+    expect(mockInvalidateDomainCaches).not.toHaveBeenCalled();
+  });
+
   it("invalidates domain caches after auto-configure", async () => {
     mockGetCachedDomainById.mockResolvedValue({
       id: VALID_DOMAIN_ID,
       name: "example.com",
+      userId: "user-1",
     });
     mockCreateDomainIdentity.mockResolvedValue({
       dkimTokens: ["a", "b", "c"],
@@ -257,6 +284,7 @@ describe("cache invalidation routes", () => {
     mockGetCachedDomainById.mockResolvedValue({
       id: VALID_DOMAIN_ID,
       name: "example.com",
+      userId: "user-1",
       status: "pending",
       records: [],
     });
@@ -298,6 +326,7 @@ describe("cache invalidation routes", () => {
     mockGetCachedDomainById.mockResolvedValue({
       id: VALID_DOMAIN_ID,
       name: "example.com",
+      userId: "user-1",
     });
     mockListDNSRecords.mockResolvedValue([]);
     mockDb.delete.mockReturnValue({
