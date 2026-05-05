@@ -1,6 +1,7 @@
 import {
   emailEventRepo,
   signWebhookPayload,
+  toWebhookEventType,
   webhookDeliveryRepo,
   webhookRepo,
 } from "@opensend/core";
@@ -69,10 +70,14 @@ export class WebhookDispatcher {
     const attemptNumber = delivery.attempt + 1;
     const timestamp = Math.floor(attemptedAt.getTime() / 1000).toString();
     const msgId = `whd_${delivery.id}_${attemptNumber}`;
-    const eventType =
-      typeof event.type === "string" && event.type.includes(".")
-        ? event.type
-        : `email.${event.type}`;
+    const eventType = toWebhookEventType(String(event.type));
+    if (!eventType) {
+      return await this.markTerminal(
+        delivery,
+        `Unsupported webhook event type: ${String(event.type)}`,
+      );
+    }
+
     const body = JSON.stringify({
       id: msgId,
       type: eventType,

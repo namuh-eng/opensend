@@ -1,6 +1,6 @@
 # Ingester deployment runbook
 
-Issue #70 splits SES/SNS ingestion into its own container and ECS/Fargate service so webhook bursts do not contend with the Next.js app.
+The standalone ingester receives SES/SNS events and owns background worker execution so webhook bursts and queued email sends do not contend with the Next.js app. Team production runs the ingester as an AWS ECS Fargate service behind the shared `namuh-alb` Application Load Balancer.
 
 ## Local docker-compose
 
@@ -23,17 +23,45 @@ docker compose ps ingester
 docker compose logs -f ingester
 ```
 
-## Production deploy shape
+## Production ECS Fargate shape
 
-Team production runs on AWS ECS/Fargate behind the shared `namuh` ALB.
-`bash scripts/deploy.sh` deploys two long-running services and a one-off
-migrator task:
+Production is AWS ECS Fargate in `us-east-1`:
 
-- app image from `Dockerfile`
-- migrator image from the `Dockerfile` `migrator` target, pushed to the app ECR repo as `<tag>-migrator`
-- ingester image from `packages/ingester/Dockerfile`
+- ECS cluster: `namuh`
+- ALB: `namuh-alb`, shared across products with host-based listener rules
+- ECR repos: `<product>-app` and `<product>-ingester`
+- ECS services: `<product>-app` and `<product>-ingester`
+- CloudWatch log groups: `/ecs/<product>-app` and `/ecs/<product>-ingester`
 
-Supported targets:
+The ALB listener routes by hostname:
+
+| Host | Target service | Target port |
+| --- | --- | --- |
+| `<product>.namuh.co` | app/dashboard | `8080` |
+| `api.<product>.namuh.co` | app/API | `8080` |
+| `events.<product>.namuh.co` | ingester | `3016` |
+
+For the current Opensend deployment, the ingester public endpoint is:
+
+```text
+https://events.opensend.namuh.co/events/ses
+```
+
+The Fargate task definition must expose/container-map the ingester on port `3016`, and the `events.<product>.namuh.co` ALB rule must forward to the ingester target group on port `3016`.
+
+## Deploy the ingester
+
+Use `scripts/deploy.sh` rather than a raw `aws ecs update-service`. The script
+runs migrations before service redeploys so app code does not start against an
+older database schema. The Fargate deploy script contract is:
+
+- build `packages/ingester/Dockerfile` for `linux/amd64`
+- push the image to ECR repo `<product>-ingester`
+- run a one-off migrator task before service redeploys
+- force a new deployment of ECS service `<product>-ingester` in cluster `namuh`
+- wait for `aws ecs wait services-stable` before reporting success
+
+Supported deploy targets:
 
 ```bash
 bash scripts/deploy.sh migrate   # DB-only migration/repair
@@ -49,23 +77,21 @@ PRODUCT=opensend \
 ECS_CLUSTER=namuh \
 IMAGE_TAG=latest \
 PLATFORM=linux/amd64 \
-bash scripts/deploy.sh all
+bash scripts/deploy.sh ingester
 ```
 
-Do not bypass the script with a raw `aws ecs update-service` after schema
-changes. The script runs migrations before service redeploys so app code does
-not start against an older database schema.
+The deploy script assumes the ECS services, target groups, listener rules, log groups, ECR repositories, and Secrets Manager wiring already exist. Use this runbook's external residuals checklist when bringing up a new product or debugging a failed deployment.
 
 ## Background job worker
 
-Issues #15/#16 move send/webhook work to AWS-native background jobs. The app publishes jobs to SQS after persisting rows; the ingester service consumes and executes them. Email rows start as `queued`, transition through worker-owned `processing`/`sent`, and get `sent_at` only after SES accepts the message.
+The app publishes jobs to SQS after persisting rows; the ingester service consumes and executes them. Email rows start as `queued`, transition through worker-owned `processing`/`sent`, and get `sent_at` only after SES accepts the message.
 
 Required production environment for both app and ingester:
 
 ```bash
-BACKGROUND_JOBS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/<account>/opensend-background
+BACKGROUND_JOBS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/<account>/<product>-background
 BACKGROUND_JOBS_REQUIRE_QUEUE=true
-BACKGROUND_JOBS_EVENT_BUS_NAME=opensend-background-jobs # optional lifecycle/event hook bus
+BACKGROUND_JOBS_EVENT_BUS_NAME=<product>-background-jobs # optional lifecycle/event hook bus
 CLOUDWATCH_METRICS_NAMESPACE=Opensend # optional EMF namespace override
 ```
 
@@ -92,7 +118,7 @@ EventBridge scheduling:
 Manual probes:
 
 ```bash
-INGESTER_URL="https://<ingester-service-url>"
+INGESTER_URL="https://events.<product>.namuh.co"
 curl -i -X POST "${INGESTER_URL}/jobs/poll" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 curl -i -X POST "${INGESTER_URL}/jobs/scheduled-emails" \
@@ -103,13 +129,19 @@ curl -i -X POST "${INGESTER_URL}/jobs/webhooks" \
 
 ## SNS cutover
 
-After the ingester service is live, SES SNS should point at:
+After the Fargate ingester service is healthy behind the ALB, SES SNS should point at the host-based `events` route:
 
 ```text
-https://<ingester-service-url>/events/ses
+https://events.<product>.namuh.co/events/ses
 ```
 
-Do not leave SES pointed at the Next.js app URL once the split is active.
+For Opensend production:
+
+```text
+https://events.opensend.namuh.co/events/ses
+```
+
+Do not leave SES pointed at the Next.js app/API host once the split is active.
 
 ## Observability
 
@@ -117,29 +149,34 @@ The app and ingester emit structured JSON logs, W3C/OpenTelemetry-compatible tra
 
 ## Tail ingester logs
 
-Tail the ECS CloudWatch log group:
+Tail the ECS CloudWatch log group for the ingester service:
 
 ```bash
-aws logs tail /ecs/opensend-ingester --region us-east-1 --since 10m --follow
+PRODUCT=opensend
+aws logs tail "/ecs/${PRODUCT}-ingester" \
+  --region us-east-1 \
+  --since 10m \
+  --follow
 ```
 
-Check recent ECS service events:
+Check recent ECS service events when a deploy or health check is failing:
 
 ```bash
+PRODUCT=opensend
 aws ecs describe-services \
   --cluster namuh \
-  --services opensend-ingester \
+  --services "${PRODUCT}-ingester" \
   --region us-east-1 \
   --query 'services[0].events[0:10].message' \
   --output table
 ```
 
-## Force-process a missed SES event
+## Replay a missed SES SNS event
 
-The ingester verifies the original SNS signature, so the safe replay path is to resend the exact SNS notification body that AWS originally delivered.
+The ingester verifies the original SNS signature, so the safe replay path is to resend the exact SNS notification body that AWS originally delivered to the Fargate endpoint.
 
 ```bash
-INGESTER_URL="https://<ingester-service-url>/events/ses"
+INGESTER_URL="https://events.<product>.namuh.co/events/ses"
 curl -i "${INGESTER_URL}" \
   -H "Content-Type: text/plain; charset=UTF-8" \
   -H "x-amz-sns-message-type: Notification" \
@@ -150,11 +187,15 @@ curl -i "${INGESTER_URL}" \
 
 ## External residuals
 
-This repo change does not create or mutate external AWS resources on its own. Before production cutover, verify:
+This repo change does not create or mutate external AWS resources on its own. Before production cutover or a new product launch, verify:
 
-- the ingester ECR repository exists
+- the `<product>-ingester` ECR repository exists
+- the `<product>-ingester` ECS service exists in cluster `namuh`
+- the ingester task definition has the same RDS, AWS, Cloudflare, queue, and token secrets as production requires
 - the app, ingester, and migrator ECS tasks have shared RDS and Secrets Manager wiring
+- the ALB listener has a host-based rule for `events.<product>.namuh.co`
+- the ingester target group forwards to port `3016` and has a passing health check
 - the SQS queue exists with a redrive policy and DLQ
 - EventBridge schedule/rules exist for scheduled-email and webhook retry scans
 - IAM grants app publish permissions and ingester consume/delete/change-visibility permissions
-- the SES SNS subscription has been updated to the ingester URL
+- the SES SNS subscription has been updated to `https://events.<product>.namuh.co/events/ses`

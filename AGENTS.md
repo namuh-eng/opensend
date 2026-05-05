@@ -30,6 +30,7 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 - `packages/core/` — `@opensend/core` — shared DB client, repositories, DTOs, webhook helpers
 - `packages/ingester/` — `@opensend/ingester` — Hono webhook dispatcher for SES/SNS events and scheduled email worker
 - `packages/sdk/` — `opensend` — public TypeScript SDK published to npm
+- `services/api/` — `@opensend/api` — Bun + Hono control-plane API skeleton on local port 3026; Next.js `src/app/api` routes remain the public API until later thin-adapter PRs
 - `tests/` — Vitest unit tests
 - `tests/e2e/` — Playwright E2E tests
 - `drizzle/` — generated migration SQL

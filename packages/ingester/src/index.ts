@@ -2,11 +2,14 @@ import {
   createBackgroundJob,
   createTelemetryContext,
   emailEventRepo,
+  emailService,
   emitCloudWatchMetric,
   getTelemetryCarrier,
   logTelemetry,
   publishBackgroundJob,
   recordTelemetryError,
+  suppressionRepo,
+  toWebhookEventType,
   webhookRepo,
 } from "@opensend/core";
 import { Hono } from "hono";
@@ -20,8 +23,66 @@ import {
   parseSnsEnvelope,
   verifySnsSignature,
 } from "./sns-message";
+import {
+  StripeWebhookProcessor,
+  buildPaymentFailedEmail,
+} from "./stripe-webhook";
 
 const app = new Hono();
+
+type SesSuppressionOutcome = {
+  reason: "bounced" | "complained";
+  recipients: string[];
+  metadata: { bounceType?: string; complaintFeedbackType?: string };
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readRecipientEmails(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((recipient) => {
+      if (!isRecord(recipient)) return null;
+      const emailAddress = recipient.emailAddress;
+      return typeof emailAddress === "string" && emailAddress.length > 0
+        ? emailAddress
+        : null;
+    })
+    .filter((email): email is string => Boolean(email));
+}
+
+function getSesSuppressionOutcome(
+  eventType: string,
+  payload: unknown,
+): SesSuppressionOutcome | null {
+  if (!isRecord(payload)) return null;
+
+  if (eventType === "Bounce") {
+    const bounceType = payload.bounceType;
+    if (bounceType !== "Permanent") return null;
+    return {
+      reason: "bounced",
+      recipients: readRecipientEmails(payload.bouncedRecipients),
+      metadata: { bounceType },
+    };
+  }
+
+  if (eventType === "Complaint") {
+    const complaintFeedbackType = payload.complaintFeedbackType;
+    return {
+      reason: "complained",
+      recipients: readRecipientEmails(payload.complainedRecipients),
+      metadata:
+        typeof complaintFeedbackType === "string"
+          ? { complaintFeedbackType }
+          : {},
+    };
+  }
+
+  return null;
+}
 
 function isAuthorizedJobRequest(authHeader: string | undefined): boolean {
   const token = process.env.INGESTER_JOB_TOKEN?.trim();
@@ -59,6 +120,98 @@ app.post("/jobs/webhooks", async (c) =>
     async () => await webhookDispatcher.dispatchPendingDeliveries(),
   ),
 );
+
+app.post("/webhooks/stripe", async (c) => {
+  const telemetry = createTelemetryContext({
+    service: "ingester",
+    operation: "POST /webhooks/stripe",
+    headers: {
+      traceparent: c.req.header("traceparent"),
+      tracestate: c.req.header("tracestate"),
+      "x-correlation-id": c.req.header("x-correlation-id"),
+    },
+  });
+
+  const secret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
+  if (!secret) {
+    logTelemetry("warn", "stripe.webhook.secret_missing", telemetry);
+    return c.text("Stripe webhook secret not configured", 503);
+  }
+
+  const notificationFrom =
+    process.env.BILLING_NOTIFICATION_FROM_EMAIL?.trim() ?? null;
+
+  const processor = new StripeWebhookProcessor({
+    secret,
+    notificationFrom,
+    deps: {
+      emailNotifier: notificationFrom
+        ? async ({ to, invoice }) => {
+            const built = buildPaymentFailedEmail({ invoice });
+            await emailService.send({
+              from: notificationFrom,
+              to: [to],
+              subject: built.subject,
+              html: built.html,
+              text: built.text,
+              tags: [
+                { name: "namuh:source", value: "billing" },
+                { name: "namuh:reason", value: "invoice_payment_failed" },
+              ],
+              idempotencyKey: `stripe:invoice_payment_failed:${invoice.invoiceId}`,
+            });
+          }
+        : undefined,
+      log: (level, event, fields) =>
+        logTelemetry(level, event, telemetry, fields),
+    },
+  });
+
+  let rawBody: string;
+  try {
+    rawBody = await c.req.text();
+  } catch (error) {
+    recordTelemetryError(telemetry, "stripe.webhook.body_read_failed", error);
+    return c.text("Invalid request body", 400);
+  }
+
+  try {
+    const outcome = await processor.process({
+      rawBody,
+      signatureHeader: c.req.header("stripe-signature"),
+    });
+
+    emitCloudWatchMetric(telemetry, {
+      metrics: [{ name: "StripeWebhookEvent", value: 1, unit: "Count" }],
+      dimensions: {
+        Service: "ingester",
+        Operation: "stripe.webhook",
+        Outcome: outcome.status,
+      },
+    });
+
+    if (outcome.status === "rejected") {
+      return c.text(outcome.reason, outcome.httpStatus);
+    }
+    return c.json({
+      ok: true,
+      status: outcome.status,
+      event_id: "eventId" in outcome ? outcome.eventId : null,
+      type: "type" in outcome ? outcome.type : null,
+    });
+  } catch (error) {
+    recordTelemetryError(telemetry, "stripe.webhook.failed", error);
+    emitCloudWatchMetric(telemetry, {
+      metrics: [{ name: "StripeWebhookFailed", value: 1, unit: "Count" }],
+      dimensions: {
+        Service: "ingester",
+        Operation: "stripe.webhook",
+        Outcome: "error",
+      },
+    });
+    return c.text("Internal Server Error", 500);
+  }
+});
 
 app.post("/events/ses", async (c) => {
   const telemetry = createTelemetryContext({
@@ -154,6 +307,26 @@ app.post("/events/ses", async (c) => {
       return c.text("OK");
     }
 
+    const suppressionOutcome = getSesSuppressionOutcome(
+      eventType,
+      sesMessage[normalizedEvent.payloadKey],
+    );
+    if (suppressionOutcome) {
+      const suppressions = await suppressionRepo.suppressFromSesEvent({
+        emailId,
+        recipients: suppressionOutcome.recipients,
+        reason: suppressionOutcome.reason,
+        sourceEventId: snsMessage.MessageId,
+        sourceMessageId: sesId,
+        metadata: suppressionOutcome.metadata,
+      });
+      logTelemetry("info", "ses.suppressions.refreshed", telemetry, {
+        email_id: emailId,
+        reason: suppressionOutcome.reason,
+        suppression_count: suppressions.length,
+      });
+    }
+
     emitCloudWatchMetric(telemetry, {
       metrics: [{ name: "SesEventIngested", value: 1, unit: "Count" }],
       dimensions: {
@@ -164,16 +337,15 @@ app.post("/events/ses", async (c) => {
       },
     });
 
+    const webhookEventType = toWebhookEventType(event.type);
+    if (!webhookEventType) {
+      return c.text("OK");
+    }
+
     const { data: hooks } = await webhookRepo.list({ limit: 100 });
     for (const hook of hooks) {
       const types = hook.eventTypes as string[];
-      const webhookEventType = `email.${event.type}`;
-      if (
-        hook.status === "active" &&
-        (types.includes("*") ||
-          types.includes(event.type) ||
-          types.includes(webhookEventType))
-      ) {
+      if (hook.status === "active" && types.includes(webhookEventType)) {
         const delivery = await webhookDispatcher.enqueue(hook.id, event.id);
         await publishBackgroundJob(
           createBackgroundJob({

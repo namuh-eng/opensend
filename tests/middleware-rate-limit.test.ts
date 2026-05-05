@@ -1,14 +1,12 @@
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockGetRateLimitBackend = vi.hoisted(() => vi.fn());
 const mockIsRedisConfigured = vi.hoisted(() => vi.fn());
 const mockIncrCache = vi.hoisted(() => vi.fn());
 const mockGetTtl = vi.hoisted(() => vi.fn());
 const mockGetSessionCookie = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/cache/redis", () => ({
-  getRateLimitBackend: mockGetRateLimitBackend,
   isRedisConfigured: mockIsRedisConfigured,
   incrCache: mockIncrCache,
   getTtl: mockGetTtl,
@@ -30,7 +28,7 @@ describe("middleware rate limiting", () => {
     vi.clearAllMocks();
     mockGetSessionCookie.mockReturnValue("session");
     mockIsRedisConfigured.mockReturnValue(true);
-    mockGetRateLimitBackend.mockReturnValue("disabled");
+    process.env.RATE_LIMIT_BACKEND = "disabled";
   });
 
   it("skips API rate limiting when RATE_LIMIT_BACKEND is disabled", async () => {
@@ -45,7 +43,7 @@ describe("middleware rate limiting", () => {
   });
 
   it("enforces Redis-backed limits for API routes", async () => {
-    mockGetRateLimitBackend.mockReturnValue("redis");
+    process.env.RATE_LIMIT_BACKEND = "redis";
     mockIncrCache.mockResolvedValue(1);
 
     const { middleware } = await import("@/middleware");
@@ -67,7 +65,7 @@ describe("middleware rate limiting", () => {
   });
 
   it("returns 429 with Retry-After once the Redis limit is exceeded", async () => {
-    mockGetRateLimitBackend.mockReturnValue("redis");
+    process.env.RATE_LIMIT_BACKEND = "redis";
     mockIncrCache.mockResolvedValue(21);
     mockGetTtl.mockResolvedValue(17);
 
@@ -80,12 +78,15 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("retry-after")).toBe("17");
     expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
     await expect(response.json()).resolves.toEqual({
-      error: "Rate limit exceeded. Try again later.",
+      name: "rate_limit_exceeded",
+      code: "rate_limit_exceeded",
+      message: "Rate limit exceeded. Try again later.",
+      statusCode: 429,
     });
   });
 
   it("returns 503 when Redis-backed rate limiting is unavailable", async () => {
-    mockGetRateLimitBackend.mockReturnValue("redis");
+    process.env.RATE_LIMIT_BACKEND = "redis";
     mockIncrCache.mockResolvedValue(null);
 
     const { middleware } = await import("@/middleware");
@@ -96,7 +97,10 @@ describe("middleware rate limiting", () => {
     expect(response.status).toBe(503);
     expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
     await expect(response.json()).resolves.toEqual({
-      error: "Rate limiting is temporarily unavailable.",
+      name: "rate_limit_unavailable",
+      code: "rate_limit_unavailable",
+      message: "Rate limiting is temporarily unavailable.",
+      statusCode: 503,
     });
   });
 });

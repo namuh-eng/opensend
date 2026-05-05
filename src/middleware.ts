@@ -1,9 +1,3 @@
-import {
-  getRateLimitBackend,
-  getTtl,
-  incrCache,
-  isRedisConfigured,
-} from "@/lib/cache/redis";
 import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -12,16 +6,35 @@ type RateCheckResult =
   | { allowed: false; retryAfter: number; status: 429 }
   | { allowed: false; error: string; status: 503 };
 
+type RateLimitBackend = "disabled" | "redis";
+type RateLimitDependencies = typeof import("@/lib/cache/redis");
+
 const RATE_LIMIT_BACKEND_UNAVAILABLE_ERROR =
   "Rate limiting is temporarily unavailable.";
 let hasLoggedRateLimitConfigError = false;
+let hasLoggedUnsupportedRateLimitBackend = false;
+
+function getRateLimitBackend(): RateLimitBackend {
+  const backend = process.env.RATE_LIMIT_BACKEND?.trim().toLowerCase();
+  if (!backend) return "disabled";
+  if (backend === "disabled" || backend === "redis") return backend;
+
+  if (!hasLoggedUnsupportedRateLimitBackend) {
+    hasLoggedUnsupportedRateLimitBackend = true;
+    console.warn(
+      `[rate-limit] Unsupported RATE_LIMIT_BACKEND="${backend}". Falling back to "disabled".`,
+    );
+  }
+  return "disabled";
+}
 
 async function checkRate(
   key: string,
   maxRequests: number,
   windowMs: number,
+  rateLimit: RateLimitDependencies,
 ): Promise<RateCheckResult> {
-  if (!isRedisConfigured()) {
+  if (!rateLimit.isRedisConfigured()) {
     if (!hasLoggedRateLimitConfigError) {
       hasLoggedRateLimitConfigError = true;
       console.error(
@@ -37,7 +50,7 @@ async function checkRate(
 
   const redisKey = `ratelimit:${key}`;
   const windowSeconds = Math.ceil(windowMs / 1000);
-  const count = await incrCache(redisKey, windowSeconds);
+  const count = await rateLimit.incrCache(redisKey, windowSeconds);
 
   if (count === null) {
     return {
@@ -51,7 +64,7 @@ async function checkRate(
     return { allowed: true };
   }
 
-  const ttl = await getTtl(redisKey);
+  const ttl = await rateLimit.getTtl(redisKey);
   return {
     allowed: false,
     retryAfter: ttl && ttl > 0 ? ttl : windowSeconds,
@@ -60,6 +73,13 @@ async function checkRate(
 }
 
 // Rate limit tiers by route pattern
+function isSendApiPost(pathname: string, method: string): boolean {
+  return (
+    method === "POST" &&
+    (pathname === "/api/emails" || pathname === "/api/emails/batch")
+  );
+}
+
 function getLimits(
   pathname: string,
   method: string,
@@ -94,21 +114,30 @@ function getLimits(
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const isPublicUnsubscribeRoute = pathname.startsWith("/unsubscribe/");
+
   // Protect non-API page routes with session check
   if (!pathname.startsWith("/api/")) {
-    // Allow auth page and static assets
+    // Allow auth page, public landing page, and static assets
     if (
       pathname === "/auth" ||
+      pathname === "/landing" ||
+      pathname.startsWith("/landing/") ||
       pathname.startsWith("/_next/") ||
       pathname.startsWith("/favicon")
     ) {
       return NextResponse.next();
     }
-    const sessionCookie = getSessionCookie(request);
-    if (!sessionCookie) {
-      return NextResponse.redirect(new URL("/auth", request.url));
+    if (isPublicUnsubscribeRoute) {
+      // Public one-click links must not require auth, but still flow through
+      // the same anonymous IP rate-limit path used for API routes below.
+    } else {
+      const sessionCookie = getSessionCookie(request);
+      if (!sessionCookie) {
+        return NextResponse.redirect(new URL("/auth", request.url));
+      }
+      return NextResponse.next();
     }
-    return NextResponse.next();
   }
 
   const backend = getRateLimitBackend();
@@ -118,6 +147,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next({ headers: responseHeaders });
   }
 
+  const rateLimit = await import("@/lib/cache/redis");
+
   const rawIp =
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
   const ip = /^[\d.a-fA-F:]+$/.test(rawIp) ? rawIp : "unknown";
@@ -125,26 +156,37 @@ export async function middleware(request: NextRequest) {
   const rateLimitKey = `${ip}:${authKey}:${pathname}`;
 
   const { max, windowMs } = getLimits(pathname, request.method);
-  const result = await checkRate(rateLimitKey, max, windowMs);
+  const result = await checkRate(rateLimitKey, max, windowMs, rateLimit);
 
   if (!result.allowed) {
+    const message =
+      result.status === 429
+        ? "Rate limit exceeded. Try again later."
+        : result.error;
+    const headers = new Headers({ "X-RateLimit-Backend": backend });
+    if (result.status === 429) {
+      headers.set("Retry-After", String(result.retryAfter));
+    }
+
+    if (isSendApiPost(pathname, request.method)) {
+      const code =
+        result.status === 429
+          ? "rate_limit_exceeded"
+          : "rate_limit_unavailable";
+      return NextResponse.json(
+        {
+          name: code,
+          code,
+          message,
+          statusCode: result.status,
+        },
+        { status: result.status, headers },
+      );
+    }
+
     return NextResponse.json(
-      {
-        error:
-          result.status === 429
-            ? "Rate limit exceeded. Try again later."
-            : result.error,
-      },
-      {
-        status: result.status,
-        headers:
-          result.status === 429
-            ? {
-                "Retry-After": String(result.retryAfter),
-                "X-RateLimit-Backend": backend,
-              }
-            : { "X-RateLimit-Backend": backend },
-      },
+      { error: message },
+      { status: result.status, headers },
     );
   }
 

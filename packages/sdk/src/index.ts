@@ -27,15 +27,78 @@ interface SDKOptions {
   baseUrl: string;
 }
 
+export interface RequestOptions {
+  idempotencyKey?: string;
+}
+
+interface ApiError {
+  message: string;
+  statusCode: number;
+  name?: string;
+  code?: string;
+}
+
 interface ApiResponse<T> {
   data: T | null;
-  error: { message: string; statusCode: number } | null;
+  error: ApiError | null;
 }
 
 export type SendEmailPayload = EmailOptions & {
   react?: unknown;
 };
 export type CreateDomainPayload = DomainOptions;
+
+export interface AutomationStepPayload {
+  key: string;
+  type:
+    | "trigger"
+    | "delay"
+    | "send_email"
+    | "end"
+    | "condition"
+    | "wait_for_event"
+    | "contact_update";
+  config?: Record<string, unknown>;
+  position?: number;
+}
+
+export interface AutomationConnectionPayload {
+  from: string;
+  to: string;
+}
+
+export interface CreateAutomationPayload {
+  name?: string;
+  status?: "draft" | "enabled" | "disabled";
+  trigger_event_name?: string;
+  triggerEventName?: string;
+  steps: AutomationStepPayload[];
+  connections?: AutomationConnectionPayload[];
+}
+
+export type UpdateAutomationPayload = Partial<CreateAutomationPayload>;
+
+export interface SendEventPayload {
+  event: string;
+  contact_id?: string;
+  contactId?: string;
+  email?: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface CreateEventPayload {
+  name: string;
+  schema?: Record<string, unknown>;
+}
+
+export interface ListOptions {
+  limit?: number;
+  after?: string;
+}
+
+export interface AutomationRunListOptions extends ListOptions {
+  status?: string;
+}
 
 function normalizeBaseUrl(baseUrl?: string): string {
   if (!baseUrl?.trim()) {
@@ -54,6 +117,43 @@ function normalizeBaseUrl(baseUrl?: string): string {
   }
 
   return normalized.toString().replace(/\/$/, "");
+}
+
+function getStringProperty(
+  value: Record<string, unknown>,
+  key: string,
+): string | null {
+  const property = value[key];
+  return typeof property === "string" ? property : null;
+}
+
+function parseApiErrorBody(parsedBody: unknown, response: Response): ApiError {
+  const errorBody =
+    parsedBody && typeof parsedBody === "object"
+      ? (parsedBody as Record<string, unknown>)
+      : null;
+
+  if (!errorBody) {
+    return {
+      message: response.statusText || "Request failed",
+      statusCode: response.status,
+    };
+  }
+
+  const message =
+    getStringProperty(errorBody, "message") ??
+    getStringProperty(errorBody, "error") ??
+    response.statusText ??
+    "Request failed";
+  const name = getStringProperty(errorBody, "name");
+  const code = getStringProperty(errorBody, "code");
+
+  return {
+    message,
+    statusCode: response.status,
+    ...(name ? { name } : {}),
+    ...(code ? { code } : {}),
+  };
 }
 
 async function renderReactToHtml(element: unknown): Promise<string | null> {
@@ -77,12 +177,16 @@ class HttpClient {
     method: string,
     path: string,
     body?: unknown,
+    requestOptions: RequestOptions = {},
   ): Promise<ApiResponse<T>> {
     try {
       const headers: Record<string, string> = {
         Authorization: `Bearer ${this.apiKey}`,
         "Content-Type": "application/json",
       };
+      if (requestOptions.idempotencyKey !== undefined) {
+        headers["Idempotency-Key"] = requestOptions.idempotencyKey;
+      }
 
       const options: RequestInit = { method, headers };
       if (body !== undefined) {
@@ -94,20 +198,9 @@ class HttpClient {
       const parsedBody = rawBody ? (JSON.parse(rawBody) as unknown) : null;
 
       if (!response.ok) {
-        const errorBody =
-          parsedBody && typeof parsedBody === "object" ? parsedBody : null;
-
         return {
           data: null,
-          error: {
-            message:
-              errorBody &&
-              "error" in errorBody &&
-              typeof errorBody.error === "string"
-                ? errorBody.error
-                : response.statusText || "Request failed",
-            statusCode: response.status,
-          },
+          error: parseApiErrorBody(parsedBody, response),
         };
       }
 
@@ -118,6 +211,8 @@ class HttpClient {
         error: {
           message: error instanceof Error ? error.message : "Unknown error",
           statusCode: 500,
+          name: "internal_server_error",
+          code: "internal_server_error",
         },
       };
     }
@@ -127,7 +222,10 @@ class HttpClient {
 class Emails {
   constructor(private readonly http: HttpClient) {}
 
-  async send(payload: SendEmailPayload): Promise<ApiResponse<EmailResponse>> {
+  async send(
+    payload: SendEmailPayload,
+    options: RequestOptions = {},
+  ): Promise<ApiResponse<EmailResponse>> {
     const { react, ...rest } = payload;
 
     if (react != null) {
@@ -137,16 +235,23 @@ class Emails {
       }
     }
 
-    return this.http.request<EmailResponse>("POST", "/api/emails", rest);
+    return this.http.request<EmailResponse>(
+      "POST",
+      "/api/emails",
+      rest,
+      options,
+    );
   }
 
   async sendBatch(
     payload: SendEmailPayload[],
+    options: RequestOptions = {},
   ): Promise<ApiResponse<BatchEmailResponse>> {
     return this.http.request<BatchEmailResponse>(
       "POST",
       "/api/emails/batch",
       payload,
+      options,
     );
   }
 
@@ -262,11 +367,103 @@ class Contacts {
   }
 }
 
+class Automations {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(
+    payload: CreateAutomationPayload,
+  ): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>("POST", "/api/automations", payload);
+  }
+
+  async list(
+    options: ListOptions & { status?: string } = {},
+  ): Promise<ApiResponse<unknown>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.status) params.set("status", options.status);
+    const query = params.toString();
+    return this.http.request<unknown>(
+      "GET",
+      query ? `/api/automations?${query}` : "/api/automations",
+    );
+  }
+
+  async get(id: string): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>("GET", `/api/automations/${id}`);
+  }
+
+  async update(
+    id: string,
+    payload: UpdateAutomationPayload,
+  ): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>(
+      "PATCH",
+      `/api/automations/${id}`,
+      payload,
+    );
+  }
+
+  async delete(id: string): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>("DELETE", `/api/automations/${id}`);
+  }
+
+  async listRuns(
+    id: string,
+    options: AutomationRunListOptions = {},
+  ): Promise<ApiResponse<unknown>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.status) params.set("status", options.status);
+    const query = params.toString();
+    return this.http.request<unknown>(
+      "GET",
+      query
+        ? `/api/automations/${id}/runs?${query}`
+        : `/api/automations/${id}/runs`,
+    );
+  }
+
+  async getRun(id: string, runId: string): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>(
+      "GET",
+      `/api/automations/${id}/runs/${runId}`,
+    );
+  }
+}
+
+class Events {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(payload: CreateEventPayload): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>("POST", "/api/events", payload);
+  }
+
+  async list(options: ListOptions = {}): Promise<ApiResponse<unknown>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    const query = params.toString();
+    return this.http.request<unknown>(
+      "GET",
+      query ? `/api/events?${query}` : "/api/events",
+    );
+  }
+
+  async send(payload: SendEventPayload): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>("POST", "/api/events/send", payload);
+  }
+}
+
 class Opensend {
   public readonly emails: Emails;
   public readonly domains: Domains;
   public readonly apiKeys: ApiKeys;
   public readonly contacts: Contacts;
+  public readonly automations: Automations;
+  public readonly events: Events;
 
   constructor(apiKey: string, options: SDKOptions) {
     if (!apiKey) {
@@ -279,12 +476,15 @@ class Opensend {
     this.domains = new Domains(http);
     this.apiKeys = new ApiKeys(http);
     this.contacts = new Contacts(http);
+    this.automations = new Automations(http);
+    this.events = new Events(http);
   }
 }
 
 export { Opensend };
 export type {
   SDKOptions,
+  ApiError,
   ApiResponse,
   EmailOptions,
   EmailResponse,

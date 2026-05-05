@@ -93,6 +93,18 @@ curl -X POST http://localhost:3015/api/emails \
 
 Open `http://localhost:3015/docs` for the full local API reference.
 
+### Control-plane API skeleton
+
+This repository now includes a dedicated TypeScript control-plane API service skeleton at [`services/api`](./services/api). It runs on Bun + Hono and reserves local development port **3026**:
+
+```bash
+bun run dev:api
+curl http://localhost:3026/healthz
+curl http://localhost:3026/readyz
+```
+
+For now, the Next.js routes under `src/app/api` remain the current public API and own production request handling. The control-plane service only exposes health/readiness endpoints until follow-up thin-adapter PRs move route ownership behind this boundary.
+
 ### TypeScript SDK
 
 ```bash
@@ -279,7 +291,7 @@ docker build -t opensend .
 docker run -p 3015:8080 --env-file .env opensend
 ```
 
-The team production deployment runs on **AWS ECS Fargate** behind an ALB with the app and the standalone ingester as separate services. For the split-service runbook, SNS cutover, and ingester log/replay instructions, see [`docs/ingester-deploy.md`](docs/ingester-deploy.md). Note: that doc is mid-migration from App Runner to Fargate — see [issue #128](https://github.com/namuh-eng/opensend/issues/128) for the rewrite.
+For the ECS Fargate split-service shape, ALB host-based events routing, SNS cutover, and ingester log/replay runbook, see [`docs/ingester-deploy.md`](docs/ingester-deploy.md).
 
 ## Architecture
 

@@ -40,15 +40,50 @@
     {
       "idx": 5,
       "version": "7",
-      "when": 1777939200000,
-      "tag": "0005_session_better_auth_fields",
+      "when": 1777660079407,
+      "tag": "0005_automations_foundation",
       "breakpoints": true
     },
     {
       "idx": 6,
       "version": "7",
+      "when": 1777692459103,
+      "tag": "0006_billing_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777692991151,
+      "tag": "0007_stripe_events_processed",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777712479232,
+      "tag": "0008_session_ip_user_agent",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1777939200000,
+      "tag": "0009_session_better_auth_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
       "when": 1777939200001,
-      "tag": "0006_repair_domain_columns",
+      "tag": "0010_repair_domain_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777950543196,
+      "tag": "0011_pretty_reavers",
       "breakpoints": true
     }
   ]

@@ -9,6 +9,7 @@ const mockPublishBackgroundJob = vi.fn();
 const mockEmitCloudWatchMetric = vi.fn();
 const mockLogTelemetry = vi.fn();
 const mockRecordTelemetryError = vi.fn();
+const mockSuppressFromSesEvent = vi.fn();
 
 vi.mock("@opensend/core", () => {
   const testTraceparent =
@@ -64,6 +65,26 @@ vi.mock("@opensend/core", () => {
     logTelemetry: mockLogTelemetry,
     publishBackgroundJob: mockPublishBackgroundJob,
     recordTelemetryError: mockRecordTelemetryError,
+    suppressionRepo: {
+      suppressFromSesEvent: mockSuppressFromSesEvent,
+    },
+    toWebhookEventType: (eventType: string) => {
+      const candidate = eventType.includes(".")
+        ? eventType
+        : `email.${eventType}`;
+      return [
+        "email.sent",
+        "email.delivered",
+        "email.bounced",
+        "email.complained",
+        "email.delivery_delayed",
+        "email.opened",
+        "email.clicked",
+        "email.failed",
+      ].includes(candidate)
+        ? candidate
+        : null;
+    },
     webhookRepo: {
       list: mockWebhookList,
     },
@@ -227,6 +248,7 @@ describe("SES SNS ingestion route", () => {
     mockEmitCloudWatchMetric.mockReset();
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
+    mockSuppressFromSesEvent.mockResolvedValue([]);
 
     vi.stubGlobal(
       "fetch",
@@ -291,6 +313,64 @@ describe("SES SNS ingestion route", () => {
       }),
     );
     expect(mockDispatchDelivery).not.toHaveBeenCalled();
+  });
+
+  it("creates user-scoped suppressions for permanent bounce recipients", async () => {
+    const persistedEvent = {
+      id: "evt-bounce-1",
+      emailId: "550e8400-e29b-41d4-a716-446655440000",
+      sourceId: "sns-msg-1",
+      type: "bounced",
+      payload: {
+        bounceType: "Permanent",
+        bouncedRecipients: [{ emailAddress: "blocked@test.com" }],
+      },
+    };
+    mockCreateOrIgnoreDuplicate.mockResolvedValue({
+      event: persistedEvent,
+      created: true,
+    });
+    mockWebhookList.mockResolvedValue({ data: [] });
+    mockSuppressFromSesEvent.mockResolvedValue([{ id: "suppression-1" }]);
+
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope({
+      sesMessage: {
+        eventType: "Bounce",
+        mail: {
+          messageId: "ses-msg-bounce-1",
+          headers: [
+            {
+              name: "X-Entity-ID",
+              value: "550e8400-e29b-41d4-a716-446655440000",
+            },
+          ],
+        },
+        bounce: {
+          bounceType: "Permanent",
+          bouncedRecipients: [{ emailAddress: "blocked@test.com" }],
+        },
+      },
+    });
+
+    const response = await app.request("http://localhost/events/ses", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-amz-sns-message-type": "Notification",
+      },
+      body: JSON.stringify(envelope),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockSuppressFromSesEvent).toHaveBeenCalledWith({
+      emailId: "550e8400-e29b-41d4-a716-446655440000",
+      recipients: ["blocked@test.com"],
+      reason: "bounced",
+      sourceEventId: "sns-msg-1",
+      sourceMessageId: "ses-msg-bounce-1",
+      metadata: { bounceType: "Permanent" },
+    });
   });
 
   it("rejects invalid SNS signatures before touching persistence", async () => {

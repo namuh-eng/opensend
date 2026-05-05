@@ -25,6 +25,7 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/api-auth", () => ({
   validateApiKey: mockValidateApiKey,
+  authorizeDashboardOrApiKey: mockValidateApiKey,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
@@ -107,6 +108,22 @@ describe("Domain API validation", () => {
     expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
+  it("returns 422 for invalid custom return path labels", async () => {
+    const { POST } = await import("@/app/api/domains/route");
+    const req = makeRequest("http://localhost:3015/api/domains", "POST", {
+      name: "example.com",
+      custom_return_path: "outbound.example",
+    });
+
+    const res = await POST(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error).toBe("Validation failed");
+    expect(json.details.fieldErrors.custom_return_path).toBeDefined();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
   it("returns 422 for invalid domain update payload", async () => {
     const { PATCH } = await import("@/app/api/domains/[id]/route");
     const req = makeRequest(
@@ -153,7 +170,15 @@ describe("Domain API validation", () => {
       id: VALID_DOMAIN_ID,
       name: "example.com",
       status: "pending",
-      records: [{ status: "pending" }],
+      records: [
+        {
+          type: "TXT",
+          name: "_dmarc.example.com",
+          value: "v=DMARC1; p=none;",
+          status: "pending",
+          ttl: "Auto",
+        },
+      ],
     };
     const updated = {
       ...domain,
@@ -184,6 +209,13 @@ describe("Domain API validation", () => {
 
     expect(res.status).toBe(200);
     expect(json.status).toBe("verified");
+    expect(json.records).toContainEqual({
+      type: "TXT",
+      name: "_dmarc.example.com",
+      value: "v=DMARC1; p=none;",
+      status: "pending",
+      ttl: "Auto",
+    });
     expect(mockDb.query.domains.findFirst).toHaveBeenCalledTimes(1);
     expect(mockQueueEvent).toHaveBeenCalledTimes(1);
   });
@@ -212,6 +244,16 @@ describe("Domain API validation", () => {
     mockDb.query.domains.findFirst.mockResolvedValue({
       id: VALID_DOMAIN_ID,
       name: "example.com",
+      customReturnPath: "outbound",
+      records: [
+        {
+          type: "TXT",
+          name: "_dmarc.example.com",
+          value: "v=DMARC1; p=none;",
+          status: "pending",
+          ttl: "Auto",
+        },
+      ],
     });
     mockCreateDomainIdentity.mockResolvedValue({
       dkimTokens: ["dkim-1", "dkim-2", "dkim-3"],
@@ -220,8 +262,13 @@ describe("Domain API validation", () => {
       records: [
         {
           type: "TXT",
-          name: "example.com",
+          name: "outbound.example.com",
           content: "v=spf1 include:amazonses.com ~all",
+        },
+        {
+          type: "TXT",
+          name: "_dmarc.example.com",
+          content: "v=DMARC1; p=none;",
         },
       ],
       warnings: [],
@@ -247,11 +294,18 @@ describe("Domain API validation", () => {
 
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
-    expect(json.cloudflare_records).toBe(1);
-    expect(mockAutoConfigureDomain).toHaveBeenCalledWith("example.com", [
-      "dkim-1",
-      "dkim-2",
-      "dkim-3",
-    ]);
+    expect(json.cloudflare_records).toBe(2);
+    expect(json.records).toContainEqual({
+      type: "TXT",
+      name: "_dmarc.example.com",
+      value: "v=DMARC1; p=none;",
+      status: "pending",
+      ttl: "Auto",
+    });
+    expect(mockAutoConfigureDomain).toHaveBeenCalledWith(
+      "example.com",
+      ["dkim-1", "dkim-2", "dkim-3"],
+      "outbound",
+    );
   });
 });

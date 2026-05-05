@@ -53,6 +53,45 @@ const { data } = await client.emails.send({
 });
 ```
 
+## Idempotency Keys
+
+Pass a per-request `idempotencyKey` option to prevent accidental duplicate
+acceptance when retrying sends. Keys must match the API contract: 1-255
+characters. Opensend preserves the existing send contract for duplicate keys: the
+API returns `409 idempotency_conflict` with the originally accepted email id in
+`details.id`; batch duplicates are rejected before reserving quota, creating
+additional rows, or publishing more queue jobs.
+
+```typescript
+await client.emails.send(
+  {
+    from: "hello@updates.example.com",
+    to: "user@example.com",
+    subject: "Welcome!",
+    html: "<h1>Welcome aboard</h1>",
+  },
+  { idempotencyKey: "welcome-user-123" },
+);
+
+await client.emails.sendBatch(
+  [
+    {
+      from: "hello@updates.example.com",
+      to: "a@example.com",
+      subject: "Hi A",
+      html: "<p>A</p>",
+    },
+    {
+      from: "hello@updates.example.com",
+      to: "b@example.com",
+      subject: "Hi B",
+      html: "<p>B</p>",
+    },
+  ],
+  { idempotencyKey: "batch-campaign-123" },
+);
+```
+
 ## Listing Emails
 
 ```typescript

@@ -64,8 +64,20 @@ export interface EmailListOptions {
   status?: EmailStatus;
 }
 
+export interface BatchEmailItemError {
+  error: {
+    name?: string;
+    code: string;
+    message: string;
+    statusCode: number;
+    details?: Record<string, string | number | boolean | null>;
+  };
+}
+
+export type BatchEmailItemResponse = EmailResponse | BatchEmailItemError;
+
 export interface BatchEmailResponse {
-  data: EmailResponse[];
+  data: BatchEmailItemResponse[];
 }
 
 export interface EmailListItem {
@@ -137,6 +149,8 @@ export interface DomainResponse {
   status: string;
   region: string;
   records: DomainRecord[];
+  custom_return_path?: string | null;
+  return_path?: string;
   open_tracking?: boolean;
   click_tracking?: boolean;
   tracking_subdomain?: string | null;
@@ -239,3 +253,67 @@ export interface ContactListResponse {
   data: ContactListItem[];
   has_more: boolean;
 }
+
+export * from "./automations";
+
+// ── Billing DTOs ───────────────────────────────────────────────────
+
+export type BillingBackend = "stripe" | "disabled";
+
+export type SubscriptionStatus =
+  | "active"
+  | "trialing"
+  | "past_due"
+  | "canceled"
+  | "incomplete"
+  | "incomplete_expired"
+  | "unpaid"
+  | "paused";
+
+export interface PlanResponse {
+  object: "plan";
+  id: string;
+  slug: string;
+  name: string;
+  monthly_price_cents: number;
+  monthly_email_quota: number;
+  max_domains: number;
+  max_api_keys: number;
+  stripe_price_id: string | null;
+  is_public: boolean;
+  created_at: string;
+}
+
+export interface SubscriptionResponse {
+  object: "subscription";
+  id: string;
+  user_id: string;
+  plan_id: string;
+  status: SubscriptionStatus;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  stripe_subscription_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StripeCustomerResponse {
+  object: "stripe_customer";
+  id: string;
+  user_id: string;
+  stripe_customer_id: string;
+  created_at: string;
+}
+
+export interface UsagePeriodResponse {
+  object: "usage_period";
+  id: string;
+  user_id: string;
+  period_start: string;
+  period_end: string;
+  emails_sent: number;
+  last_increment_at: string | null;
+}
+
+export const FREE_PLAN_SLUG = "free";

@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockInvalidateApiKeyAuthCache = vi.hoisted(() => vi.fn());
+const mockCreateApiKey = vi.hoisted(() => vi.fn());
+const mockDeleteApiKey = vi.hoisted(() => vi.fn());
+const mockCreateDomain = vi.hoisted(() => vi.fn());
 const mockGetCachedDomainById = vi.hoisted(() => vi.fn());
 const mockGetCachedDomainIdentity = vi.hoisted(() => vi.fn());
 const mockInvalidateDomainCaches = vi.hoisted(() => vi.fn());
@@ -21,7 +24,23 @@ const mockDb = vi.hoisted(() => ({
   delete: vi.fn(),
 }));
 
+vi.mock("@opensend/core", () => ({
+  ApiKeyServiceError: class ApiKeyServiceError extends Error {},
+  createApiKeyService: () => ({
+    createApiKey: mockCreateApiKey,
+    deleteApiKey: mockDeleteApiKey,
+  }),
+  createDomainService: () => ({
+    createDomain: mockCreateDomain,
+  }),
+  DMARC_RECORD_VALUE: "v=DMARC1; p=none;",
+  buildDmarcRecordName: (domainName: string) => `_dmarc.${domainName}`,
+  getEffectiveReturnPathLabel: (customReturnPath: string | null | undefined) =>
+    customReturnPath?.trim() || "send",
+}));
+
 vi.mock("@/lib/api-auth", () => ({
+  authorizeDashboardOrApiKey: mockValidateApiKey,
   invalidateApiKeyAuthCache: mockInvalidateApiKeyAuthCache,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
@@ -71,15 +90,14 @@ describe("cache invalidation routes", () => {
       domain: null,
       userId: "user-1",
     });
+    mockCreateDomain.mockReset();
   });
 
-  it("invalidates new api-key auth entries after create", async () => {
-    mockDb.insert.mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi
-          .fn()
-          .mockResolvedValue([{ id: "created-key", tokenHash: "hash-123" }]),
-      }),
+  it("delegates api-key create through the thin adapter", async () => {
+    mockCreateApiKey.mockResolvedValue({
+      id: "created-key",
+      token: "re_created",
+      tokenHash: "hash-123",
     });
 
     const route = await import("@/app/api/api-keys/route");
@@ -95,32 +113,32 @@ describe("cache invalidation routes", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(mockInvalidateApiKeyAuthCache).toHaveBeenCalledWith("hash-123");
+    await expect(response.json()).resolves.toEqual({
+      id: "created-key",
+      token: "re_created",
+    });
+    expect(mockCreateApiKey).toHaveBeenCalledWith({
+      name: "Primary",
+      permission: undefined,
+      domainId: undefined,
+      userId: "user-1",
+    });
   });
 
-  it("invalidates domain caches after create", async () => {
-    mockCreateDomainIdentity.mockResolvedValue({
-      dkimTokens: ["a", "b", "c"],
-      status: "PENDING",
-    });
-    mockDb.insert.mockReturnValue({
-      values: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([
-          {
-            id: VALID_DOMAIN_ID,
-            name: "example.com",
-            status: "not_started",
-            region: "us-east-1",
-            records: [],
-            trackOpens: false,
-            trackClicks: false,
-            trackingSubdomain: null,
-            tls: "opportunistic",
-            capabilities: [{ name: "sending", enabled: true }],
-            createdAt: new Date("2026-04-28T00:00:00.000Z"),
-          },
-        ]),
-      }),
+  it("delegates domain create through the thin adapter", async () => {
+    mockCreateDomain.mockResolvedValue({
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      status: "not_started",
+      region: "us-east-1",
+      records: [],
+      trackOpens: false,
+      trackClicks: false,
+      trackingSubdomain: null,
+      tls: "opportunistic",
+      capabilities: [{ name: "sending", enabled: true }],
+      createdAt: new Date("2026-04-28T00:00:00.000Z"),
+      customReturnPath: null,
     });
 
     const route = await import("@/app/api/domains/route");
@@ -131,30 +149,30 @@ describe("cache invalidation routes", () => {
           authorization: "Bearer key",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ name: "example.com" }),
+        body: JSON.stringify({ name: "Example.COM" }),
       }),
     );
 
     expect(response.status).toBe(201);
-    expect(mockInvalidateDomainCaches).toHaveBeenCalledWith({
-      id: VALID_DOMAIN_ID,
-      name: "example.com",
+    await expect(response.json()).resolves.toMatchObject({
+      custom_return_path: null,
+      return_path: "send",
+    });
+    expect(mockCreateDomain).toHaveBeenCalledWith({
+      name: "Example.COM",
+      region: "us-east-1",
+      customReturnPath: undefined,
+      openTracking: undefined,
+      clickTracking: undefined,
+      trackingSubdomain: undefined,
+      tls: "opportunistic",
+      capabilities: undefined,
+      userId: "user-1",
     });
   });
 
-  it("invalidates cached api-key auth entries on delete", async () => {
-    mockDb.select.mockReturnValue({
-      from: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          limit: vi.fn().mockResolvedValue([{ tokenHash: "hash-456" }]),
-        }),
-      }),
-    });
-    mockDb.delete.mockReturnValue({
-      where: vi.fn().mockReturnValue({
-        returning: vi.fn().mockResolvedValue([{ id: "key-1" }]),
-      }),
-    });
+  it("delegates api-key delete through the thin adapter", async () => {
+    mockDeleteApiKey.mockResolvedValue({ id: "key-1", tokenHash: "hash-456" });
 
     const route = await import("@/app/api/api-keys/[id]/route");
     const response = await route.DELETE(new Request("http://localhost"), {
@@ -162,7 +180,7 @@ describe("cache invalidation routes", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockInvalidateApiKeyAuthCache).toHaveBeenCalledWith("hash-456");
+    expect(mockDeleteApiKey).toHaveBeenCalledWith("key-1");
   });
 
   it("invalidates domain caches after patch", async () => {

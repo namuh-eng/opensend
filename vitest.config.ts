@@ -10,8 +10,19 @@ export default defineConfig({
     include: ["tests/**/*.test.{ts,tsx}"],
   },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias: [
+      {
+        find: "@opensend/core/src/webhook-events",
+        replacement: path.resolve(
+          __dirname,
+          "./packages/core/src/webhook-events.ts",
+        ),
+      },
+      {
+        find: "@opensend/core",
+        replacement: path.resolve(__dirname, "./packages/core/src/index.ts"),
+      },
+      { find: "@", replacement: path.resolve(__dirname, "./src") },
+    ],
   },
 });

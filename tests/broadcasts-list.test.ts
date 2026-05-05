@@ -95,6 +95,7 @@ function mockFetchSuccess(
 describe("BroadcastsList", () => {
   beforeEach(async () => {
     vi.resetModules();
+    vi.clearAllMocks();
     const mod = await import("@/components/broadcasts-list");
     BroadcastsList = mod.BroadcastsList;
   });
@@ -312,12 +313,8 @@ describe("BroadcastsList", () => {
 
     const statusTrigger = screen.getByText("All Statuses");
     fireEvent.click(statusTrigger);
-    await waitFor(() => {
-      expect(screen.getAllByRole("menuitem", { name: "Draft" })).toHaveLength(
-        1,
-      );
-    });
-    fireEvent.click(screen.getAllByRole("menuitem", { name: "Draft" })[0]);
+    const draftOption = await screen.findByRole("menuitem", { name: "Draft" });
+    fireEvent.click(draftOption);
     await waitFor(() => {
       expect(mockRouter.replace).toHaveBeenCalledWith(
         expect.stringContaining("status=draft"),

@@ -1,4 +1,34 @@
+# OpenSend self-host stack.
+#
+# Quick start:
+#   1. cp .env.example .env  (then fill in the required keys)
+#   2. docker compose up -d
+#
+# What this brings up:
+#   - postgres   : Postgres 16 with the OpenSend schema, persisted in the named volume `pgdata`.
+#   - migrate    : One-shot job that runs Drizzle migrations and exits.
+#   - app        : Next.js dashboard + REST API on http://localhost:${PORT:-3015}.
+#   - ingester   : Standalone Hono service that handles SES/SNS, Stripe, and scheduled-email
+#                  webhooks on http://localhost:${INGESTER_PORT:-3016}.
+#
+# Optional overrides (all read from .env):
+#   - PORT                        : host port for the app (default 3015)
+#   - INGESTER_PORT               : host port for the ingester (default 3016)
+#   - POSTGRES_PORT               : host port for Postgres (default 5432)
+#   - POSTGRES_PASSWORD           : Postgres password (default `opensend`; CHANGE in production)
+#   - AWS_*                       : SES + S3 credentials. If unset, email sending is disabled.
+#   - BACKGROUND_JOBS_*           : SQS/EventBridge wiring for async send pipeline.
+#   - CLOUDFLARE_API_TOKEN/ZONE_ID: enables auto-DKIM/SPF/DMARC when adding a domain.
+#   - S3_BUCKET_NAME              : S3 bucket for email attachments.
+#
+# To wipe the local database and start fresh:
+#   docker compose down -v
+
+name: opensend-staging
+
 services:
+  # Postgres 16. Data lives in the `pgdata` named volume so it survives `docker compose down`.
+  # Use `docker compose down -v` to also remove the volume.
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -16,6 +46,8 @@ services:
       timeout: 5s
       retries: 5
 
+  # Runs Drizzle migrations once against Postgres and exits. The `app` and `ingester`
+  # services wait for this to complete successfully before starting.
   migrate:
     build:
       context: .
@@ -27,6 +59,8 @@ services:
         condition: service_healthy
     restart: "no"
 
+  # Next.js dashboard and REST API. Container listens on 8080; published to ${PORT:-3015}
+  # on the host. AWS_* and CLOUDFLARE_* are optional — leave unset for a basic local stack.
   app:
     build:
       context: .
@@ -36,7 +70,6 @@ services:
       - "${PORT:-3015}:8080"
     environment:
       DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:-opensend}@postgres:5432/opensend
-      DASHBOARD_KEY: ${DASHBOARD_KEY:?Set DASHBOARD_KEY in .env}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
@@ -58,6 +91,11 @@ services:
       retries: 3
       start_period: 10s
 
+  # Standalone Hono service for inbound webhooks (SES bounces/complaints, Stripe billing
+  # events, scheduled-email worker). Point your SES SNS topic and Stripe webhook at:
+  #   http://<host>:${INGESTER_PORT:-3016}/events/ses
+  #   http://<host>:${INGESTER_PORT:-3016}/events/stripe
+  # Set BACKGROUND_WORKER_POLL=true to enable the SQS long-poll loop in this container.
   ingester:
     build:
       context: .

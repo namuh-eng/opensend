@@ -1,10 +1,11 @@
-FROM oven/bun:1.3-alpine AS base
+FROM oven/bun:1.3.8-alpine AS base
 
 FROM base AS deps
 RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages ./packages
+COPY services ./services
 RUN bun install --frozen-lockfile --ignore-scripts
 
 

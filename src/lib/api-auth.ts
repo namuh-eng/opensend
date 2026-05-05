@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { apiKeys } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { headers } from "next/headers";
+import { publicApiErrorResponse } from "./api-errors";
 import { auth } from "./auth";
 
 export interface AuthResult {
@@ -13,7 +14,31 @@ export interface AuthResult {
   userId: string | null;
 }
 
+export type ApiKeyAuthHeaderError = "missing_api_key" | "malformed_api_key";
+export type ApiKeyAuthErrorCode = ApiKeyAuthHeaderError | "invalid_api_key";
+
+const API_KEY_AUTH_MESSAGES: Record<ApiKeyAuthErrorCode, string> = {
+  missing_api_key:
+    "Missing API key. Provide an Authorization: Bearer <api_key> header.",
+  malformed_api_key:
+    "Malformed API key. Use the Authorization: Bearer <api_key> header format.",
+  invalid_api_key: "Invalid API key.",
+};
+
 const API_KEY_AUTH_CACHE_TTL_SECONDS = 300;
+
+export function getApiKeyAuthHeaderError(
+  authHeader: string | null | undefined,
+): ApiKeyAuthHeaderError | null {
+  if (!authHeader) return "missing_api_key";
+
+  const parts = authHeader.split(" ");
+  if (parts.length !== 2 || parts[0] !== "Bearer" || !parts[1]) {
+    return "malformed_api_key";
+  }
+
+  return null;
+}
 
 function getApiKeyAuthCacheKeyFromHash(tokenHash: string): string {
   return `auth:apikey:${tokenHash}`;
@@ -52,12 +77,9 @@ export async function invalidateApiKeyAuthCache(
 export async function validateApiKey(
   authHeader: string | null | undefined,
 ): Promise<AuthResult | null> {
-  if (!authHeader) return null;
+  if (getApiKeyAuthHeaderError(authHeader)) return null;
 
-  const parts = authHeader.split(" ");
-  if (parts.length !== 2 || parts[0] !== "Bearer") return null;
-
-  const rawKey = parts[1];
+  const rawKey = authHeader?.split(" ")[1];
   if (!rawKey) return null;
 
   const hashedKey = createHash("sha256").update(rawKey).digest("hex");
@@ -122,6 +144,13 @@ export async function validateApiKey(
 /**
  * Helper to create a 401 JSON response.
  */
+export function publicApiKeyUnauthorizedResponse(
+  code: ApiKeyAuthErrorCode = "invalid_api_key",
+  init?: ResponseInit,
+): Response {
+  return publicApiErrorResponse(code, API_KEY_AUTH_MESSAGES[code], 401, init);
+}
+
 export function unauthorizedResponse(): Response {
   return Response.json(
     { error: "Missing or invalid API key" },

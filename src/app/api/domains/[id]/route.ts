@@ -1,4 +1,7 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  authorizeDashboardOrApiKey,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
 import { deleteDNSRecord, listDNSRecords } from "@/lib/cloudflare";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
@@ -11,6 +14,7 @@ import {
   domainRouteParamsSchema,
   updateDomainSchema,
 } from "@/lib/validation/domains";
+import { getEffectiveReturnPathLabel } from "@opensend/core";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -23,7 +27,9 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(_req.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    _req.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
 
   const parsedParams = domainRouteParamsSchema.safeParse(await params);
@@ -49,6 +55,8 @@ export async function GET(
       status: domain.status,
       region: domain.region,
       records: domain.records || [],
+      custom_return_path: domain.customReturnPath,
+      return_path: getEffectiveReturnPathLabel(domain.customReturnPath),
       open_tracking: domain.trackOpens,
       click_tracking: domain.trackClicks,
       tracking_subdomain: domain.trackingSubdomain,
@@ -69,7 +77,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(req.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    req.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
 
   let body: unknown;
@@ -171,7 +181,9 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(_req.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    _req.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
 
   const parsedParams = domainRouteParamsSchema.safeParse(await params);

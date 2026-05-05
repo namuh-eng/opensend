@@ -1,6 +1,7 @@
 import { DomainDetail } from "@/components/domain-detail";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
+import { domainRouteParamsSchema } from "@/lib/validation/domains";
 import { eq } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
@@ -14,21 +15,23 @@ export default async function DomainDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = await params;
-
-  type DomainRow = typeof domains.$inferSelect;
-  let rows: DomainRow[];
-  try {
-    rows = await db.select().from(domains).where(eq(domains.id, id)).limit(1);
-  } catch (error) {
-    console.error("[domains/[id]] query failed", { id, error });
-    throw error;
-  }
-
-  if (rows.length === 0) {
-    console.warn("[domains/[id]] no row for id", { id });
+  const parsedParams = domainRouteParamsSchema.safeParse(await params);
+  if (!parsedParams.success) {
     notFound();
   }
+
+  const { id } = parsedParams.data;
+
+  const rows = await db
+    .select()
+    .from(domains)
+    .where(eq(domains.id, id))
+    .limit(1);
+
+  if (rows.length === 0) {
+    notFound();
+  }
+
   const domain = rows[0];
 
   const events: DomainEvent[] = [];

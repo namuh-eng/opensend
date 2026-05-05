@@ -327,6 +327,13 @@ export function BroadcastEditor({
 
   const selectedTopic = topics.find((t) => t.id === topicId);
   const selectedSegment = segments.find((s) => s.id === segmentId);
+  const hasManagedUnsubscribeLink =
+    (broadcast?.html?.includes("{{{RESEND_UNSUBSCRIBE_URL}}}") ?? false) ||
+    blocks.some(
+      (block) =>
+        block.type === "unsubscribe_footer" ||
+        block.content.includes("{{{RESEND_UNSUBSCRIBE_URL}}}"),
+    );
 
   const statusLabel = broadcast?.status
     ? broadcast.status.charAt(0).toUpperCase() + broadcast.status.slice(1)
@@ -890,7 +897,7 @@ export function BroadcastEditor({
                 },
                 {
                   label: "No unsubscribe link detected",
-                  passed: false,
+                  passed: hasManagedUnsubscribeLink,
                   isWarning: true,
                 },
               ].map((item) => (
@@ -1310,9 +1317,9 @@ function BlockRenderer({
     case "unsubscribe_footer":
       return (
         <div className="text-center py-3 text-[12px] text-[#666]">
-          <button type="button" className="underline">
+          <a href="{{{RESEND_UNSUBSCRIBE_URL}}}" className="underline">
             Unsubscribe
-          </button>
+          </a>
         </div>
       );
     case "html":

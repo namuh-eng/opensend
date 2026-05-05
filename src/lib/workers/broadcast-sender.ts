@@ -6,6 +6,12 @@ import {
   segments,
   topics,
 } from "@/lib/db/schema";
+import {
+  buildOneClickUnsubscribeHeaders,
+  createUnsubscribeUrl,
+  getPublicBaseUrl,
+  replaceUnsubscribePlaceholder,
+} from "@/lib/unsubscribe";
 import { and, eq, lte, sql } from "drizzle-orm";
 
 /**
@@ -43,6 +49,7 @@ export async function processScheduledBroadcasts() {
 
       // 3. Resolve audience contacts
       let targetContacts: {
+        id: string;
         email: string;
         firstName: string | null;
         lastName: string | null;
@@ -58,6 +65,7 @@ export async function processScheduledBroadcasts() {
         if (segment) {
           targetContacts = await db
             .select({
+              id: contacts.id,
               email: contacts.email,
               firstName: contacts.firstName,
               lastName: contacts.lastName,
@@ -74,6 +82,7 @@ export async function processScheduledBroadcasts() {
         // Fallback: send to all subscribed contacts if no segment specified
         targetContacts = await db
           .select({
+            id: contacts.id,
             email: contacts.email,
             firstName: contacts.firstName,
             lastName: contacts.lastName,
@@ -101,12 +110,23 @@ export async function processScheduledBroadcasts() {
             subject = subject.replace(regex, value);
           }
 
+          const unsubscribeUrl = createUnsubscribeUrl(
+            contact.id,
+            getPublicBaseUrl(),
+          );
+          html = replaceUnsubscribePlaceholder(html, unsubscribeUrl);
+          const text = replaceUnsubscribePlaceholder(
+            broadcast.text || "",
+            unsubscribeUrl,
+          );
+
           await db.insert(emails).values({
             from: broadcast.from || "system@opensend.com",
             to: [contact.email],
             subject,
             html,
-            text: broadcast.text || "",
+            text,
+            headers: buildOneClickUnsubscribeHeaders(unsubscribeUrl),
             status: "queued", // Worker will pick these up
             userId: broadcast.userId,
             topicId: broadcast.topicId,

@@ -56,4 +56,26 @@ describe("SettingsPage", () => {
     expect(screen.getByText("0 / 3,000")).toBeTruthy();
     expect(screen.queryByText("Missing or invalid API key")).toBeNull();
   });
+
+  it("hides the billing settings tab when billing is disabled", () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({}),
+    });
+
+    render(<SettingsPage billingEnabled={false} />);
+
+    expect(screen.queryByRole("button", { name: "Billing" })).toBeNull();
+  });
+
+  it("shows the billing settings tab when billing is enabled", () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({}),
+    });
+
+    render(<SettingsPage billingEnabled={true} />);
+
+    expect(screen.getByRole("button", { name: "Billing" })).toBeDefined();
+  });
 });

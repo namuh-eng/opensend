@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 const NAV_ITEMS = [
   { label: "Emails", path: "/emails" },
   { label: "Broadcasts", path: "/broadcasts" },
+  { label: "Automations", path: "/automations" },
   { label: "Templates", path: "/templates" },
   { label: "Audience", path: "/audience" },
   { label: "Metrics", path: "/metrics" },
@@ -13,7 +14,7 @@ const NAV_ITEMS = [
   { label: "Settings", path: "/settings" },
 ];
 
-test("sidebar renders with all 10 nav items", async ({ page }) => {
+test("sidebar renders with all nav items", async ({ page }) => {
   await page.goto("/");
   const sidebar = page.locator("nav");
   for (const item of NAV_ITEMS) {

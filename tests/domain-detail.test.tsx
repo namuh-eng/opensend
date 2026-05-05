@@ -174,8 +174,7 @@ describe("DomainDetail", () => {
     expect(screen.getByText("Auto configure")).toBeTruthy();
   });
 
-  it("sends the stored API key when auto-configuring DNS records", async () => {
-    window.localStorage.setItem("api_key", "re_test_123");
+  it("posts to the auto-configure endpoint without an Authorization header", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ ok: true }),
@@ -187,19 +186,15 @@ describe("DomainDetail", () => {
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
         "/api/domains/d1/auto-configure",
-        expect.objectContaining({
-          method: "POST",
-          headers: expect.objectContaining({
-            Authorization: "Bearer re_test_123",
-          }),
-        }),
+        expect.objectContaining({ method: "POST" }),
       );
     });
+    const [, init] = mockFetch.mock.calls[0] ?? [];
+    expect(init?.headers).toBeUndefined();
     expect(mockRefresh).toHaveBeenCalled();
   });
 
   it("does not refresh the page when auto-configure fails", async () => {
-    window.localStorage.setItem("api_key", "re_test_123");
     mockFetch.mockResolvedValueOnce({
       ok: false,
       json: async () => ({ error: "Missing or invalid API key" }),

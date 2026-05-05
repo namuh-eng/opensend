@@ -1,7 +1,24 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  getApiKeyAuthHeaderError,
+  publicApiKeyUnauthorizedResponse,
+  validateApiKey,
+} from "@/lib/api-auth";
+import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
+import { quotaExceededResponse, reserveEmailQuota } from "@/lib/billing/quota";
 import { db } from "@/lib/db";
-import { emails } from "@/lib/db/schema";
+import { contacts, emails } from "@/lib/db/schema";
 import { normalizeAttachmentsForStorage } from "@/lib/email-attachments";
+import {
+  findSuppressedRecipients,
+  suppressedRecipientError,
+} from "@/lib/suppressions";
+import {
+  buildOneClickUnsubscribeHeaders,
+  createUnsubscribeUrl,
+  getPublicBaseUrl,
+  hasUnsubscribePlaceholder,
+  replaceUnsubscribePlaceholder,
+} from "@/lib/unsubscribe";
 import { batchSendEmailSchema } from "@/lib/validation/emails";
 import {
   createBackgroundJob,
@@ -12,7 +29,7 @@ import {
   publishBackgroundJob,
   recordTelemetryError,
 } from "@opensend/core";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -59,6 +76,48 @@ function recordBatchMetric(
   });
 }
 
+async function applyManagedUnsubscribe(input: {
+  userId: string | null;
+  to: string[];
+  html: string;
+  text: string;
+  headers: Record<string, string>;
+  baseUrl: string;
+}): Promise<{ html: string; text: string; headers: Record<string, string> }> {
+  if (
+    input.to.length !== 1 ||
+    (!hasUnsubscribePlaceholder(input.html) &&
+      !hasUnsubscribePlaceholder(input.text))
+  ) {
+    return { html: input.html, text: input.text, headers: input.headers };
+  }
+
+  const recipient = input.to[0];
+  if (!recipient) {
+    return { html: input.html, text: input.text, headers: input.headers };
+  }
+
+  const contact = await db.query.contacts.findFirst({
+    where: input.userId
+      ? and(eq(contacts.email, recipient), eq(contacts.userId, input.userId))
+      : eq(contacts.email, recipient),
+  });
+
+  if (!contact || contact.unsubscribed) {
+    return { html: input.html, text: input.text, headers: input.headers };
+  }
+
+  const unsubscribeUrl = createUnsubscribeUrl(contact.id, input.baseUrl);
+  return {
+    html: replaceUnsubscribePlaceholder(input.html, unsubscribeUrl),
+    text: replaceUnsubscribePlaceholder(input.text, unsubscribeUrl),
+    headers: {
+      ...input.headers,
+      ...buildOneClickUnsubscribeHeaders(unsubscribeUrl),
+    },
+  };
+}
+
 // ── POST /api/emails/batch ────────────────────────────────────────
 
 export async function POST(request: Request): Promise<Response> {
@@ -73,16 +132,66 @@ export async function POST(request: Request): Promise<Response> {
     route: "/api/emails/batch",
   });
 
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const authHeader = request.headers.get("authorization");
+  const authHeaderError = getApiKeyAuthHeaderError(authHeader);
+  const auth = authHeaderError ? null : await validateApiKey(authHeader);
   if (!auth) {
     recordBatchMetric(telemetry, {
       durationMs: performance.now() - startedAt,
       outcome: "unauthorized",
     });
-    const response = unauthorizedResponse();
-    response.headers.set("x-correlation-id", telemetry.correlationId);
-    response.headers.set("traceparent", telemetry.traceparent);
-    return response;
+    return publicApiKeyUnauthorizedResponse(
+      authHeaderError ?? "invalid_api_key",
+      {
+        headers: {
+          "x-correlation-id": telemetry.correlationId,
+          traceparent: telemetry.traceparent,
+        },
+      },
+    );
+  }
+
+  const idempotencyKey = request.headers.get("idempotency-key");
+  if (
+    idempotencyKey &&
+    (idempotencyKey.length < 1 || idempotencyKey.length > 255)
+  ) {
+    recordBatchMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "invalid",
+    });
+    return jsonWithTelemetry(
+      publicApiError(
+        "invalid_idempotency_key",
+        "Idempotency-Key must be between 1 and 255 characters.",
+        400,
+      ),
+      telemetry,
+      { status: 400 },
+    );
+  }
+
+  if (idempotencyKey) {
+    const existing = await db.query.emails.findFirst({
+      where: eq(emails.idempotencyKey, idempotencyKey),
+    });
+    if (existing) {
+      recordBatchMetric(telemetry, {
+        durationMs: performance.now() - startedAt,
+        outcome: "accepted",
+        count: 0,
+      });
+      return jsonWithTelemetry(
+        publicApiError(
+          "idempotency_conflict",
+          "A request with this idempotency key has already been accepted.",
+          409,
+          { id: existing.id },
+        ),
+        telemetry,
+        { status: 409 },
+      );
+    }
   }
 
   let body: unknown;
@@ -93,9 +202,11 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
     });
-    return jsonWithTelemetry({ error: "Invalid JSON body" }, telemetry, {
-      status: 400,
-    });
+    return jsonWithTelemetry(
+      publicApiError("invalid_json", "Request body must be valid JSON.", 400),
+      telemetry,
+      { status: 400 },
+    );
   }
 
   const result = batchSendEmailSchema.safeParse(body);
@@ -105,103 +216,197 @@ export async function POST(request: Request): Promise<Response> {
       outcome: "invalid",
     });
     return jsonWithTelemetry(
-      { error: "Validation failed", details: result.error.flatten() },
+      publicApiError(
+        "validation_error",
+        "Validation failed.",
+        422,
+        zodValidationDetails(result.error),
+      ),
       telemetry,
       { status: 422 },
     );
   }
 
   const validatedItems = result.data;
+  const itemRecipients = validatedItems.map(
+    (item) => normalizeToArray(item.to) as string[],
+  );
+  const suppressedByEmail = new Map(
+    (
+      await findSuppressedRecipients({
+        userId: auth.userId,
+        recipients: itemRecipients.flat(),
+      })
+    ).map((entry) => [entry.email, entry]),
+  );
+  const suppressedResults = itemRecipients.map((recipients) =>
+    recipients
+      .map((recipient) => suppressedByEmail.get(recipient.toLowerCase()))
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
+  );
+  const acceptedCount = suppressedResults.filter(
+    (entries) => entries.length === 0,
+  ).length;
+  const firstAcceptedIndex = suppressedResults.findIndex(
+    (entries) => entries.length === 0,
+  );
 
   try {
-    // Send emails with controlled concurrency (5 at a time)
+    const reservation = await db.transaction(async (tx) => {
+      // Quota gate: reserve the entire batch atomically in the same transaction
+      // that persists all accepted rows. If the batch would overrun, no rows are
+      // inserted and the whole request returns 402.
+      const quota = await reserveEmailQuota(
+        auth.userId,
+        acceptedCount,
+        new Date(),
+        process.env,
+        tx,
+      );
+      if (!quota.ok) {
+        return quota;
+      }
+      const persisted: Array<{
+        index: number;
+        id: string;
+        shouldQueueNow: boolean;
+      }> = [];
+
+      for (const [index, item] of validatedItems.entries()) {
+        if (suppressedResults[index]?.length) {
+          continue;
+        }
+        const to = normalizeToArray(item.to) as string[];
+        const cc = normalizeToArray(item.cc);
+        const bcc = normalizeToArray(item.bcc);
+        const replyTo = normalizeToArray(item.reply_to);
+        const scheduledAt = item.scheduled_at
+          ? new Date(item.scheduled_at)
+          : null;
+
+        const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();
+        const managedUnsubscribe = await applyManagedUnsubscribe({
+          userId: auth.userId,
+          to,
+          html: item.html ?? "",
+          text: item.text ?? "",
+          headers: (item.headers as Record<string, string>) ?? {},
+          baseUrl: getPublicBaseUrl(request),
+        });
+
+        const [email] = await tx
+          .insert(emails)
+          .values({
+            from: item.from,
+            to,
+            cc: cc ?? [],
+            bcc: bcc ?? [],
+            replyTo: replyTo ?? [],
+            subject: item.subject,
+            html: managedUnsubscribe.html,
+            text: managedUnsubscribe.text,
+            tags: item.tags ?? [],
+            headers: managedUnsubscribe.headers,
+            attachments: normalizeAttachmentsForStorage(item.attachments),
+            status: shouldQueueNow ? "queued" : "scheduled",
+            scheduledAt: scheduledAt,
+            topicId: item.topic_id || null,
+            idempotencyKey:
+              index === firstAcceptedIndex ? idempotencyKey : null,
+            userId: auth.userId,
+          })
+          .returning({ id: emails.id });
+
+        persisted.push({ index, id: email.id, shouldQueueNow });
+      }
+
+      return { ok: true as const, emails: persisted };
+    });
+
+    if (!reservation.ok) {
+      logTelemetry("info", "email.batch_quota_exceeded", telemetry, {
+        plan: reservation.info.plan,
+        limit: reservation.info.limit,
+        used: reservation.info.used,
+        requested: acceptedCount,
+      });
+      recordBatchMetric(telemetry, {
+        durationMs: performance.now() - startedAt,
+        outcome: "invalid",
+      });
+      return quotaExceededResponse(reservation.info, {
+        headers: {
+          "x-correlation-id": telemetry.correlationId,
+          traceparent: telemetry.traceparent,
+        },
+      });
+    }
+
+    const resultByIndex = new Map<number, { id: string }>();
     const CONCURRENCY = 5;
-    const results: Array<{ id: string }> = [];
+    const queuedEmails = reservation.emails.filter(
+      (email) => email.shouldQueueNow,
+    );
 
-    for (let i = 0; i < validatedItems.length; i += CONCURRENCY) {
-      const chunk = validatedItems.slice(i, i + CONCURRENCY);
-      const chunkResults = await Promise.all(
-        chunk.map(async (item) => {
-          const to = normalizeToArray(item.to) as string[];
-          const cc = normalizeToArray(item.cc);
-          const bcc = normalizeToArray(item.bcc);
-          const replyTo = normalizeToArray(item.reply_to);
-          const scheduledAt = item.scheduled_at
-            ? new Date(item.scheduled_at)
-            : null;
-
-          const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();
-
-          const [email] = await db
-            .insert(emails)
-            .values({
-              from: item.from,
-              to,
-              cc: cc ?? [],
-              bcc: bcc ?? [],
-              replyTo: replyTo ?? [],
-              subject: item.subject,
-              html: item.html ?? "",
-              text: item.text ?? "",
-              tags: item.tags ?? [],
-              headers: (item.headers as Record<string, string>) ?? {},
-              attachments: normalizeAttachmentsForStorage(item.attachments),
-              status: shouldQueueNow ? "queued" : "scheduled",
-              scheduledAt: scheduledAt,
-              topicId: item.topic_id || null,
-            })
-            .returning({ id: emails.id });
-
-          if (shouldQueueNow) {
-            try {
-              await publishBackgroundJob(
-                createBackgroundJob({
-                  id: `email.send:${email.id}`,
-                  type: "email.send",
-                  source: "api",
-                  emailId: email.id,
-                  trace: getTelemetryCarrier(telemetry),
-                }),
-                {
-                  deduplicationId: `email.send:${email.id}`,
-                  groupId: "email.send",
-                },
-              );
-            } catch (error) {
-              await db
-                .update(emails)
-                .set({ status: "failed" })
-                .where(eq(emails.id, email.id));
-              recordTelemetryError(
-                telemetry,
-                "email.batch_accept.queue_publish_failed",
-                error,
-                { email_id: email.id },
-              );
-              throw error;
-            }
+    for (let i = 0; i < queuedEmails.length; i += CONCURRENCY) {
+      const chunk = queuedEmails.slice(i, i + CONCURRENCY);
+      await Promise.all(
+        chunk.map(async (email) => {
+          try {
+            await publishBackgroundJob(
+              createBackgroundJob({
+                id: `email.send:${email.id}`,
+                type: "email.send",
+                source: "api",
+                emailId: email.id,
+                trace: getTelemetryCarrier(telemetry),
+              }),
+              {
+                deduplicationId: `email.send:${email.id}`,
+                groupId: "email.send",
+              },
+            );
+          } catch (error) {
+            await db
+              .update(emails)
+              .set({ status: "failed" })
+              .where(eq(emails.id, email.id));
+            recordTelemetryError(
+              telemetry,
+              "email.batch_accept.queue_publish_failed",
+              error,
+              { email_id: email.id },
+            );
+            throw error;
           }
-
-          return { id: email.id };
         }),
       );
-      results.push(...chunkResults);
     }
+
+    for (const email of reservation.emails) {
+      resultByIndex.set(email.index, { id: email.id });
+    }
+
+    const results = validatedItems.map((_, index) => {
+      const success = resultByIndex.get(index);
+      if (success) return success;
+      return {
+        error: suppressedRecipientError(suppressedResults[index] ?? []),
+      };
+    });
 
     const durationMs = performance.now() - startedAt;
     logTelemetry("info", "email.batch_accepted", telemetry, {
-      email_count: results.length,
+      email_count: acceptedCount,
       duration_ms: Math.round(durationMs),
     });
     recordBatchMetric(telemetry, {
       durationMs,
       outcome: "accepted",
-      count: results.length,
+      count: acceptedCount,
     });
     return jsonWithTelemetry({ data: results }, telemetry);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to send batch emails";
     recordTelemetryError(telemetry, "email.batch_accept.failed", err);
     emitCloudWatchMetric(telemetry, {
       metrics: [
@@ -218,6 +423,14 @@ export async function POST(request: Request): Promise<Response> {
         Outcome: "failed",
       },
     });
-    return jsonWithTelemetry({ error: message }, telemetry, { status: 500 });
+    return jsonWithTelemetry(
+      publicApiError(
+        "internal_server_error",
+        "Failed to send batch emails.",
+        500,
+      ),
+      telemetry,
+      { status: 500 },
+    );
   }
 }

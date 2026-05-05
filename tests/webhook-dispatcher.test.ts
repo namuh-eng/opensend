@@ -13,6 +13,23 @@ vi.mock("@opensend/core", () => ({
     findById: mockFindEventById,
   },
   signWebhookPayload: mockSignWebhookPayload,
+  toWebhookEventType: (eventType: string) => {
+    const candidate = eventType.includes(".")
+      ? eventType
+      : `email.${eventType}`;
+    return [
+      "email.sent",
+      "email.delivered",
+      "email.bounced",
+      "email.complained",
+      "email.delivery_delayed",
+      "email.opened",
+      "email.clicked",
+      "email.failed",
+    ].includes(candidate)
+      ? candidate
+      : null;
+  },
   webhookDeliveryRepo: {
     create: mockCreate,
     findById: mockFindById,
@@ -138,6 +155,50 @@ describe("WebhookDispatcher", () => {
       }),
     );
     expect(result).toMatchObject({ status: "success", attempt: 1 });
+  });
+
+  it("marks unsupported event types terminal without sending", async () => {
+    mockFindById.mockResolvedValue({
+      id: "delivery-unsupported",
+      webhookId: "hook-unsupported",
+      eventId: "event-unsupported",
+      attempt: 0,
+      status: "pending",
+    });
+    mockFindWebhookById.mockResolvedValue({
+      id: "hook-unsupported",
+      url: "https://example.com/webhook",
+      status: "active",
+      signingSecret: "whsec_test_secret",
+    });
+    mockFindEventById.mockResolvedValue({
+      id: "event-unsupported",
+      type: "domain.updated",
+      payload: {},
+    });
+    const fetchMock = vi.fn();
+    mockUpdate.mockImplementation(async (_id, data) => ({
+      id: "delivery-unsupported",
+      ...data,
+    }));
+
+    const { WebhookDispatcher } = await import(
+      "../packages/ingester/src/dispatcher"
+    );
+    const dispatcher = new WebhookDispatcher({ fetchImpl: fetchMock });
+
+    const result = await dispatcher.dispatchDelivery("delivery-unsupported");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockUpdate).toHaveBeenCalledWith(
+      "delivery-unsupported",
+      expect.objectContaining({
+        status: "failed",
+        responseBody: "Unsupported webhook event type: domain.updated",
+        nextRetryAt: null,
+      }),
+    );
+    expect(result).toMatchObject({ status: "failed" });
   });
 
   it("schedules the first retry after a failed response", async () => {

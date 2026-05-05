@@ -40,6 +40,12 @@ test.describe("Domain DNS Records Tab (feature-025)", () => {
     await expect(page.getByText("Enable Sending")).toBeVisible();
     await expect(page.getByTestId("sending-toggle")).toBeVisible();
 
+    // Verify DMARC guidance section
+    await expect(page.getByText("DMARC Policy")).toBeVisible();
+    await expect(
+      page.getByText(/evaluate SPF and DKIM alignment/),
+    ).toBeVisible();
+
     // Verify Enable Receiving section
     await expect(page.getByText("Enable Receiving")).toBeVisible();
     await expect(page.getByTestId("receiving-toggle")).toBeVisible();

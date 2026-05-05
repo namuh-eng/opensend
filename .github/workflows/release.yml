@@ -1,0 +1,88 @@
+# ABOUTME: Tag-triggered release workflow — version-sync gate + GitHub Release on `v*` tags.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-version-sync:
+    name: Verify Version Sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify package versions match tag
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: |
+          node --input-type=module <<'EOF'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const root = process.cwd();
+          const tag = process.env.GITHUB_REF_NAME ?? '';
+          const expected = tag.replace(/^v/, '');
+
+          const synced = [
+            'package.json',
+            'packages/core/package.json',
+            'packages/ingester/package.json',
+          ];
+
+          const problems = [];
+
+          if (!/^v\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(tag)) {
+            problems.push(`tag "${tag}" is not a valid semver vX.Y.Z(-suffix)`);
+          }
+
+          for (const rel of synced) {
+            const pkg = JSON.parse(fs.readFileSync(path.join(root, rel), 'utf-8'));
+            if (pkg.version !== expected) {
+              problems.push(`${rel} version (${pkg.version}) does not match tag (${expected})`);
+            }
+          }
+
+          if (problems.length > 0) {
+            for (const p of problems) console.error(`[version-sync] ${p}`);
+            process.exit(1);
+          }
+
+          console.log(`[version-sync] OK tag=${tag} root/core/ingester=${expected}`);
+          console.log('[version-sync] note: packages/sdk has an independent version cadence and is not gated here.');
+          EOF
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [verify-version-sync]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Create or update GitHub Release for tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release for $TAG already exists; leaving body untouched."
+            exit 0
+          fi
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --target main \
+            --generate-notes

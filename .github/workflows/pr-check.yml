@@ -1,0 +1,80 @@
+# ABOUTME: PR-time guardrails — base-branch guidance and size labels for opensend.
+name: PR Check
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  base-branch-guidance:
+    name: PR Base Guidance
+    if: github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Remind contributors to target staging for normal contributions
+        run: |
+          message='Normal contributions should target `staging`. `main` is reserved for release PRs (`release/X.Y.Z-main`) that promote a verified staging tip with green CI. If this PR was opened against `main` by accident, please retarget it to `staging`. Maintainer-directed `main` PRs are still allowed.'
+          echo "::warning title=Retarget normal PRs to staging::$message"
+          {
+            echo '## PR base guidance'
+            echo
+            echo "$message"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  size-label:
+    name: PR Size Label
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            const { additions, deletions } = context.payload.pull_request;
+            const total = additions + deletions;
+
+            let label;
+            if (total < 50) label = 'size/S';
+            else if (total < 200) label = 'size/M';
+            else if (total < 500) label = 'size/L';
+            else label = 'size/XL';
+
+            const existing = context.payload.pull_request.labels
+              .map(l => l.name)
+              .filter(n => n.startsWith('size/'));
+
+            for (const old of existing) {
+              if (old !== label) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  name: old,
+                });
+              }
+            }
+
+            if (!existing.includes(label)) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: [label],
+              });
+            }
+
+            core.notice(`PR size: ${total} changes (${additions}+, ${deletions}-) -> ${label}`);
+
+  draft-check:
+    name: Draft Check
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            if (context.payload.pull_request.draft) {
+              core.notice('This PR is still in draft state.');
+            }

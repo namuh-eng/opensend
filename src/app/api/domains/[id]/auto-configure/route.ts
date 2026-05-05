@@ -1,4 +1,7 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  authorizeDashboardOrApiKey,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
 import { autoConfigureDomain } from "@/lib/cloudflare";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
@@ -9,6 +12,7 @@ import {
 } from "@/lib/domain-cache";
 import { createDomainIdentity } from "@/lib/ses";
 import { autoConfigureDomainParamsSchema } from "@/lib/validation/domains";
+import { DMARC_RECORD_VALUE, buildDmarcRecordName } from "@opensend/core";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -16,7 +20,9 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(_req.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    _req.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
 
   const parsedParams = autoConfigureDomainParamsSchema.safeParse(await params);
@@ -48,9 +54,10 @@ export async function POST(
     const { records: cfRecords, warnings } = await autoConfigureDomain(
       domain.name,
       dkimTokens,
+      domain.customReturnPath,
     );
 
-    const allRecords = cfRecords.map((record) => ({
+    const configuredRecords = cfRecords.map((record) => ({
       type: record.type,
       name: record.name,
       value: record.content,
@@ -58,6 +65,38 @@ export async function POST(
       ttl: "Auto",
       ...(record.priority !== undefined ? { priority: record.priority } : {}),
     }));
+
+    const existingRecords = (domain.records ?? []) as Array<{
+      type: string;
+      name: string;
+      value: string;
+      status: string;
+      ttl: string;
+      priority?: number;
+    }>;
+    const configuredKeys = new Set(
+      configuredRecords.map((record) => `${record.type}:${record.name}`),
+    );
+    const allRecords = [
+      ...existingRecords.filter(
+        (record) => !configuredKeys.has(`${record.type}:${record.name}`),
+      ),
+      ...configuredRecords,
+    ];
+
+    const dmarcRecordName = buildDmarcRecordName(domain.name);
+    const hasDmarcRecord = allRecords.some(
+      (record) => record.type === "TXT" && record.name === dmarcRecordName,
+    );
+    if (!hasDmarcRecord) {
+      allRecords.push({
+        type: "TXT",
+        name: dmarcRecordName,
+        value: DMARC_RECORD_VALUE,
+        status: "pending",
+        ttl: "Auto",
+      });
+    }
 
     await db
       .update(domains)

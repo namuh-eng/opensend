@@ -11,4 +11,4 @@ promoted_to: null
 
 **Why:** A thin publishable SDK should not duplicate request/response shapes in `packages/sdk/src/index.ts`, but it also cannot ship declaration files that reference a private workspace package consumers do not install.
 
-**Fix:** Keep SDK DTOs in `@namuh/core`, import them by source path inside the monorepo, and compile the DTO source into `packages/sdk/dist/core/...` alongside the SDK declaration output.
+**Fix:** Keep SDK DTOs in `@opensend/core`, import them by source path inside the monorepo, and compile the DTO source into `packages/sdk/dist/core/...` alongside the SDK declaration output.

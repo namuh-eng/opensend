@@ -1,3 +1,5 @@
+import { DMARC_RECORD_VALUE, buildDmarcRecordName } from "@opensend/core";
+
 // ── Types ──────────────────────────────────────────────────────────
 
 export interface DNSRecord {
@@ -39,6 +41,13 @@ function headers(token: string) {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
+}
+
+function buildReturnPathRecordName(
+  domainName: string,
+  customReturnPath: string | null | undefined,
+): string {
+  return `${customReturnPath?.trim() || "send"}.${domainName}`;
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -147,18 +156,26 @@ export interface AutoConfigureResult {
 export async function autoConfigureDomain(
   domain: string,
   dkimTokens: string[],
+  customReturnPath?: string | null,
 ): Promise<AutoConfigureResult> {
   if (!domain) throw new Error("domain is required");
   if (!dkimTokens || dkimTokens.length === 0)
     throw new Error("DKIM tokens are required");
 
+  const returnPathRecordName = buildReturnPathRecordName(
+    domain,
+    customReturnPath,
+  );
   const warnings: string[] = [];
   const results: DNSRecordResult[] = [];
 
-  // Check existing MX and TXT records before creating anything
-  const [existingMX, existingTXT] = await Promise.all([
-    listDNSRecords({ name: domain, type: "MX" }),
-    listDNSRecords({ name: domain, type: "TXT" }),
+  const dmarcRecordName = buildDmarcRecordName(domain);
+
+  // Check existing MX, SPF TXT, and DMARC TXT records before creating anything
+  const [existingMX, existingTXT, existingDmarcTXT] = await Promise.all([
+    listDNSRecords({ name: returnPathRecordName, type: "MX" }),
+    listDNSRecords({ name: returnPathRecordName, type: "TXT" }),
+    listDNSRecords({ name: dmarcRecordName, type: "TXT" }),
   ]);
 
   // DKIM CNAME records — skip gracefully if already exist
@@ -197,11 +214,27 @@ export async function autoConfigureDomain(
   } else {
     const spfRecord = await createDNSRecord({
       type: "TXT",
-      name: domain,
+      name: returnPathRecordName,
       content: "v=spf1 include:amazonses.com ~all",
       ttl: 300,
     });
     results.push(spfRecord);
+  }
+
+  // DMARC TXT record — create starter guidance only when missing. Never
+  // overwrite an existing customer DMARC policy.
+  if (existingDmarcTXT.length > 0) {
+    warnings.push(
+      "DMARC record already exists — skipped to avoid overwriting your policy",
+    );
+  } else {
+    const dmarcRecord = await createDNSRecord({
+      type: "TXT",
+      name: dmarcRecordName,
+      content: DMARC_RECORD_VALUE,
+      ttl: 300,
+    });
+    results.push(dmarcRecord);
   }
 
   // MX record — skip entirely if any MX records already exist to avoid
@@ -213,7 +246,7 @@ export async function autoConfigureDomain(
   } else {
     const mxRecord = await createDNSRecord({
       type: "MX",
-      name: domain,
+      name: returnPathRecordName,
       content: "feedback-smtp.us-east-1.amazonses.com",
       ttl: 300,
       priority: 10,

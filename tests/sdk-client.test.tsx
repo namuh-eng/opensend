@@ -48,6 +48,51 @@ describe("Opensend SDK", () => {
     });
   });
 
+  it("forwards Idempotency-Key for single and batch send request options", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ id: "email_789" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+    const payload = {
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+    };
+
+    await client.emails.send(payload, { idempotencyKey: "send-key-1" });
+    await client.emails.sendBatch([payload], { idempotencyKey: "batch-key-1" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/api/emails",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Idempotency-Key": "send-key-1",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/api/emails/batch",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Idempotency-Key": "batch-key-1",
+        }),
+      }),
+    );
+  });
+
   it("renders react payloads to html before sending", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ id: "email_456" }), {
@@ -99,6 +144,69 @@ describe("Opensend SDK", () => {
     );
   });
 
+  it("exposes machine-readable API error fields without dropping message or status", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          name: "validation_error",
+          code: "validation_error",
+          message: "Validation failed.",
+          statusCode: 422,
+          details: { fieldErrors: { to: ["Required"] }, formErrors: [] },
+        }),
+        { status: 422, statusText: "Unprocessable Entity" },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    const response = await client.emails.send({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+    });
+
+    expect(response).toEqual({
+      data: null,
+      error: {
+        name: "validation_error",
+        code: "validation_error",
+        message: "Validation failed.",
+        statusCode: 422,
+      },
+    });
+  });
+
+  it("keeps legacy string error parsing for older routes", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ error: "Missing or invalid API key" }), {
+        status: 401,
+        statusText: "Unauthorized",
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    const response = await client.emails.list();
+
+    expect(response).toEqual({
+      data: null,
+      error: {
+        message: "Missing or invalid API key",
+        statusCode: 401,
+      },
+    });
+  });
+
   it("treats empty successful responses as null data", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -116,5 +224,52 @@ describe("Opensend SDK", () => {
       data: null,
       error: null,
     });
+  });
+
+  it("exposes automations and events clients", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "ok" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.automations.create({
+      name: "Welcome",
+      steps: [
+        {
+          key: "trigger",
+          type: "trigger",
+          config: { event_name: "user.signed_up" },
+        },
+      ],
+    });
+    await client.automations.listRuns("auto_1", { status: "queued", limit: 5 });
+    await client.events.send({
+      event: "user.signed_up",
+      email: "user@example.com",
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/api/automations",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/api/automations/auto_1/runs?limit=5&status=queued",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/api/events/send",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });

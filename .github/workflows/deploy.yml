@@ -1,0 +1,23 @@
+# ABOUTME: Deploys app + ingester to ECS Fargate via the Mac mini self-hosted runner.
+# ABOUTME: Fires on every push to main and via manual workflow_dispatch.
+# Note: this workflow does not consume any untrusted github.event.* inputs in run: commands.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, opensend-deploy]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy app + ingester to ECS
+        run: bash scripts/deploy.sh all

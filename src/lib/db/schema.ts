@@ -189,6 +189,47 @@ export const topics = pgTable("topics", {
   userId: text("user_id"),
 });
 
+export type SuppressionReason = "bounced" | "complained";
+
+export type SuppressionSourceMetadata = {
+  source?: "ses" | "operator";
+  sourceEventId?: string;
+  sourceEmailId?: string;
+  sourceMessageId?: string;
+  bounceType?: string;
+  complaintFeedbackType?: string;
+};
+
+export const emailSuppressions = pgTable(
+  "email_suppressions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    email: varchar("email", { length: 512 }).notNull(),
+    reason: varchar("reason", { length: 50 })
+      .$type<SuppressionReason>()
+      .notNull(),
+    sourceEventId: varchar("source_event_id", { length: 255 }),
+    sourceEmailId: uuid("source_email_id"),
+    sourceMessageId: varchar("source_message_id", { length: 255 }),
+    metadata: jsonb("metadata").$type<SuppressionSourceMetadata>(),
+    suppressedAt: timestamp("suppressed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("email_suppressions_user_email_idx").on(
+      table.userId,
+      table.email,
+    ),
+    index("email_suppressions_user_idx").on(table.userId),
+    index("email_suppressions_email_idx").on(table.email),
+  ],
+);
+
 export const contacts = pgTable(
   "contacts",
   {
@@ -401,4 +442,248 @@ export const contactsToSegments = pgTable(
     uniqueIndex("contacts_to_segments_idx").on(t.contactId, t.segmentId),
     index("contacts_to_segments_segment_id_idx").on(t.segmentId),
   ],
+);
+
+// ── Automations ─────────────────────────────────────────────────────
+
+export type AutomationConnection = {
+  from: string;
+  to: string;
+  type?: "default" | "condition_met" | "condition_not_met";
+};
+
+export type AutomationStepStateEntry = {
+  status:
+    | "pending"
+    | "running"
+    | "waiting"
+    | "completed"
+    | "failed"
+    | "skipped";
+  startedAt?: string;
+  completedAt?: string;
+  scheduledFor?: string;
+  error?: string;
+  output?: Record<string, unknown>;
+};
+
+export const automations = pgTable(
+  "automations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull().default("Untitled"),
+    status: varchar("status", { length: 50 }).notNull().default("draft"),
+    triggerEventName: varchar("trigger_event_name", { length: 255 }),
+    connections: jsonb("connections").$type<AutomationConnection[]>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    document: jsonb("document"),
+    userId: text("user_id"),
+  },
+  (t) => [
+    index("automations_status_trigger_idx").on(t.status, t.triggerEventName),
+    index("automations_user_id_idx").on(t.userId),
+  ],
+);
+
+export const automationSteps = pgTable(
+  "automation_steps",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    automationId: uuid("automation_id")
+      .notNull()
+      .references(() => automations.id, { onDelete: "cascade" }),
+    key: varchar("key", { length: 64 }).notNull(),
+    type: varchar("type", { length: 50 }).notNull(),
+    config: jsonb("config").notNull().$type<Record<string, unknown>>(),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("automation_steps_automation_id_key_idx").on(
+      t.automationId,
+      t.key,
+    ),
+    index("automation_steps_automation_id_position_idx").on(
+      t.automationId,
+      t.position,
+    ),
+  ],
+);
+
+export const customEvents = pgTable(
+  "custom_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    schema: jsonb("schema"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    userId: text("user_id"),
+  },
+  (t) => [uniqueIndex("custom_events_user_name_idx").on(t.userId, t.name)],
+);
+
+export const customEventDeliveries = pgTable(
+  "custom_event_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventName: varchar("event_name", { length: 255 }).notNull(),
+    contactId: uuid("contact_id"),
+    email: varchar("email", { length: 512 }),
+    payload: jsonb("payload").notNull().$type<Record<string, unknown>>(),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    userId: text("user_id"),
+  },
+  (t) => [
+    index("custom_event_deliveries_event_name_idx").on(t.eventName),
+    index("custom_event_deliveries_received_at_idx").on(t.receivedAt),
+  ],
+);
+
+export const automationRuns = pgTable(
+  "automation_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    automationId: uuid("automation_id")
+      .notNull()
+      .references(() => automations.id, { onDelete: "cascade" }),
+    triggerEventId: uuid("trigger_event_id"),
+    contactId: uuid("contact_id"),
+    status: varchar("status", { length: 50 }).notNull().default("queued"),
+    currentStepKey: varchar("current_step_key", { length: 64 }),
+    stepStates:
+      jsonb("step_states").$type<Record<string, AutomationStepStateEntry>>(),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    nextStepAt: timestamp("next_step_at", { withTimezone: true }),
+    failureReason: text("failure_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    userId: text("user_id"),
+  },
+  (t) => [
+    index("automation_runs_status_next_step_at_idx").on(t.status, t.nextStepAt),
+    index("automation_runs_automation_id_created_at_idx").on(
+      t.automationId,
+      t.createdAt,
+    ),
+  ],
+);
+
+// ── Billing Tables (additive, gated by BILLING_BACKEND) ────────────
+
+export const plans = pgTable(
+  "plans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: varchar("slug", { length: 64 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    monthlyPriceCents: integer("monthly_price_cents").notNull().default(0),
+    monthlyEmailQuota: integer("monthly_email_quota").notNull().default(0),
+    maxDomains: integer("max_domains").notNull().default(0),
+    maxApiKeys: integer("max_api_keys").notNull().default(0),
+    stripePriceId: varchar("stripe_price_id", { length: 255 }),
+    isPublic: boolean("is_public").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("plans_slug_idx").on(t.slug)],
+);
+
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    planId: uuid("plan_id")
+      .notNull()
+      .references(() => plans.id),
+    status: varchar("status", { length: 50 }).notNull().default("active"),
+    currentPeriodStart: timestamp("current_period_start", {
+      withTimezone: true,
+    }),
+    currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+    cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+    stripeSubscriptionId: varchar("stripe_subscription_id", { length: 255 }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("subscriptions_user_id_idx").on(t.userId),
+    uniqueIndex("subscriptions_stripe_subscription_id_idx").on(
+      t.stripeSubscriptionId,
+    ),
+    index("subscriptions_status_idx").on(t.status),
+  ],
+);
+
+export const stripeCustomers = pgTable(
+  "stripe_customers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    stripeCustomerId: varchar("stripe_customer_id", { length: 255 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("stripe_customers_user_id_idx").on(t.userId),
+    uniqueIndex("stripe_customers_stripe_customer_id_idx").on(
+      t.stripeCustomerId,
+    ),
+  ],
+);
+
+export const usagePeriods = pgTable(
+  "usage_periods",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    emailsSent: integer("emails_sent").notNull().default(0),
+    lastIncrementAt: timestamp("last_increment_at", { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex("usage_periods_user_period_idx").on(t.userId, t.periodStart),
+    index("usage_periods_user_id_idx").on(t.userId),
+  ],
+);
+
+export const stripeEventsProcessed = pgTable(
+  "stripe_events_processed",
+  {
+    eventId: varchar("event_id", { length: 255 }).primaryKey(),
+    type: varchar("type", { length: 255 }).notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("stripe_events_processed_processed_at_idx").on(t.processedAt)],
 );

@@ -1,4 +1,7 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  authorizeDashboardOrApiKey,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
 import {
@@ -8,13 +11,16 @@ import {
 } from "@/lib/domain-cache";
 import { queueEvent } from "@/lib/events";
 import { verifyDomainParamsSchema } from "@/lib/validation/domains";
+import { getEffectiveReturnPathLabel } from "@opensend/core";
 import { eq } from "drizzle-orm";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
 
   const parsedParams = verifyDomainParamsSchema.safeParse(await params);
@@ -101,6 +107,8 @@ export async function POST(
       name: updated.name,
       status: updated.status,
       records: updated.records || [],
+      custom_return_path: updated.customReturnPath,
+      return_path: getEffectiveReturnPathLabel(updated.customReturnPath),
       created_at: updated.createdAt,
     });
   } catch (err) {

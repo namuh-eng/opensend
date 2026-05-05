@@ -5,13 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockSendEmail = vi.hoisted(() => vi.fn());
 const mockPublishBackgroundJob = vi.hoisted(() => vi.fn());
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
+const mockGetApiKeyAuthHeaderError = vi.hoisted(() => vi.fn());
 const mockEmitCloudWatchMetric = vi.hoisted(() => vi.fn());
 const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
+const mockReserveEmailQuota = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
   select: vi.fn(),
   query: vi.fn(),
+  transaction: vi.fn(async (callback: (tx: typeof mockDb) => unknown) =>
+    callback(mockDb),
+  ),
 }));
 
 vi.mock("@/lib/ses", () => ({
@@ -79,11 +84,26 @@ vi.mock("@/lib/db", () => ({
   db: mockDb,
 }));
 
-vi.mock("@/lib/api-auth", () => ({
-  validateApiKey: mockValidateApiKey,
-  unauthorizedResponse: () =>
-    Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
-}));
+vi.mock("@/lib/billing/quota", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/billing/quota")>(
+    "@/lib/billing/quota",
+  );
+  return {
+    ...actual,
+    reserveEmailQuota: mockReserveEmailQuota,
+  };
+});
+
+vi.mock("@/lib/api-auth", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/api-auth")>("@/lib/api-auth");
+  return {
+    validateApiKey: mockValidateApiKey,
+    getApiKeyAuthHeaderError: mockGetApiKeyAuthHeaderError,
+    publicApiKeyUnauthorizedResponse: actual.publicApiKeyUnauthorizedResponse,
+    unauthorizedResponse: actual.unauthorizedResponse,
+  };
+});
 
 // Mock drizzle-orm operators
 vi.mock("drizzle-orm", async () => {
@@ -103,7 +123,8 @@ vi.mock("drizzle-orm", async () => {
 const AUTH_RESULT = {
   apiKeyId: "key-uuid",
   permission: "full_access",
-  domainId: null,
+  domain: null,
+  userId: "user-1",
 };
 
 function makeRequest(
@@ -128,7 +149,20 @@ function makeRequest(
 // ── Auth Middleware Tests ──────────────────────────────────────────
 
 describe("API Key Authentication", () => {
-  it("returns 401 when no auth header", async () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockGetApiKeyAuthHeaderError.mockImplementation(
+      (authHeader: string | null | undefined) => {
+        if (!authHeader) return "missing_api_key";
+        const parts = authHeader.split(" ");
+        return parts.length === 2 && parts[0] === "Bearer" && parts[1]
+          ? null
+          : "malformed_api_key";
+      },
+    );
+  });
+
+  it("returns 401 with a machine-readable code when no auth header", async () => {
     mockValidateApiKey.mockResolvedValue(null);
     const { POST } = await import("@/app/api/emails/route");
     const req = makeRequest("POST", {
@@ -139,16 +173,56 @@ describe("API Key Authentication", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "missing_api_key",
+      code: "missing_api_key",
+      statusCode: 401,
+      message: expect.any(String),
+    });
   });
 
-  it("returns 401 for invalid key", async () => {
+  it("returns 401 with a malformed key code for bad Authorization shape", async () => {
     mockValidateApiKey.mockResolvedValue(null);
-    const { GET } = await import("@/app/api/emails/route");
-    const req = new Request("http://localhost:3015/api/emails", {
-      headers: { Authorization: "Bearer bad_key" },
-    });
-    const res = await GET(req);
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "a@b.com",
+        to: ["c@d.com"],
+        subject: "X",
+        html: "<p>Y</p>",
+      },
+      { Authorization: "Basic nope" },
+    );
+    const res = await POST(req);
     expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "malformed_api_key",
+      code: "malformed_api_key",
+      statusCode: 401,
+    });
+  });
+
+  it("returns 401 with an invalid key code for send requests", async () => {
+    mockValidateApiKey.mockResolvedValue(null);
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "a@b.com",
+        to: ["c@d.com"],
+        subject: "X",
+        html: "<p>Y</p>",
+      },
+      { Authorization: "Bearer bad_key" },
+    );
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "invalid_api_key",
+      code: "invalid_api_key",
+      statusCode: 401,
+    });
   });
 });
 
@@ -162,6 +236,22 @@ describe("POST /api/emails", () => {
     mockEmitCloudWatchMetric.mockReset();
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
+    mockReserveEmailQuota.mockReset();
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
+    mockGetApiKeyAuthHeaderError.mockReturnValue(null);
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+    mockDb.insert = vi.fn();
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
+    mockDb.transaction.mockImplementation(
+      async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
+    );
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
       reason: "queue_url_missing",
@@ -173,7 +263,7 @@ describe("POST /api/emails", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns 422 when required fields are missing", async () => {
+  it("returns 422 with flattened validation details when required fields are missing", async () => {
     const { POST } = await import("@/app/api/emails/route");
     const req = makeRequest(
       "POST",
@@ -183,7 +273,41 @@ describe("POST /api/emails", () => {
     const res = await POST(req);
     expect(res.status).toBe(422);
     const json = await res.json();
-    expect(json).toHaveProperty("error");
+    expect(json).toEqual({
+      name: "validation_error",
+      code: "validation_error",
+      message: "Validation failed.",
+      statusCode: 422,
+      details: {
+        formErrors: [],
+        fieldErrors: {
+          to: [expect.any(String)],
+          subject: [expect.any(String)],
+        },
+      },
+    });
+  });
+
+  it("returns 400 with invalid_json for malformed JSON", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const req = new Request("http://localhost:3015/api/emails", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer re_test123",
+        "Content-Type": "application/json",
+      },
+      body: "{",
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "invalid_json",
+      code: "invalid_json",
+      message: "Request body must be valid JSON.",
+      statusCode: 400,
+    });
   });
 
   it("returns 422 when from is missing", async () => {
@@ -330,6 +454,95 @@ describe("POST /api/emails", () => {
     expect(mockPublishBackgroundJob).toHaveBeenCalledOnce();
   });
 
+  it("injects one-click unsubscribe headers and replaces the managed URL placeholder for known contact sends", async () => {
+    process.env.UNSUBSCRIBE_SECRET = "test-unsubscribe-secret";
+    Object.assign(mockDb.query, {
+      contacts: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "00000000-0000-4000-8000-000000000173",
+          email: "known@test.com",
+          unsubscribed: false,
+        }),
+      },
+    });
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-uuid" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: "known@test.com",
+        subject: "Managed unsubscribe",
+        html: '<p><a href="{{{RESEND_UNSUBSCRIBE_URL}}}">Unsubscribe</a></p>',
+        headers: { "X-Custom": "ok" },
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    const persisted = valuesMock.mock.calls[0][0];
+    expect(persisted.html).toContain(
+      "http://localhost:3015/unsubscribe/00000000-0000-4000-8000-000000000173?token=",
+    );
+    expect(persisted.html).not.toContain("{{{RESEND_UNSUBSCRIBE_URL}}}");
+    expect(persisted.headers).toMatchObject({
+      "X-Custom": "ok",
+      "List-Unsubscribe": expect.stringContaining(
+        "<http://localhost:3015/unsubscribe/00000000-0000-4000-8000-000000000173?token=",
+      ),
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    });
+  });
+
+  it("rejects suppressed to recipients before quota, persistence, or queueing", async () => {
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([
+          {
+            email: "blocked@test.com",
+            reason: "bounced",
+            suppressedAt: new Date("2026-05-05T00:00:00Z"),
+          },
+        ]),
+      }),
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: ["blocked@test.com"],
+        subject: "Suppressed",
+        html: "<p>No send</p>",
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "recipient_suppressed",
+      code: "recipient_suppressed",
+      statusCode: 422,
+      details: {
+        recipients: "blocked@test.com",
+        reason: "bounced",
+        scope: "user",
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
   it("stores attachment ids and queues delivery without direct SES", async () => {
     mockSendEmail.mockResolvedValue({ id: "ses-msg-id" });
     const valuesMock = vi.fn().mockReturnValue({
@@ -387,6 +600,22 @@ describe("POST /api/emails/batch", () => {
     mockEmitCloudWatchMetric.mockReset();
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
+    mockReserveEmailQuota.mockReset();
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
+    mockGetApiKeyAuthHeaderError.mockReturnValue(null);
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+    mockDb.insert = vi.fn();
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
+    mockDb.transaction.mockImplementation(
+      async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
+    );
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
       reason: "queue_url_missing",
@@ -408,8 +637,241 @@ describe("POST /api/emails/batch", () => {
     const res = await POST(req);
     expect(res.status).toBe(422);
     const json = await res.json();
-    expect(json.error).toBe("Validation failed");
+    expect(json).toMatchObject({
+      name: "validation_error",
+      code: "validation_error",
+      message: "Validation failed.",
+      statusCode: 422,
+    });
     expect(json.details.formErrors[0]).toContain("100");
+  });
+
+  it("returns 400 with invalid_json for malformed batch JSON", async () => {
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const req = new Request("http://localhost:3015/api/emails/batch", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer re_test123",
+        "Content-Type": "application/json",
+      },
+      body: "[",
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "invalid_json",
+      code: "invalid_json",
+      statusCode: 400,
+    });
+  });
+
+  it("returns 400 for an invalid batch Idempotency-Key before reserving quota", async () => {
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const req = makeRequest(
+      "POST",
+      [
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Test",
+          html: "<p>Test</p>",
+        },
+      ],
+      {
+        Authorization: "Bearer re_test123",
+        "Idempotency-Key": "x".repeat(256),
+      },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "invalid_idempotency_key",
+      code: "invalid_idempotency_key",
+      statusCode: 400,
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("short-circuits duplicate batch Idempotency-Key retries before quota, rows, or queue", async () => {
+    const findFirst = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "email-1" });
+    Object.assign(mockDb.query, {
+      emails: { findFirst },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+
+    let callCount = 0;
+    const valuesMock = vi.fn().mockImplementation(() => ({
+      returning: vi.fn().mockResolvedValue([{ id: `email-${++callCount}` }]),
+    }));
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const emailsArr = [
+      {
+        from: "sender@domain.com",
+        to: ["user1@test.com"],
+        subject: "Test 1",
+        html: "<p>1</p>",
+      },
+      {
+        from: "sender@domain.com",
+        to: ["user2@test.com"],
+        subject: "Test 2",
+        html: "<p>2</p>",
+      },
+    ];
+
+    const first = await POST(
+      makeRequest("POST", emailsArr, {
+        Authorization: "Bearer re_test123",
+        "Idempotency-Key": "batch-key-1",
+      }),
+    );
+    const retry = await POST(
+      makeRequest("POST", emailsArr, {
+        Authorization: "Bearer re_test123",
+        "Idempotency-Key": "batch-key-1",
+      }),
+    );
+
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({
+      data: [{ id: "email-1" }, { id: "email-2" }],
+    });
+    expect(retry.status).toBe(409);
+    await expect(retry.json()).resolves.toMatchObject({
+      name: "idempotency_conflict",
+      code: "idempotency_conflict",
+      statusCode: 409,
+      details: { id: "email-1" },
+    });
+
+    expect(mockReserveEmailQuota).toHaveBeenCalledTimes(1);
+    expect(mockDb.insert).toHaveBeenCalledTimes(2);
+    expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(2);
+    expect(
+      valuesMock.mock.calls.map(([value]) => value.idempotencyKey),
+    ).toEqual(["batch-key-1", null]);
+  });
+
+  it("injects managed unsubscribe headers for batch items with known contact placeholders", async () => {
+    process.env.UNSUBSCRIBE_SECRET = "test-unsubscribe-secret";
+    Object.assign(mockDb.query, {
+      contacts: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "00000000-0000-4000-8000-000000000174",
+          email: "batch@test.com",
+          unsubscribed: false,
+        }),
+      },
+    });
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-batch-1" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const req = makeRequest(
+      "POST",
+      [
+        {
+          from: "sender@domain.com",
+          to: "batch@test.com",
+          subject: "Batch",
+          text: "Leave: {{{RESEND_UNSUBSCRIBE_URL}}}",
+        },
+      ],
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    const persisted = valuesMock.mock.calls[0][0];
+    expect(persisted.text).toContain(
+      "http://localhost:3015/unsubscribe/00000000-0000-4000-8000-000000000174?token=",
+    );
+    expect(persisted.headers).toMatchObject({
+      "List-Unsubscribe": expect.stringContaining(
+        "<http://localhost:3015/unsubscribe/00000000-0000-4000-8000-000000000174?token=",
+      ),
+      "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+    });
+  });
+
+  it("returns per-item suppression errors while preserving accepted batch sends", async () => {
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([
+          {
+            email: "blocked@test.com",
+            reason: "complained",
+            suppressedAt: new Date("2026-05-05T00:00:00Z"),
+          },
+        ]),
+      }),
+    });
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-accepted-1" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const req = makeRequest(
+      "POST",
+      [
+        {
+          from: "sender@domain.com",
+          to: ["ok@test.com"],
+          subject: "OK",
+          html: "<p>OK</p>",
+        },
+        {
+          from: "sender@domain.com",
+          to: ["blocked@test.com"],
+          subject: "Blocked",
+          html: "<p>Blocked</p>",
+        },
+      ],
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      data: [
+        { id: "email-accepted-1" },
+        {
+          error: {
+            code: "recipient_suppressed",
+            statusCode: 422,
+            details: {
+              recipients: "blocked@test.com",
+              reason: "complained",
+              scope: "user",
+            },
+          },
+        },
+      ],
+    });
+    expect(mockReserveEmailQuota).toHaveBeenCalledWith(
+      "user-1",
+      1,
+      expect.any(Date),
+      process.env,
+      mockDb,
+    );
+    expect(mockDb.insert).toHaveBeenCalledTimes(1);
+    expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(1);
   });
 
   it("sends batch and returns array of ids", async () => {

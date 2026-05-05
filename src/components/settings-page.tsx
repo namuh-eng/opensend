@@ -4,6 +4,7 @@ import { CopyToClipboard } from "@/components/copy-to-clipboard";
 import { DocumentsTab } from "@/components/settings-documents";
 import { TeamTab } from "@/components/settings-team";
 import { type UsageData, UsageTab } from "@/components/settings-usage";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 function isUsageData(value: unknown): value is UsageData {
@@ -57,7 +58,13 @@ const DEFAULT_USAGE: UsageData = {
   team: { domainsUsed: 0, domainsLimit: 3, rateLimit: 2 },
 };
 
-export function SettingsPage() {
+interface SettingsPageProps {
+  billingEnabled?: boolean;
+}
+
+export function SettingsPage({
+  billingEnabled = false,
+}: SettingsPageProps = {}) {
   const [activeTab, setActiveTab] = useState<
     "usage" | "smtp" | "team" | "unsubscribe" | "billing" | "documents"
   >("usage");
@@ -79,6 +86,15 @@ export function SettingsPage() {
       .catch(() => {});
   }, [activeTab]);
 
+  const tabs = [
+    { key: "usage", label: "Usage" },
+    { key: "smtp", label: "SMTP" },
+    { key: "team", label: "Team" },
+    { key: "unsubscribe", label: "Unsubscribe Page" },
+    ...(billingEnabled ? [{ key: "billing", label: "Billing" } as const] : []),
+    { key: "documents", label: "Documents" },
+  ] as const;
+
   return (
     <div>
       <h1 className="text-2xl font-semibold text-[#F0F0F0] mb-6">Settings</h1>
@@ -86,16 +102,7 @@ export function SettingsPage() {
       {/* Tabs */}
       <div className="border-b border-[rgba(176,199,217,0.145)] mb-6 overflow-x-auto">
         <div className="flex items-center gap-0 min-w-max">
-          {(
-            [
-              { key: "usage", label: "Usage" },
-              { key: "smtp", label: "SMTP" },
-              { key: "team", label: "Team" },
-              { key: "unsubscribe", label: "Unsubscribe Page" },
-              { key: "billing", label: "Billing" },
-              { key: "documents", label: "Documents" },
-            ] as const
-          ).map((tab) => (
+          {tabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
@@ -164,13 +171,19 @@ SMTP_PASS=re_YOUR_API_KEY`}
       {/* Team Tab */}
       {activeTab === "team" && <TeamTab />}
 
-      {/* Billing Tab (Stub) */}
+      {/* Billing Tab → dedicated page */}
       {activeTab === "billing" && (
-        <div className="flex flex-col items-center justify-center min-h-[300px] border border-dashed border-[rgba(176,199,217,0.145)] rounded-lg">
+        <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-[rgba(176,199,217,0.145)] p-8">
           <p className="text-[14px] text-[#A1A4A5]">
-            Billing and subscription management is out of scope for the current
-            phase.
+            Billing has its own dedicated page with current plan, usage, and
+            management actions.
           </p>
+          <Link
+            href="/settings/billing"
+            className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] hover:bg-[rgba(24,25,28,1)]"
+          >
+            Open billing
+          </Link>
         </div>
       )}
 

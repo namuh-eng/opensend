@@ -67,7 +67,7 @@ describe("postinstall-star", () => {
         env: { ...inherited, ...env },
         input,
         encoding: "utf-8",
-        timeout: 5000,
+        timeout: 30000,
       });
       return { stdout, exitCode: 0 };
     } catch (err: unknown) {

@@ -1,8 +1,9 @@
-FROM oven/bun:1.3-alpine AS build
+FROM oven/bun:1.3.8-alpine AS build
 
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages ./packages
+COPY services ./services
 RUN bun install --frozen-lockfile --ignore-scripts
 COPY . .
 RUN bun build ./packages/ingester/src/server.ts \
@@ -10,7 +11,7 @@ RUN bun build ./packages/ingester/src/server.ts \
   --minify \
   --outfile /tmp/ingester-server.js
 
-FROM oven/bun:1.3-alpine AS runner
+FROM oven/bun:1.3.8-alpine AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production

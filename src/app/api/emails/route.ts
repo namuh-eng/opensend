@@ -1,7 +1,29 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import {
+  getApiKeyAuthHeaderError,
+  publicApiKeyUnauthorizedResponse,
+  unauthorizedResponse,
+  validateApiKey,
+} from "@/lib/api-auth";
+import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
+import {
+  quotaExceededResponse,
+  releaseEmailQuota,
+  reserveEmailQuota,
+} from "@/lib/billing/quota";
 import { db } from "@/lib/db";
-import { emails, templates } from "@/lib/db/schema";
+import { contacts, emails, templates } from "@/lib/db/schema";
 import { normalizeAttachmentsForStorage } from "@/lib/email-attachments";
+import {
+  findSuppressedRecipients,
+  suppressedRecipientError,
+} from "@/lib/suppressions";
+import {
+  buildOneClickUnsubscribeHeaders,
+  createUnsubscribeUrl,
+  getPublicBaseUrl,
+  hasUnsubscribePlaceholder,
+  replaceUnsubscribePlaceholder,
+} from "@/lib/unsubscribe";
 import { sendEmailSchema } from "@/lib/validation/emails";
 import {
   createBackgroundJob,
@@ -59,6 +81,48 @@ function recordAcceptMetric(
   });
 }
 
+async function applyManagedUnsubscribe(input: {
+  userId: string | null;
+  to: string[];
+  html: string;
+  text: string;
+  headers: Record<string, string>;
+  baseUrl: string;
+}): Promise<{ html: string; text: string; headers: Record<string, string> }> {
+  if (
+    input.to.length !== 1 ||
+    (!hasUnsubscribePlaceholder(input.html) &&
+      !hasUnsubscribePlaceholder(input.text))
+  ) {
+    return { html: input.html, text: input.text, headers: input.headers };
+  }
+
+  const recipient = input.to[0];
+  if (!recipient) {
+    return { html: input.html, text: input.text, headers: input.headers };
+  }
+
+  const contact = await db.query.contacts.findFirst({
+    where: input.userId
+      ? and(eq(contacts.email, recipient), eq(contacts.userId, input.userId))
+      : eq(contacts.email, recipient),
+  });
+
+  if (!contact || contact.unsubscribed) {
+    return { html: input.html, text: input.text, headers: input.headers };
+  }
+
+  const unsubscribeUrl = createUnsubscribeUrl(contact.id, input.baseUrl);
+  return {
+    html: replaceUnsubscribePlaceholder(input.html, unsubscribeUrl),
+    text: replaceUnsubscribePlaceholder(input.text, unsubscribeUrl),
+    headers: {
+      ...input.headers,
+      ...buildOneClickUnsubscribeHeaders(unsubscribeUrl),
+    },
+  };
+}
+
 // ── POST /api/emails ──────────────────────────────────────────────
 
 export async function POST(request: Request): Promise<Response> {
@@ -73,16 +137,23 @@ export async function POST(request: Request): Promise<Response> {
     route: "/api/emails",
   });
 
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const authHeader = request.headers.get("authorization");
+  const authHeaderError = getApiKeyAuthHeaderError(authHeader);
+  const auth = authHeaderError ? null : await validateApiKey(authHeader);
   if (!auth) {
     recordAcceptMetric(telemetry, {
       durationMs: performance.now() - startedAt,
       outcome: "unauthorized",
     });
-    const response = unauthorizedResponse();
-    response.headers.set("x-correlation-id", telemetry.correlationId);
-    response.headers.set("traceparent", telemetry.traceparent);
-    return response;
+    return publicApiKeyUnauthorizedResponse(
+      authHeaderError ?? "invalid_api_key",
+      {
+        headers: {
+          "x-correlation-id": telemetry.correlationId,
+          traceparent: telemetry.traceparent,
+        },
+      },
+    );
   }
 
   const idempotencyKey = request.headers.get("idempotency-key");
@@ -95,7 +166,11 @@ export async function POST(request: Request): Promise<Response> {
       outcome: "invalid",
     });
     return jsonWithTelemetry(
-      { error: "Invalid idempotency key length" },
+      publicApiError(
+        "invalid_idempotency_key",
+        "Idempotency-Key must be between 1 and 255 characters.",
+        400,
+      ),
       telemetry,
       { status: 400 },
     );
@@ -109,9 +184,11 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
     });
-    return jsonWithTelemetry({ error: "Invalid JSON body" }, telemetry, {
-      status: 400,
-    });
+    return jsonWithTelemetry(
+      publicApiError("invalid_json", "Request body must be valid JSON.", 400),
+      telemetry,
+      { status: 400 },
+    );
   }
 
   const result = sendEmailSchema.safeParse(body);
@@ -121,7 +198,12 @@ export async function POST(request: Request): Promise<Response> {
       outcome: "invalid",
     });
     return jsonWithTelemetry(
-      { error: "Validation failed", details: result.error.flatten() },
+      publicApiError(
+        "validation_error",
+        "Validation failed.",
+        422,
+        zodValidationDetails(result.error),
+      ),
       telemetry,
       { status: 422 },
     );
@@ -139,7 +221,16 @@ export async function POST(request: Request): Promise<Response> {
         durationMs: performance.now() - startedAt,
         outcome: "queued",
       });
-      return jsonWithTelemetry({ id: existing.id }, telemetry, { status: 409 });
+      return jsonWithTelemetry(
+        publicApiError(
+          "idempotency_conflict",
+          "A request with this idempotency key has already been accepted.",
+          409,
+          { id: existing.id },
+        ),
+        telemetry,
+        { status: 409 },
+      );
     }
   }
 
@@ -151,8 +242,27 @@ export async function POST(request: Request): Promise<Response> {
     ? new Date(validated.scheduled_at)
     : null;
 
+  const suppressedRecipients = await findSuppressedRecipients({
+    userId: auth.userId,
+    recipients: to,
+  });
+  if (suppressedRecipients.length > 0) {
+    recordAcceptMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "invalid",
+    });
+    return jsonWithTelemetry(
+      suppressedRecipientError(suppressedRecipients),
+      telemetry,
+      { status: 422 },
+    );
+  }
+
+  let quotaReserved = false;
   try {
     let finalHtml = validated.html || "";
+    let finalText = validated.text ?? "";
+    let finalHeaders = (validated.headers as Record<string, string>) ?? {};
     let finalSubject = validated.subject;
 
     // Handle template resolving
@@ -165,9 +275,11 @@ export async function POST(request: Request): Promise<Response> {
           durationMs: performance.now() - startedAt,
           outcome: "invalid",
         });
-        return jsonWithTelemetry({ error: "Template not found" }, telemetry, {
-          status: 404,
-        });
+        return jsonWithTelemetry(
+          publicApiError("not_found", "Template not found.", 404),
+          telemetry,
+          { status: 404 },
+        );
       }
 
       // Validate required variables
@@ -188,10 +300,17 @@ export async function POST(request: Request): Promise<Response> {
             outcome: "invalid",
           });
           return jsonWithTelemetry(
-            {
-              error: "Validation failed",
-              message: `Missing required template variable: ${requiredVar}`,
-            },
+            publicApiError(
+              "validation_error",
+              `Missing required template variable: ${requiredVar}`,
+              422,
+              {
+                formErrors: [],
+                fieldErrors: {
+                  template: [`Missing required variable: ${requiredVar}`],
+                },
+              },
+            ),
             telemetry,
             { status: 422 },
           );
@@ -215,41 +334,90 @@ export async function POST(request: Request): Promise<Response> {
 
     const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();
 
-    // Store in DB before publishing async work so the worker has a durable row.
-    const [email] = await db
-      .insert(emails)
-      .values({
-        from: validated.from,
+    // Quota gate: post-validation and committed in the same transaction as the
+    // durable email row. SQS publish remains after commit so workers can read it.
+    const email = await db.transaction(async (tx) => {
+      const quota = await reserveEmailQuota(
+        auth.userId,
+        1,
+        new Date(),
+        process.env,
+        tx,
+      );
+      if (!quota.ok) {
+        return quota;
+      }
+      quotaReserved = !quota.bypassed;
+
+      const managedUnsubscribe = await applyManagedUnsubscribe({
+        userId: auth.userId,
         to,
-        cc: cc ?? [],
-        bcc: bcc ?? [],
-        replyTo: replyTo ?? [],
-        subject: finalSubject,
         html: finalHtml,
-        text: validated.text ?? "",
-        tags: validated.tags ?? [],
-        headers: (validated.headers as Record<string, string>) ?? {},
-        attachments: normalizeAttachmentsForStorage(validated.attachments),
-        status: shouldQueueNow ? "queued" : "scheduled",
-        scheduledAt: scheduledAt,
-        topicId: validated.topic_id || null,
-        idempotencyKey: idempotencyKey,
-        userId: auth.userId, // Link to the user who owns the API key
-      })
-      .returning({ id: emails.id });
+        text: finalText,
+        headers: finalHeaders,
+        baseUrl: getPublicBaseUrl(request),
+      });
+      finalHtml = managedUnsubscribe.html;
+      finalText = managedUnsubscribe.text;
+      finalHeaders = managedUnsubscribe.headers;
+
+      const [created] = await tx
+        .insert(emails)
+        .values({
+          from: validated.from,
+          to,
+          cc: cc ?? [],
+          bcc: bcc ?? [],
+          replyTo: replyTo ?? [],
+          subject: finalSubject,
+          html: finalHtml,
+          text: finalText,
+          tags: validated.tags ?? [],
+          headers: finalHeaders,
+          attachments: normalizeAttachmentsForStorage(validated.attachments),
+          status: shouldQueueNow ? "queued" : "scheduled",
+          scheduledAt: scheduledAt,
+          topicId: validated.topic_id || null,
+          idempotencyKey: idempotencyKey,
+          userId: auth.userId, // Link to the user who owns the API key
+        })
+        .returning({ id: emails.id });
+
+      return { ok: true as const, email: created };
+    });
+
+    if (!email.ok) {
+      logTelemetry("info", "email.quota_exceeded", telemetry, {
+        plan: email.info.plan,
+        limit: email.info.limit,
+        used: email.info.used,
+      });
+      recordAcceptMetric(telemetry, {
+        durationMs: performance.now() - startedAt,
+        outcome: "invalid",
+      });
+      return quotaExceededResponse(email.info, {
+        headers: {
+          "x-correlation-id": telemetry.correlationId,
+          traceparent: telemetry.traceparent,
+        },
+      });
+    }
+
+    const createdEmail = email.email;
 
     if (shouldQueueNow) {
       try {
         await publishBackgroundJob(
           createBackgroundJob({
-            id: `email.send:${email.id}`,
+            id: `email.send:${createdEmail.id}`,
             type: "email.send",
             source: "api",
-            emailId: email.id,
+            emailId: createdEmail.id,
             trace: getTelemetryCarrier(telemetry),
           }),
           {
-            deduplicationId: `email.send:${email.id}`,
+            deduplicationId: `email.send:${createdEmail.id}`,
             groupId: "email.send",
           },
         );
@@ -257,13 +425,13 @@ export async function POST(request: Request): Promise<Response> {
         await db
           .update(emails)
           .set({ status: "failed" })
-          .where(eq(emails.id, email.id));
+          .where(eq(emails.id, createdEmail.id));
         recordTelemetryError(
           telemetry,
           "email.accept.queue_publish_failed",
           error,
           {
-            email_id: email.id,
+            email_id: createdEmail.id,
           },
         );
         throw error;
@@ -273,20 +441,27 @@ export async function POST(request: Request): Promise<Response> {
     const outcome = shouldQueueNow ? "queued" : "scheduled";
     const durationMs = performance.now() - startedAt;
     logTelemetry("info", "email.accepted", telemetry, {
-      email_id: email.id,
+      email_id: createdEmail.id,
       status: outcome,
       duration_ms: Math.round(durationMs),
     });
     recordAcceptMetric(telemetry, { durationMs, outcome });
-    return jsonWithTelemetry({ id: email.id }, telemetry);
+    quotaReserved = false;
+    return jsonWithTelemetry({ id: createdEmail.id }, telemetry);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to send email";
     recordTelemetryError(telemetry, "email.accept.failed", err);
     recordAcceptMetric(telemetry, {
       durationMs: performance.now() - startedAt,
       outcome: "failed",
     });
-    return jsonWithTelemetry({ error: message }, telemetry, { status: 500 });
+    if (quotaReserved) {
+      await releaseEmailQuota(auth.userId, 1);
+    }
+    return jsonWithTelemetry(
+      publicApiError("internal_server_error", "Failed to send email.", 500),
+      telemetry,
+      { status: 500 },
+    );
   }
 }
 
@@ -395,5 +570,5 @@ export async function DELETE(request: Request): Promise<Response> {
 
 // Error fallback for Zod (kept explicit for strict typing in route handlers)
 export function formatZodError(error: ZodError): Record<string, unknown> {
-  return error.flatten();
+  return zodValidationDetails(error);
 }

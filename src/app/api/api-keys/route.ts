@@ -1,12 +1,50 @@
-import { createHash, randomUUID } from "node:crypto";
 import {
   invalidateApiKeyAuthCache,
   unauthorizedResponse,
   validateApiKey,
 } from "@/lib/api-auth";
-import { db } from "@/lib/db";
-import { apiKeys } from "@/lib/db/schema";
-import { and, desc, lt } from "drizzle-orm";
+import { checkApiKeyQuota, quotaExceededResponse } from "@/lib/billing/quota";
+import {
+  type ApiKeyPermission,
+  ApiKeyServiceError,
+  createApiKeyService,
+} from "@opensend/core";
+
+function apiKeyService() {
+  return createApiKeyService({
+    invalidateAuthCache: invalidateApiKeyAuthCache,
+  });
+}
+
+function mapServiceError(err: unknown, fallback: string): Response {
+  if (err instanceof ApiKeyServiceError) {
+    const status = err.code === "not_found" ? 404 : 422;
+    return Response.json({ error: err.message }, { status });
+  }
+
+  const message = err instanceof Error ? err.message : fallback;
+  return Response.json({ error: message }, { status: 500 });
+}
+
+function parseCreateApiKeyBody(body: unknown): {
+  name: string;
+  permission?: ApiKeyPermission;
+  domainId?: string;
+} {
+  const data = body && typeof body === "object" ? body : {};
+  const record = data as Record<string, unknown>;
+  const permission = record.permission;
+  const domainId = record.domain_id;
+
+  return {
+    name: typeof record.name === "string" ? record.name : "",
+    permission:
+      permission === "full_access" || permission === "sending_access"
+        ? permission
+        : undefined,
+    domainId: typeof domainId === "string" ? domainId : undefined,
+  };
+}
 
 export async function GET(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
@@ -15,54 +53,25 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const url = new URL(request.url);
-  const limit = Math.min(
-    Math.max(Number(url.searchParams.get("limit")) || 20, 1),
-    100,
-  );
+  const limit = Number(url.searchParams.get("limit")) || 20;
   const after = url.searchParams.get("after") || "";
 
   try {
-    const conditions = [];
-    if (after) {
-      conditions.push(lt(apiKeys.id, after));
-    }
-
-    const results = await db
-      .select({
-        id: apiKeys.id,
-        name: apiKeys.name,
-        createdAt: apiKeys.createdAt,
-        lastUsedAt: apiKeys.lastUsedAt,
-      })
-      .from(apiKeys)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(apiKeys.id))
-      .limit(limit + 1);
-
-    const hasMore = results.length > limit;
-    const dataRows = hasMore ? results.slice(0, limit) : results;
+    const result = await apiKeyService().listApiKeys({ limit, after });
 
     return Response.json({
       object: "list",
-      data: dataRows.map((k) => ({
-        id: k.id,
-        name: k.name,
-        created_at: k.createdAt,
-        last_used_at: k.lastUsedAt,
+      data: result.data.map((key) => ({
+        id: key.id,
+        name: key.name,
+        created_at: key.createdAt,
+        last_used_at: key.lastUsedAt,
       })),
-      has_more: hasMore,
+      has_more: result.hasMore,
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to list API keys";
-    return Response.json({ error: message }, { status: 500 });
+    return mapServiceError(err, "Failed to list API keys");
   }
-}
-
-interface CreateApiKeyBody {
-  name: string;
-  permission?: "full_access" | "sending_access";
-  domain_id?: string;
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -71,52 +80,32 @@ export async function POST(request: Request): Promise<Response> {
     return unauthorizedResponse();
   }
 
-  let body: CreateApiKeyBody;
+  let body: unknown;
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!body.name || body.name.trim().length === 0) {
-    return Response.json({ error: "name is required" }, { status: 422 });
-  }
-
-  if (body.name.trim().length > 50) {
-    return Response.json(
-      { error: "name must be 50 characters or less" },
-      { status: 422 },
-    );
-  }
-
   try {
-    const rawKey = `re_${randomUUID().replace(/-/g, "")}`;
-    const tokenHash = createHash("sha256").update(rawKey).digest("hex");
-    const tokenPreview = `${rawKey.slice(0, 6)}...${rawKey.slice(-4)}`;
+    const quota = await checkApiKeyQuota(auth.userId);
+    if (!quota.ok) {
+      return quotaExceededResponse(quota.info);
+    }
 
-    const [created] = await db
-      .insert(apiKeys)
-      .values({
-        name: body.name.trim(),
-        tokenHash,
-        tokenPreview,
-        permission: body.permission ?? "full_access",
-        domain: body.domain_id ?? null,
-      })
-      .returning();
-
-    await invalidateApiKeyAuthCache(created.tokenHash);
+    const created = await apiKeyService().createApiKey({
+      ...parseCreateApiKeyBody(body),
+      userId: auth.userId ?? undefined,
+    });
 
     return Response.json(
       {
         id: created.id,
-        token: rawKey,
+        token: created.token,
       },
       { status: 201 },
     );
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to create API key";
-    return Response.json({ error: message }, { status: 500 });
+    return mapServiceError(err, "Failed to create API key");
   }
 }

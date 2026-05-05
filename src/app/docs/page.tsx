@@ -21,10 +21,12 @@ const API_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/emails",
-        description: "Send an email",
+        description:
+          "Send an email. Reusing the same Idempotency-Key returns the existing 409 idempotency_conflict response instead of accepting a duplicate.",
         curl: `curl -X POST https://api.opensend.com/api/emails \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: welcome-user-123" \\
   -d '{
     "from": "you@example.com",
     "to": "user@example.com",
@@ -49,10 +51,12 @@ const API_GROUPS: EndpointGroup[] = [
       {
         method: "POST",
         path: "/api/emails/batch",
-        description: "Send a batch of emails",
+        description:
+          "Send a batch of emails with one Idempotency-Key for the whole batch. Duplicate keys return 409 idempotency_conflict before quota reservation, row persistence, or queue publish.",
         curl: `curl -X POST https://api.opensend.com/api/emails/batch \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
+  -H "Idempotency-Key: batch-campaign-123" \\
   -d '[
     { "from": "you@example.com", "to": "a@example.com", "subject": "Hi A", "html": "<p>A</p>" },
     { "from": "you@example.com", "to": "b@example.com", "subject": "Hi B", "html": "<p>B</p>" }
