@@ -42,6 +42,7 @@ export class EmailService {
     if (params.idempotencyKey) {
       const existing = await emailRepo.findByIdempotencyKey(
         params.idempotencyKey,
+        params.userId,
       );
       if (existing) return { id: existing.id, duplicate: true };
     }
@@ -96,7 +97,7 @@ export class EmailService {
           },
         );
       } catch (error) {
-        await emailRepo.update(record.id, { status: "failed" });
+        await emailRepo.update(record.id, { status: "failed" }, params.userId);
         throw error;
       }
     }

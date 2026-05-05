@@ -156,7 +156,11 @@ export const emails = pgTable(
     index("emails_status_idx").on(table.status),
     index("emails_created_at_idx").on(table.createdAt),
     index("emails_status_created_at_idx").on(table.status, table.createdAt),
-    uniqueIndex("emails_idempotency_key_idx").on(table.idempotencyKey),
+    index("emails_user_created_at_idx").on(table.userId, table.createdAt),
+    uniqueIndex("emails_user_id_idempotency_key_idx").on(
+      table.userId,
+      table.idempotencyKey,
+    ),
   ],
 );
 

@@ -1,12 +1,15 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { unauthorizedResponse } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { broadcasts } from "@/lib/db/schema";
 import { type SQL, and, desc, eq, ilike, lt } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
+import { resolveBroadcastRouteUserId } from "./auth";
 
 export async function GET(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  const userId = await resolveBroadcastRouteUserId(
+    request.headers.get("authorization"),
+  );
+  if (!userId) return unauthorizedResponse();
 
   try {
     const url = request.nextUrl;
@@ -19,7 +22,7 @@ export async function GET(request: NextRequest) {
     const segmentId = url.searchParams.get("segmentId")?.trim() || "";
     const after = url.searchParams.get("after") || "";
 
-    const conditions: SQL[] = [];
+    const conditions: SQL[] = [eq(broadcasts.userId, userId)];
     if (search) {
       conditions.push(ilike(broadcasts.name, `%${search}%`));
     }
@@ -49,7 +52,7 @@ export async function GET(request: NextRequest) {
         scheduledAt: broadcasts.scheduledAt,
       })
       .from(broadcasts)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .where(and(...conditions))
       .orderBy(desc(broadcasts.id))
       .limit(limit + 1);
 
@@ -79,8 +82,10 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  const userId = await resolveBroadcastRouteUserId(
+    request.headers.get("authorization"),
+  );
+  if (!userId) return unauthorizedResponse();
 
   try {
     const body = await request.json();
@@ -113,6 +118,7 @@ export async function POST(request: NextRequest) {
         topicId: body.topic_id || null,
         status: shouldSend ? (scheduledAt ? "scheduled" : "queued") : "draft",
         scheduledAt,
+        userId,
       })
       .returning();
 

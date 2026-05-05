@@ -13,6 +13,8 @@ const mockReserveEmailQuota = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
   select: vi.fn(),
+  update: vi.fn(),
+  delete: vi.fn(),
   query: vi.fn(),
   transaction: vi.fn(async (callback: (tx: typeof mockDb) => unknown) =>
     callback(mockDb),
@@ -376,6 +378,54 @@ describe("POST /api/emails", () => {
         groupId: "email.send",
       }),
     );
+  });
+
+  it("checks duplicate Idempotency-Key retries only within the authenticated user scope", async () => {
+    const findFirst = vi.fn().mockResolvedValue({ id: "email-1" });
+    Object.assign(mockDb.query, {
+      emails: { findFirst },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Test Email",
+          html: "<p>Hello</p>",
+        },
+        {
+          Authorization: "Bearer re_test123",
+          "Idempotency-Key": "send-key-1",
+        },
+      ),
+    );
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "idempotency_conflict",
+      details: { id: "email-1" },
+    });
+    expect(findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["send-key-1"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ]),
+      }),
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
   it("returns p95 under 50ms when the SES mock takes 500ms", async () => {
@@ -757,6 +807,36 @@ describe("POST /api/emails/batch", () => {
     expect(mockReserveEmailQuota).toHaveBeenCalledTimes(1);
     expect(mockDb.insert).toHaveBeenCalledTimes(2);
     expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(2);
+    expect(findFirst).toHaveBeenNthCalledWith(1, {
+      where: expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["batch-key-1"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ]),
+      }),
+    });
+    expect(findFirst).toHaveBeenNthCalledWith(2, {
+      where: expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["batch-key-1"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ]),
+      }),
+    });
     expect(
       valuesMock.mock.calls.map(([value]) => value.idempotencyKey),
     ).toEqual(["batch-key-1", null]);
@@ -960,6 +1040,17 @@ describe("GET /api/emails", () => {
     expect(json).toHaveProperty("data");
     expect(Array.isArray(json.data)).toBe(true);
     expect(json.data[0]).toHaveProperty("sent_at", "2024-01-01T00:00:05.000Z");
+    expect(mockWhere).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: "and",
+        args: [
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ],
+      }),
+    );
   });
 
   it("applies status filter so queued dashboard/API views return queued rows", async () => {
@@ -984,6 +1075,10 @@ describe("GET /api/emails", () => {
       expect.objectContaining({
         op: "and",
         args: [
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
           expect.objectContaining({
             op: "eq",
             args: expect.arrayContaining(["queued"]),
@@ -1027,9 +1122,10 @@ describe("GET /api/emails/:id", () => {
       ],
     };
 
+    const findFirst = vi.fn().mockResolvedValue(mockEmail);
     mockDb.query = {
       emails: {
-        findFirst: vi.fn().mockResolvedValue(mockEmail),
+        findFirst,
       },
     } as unknown as ReturnType<typeof vi.fn>;
 
@@ -1046,12 +1142,28 @@ describe("GET /api/emails/:id", () => {
     expect(json).toHaveProperty("id", "email-uuid");
     expect(json).toHaveProperty("last_event", "delivered");
     expect(json).toHaveProperty("sent_at", "2024-01-01T00:00:05.000Z");
+    expect(findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        op: "and",
+        args: [
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["email-uuid"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ],
+      }),
+    });
   });
 
   it("returns 404 for non-existent email", async () => {
+    const findFirst = vi.fn().mockResolvedValue(null);
     mockDb.query = {
       emails: {
-        findFirst: vi.fn().mockResolvedValue(null),
+        findFirst,
       },
     } as unknown as ReturnType<typeof vi.fn>;
 
@@ -1063,5 +1175,166 @@ describe("GET /api/emails/:id", () => {
       params: Promise.resolve({ id: "nonexistent" }),
     });
     expect(res.status).toBe(404);
+    expect(findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        op: "and",
+        args: [
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["nonexistent"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ],
+      }),
+    });
+  });
+});
+
+describe("PATCH /api/emails/:id", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
+  });
+
+  it("scopes scheduled email updates to the authenticated user", async () => {
+    const findFirst = vi.fn().mockResolvedValue({
+      id: "email-uuid",
+      status: "scheduled",
+    });
+    mockDb.query = {
+      emails: {
+        findFirst,
+      },
+    } as unknown as ReturnType<typeof vi.fn>;
+    const returning = vi.fn().mockResolvedValue([{ id: "email-uuid" }]);
+    const where = vi.fn().mockReturnValue({ returning });
+    const set = vi.fn().mockReturnValue({ where });
+    mockDb.update = vi.fn().mockReturnValue({ set });
+
+    const { PATCH } = await import("@/app/api/emails/[id]/route");
+    const res = await PATCH(
+      new Request("http://localhost:3015/api/emails/email-uuid", {
+        method: "PATCH",
+        headers: { Authorization: "Bearer re_test123" },
+        body: JSON.stringify({ scheduled_at: "2026-05-06T00:00:00.000Z" }),
+      }),
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["email-uuid"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ]),
+      }),
+    });
+    expect(where).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["email-uuid"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ]),
+      }),
+    );
+  });
+});
+
+describe("DELETE /api/emails", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
+  });
+
+  it("scopes deletes to the authenticated user", async () => {
+    const where = vi.fn().mockResolvedValue(undefined);
+    mockDb.delete = vi.fn().mockReturnValue({ where });
+
+    const { DELETE } = await import("@/app/api/emails/route");
+    const res = await DELETE(
+      new Request("http://localhost:3015/api/emails?id=email-uuid", {
+        method: "DELETE",
+        headers: { Authorization: "Bearer re_test123" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(where).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["email-uuid"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ]),
+      }),
+    );
+  });
+});
+
+describe("GET /api/emails/:id/events", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
+  });
+
+  it("does not list events for an email outside the authenticated user scope", async () => {
+    const findFirst = vi.fn().mockResolvedValue(null);
+    mockDb.query = {
+      emails: {
+        findFirst,
+      },
+    } as unknown as ReturnType<typeof vi.fn>;
+    const select = vi.fn();
+    mockDb.select = select;
+
+    const { GET } = await import("@/app/api/emails/[id]/events/route");
+    const res = await GET(
+      new Request("http://localhost:3015/api/emails/email-uuid/events", {
+        headers: { Authorization: "Bearer re_test123" },
+      }) as never,
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(res.status).toBe(404);
+    expect(select).not.toHaveBeenCalled();
+    expect(findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["email-uuid"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ]),
+      }),
+    });
   });
 });

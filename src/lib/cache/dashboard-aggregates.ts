@@ -24,11 +24,15 @@ export function getMetricsAggregateCacheKey(params: {
   ].join(":");
 }
 
-export function getBroadcastMetricsCacheKey(broadcastId: string): string {
+export function getBroadcastMetricsCacheKey(params: {
+  userId: string;
+  broadcastId: string;
+}): string {
   return [
     DASHBOARD_AGGREGATE_CACHE_PREFIX,
     "broadcast-metrics",
-    normalizeCacheSegment(broadcastId),
+    normalizeCacheSegment(params.userId),
+    normalizeCacheSegment(params.broadcastId),
   ].join(":");
 }
 

@@ -1,7 +1,7 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { emailEvents } from "@/lib/db/schema";
-import { asc, eq } from "drizzle-orm";
+import { emailEvents, emails } from "@/lib/db/schema";
+import { and, asc, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -9,10 +9,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await validateApiKey(_request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   try {
     const { id: emailId } = await params;
+    const email = await db.query.emails.findFirst({
+      where: and(eq(emails.id, emailId), eq(emails.userId, auth.userId)),
+    });
+
+    if (!email) {
+      return NextResponse.json({ error: "Email not found" }, { status: 404 });
+    }
 
     const results = await db
       .select()

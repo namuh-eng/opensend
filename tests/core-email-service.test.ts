@@ -72,6 +72,31 @@ describe("EmailService", () => {
     expect(mockProviderSendEmail).not.toHaveBeenCalled();
   });
 
+  it("checks idempotency keys within the provided user scope", async () => {
+    mockFindByIdempotencyKey.mockResolvedValue({ id: "email-1" });
+    const { EmailService } = await import(
+      "../packages/core/src/services/email"
+    );
+    const service = new EmailService();
+
+    await expect(
+      service.send({
+        from: "sender@example.com",
+        to: ["user@example.com"],
+        subject: "Hello",
+        idempotencyKey: "send-key-1",
+        userId: "user-1",
+      }),
+    ).resolves.toEqual({ id: "email-1", duplicate: true });
+
+    expect(mockFindByIdempotencyKey).toHaveBeenCalledWith(
+      "send-key-1",
+      "user-1",
+    );
+    expect(mockCreateEmail).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
   it("stores future scheduled emails without publishing an immediate send job", async () => {
     const { EmailService } = await import(
       "../packages/core/src/services/email"
