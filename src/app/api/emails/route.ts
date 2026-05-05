@@ -14,6 +14,10 @@ import { db } from "@/lib/db";
 import { contacts, emails, templates } from "@/lib/db/schema";
 import { normalizeAttachmentsForStorage } from "@/lib/email-attachments";
 import {
+  findSuppressedRecipients,
+  suppressedRecipientError,
+} from "@/lib/suppressions";
+import {
   buildOneClickUnsubscribeHeaders,
   createUnsubscribeUrl,
   getPublicBaseUrl,
@@ -237,6 +241,22 @@ export async function POST(request: Request): Promise<Response> {
   const scheduledAt = validated.scheduled_at
     ? new Date(validated.scheduled_at)
     : null;
+
+  const suppressedRecipients = await findSuppressedRecipients({
+    userId: auth.userId,
+    recipients: to,
+  });
+  if (suppressedRecipients.length > 0) {
+    recordAcceptMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "invalid",
+    });
+    return jsonWithTelemetry(
+      suppressedRecipientError(suppressedRecipients),
+      telemetry,
+      { status: 422 },
+    );
+  }
 
   let quotaReserved = false;
   try {

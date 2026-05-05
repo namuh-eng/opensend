@@ -103,6 +103,11 @@ export interface EmailDetailData {
   scheduledAt: string | null;
   tags: Array<{ name: string; value: string }>;
   headers: Record<string, string>;
+  suppression?: {
+    email: string;
+    reason: "bounced" | "complained";
+    suppressedAt: string;
+  } | null;
   events: Array<{ type: string; timestamp: string }>;
 }
 
@@ -126,6 +131,8 @@ function getStatusVariant(
     case "delivery_delayed":
     case "complained":
       return "warning";
+    case "suppressed":
+      return "default";
     default:
       return "default";
   }
@@ -305,6 +312,32 @@ export function EmailDetail({ email }: EmailDetailProps) {
           </button>
         </div>
       </div>
+
+      {email.suppression && (
+        <div
+          data-testid="suppression-guidance"
+          className="mb-8 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4"
+        >
+          <div className="flex items-center gap-2 mb-2">
+            <StatusBadge status="Suppressed" variant="warning" />
+            <span className="text-[13px] text-[#F0F0F0]">
+              {email.suppression.email} is suppressed for this account because
+              it{" "}
+              {email.suppression.reason === "bounced"
+                ? "hard bounced"
+                : "reported a complaint"}
+              .
+            </span>
+          </div>
+          <p className="text-[13px] text-[#A1A4A5] leading-relaxed">
+            OpenSend will skip future sends to this recipient for your account
+            until an operator removes the suppression. If the recipient bounces
+            or complains again after removal, OpenSend will suppress it again.
+            Region-wide and provider-wide suppression scope is deferred for this
+            first slice.
+          </p>
+        </div>
+      )}
 
       {/* Metadata Grid */}
       <div className="grid grid-cols-4 gap-6 mb-8">

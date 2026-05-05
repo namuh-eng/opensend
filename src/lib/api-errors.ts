@@ -10,6 +10,7 @@ export type PublicApiErrorCode =
   | "idempotency_conflict"
   | "not_found"
   | "quota_exceeded"
+  | "recipient_suppressed"
   | "rate_limit_exceeded"
   | "rate_limit_unavailable"
   | "internal_server_error";

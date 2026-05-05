@@ -64,8 +64,20 @@ export interface EmailListOptions {
   status?: EmailStatus;
 }
 
+export interface BatchEmailItemError {
+  error: {
+    name?: string;
+    code: string;
+    message: string;
+    statusCode: number;
+    details?: Record<string, string | number | boolean | null>;
+  };
+}
+
+export type BatchEmailItemResponse = EmailResponse | BatchEmailItemError;
+
 export interface BatchEmailResponse {
-  data: EmailResponse[];
+  data: BatchEmailItemResponse[];
 }
 
 export interface EmailListItem {

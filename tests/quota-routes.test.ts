@@ -7,6 +7,7 @@ const mockCheckApiKeyQuota = vi.hoisted(() => vi.fn());
 const mockCreateDomainIdentity = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
+  select: vi.fn(),
   transaction: vi.fn(async (callback: (tx: typeof mockDb) => unknown) =>
     callback(mockDb),
   ),
@@ -97,6 +98,12 @@ describe("quota route gates", () => {
     mockCheckApiKeyQuota.mockReset();
     mockCreateDomainIdentity.mockReset();
     mockDb.insert.mockReset();
+    mockDb.select.mockReset();
+    mockDb.select.mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );

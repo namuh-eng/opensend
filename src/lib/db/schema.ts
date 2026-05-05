@@ -189,6 +189,47 @@ export const topics = pgTable("topics", {
   userId: text("user_id"),
 });
 
+export type SuppressionReason = "bounced" | "complained";
+
+export type SuppressionSourceMetadata = {
+  source?: "ses" | "operator";
+  sourceEventId?: string;
+  sourceEmailId?: string;
+  sourceMessageId?: string;
+  bounceType?: string;
+  complaintFeedbackType?: string;
+};
+
+export const emailSuppressions = pgTable(
+  "email_suppressions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    email: varchar("email", { length: 512 }).notNull(),
+    reason: varchar("reason", { length: 50 })
+      .$type<SuppressionReason>()
+      .notNull(),
+    sourceEventId: varchar("source_event_id", { length: 255 }),
+    sourceEmailId: uuid("source_email_id"),
+    sourceMessageId: varchar("source_message_id", { length: 255 }),
+    metadata: jsonb("metadata").$type<SuppressionSourceMetadata>(),
+    suppressedAt: timestamp("suppressed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("email_suppressions_user_email_idx").on(
+      table.userId,
+      table.email,
+    ),
+    index("email_suppressions_user_idx").on(table.userId),
+    index("email_suppressions_email_idx").on(table.email),
+  ],
+);
+
 export const contacts = pgTable(
   "contacts",
   {
