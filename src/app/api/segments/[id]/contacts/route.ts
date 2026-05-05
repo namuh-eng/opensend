@@ -10,6 +10,8 @@ export async function GET(
 ) {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  if (!auth.userId) return unauthorizedResponse();
+  const userId = auth.userId;
 
   try {
     const { id: segmentId } = await params;
@@ -18,7 +20,7 @@ export async function GET(
     const [segment] = await db
       .select({ id: segments.id, name: segments.name })
       .from(segments)
-      .where(eq(segments.id, segmentId));
+      .where(and(eq(segments.id, segmentId), eq(segments.userId, userId)));
 
     if (!segment) {
       return NextResponse.json({ error: "Segment not found" }, { status: 404 });
@@ -46,7 +48,12 @@ export async function GET(
         contactsToSegments,
         eq(contacts.id, contactsToSegments.contactId),
       )
-      .where(eq(contactsToSegments.segmentId, segmentId));
+      .where(
+        and(
+          eq(contactsToSegments.segmentId, segmentId),
+          eq(contacts.userId, userId),
+        ),
+      );
 
     const rows = await query.orderBy(desc(contacts.id)).limit(limit + 1);
 

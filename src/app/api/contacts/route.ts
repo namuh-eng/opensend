@@ -1,5 +1,6 @@
 import {
   authorizeDashboardOrApiKey,
+  getServerSession,
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { db } from "@/lib/db";
@@ -8,11 +9,24 @@ import { createContactSchema } from "@/lib/validation/contacts";
 import { type SQL, and, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 
+type ContactRouteAuth = NonNullable<
+  Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
+>;
+
+async function resolveUserId(auth: ContactRouteAuth): Promise<string | null> {
+  if ("userId" in auth) return auth.userId;
+
+  const session = await getServerSession();
+  return session?.user?.id ?? null;
+}
+
 export async function POST(request: NextRequest) {
   const auth = await authorizeDashboardOrApiKey(
     request.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const body = await request.json();
@@ -33,7 +47,10 @@ export async function POST(request: NextRequest) {
       resolvedSegments = await Promise.all(
         validated.segments.map(async (s: string) => {
           const seg = await db.query.segments.findFirst({
-            where: or(eq(segments.id, s), eq(segments.name, s)),
+            where: and(
+              or(eq(segments.id, s), eq(segments.name, s)),
+              eq(segments.userId, userId),
+            ),
           });
           return seg ? seg.name : null;
         }),
@@ -50,7 +67,7 @@ export async function POST(request: NextRequest) {
             const subscription =
               typeof t === "string" ? "opt_in" : t.subscription || "opt_in";
             const found = await db.query.topics.findFirst({
-              where: eq(topics.id, topicId),
+              where: and(eq(topics.id, topicId), eq(topics.userId, userId)),
             });
             if (!found) return null;
             return {
@@ -79,6 +96,7 @@ export async function POST(request: NextRequest) {
             (validated.properties as Record<string, string>) || null,
           segments: resolvedSegments.length > 0 ? resolvedSegments : null,
           topicSubscriptions: resolvedTopics.length > 0 ? resolvedTopics : null,
+          userId,
         })
         .returning({ id: contacts.id });
 
@@ -118,6 +136,8 @@ export async function GET(request: Request) {
     request.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   const url = new URL(request.url);
   const search = url.searchParams.get("search") || "";
@@ -135,7 +155,7 @@ export async function GET(request: Request) {
       const [seg] = await db
         .select({ name: segments.name })
         .from(segments)
-        .where(eq(segments.id, segmentId))
+        .where(and(eq(segments.id, segmentId), eq(segments.userId, userId)))
         .limit(1);
       if (seg) {
         segmentName = seg.name;
@@ -148,7 +168,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const conditions: SQL[] = [];
+    const conditions: SQL[] = [eq(contacts.userId, userId)];
 
     if (search) {
       conditions.push(

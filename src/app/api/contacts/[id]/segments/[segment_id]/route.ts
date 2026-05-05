@@ -4,16 +4,19 @@ import { contacts, contactsToSegments, segments } from "@/lib/db/schema";
 import { and, eq, or } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 
-async function findContact(idOrEmail: string) {
+async function findContact(idOrEmail: string, userId: string) {
   const isUuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       idOrEmail,
     );
 
   return await db.query.contacts.findFirst({
-    where: isUuid
-      ? or(eq(contacts.id, idOrEmail), eq(contacts.email, idOrEmail))
-      : eq(contacts.email, idOrEmail),
+    where: and(
+      isUuid
+        ? or(eq(contacts.id, idOrEmail), eq(contacts.email, idOrEmail))
+        : eq(contacts.email, idOrEmail),
+      eq(contacts.userId, userId),
+    ),
   });
 }
 
@@ -23,13 +26,17 @@ export async function POST(
 ) {
   const auth = await validateApiKey(_request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  if (!auth.userId) return unauthorizedResponse();
+  const userId = auth.userId;
 
   try {
     const { id: idOrEmail, segment_id } = await params;
 
     const [contact, segment] = await Promise.all([
-      findContact(idOrEmail),
-      db.query.segments.findFirst({ where: eq(segments.id, segment_id) }),
+      findContact(idOrEmail, userId),
+      db.query.segments.findFirst({
+        where: and(eq(segments.id, segment_id), eq(segments.userId, userId)),
+      }),
     ]);
 
     if (!contact) {
@@ -55,7 +62,7 @@ export async function POST(
       await db
         .update(contacts)
         .set({ segments: updatedSegments })
-        .where(eq(contacts.id, contact.id));
+        .where(and(eq(contacts.id, contact.id), eq(contacts.userId, userId)));
     }
 
     return NextResponse.json({
@@ -79,13 +86,17 @@ export async function DELETE(
 ) {
   const auth = await validateApiKey(_request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  if (!auth.userId) return unauthorizedResponse();
+  const userId = auth.userId;
 
   try {
     const { id: idOrEmail, segment_id } = await params;
 
     const [contact, segment] = await Promise.all([
-      findContact(idOrEmail),
-      db.query.segments.findFirst({ where: eq(segments.id, segment_id) }),
+      findContact(idOrEmail, userId),
+      db.query.segments.findFirst({
+        where: and(eq(segments.id, segment_id), eq(segments.userId, userId)),
+      }),
     ]);
 
     if (!contact) {
@@ -114,7 +125,7 @@ export async function DELETE(
       await db
         .update(contacts)
         .set({ segments: updatedSegments })
-        .where(eq(contacts.id, contact.id));
+        .where(and(eq(contacts.id, contact.id), eq(contacts.userId, userId)));
     }
 
     return NextResponse.json({
