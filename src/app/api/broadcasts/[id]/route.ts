@@ -1,22 +1,25 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { unauthorizedResponse } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { broadcasts } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
+import { resolveBroadcastRouteUserId } from "../auth";
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(_request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  const userId = await resolveBroadcastRouteUserId(
+    _request.headers.get("authorization"),
+  );
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id } = await params;
     const [broadcast] = await db
       .select()
       .from(broadcasts)
-      .where(eq(broadcasts.id, id))
+      .where(and(eq(broadcasts.id, id), eq(broadcasts.userId, userId)))
       .limit(1);
 
     if (!broadcast) {
@@ -55,8 +58,10 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  const userId = await resolveBroadcastRouteUserId(
+    request.headers.get("authorization"),
+  );
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id } = await params;
@@ -88,7 +93,7 @@ export async function PATCH(
     const [updated] = await db
       .update(broadcasts)
       .set(updateData)
-      .where(eq(broadcasts.id, id))
+      .where(and(eq(broadcasts.id, id), eq(broadcasts.userId, userId)))
       .returning();
 
     if (!updated) {
@@ -127,8 +132,10 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(_request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  const userId = await resolveBroadcastRouteUserId(
+    _request.headers.get("authorization"),
+  );
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id } = await params;
@@ -137,7 +144,7 @@ export async function DELETE(
     const results = await db
       .select({ status: broadcasts.status })
       .from(broadcasts)
-      .where(eq(broadcasts.id, id))
+      .where(and(eq(broadcasts.id, id), eq(broadcasts.userId, userId)))
       .limit(1);
 
     const existing = results ? results[0] : undefined;
@@ -158,7 +165,7 @@ export async function DELETE(
 
     const deleteResults = await db
       .delete(broadcasts)
-      .where(eq(broadcasts.id, id))
+      .where(and(eq(broadcasts.id, id), eq(broadcasts.userId, userId)))
       .returning();
 
     const deleted = deleteResults ? deleteResults[0] : undefined;

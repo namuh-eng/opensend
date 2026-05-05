@@ -1,15 +1,18 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { unauthorizedResponse } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { broadcasts } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
+import { resolveBroadcastRouteUserId } from "../../auth";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  const userId = await resolveBroadcastRouteUserId(
+    request.headers.get("authorization"),
+  );
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id } = await params;
@@ -19,7 +22,7 @@ export async function POST(
     const [existing] = await db
       .select({ status: broadcasts.status })
       .from(broadcasts)
-      .where(eq(broadcasts.id, id))
+      .where(and(eq(broadcasts.id, id), eq(broadcasts.userId, userId)))
       .limit(1);
 
     if (!existing) {
@@ -44,7 +47,7 @@ export async function POST(
         status: nextStatus,
         scheduledAt: scheduledAt,
       })
-      .where(eq(broadcasts.id, id))
+      .where(and(eq(broadcasts.id, id), eq(broadcasts.userId, userId)))
       .returning();
 
     return NextResponse.json({
