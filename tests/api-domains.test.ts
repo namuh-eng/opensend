@@ -50,6 +50,7 @@ const AUTH_RESULT = {
   apiKeyId: "key-uuid",
   permission: "full_access",
   domainId: null,
+  userId: "user-1",
 };
 
 const VALID_DOMAIN_ID = "11111111-1111-4111-8111-111111111111";
@@ -169,6 +170,7 @@ describe("Domain API validation", () => {
     const domain = {
       id: VALID_DOMAIN_ID,
       name: "example.com",
+      userId: "user-1",
       status: "pending",
       records: [
         {
@@ -220,6 +222,30 @@ describe("Domain API validation", () => {
     expect(mockQueueEvent).toHaveBeenCalledTimes(1);
   });
 
+  it("returns 404 when verifying a domain owned by another tenant", async () => {
+    mockDb.query.domains.findFirst.mockResolvedValue({
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      userId: "other-user",
+      status: "pending",
+      records: [],
+    });
+
+    const { POST } = await import("@/app/api/domains/[id]/verify/route");
+    const req = makeRequest(
+      `http://localhost:3015/api/domains/${VALID_DOMAIN_ID}/verify`,
+      "POST",
+    );
+
+    const res = await POST(req, {
+      params: Promise.resolve({ id: VALID_DOMAIN_ID }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(mockGetDomainIdentity).not.toHaveBeenCalled();
+    expect(mockDb.update).not.toHaveBeenCalled();
+  });
+
   it("returns 422 for invalid auto-configure params", async () => {
     const { POST } = await import(
       "@/app/api/domains/[id]/auto-configure/route"
@@ -240,10 +266,38 @@ describe("Domain API validation", () => {
     expect(mockDb.query.domains.findFirst).not.toHaveBeenCalled();
   });
 
+  it("returns 404 when auto-configuring a domain owned by another tenant", async () => {
+    mockDb.query.domains.findFirst.mockResolvedValue({
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      userId: "other-user",
+      customReturnPath: "outbound",
+      records: [],
+    });
+
+    const { POST } = await import(
+      "@/app/api/domains/[id]/auto-configure/route"
+    );
+    const req = makeRequest(
+      `http://localhost:3015/api/domains/${VALID_DOMAIN_ID}/auto-configure`,
+      "POST",
+    );
+
+    const res = await POST(req, {
+      params: Promise.resolve({ id: VALID_DOMAIN_ID }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(mockCreateDomainIdentity).not.toHaveBeenCalled();
+    expect(mockAutoConfigureDomain).not.toHaveBeenCalled();
+    expect(mockDb.update).not.toHaveBeenCalled();
+  });
+
   it("auto-configures domain when params are valid", async () => {
     mockDb.query.domains.findFirst.mockResolvedValue({
       id: VALID_DOMAIN_ID,
       name: "example.com",
+      userId: "user-1",
       customReturnPath: "outbound",
       records: [
         {

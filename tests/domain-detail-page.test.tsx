@@ -8,6 +8,13 @@ const mockNotFound = vi.hoisted(() =>
   }),
 );
 
+const mockGetServerSession = vi.hoisted(() => vi.fn());
+const mockRedirect = vi.hoisted(() =>
+  vi.fn(() => {
+    throw new Error("NEXT_REDIRECT");
+  }),
+);
+
 const limitMock = vi.hoisted(() => vi.fn());
 const whereMock = vi.hoisted(() => vi.fn(() => ({ limit: limitMock })));
 const fromMock = vi.hoisted(() => vi.fn(() => ({ where: whereMock })));
@@ -17,8 +24,13 @@ vi.mock("@/lib/db", () => ({
   db: { select: selectMock },
 }));
 
+vi.mock("@/lib/api-auth", () => ({
+  getServerSession: mockGetServerSession,
+}));
+
 vi.mock("next/navigation", () => ({
   notFound: mockNotFound,
+  redirect: mockRedirect,
 }));
 
 vi.mock("@/components/domain-detail", () => ({
@@ -39,10 +51,25 @@ describe("DomainDetailPage server component", () => {
     vi.resetModules();
     notFoundCalls.count = 0;
     mockNotFound.mockClear();
+    mockRedirect.mockClear();
+    mockGetServerSession.mockReset();
+    mockGetServerSession.mockResolvedValue({ user: { id: "user-1" } });
     selectMock.mockClear();
     fromMock.mockClear();
     whereMock.mockClear();
     limitMock.mockReset();
+  });
+
+  it("redirects unauthenticated dashboard users before loading a domain", async () => {
+    mockGetServerSession.mockResolvedValueOnce(null);
+
+    const Page = await importPage();
+    await expect(
+      Page({ params: Promise.resolve({ id: VALID_UUID }) }),
+    ).rejects.toThrow("NEXT_REDIRECT");
+
+    expect(mockRedirect).toHaveBeenCalledWith("/auth");
+    expect(selectMock).not.toHaveBeenCalled();
   });
 
   it("calls notFound for non-UUID ids without hitting the database", async () => {
