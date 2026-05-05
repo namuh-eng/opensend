@@ -135,7 +135,7 @@ export async function POST(request: Request): Promise<Response> {
   const authHeader = request.headers.get("authorization");
   const authHeaderError = getApiKeyAuthHeaderError(authHeader);
   const auth = authHeaderError ? null : await validateApiKey(authHeader);
-  if (!auth) {
+  if (!auth || !auth.userId) {
     recordBatchMetric(telemetry, {
       durationMs: performance.now() - startedAt,
       outcome: "unauthorized",
@@ -150,6 +150,7 @@ export async function POST(request: Request): Promise<Response> {
       },
     );
   }
+  const userId = auth.userId;
 
   const idempotencyKey = request.headers.get("idempotency-key");
   if (
@@ -173,7 +174,10 @@ export async function POST(request: Request): Promise<Response> {
 
   if (idempotencyKey) {
     const existing = await db.query.emails.findFirst({
-      where: eq(emails.idempotencyKey, idempotencyKey),
+      where: and(
+        eq(emails.idempotencyKey, idempotencyKey),
+        eq(emails.userId, userId),
+      ),
     });
     if (existing) {
       recordBatchMetric(telemetry, {
@@ -370,7 +374,7 @@ export async function POST(request: Request): Promise<Response> {
             await db
               .update(emails)
               .set({ status: "failed" })
-              .where(eq(emails.id, email.id));
+              .where(and(eq(emails.id, email.id), eq(emails.userId, userId)));
             recordTelemetryError(
               telemetry,
               "email.batch_accept.queue_publish_failed",

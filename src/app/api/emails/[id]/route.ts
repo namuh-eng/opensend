@@ -1,20 +1,20 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { emails } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   const { id } = await params;
 
   try {
     const email = await db.query.emails.findFirst({
-      where: eq(emails.id, id),
+      where: and(eq(emails.id, id), eq(emails.userId, auth.userId)),
     });
 
     if (!email) {
@@ -50,7 +50,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   const { id } = await params;
 
@@ -63,7 +63,7 @@ export async function PATCH(
 
   try {
     const existing = await db.query.emails.findFirst({
-      where: eq(emails.id, id),
+      where: and(eq(emails.id, id), eq(emails.userId, auth.userId)),
     });
 
     if (!existing) {
@@ -91,7 +91,7 @@ export async function PATCH(
     const [updated] = await db
       .update(emails)
       .set(updates)
-      .where(eq(emails.id, id))
+      .where(and(eq(emails.id, id), eq(emails.userId, auth.userId)))
       .returning();
 
     return Response.json({

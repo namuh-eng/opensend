@@ -85,6 +85,13 @@
       "when": 1777950543196,
       "tag": "0011_pretty_reavers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777987647765,
+      "tag": "0012_same_famine",
+      "breakpoints": true
     }
   ]
 }
