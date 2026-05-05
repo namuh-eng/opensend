@@ -49,13 +49,6 @@ ok()    { color 32 "$*"; }
 warn()  { color 33 "$*"; }
 err()   { color 31 "$*" >&2; }
 
-ecr_login() {
-  info "→ ECR login (${AWS_REGION})"
-  aws ecr get-login-password --region "${AWS_REGION}" \
-    | docker login --username AWS --password-stdin "${ECR_BASE}" >/dev/null
-  ok "  logged in"
-}
-
 build_and_push() {
   local repo="$1" dockerfile="$2" target="${3:-}" tag="${4:-${IMAGE_TAG}}"
   local image="${ECR_BASE}/${repo}:${tag}"
@@ -287,8 +280,6 @@ deploy_ingester() {
 }
 
 target="${1:-all}"
-
-ecr_login
 
 case "${target}" in
   app)
