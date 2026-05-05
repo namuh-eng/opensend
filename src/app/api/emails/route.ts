@@ -34,7 +34,7 @@ import {
   publishBackgroundJob,
   recordTelemetryError,
 } from "@opensend/core";
-import { and, desc, eq, gt, lt } from "drizzle-orm";
+import { type SQL, and, desc, eq, gt, lt } from "drizzle-orm";
 import type { ZodError } from "zod";
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ export async function POST(request: Request): Promise<Response> {
   const authHeader = request.headers.get("authorization");
   const authHeaderError = getApiKeyAuthHeaderError(authHeader);
   const auth = authHeaderError ? null : await validateApiKey(authHeader);
-  if (!auth) {
+  if (!auth || !auth.userId) {
     recordAcceptMetric(telemetry, {
       durationMs: performance.now() - startedAt,
       outcome: "unauthorized",
@@ -214,7 +214,10 @@ export async function POST(request: Request): Promise<Response> {
   // Idempotency check
   if (idempotencyKey) {
     const existing = await db.query.emails.findFirst({
-      where: eq(emails.idempotencyKey, idempotencyKey),
+      where: and(
+        eq(emails.idempotencyKey, idempotencyKey),
+        eq(emails.userId, auth.userId),
+      ),
     });
     if (existing) {
       recordAcceptMetric(telemetry, {
@@ -268,7 +271,10 @@ export async function POST(request: Request): Promise<Response> {
     // Handle template resolving
     if (validated.template) {
       const template = await db.query.templates.findFirst({
-        where: eq(templates.id, validated.template.id),
+        where: and(
+          eq(templates.id, validated.template.id),
+          eq(templates.userId, auth.userId),
+        ),
       });
       if (!template) {
         recordAcceptMetric(telemetry, {
@@ -425,7 +431,9 @@ export async function POST(request: Request): Promise<Response> {
         await db
           .update(emails)
           .set({ status: "failed" })
-          .where(eq(emails.id, createdEmail.id));
+          .where(
+            and(eq(emails.id, createdEmail.id), eq(emails.userId, auth.userId)),
+          );
         recordTelemetryError(
           telemetry,
           "email.accept.queue_publish_failed",
@@ -469,7 +477,7 @@ export async function POST(request: Request): Promise<Response> {
 
 export async function GET(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   const url = new URL(request.url);
   const limit = Math.min(
@@ -501,7 +509,7 @@ export async function GET(request: Request): Promise<Response> {
       })
       .from(emails);
 
-    const conditions = [];
+    const conditions: SQL[] = [eq(emails.userId, auth.userId)];
     if (status && status !== "all") {
       conditions.push(eq(emails.status, status));
     }
@@ -510,9 +518,7 @@ export async function GET(request: Request): Promise<Response> {
     } else if (before) {
       conditions.push(lt(emails.id, before));
     }
-    if (conditions.length > 0) {
-      query = query.where(and(...conditions)) as typeof query;
-    }
+    query = query.where(and(...conditions)) as typeof query;
 
     const results = await query
       .orderBy(desc(emails.createdAt))
@@ -549,7 +555,7 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function DELETE(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   const url = new URL(request.url);
   const id = url.searchParams.get("id");
@@ -559,7 +565,9 @@ export async function DELETE(request: Request): Promise<Response> {
   }
 
   try {
-    await db.delete(emails).where(eq(emails.id, id));
+    await db
+      .delete(emails)
+      .where(and(eq(emails.id, id), eq(emails.userId, auth.userId)));
     return Response.json({ success: true });
   } catch (err) {
     const message =

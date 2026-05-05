@@ -3,15 +3,19 @@ import { db } from "../client";
 import { emails } from "../schema";
 
 export const emailRepo = {
-  async findById(id: string) {
+  async findById(id: string, userId?: string | null) {
     return await db.query.emails.findFirst({
-      where: eq(emails.id, id),
+      where: userId
+        ? and(eq(emails.id, id), eq(emails.userId, userId))
+        : eq(emails.id, id),
     });
   },
 
-  async findByIdempotencyKey(key: string) {
+  async findByIdempotencyKey(key: string, userId?: string | null) {
     return await db.query.emails.findFirst({
-      where: eq(emails.idempotencyKey, key),
+      where: userId
+        ? and(eq(emails.idempotencyKey, key), eq(emails.userId, userId))
+        : eq(emails.idempotencyKey, key),
     });
   },
 
@@ -19,11 +23,19 @@ export const emailRepo = {
     return await db.insert(emails).values(data).returning();
   },
 
-  async update(id: string, data: Partial<typeof emails.$inferInsert>) {
+  async update(
+    id: string,
+    data: Partial<typeof emails.$inferInsert>,
+    userId?: string | null,
+  ) {
     return await db
       .update(emails)
       .set(data)
-      .where(eq(emails.id, id))
+      .where(
+        userId
+          ? and(eq(emails.id, id), eq(emails.userId, userId))
+          : eq(emails.id, id),
+      )
       .returning();
   },
 
@@ -37,12 +49,18 @@ export const emailRepo = {
   },
 
   async list(
-    options: { limit?: number; after?: string; before?: string } = {},
+    options: {
+      limit?: number;
+      after?: string;
+      before?: string;
+      userId?: string;
+    } = {},
   ) {
-    const { limit = 20, after, before } = options;
+    const { limit = 20, after, before, userId } = options;
 
     const conditions = [];
 
+    if (userId) conditions.push(eq(emails.userId, userId));
     if (after) conditions.push(gt(emails.id, after));
     else if (before) conditions.push(lt(emails.id, before));
 
