@@ -26,7 +26,7 @@ Rows are ordered roughly by priority within each area. The inspector's tie-break
 
 | Feature | Resend | OpenSend | Feature | DX | Reliability | Price | Priority | Issue # | Last reviewed |
 |---|---|---|---|---|---|---|---|---|---|
-| Single send (`POST /emails`) | core, stable, idempotency-keyed | TBD | ? | ? | ? | ? | P1 | | |
+| Single send (`POST /emails`) | `POST /emails` accepts `from`, `to`, `subject`, content, optional metadata, and `Idempotency-Key`; success returns `{ "id": "..." }` ([docs](https://resend.com/docs/api-reference/emails/send-email)) | partial: core implementation exists at `POST /api/emails` and returns `{ id }` (`src/app/api/emails/route.ts:128`, `src/app/api/emails/route.ts:450`); validation covers Resend-like fields (`src/lib/validation/emails.ts:27`, `src/lib/validation/emails.ts:40`); prod `POST /emails` returned `405 Method Not Allowed` while `POST /api/emails` reached API auth with `401` JSON on 2026-05-05; dashboard `GET /emails` is still a page route | partial | behind | parity | n/a | P1 | #194 | 2026-05-05 |
 | Batch send (`POST /emails/batch`) | up to 100/req | TBD | ? | ? | ? | ? | P1 | | |
 | Scheduled send (`scheduled_at`) | natural-language + ISO | TBD | ? | ? | ? | ? | P1 | | |
 | Cancel scheduled send | `PATCH /emails/:id` | TBD | ? | ? | ? | ? | P2 | | |
