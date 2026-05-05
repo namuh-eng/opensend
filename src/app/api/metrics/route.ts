@@ -52,7 +52,13 @@ export async function GET(request: NextRequest) {
     const range = searchParams.get("range") || "last_15_days";
     const domain = searchParams.get("domain");
     const eventType = searchParams.get("event_type");
-    const cacheKey = getMetricsAggregateCacheKey({ range, domain, eventType });
+    const userId = session.user.id;
+    const cacheKey = getMetricsAggregateCacheKey({
+      userId,
+      range,
+      domain,
+      eventType,
+    });
 
     const cached = await readDashboardAggregateCache<unknown>(cacheKey);
     if (cached) {
@@ -64,6 +70,7 @@ export async function GET(request: NextRequest) {
     const { start, end } = getMetricsDateRange(range);
 
     const conditions = [
+      eq(emails.userId, userId),
       gte(emails.createdAt, start),
       lte(emails.createdAt, end),
     ];

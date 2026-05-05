@@ -1,21 +1,26 @@
 import { EmailDetail } from "@/components/email-detail";
+import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { emailEvents, emailSuppressions, emails } from "@/lib/db/schema";
 import { and, desc, eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 export default async function EmailDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const session = await getServerSession();
+  if (!session) redirect("/auth");
+
   const { id } = await params;
+  const userId = session.user.id;
 
   try {
     const [emailResult] = await db
       .select()
       .from(emails)
-      .where(eq(emails.id, id))
+      .where(and(eq(emails.id, id), eq(emails.userId, userId)))
       .limit(1);
 
     if (!emailResult) {
@@ -32,7 +37,7 @@ export default async function EmailDetailPage({
     const suppression = primaryRecipient
       ? await db.query.emailSuppressions.findFirst({
           where: and(
-            eq(emailSuppressions.userId, emailResult.userId ?? ""),
+            eq(emailSuppressions.userId, userId),
             eq(emailSuppressions.email, primaryRecipient),
           ),
         })

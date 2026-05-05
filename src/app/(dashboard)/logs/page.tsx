@@ -1,7 +1,9 @@
 import { LogsListPage } from "@/components/logs-list-page";
+import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { logs } from "@/lib/db/schema";
 import { type SQL, and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { redirect } from "next/navigation";
 
 export default async function LogsPage(props: {
   searchParams: Promise<{
@@ -13,6 +15,9 @@ export default async function LogsPage(props: {
     apiKeyId?: string;
   }>;
 }) {
+  const session = await getServerSession();
+  if (!session) redirect("/auth");
+
   const searchParams = await props.searchParams;
   const status = searchParams.status;
   const method = searchParams.method;
@@ -21,7 +26,7 @@ export default async function LogsPage(props: {
   const userAgent = searchParams.userAgent;
   const apiKeyId = searchParams.apiKeyId;
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(logs.userId, session.user.id)];
 
   if (status) {
     if (status === "2xx") {
@@ -54,10 +59,8 @@ export default async function LogsPage(props: {
   }
 
   if (apiKeyId) {
-    conditions.push(eq(logs.apiKeyId, apiKeyId));
+    conditions.push(sql`${logs.document}->>'apiKeyId' = ${apiKeyId}`);
   }
-
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   let logRows: {
     id: string;
@@ -77,7 +80,7 @@ export default async function LogsPage(props: {
         createdAt: logs.createdAt,
       })
       .from(logs)
-      .where(whereClause)
+      .where(and(...conditions))
       .orderBy(desc(logs.createdAt))
       .limit(500);
 
