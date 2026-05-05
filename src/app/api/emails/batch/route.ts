@@ -9,6 +9,10 @@ import { db } from "@/lib/db";
 import { contacts, emails } from "@/lib/db/schema";
 import { normalizeAttachmentsForStorage } from "@/lib/email-attachments";
 import {
+  findSuppressedRecipients,
+  suppressedRecipientError,
+} from "@/lib/suppressions";
+import {
   buildOneClickUnsubscribeHeaders,
   createUnsubscribeUrl,
   getPublicBaseUrl,
@@ -224,6 +228,28 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const validatedItems = result.data;
+  const itemRecipients = validatedItems.map(
+    (item) => normalizeToArray(item.to) as string[],
+  );
+  const suppressedByEmail = new Map(
+    (
+      await findSuppressedRecipients({
+        userId: auth.userId,
+        recipients: itemRecipients.flat(),
+      })
+    ).map((entry) => [entry.email, entry]),
+  );
+  const suppressedResults = itemRecipients.map((recipients) =>
+    recipients
+      .map((recipient) => suppressedByEmail.get(recipient.toLowerCase()))
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
+  );
+  const acceptedCount = suppressedResults.filter(
+    (entries) => entries.length === 0,
+  ).length;
+  const firstAcceptedIndex = suppressedResults.findIndex(
+    (entries) => entries.length === 0,
+  );
 
   try {
     const reservation = await db.transaction(async (tx) => {
@@ -232,7 +258,7 @@ export async function POST(request: Request): Promise<Response> {
       // inserted and the whole request returns 402.
       const quota = await reserveEmailQuota(
         auth.userId,
-        validatedItems.length,
+        acceptedCount,
         new Date(),
         process.env,
         tx,
@@ -240,9 +266,16 @@ export async function POST(request: Request): Promise<Response> {
       if (!quota.ok) {
         return quota;
       }
-      const persisted: Array<{ id: string; shouldQueueNow: boolean }> = [];
+      const persisted: Array<{
+        index: number;
+        id: string;
+        shouldQueueNow: boolean;
+      }> = [];
 
       for (const [index, item] of validatedItems.entries()) {
+        if (suppressedResults[index]?.length) {
+          continue;
+        }
         const to = normalizeToArray(item.to) as string[];
         const cc = normalizeToArray(item.cc);
         const bcc = normalizeToArray(item.bcc);
@@ -278,12 +311,13 @@ export async function POST(request: Request): Promise<Response> {
             status: shouldQueueNow ? "queued" : "scheduled",
             scheduledAt: scheduledAt,
             topicId: item.topic_id || null,
-            idempotencyKey: index === 0 ? idempotencyKey : null,
+            idempotencyKey:
+              index === firstAcceptedIndex ? idempotencyKey : null,
             userId: auth.userId,
           })
           .returning({ id: emails.id });
 
-        persisted.push({ id: email.id, shouldQueueNow });
+        persisted.push({ index, id: email.id, shouldQueueNow });
       }
 
       return { ok: true as const, emails: persisted };
@@ -294,7 +328,7 @@ export async function POST(request: Request): Promise<Response> {
         plan: reservation.info.plan,
         limit: reservation.info.limit,
         used: reservation.info.used,
-        requested: validatedItems.length,
+        requested: acceptedCount,
       });
       recordBatchMetric(telemetry, {
         durationMs: performance.now() - startedAt,
@@ -308,7 +342,7 @@ export async function POST(request: Request): Promise<Response> {
       });
     }
 
-    const results: Array<{ id: string }> = [];
+    const resultByIndex = new Map<number, { id: string }>();
     const CONCURRENCY = 5;
     const queuedEmails = reservation.emails.filter(
       (email) => email.shouldQueueNow,
@@ -349,17 +383,27 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    results.push(...reservation.emails.map((email) => ({ id: email.id })));
+    for (const email of reservation.emails) {
+      resultByIndex.set(email.index, { id: email.id });
+    }
+
+    const results = validatedItems.map((_, index) => {
+      const success = resultByIndex.get(index);
+      if (success) return success;
+      return {
+        error: suppressedRecipientError(suppressedResults[index] ?? []),
+      };
+    });
 
     const durationMs = performance.now() - startedAt;
     logTelemetry("info", "email.batch_accepted", telemetry, {
-      email_count: results.length,
+      email_count: acceptedCount,
       duration_ms: Math.round(durationMs),
     });
     recordBatchMetric(telemetry, {
       durationMs,
       outcome: "accepted",
-      count: results.length,
+      count: acceptedCount,
     });
     return jsonWithTelemetry({ data: results }, telemetry);
   } catch (err) {

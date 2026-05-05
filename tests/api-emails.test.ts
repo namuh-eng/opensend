@@ -244,6 +244,11 @@ describe("POST /api/emails", () => {
       contacts: { findFirst: vi.fn().mockResolvedValue(null) },
     });
     mockDb.insert = vi.fn();
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
@@ -495,6 +500,49 @@ describe("POST /api/emails", () => {
     });
   });
 
+  it("rejects suppressed to recipients before quota, persistence, or queueing", async () => {
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([
+          {
+            email: "blocked@test.com",
+            reason: "bounced",
+            suppressedAt: new Date("2026-05-05T00:00:00Z"),
+          },
+        ]),
+      }),
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: ["blocked@test.com"],
+        subject: "Suppressed",
+        html: "<p>No send</p>",
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "recipient_suppressed",
+      code: "recipient_suppressed",
+      statusCode: 422,
+      details: {
+        recipients: "blocked@test.com",
+        reason: "bounced",
+        scope: "user",
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
   it("stores attachment ids and queues delivery without direct SES", async () => {
     mockSendEmail.mockResolvedValue({ id: "ses-msg-id" });
     const valuesMock = vi.fn().mockReturnValue({
@@ -560,6 +608,11 @@ describe("POST /api/emails/batch", () => {
       contacts: { findFirst: vi.fn().mockResolvedValue(null) },
     });
     mockDb.insert = vi.fn();
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
@@ -752,6 +805,73 @@ describe("POST /api/emails/batch", () => {
       ),
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
+  });
+
+  it("returns per-item suppression errors while preserving accepted batch sends", async () => {
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([
+          {
+            email: "blocked@test.com",
+            reason: "complained",
+            suppressedAt: new Date("2026-05-05T00:00:00Z"),
+          },
+        ]),
+      }),
+    });
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-accepted-1" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const req = makeRequest(
+      "POST",
+      [
+        {
+          from: "sender@domain.com",
+          to: ["ok@test.com"],
+          subject: "OK",
+          html: "<p>OK</p>",
+        },
+        {
+          from: "sender@domain.com",
+          to: ["blocked@test.com"],
+          subject: "Blocked",
+          html: "<p>Blocked</p>",
+        },
+      ],
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      data: [
+        { id: "email-accepted-1" },
+        {
+          error: {
+            code: "recipient_suppressed",
+            statusCode: 422,
+            details: {
+              recipients: "blocked@test.com",
+              reason: "complained",
+              scope: "user",
+            },
+          },
+        },
+      ],
+    });
+    expect(mockReserveEmailQuota).toHaveBeenCalledWith(
+      "user-1",
+      1,
+      expect.any(Date),
+      process.env,
+      mockDb,
+    );
+    expect(mockDb.insert).toHaveBeenCalledTimes(1);
+    expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(1);
   });
 
   it("sends batch and returns array of ids", async () => {

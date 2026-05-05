@@ -8,6 +8,7 @@ import {
   logTelemetry,
   publishBackgroundJob,
   recordTelemetryError,
+  suppressionRepo,
   toWebhookEventType,
   webhookRepo,
 } from "@opensend/core";
@@ -28,6 +29,60 @@ import {
 } from "./stripe-webhook";
 
 const app = new Hono();
+
+type SesSuppressionOutcome = {
+  reason: "bounced" | "complained";
+  recipients: string[];
+  metadata: { bounceType?: string; complaintFeedbackType?: string };
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readRecipientEmails(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((recipient) => {
+      if (!isRecord(recipient)) return null;
+      const emailAddress = recipient.emailAddress;
+      return typeof emailAddress === "string" && emailAddress.length > 0
+        ? emailAddress
+        : null;
+    })
+    .filter((email): email is string => Boolean(email));
+}
+
+function getSesSuppressionOutcome(
+  eventType: string,
+  payload: unknown,
+): SesSuppressionOutcome | null {
+  if (!isRecord(payload)) return null;
+
+  if (eventType === "Bounce") {
+    const bounceType = payload.bounceType;
+    if (bounceType !== "Permanent") return null;
+    return {
+      reason: "bounced",
+      recipients: readRecipientEmails(payload.bouncedRecipients),
+      metadata: { bounceType },
+    };
+  }
+
+  if (eventType === "Complaint") {
+    const complaintFeedbackType = payload.complaintFeedbackType;
+    return {
+      reason: "complained",
+      recipients: readRecipientEmails(payload.complainedRecipients),
+      metadata:
+        typeof complaintFeedbackType === "string"
+          ? { complaintFeedbackType }
+          : {},
+    };
+  }
+
+  return null;
+}
 
 function isAuthorizedJobRequest(authHeader: string | undefined): boolean {
   const token = process.env.INGESTER_JOB_TOKEN?.trim();
@@ -250,6 +305,26 @@ app.post("/events/ses", async (c) => {
         email_id: emailId,
       });
       return c.text("OK");
+    }
+
+    const suppressionOutcome = getSesSuppressionOutcome(
+      eventType,
+      sesMessage[normalizedEvent.payloadKey],
+    );
+    if (suppressionOutcome) {
+      const suppressions = await suppressionRepo.suppressFromSesEvent({
+        emailId,
+        recipients: suppressionOutcome.recipients,
+        reason: suppressionOutcome.reason,
+        sourceEventId: snsMessage.MessageId,
+        sourceMessageId: sesId,
+        metadata: suppressionOutcome.metadata,
+      });
+      logTelemetry("info", "ses.suppressions.refreshed", telemetry, {
+        email_id: emailId,
+        reason: suppressionOutcome.reason,
+        suppression_count: suppressions.length,
+      });
     }
 
     emitCloudWatchMetric(telemetry, {

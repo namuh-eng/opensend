@@ -78,6 +78,13 @@
       "when": 1777939200001,
       "tag": "0010_repair_domain_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777950543196,
+      "tag": "0011_pretty_reavers",
+      "breakpoints": true
     }
   ]
 }

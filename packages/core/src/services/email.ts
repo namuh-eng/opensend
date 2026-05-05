@@ -1,8 +1,24 @@
 import { emailRepo } from "../db/repositories/emailRepo";
+import { suppressionRepo } from "../db/repositories/suppressionRepo";
 import {
   createBackgroundJob,
   publishBackgroundJob,
 } from "../jobs/background-jobs";
+
+export class SuppressedRecipientError extends Error {
+  readonly code = "recipient_suppressed";
+  readonly statusCode = 422;
+
+  constructor(readonly recipients: Array<{ email: string; reason: string }>) {
+    const first = recipients[0];
+    super(
+      first
+        ? `Recipient ${first.email} is suppressed because it ${first.reason}.`
+        : "One or more recipients are suppressed.",
+    );
+    this.name = "SuppressedRecipientError";
+  }
+}
 
 export class EmailService {
   async send(params: {
@@ -28,6 +44,19 @@ export class EmailService {
         params.idempotencyKey,
       );
       if (existing) return { id: existing.id, duplicate: true };
+    }
+
+    const suppressed = await suppressionRepo.findByUserAndEmails(
+      params.userId,
+      params.to,
+    );
+    if (suppressed.length > 0) {
+      throw new SuppressedRecipientError(
+        suppressed.map((entry) => ({
+          email: entry.email,
+          reason: entry.reason,
+        })),
+      );
     }
 
     const shouldQueueNow =
@@ -81,7 +110,18 @@ export class EmailService {
     const results = [];
     for (let i = 0; i < items.length; i += CONCURRENCY) {
       const chunk = items.slice(i, i + CONCURRENCY);
-      const chunkRes = await Promise.all(chunk.map((item) => this.send(item)));
+      const chunkRes = await Promise.all(
+        chunk.map(async (item) => {
+          try {
+            return await this.send(item);
+          } catch (error) {
+            if (error instanceof SuppressedRecipientError) {
+              return { error };
+            }
+            throw error;
+          }
+        }),
+      );
       results.push(...chunkRes);
     }
     return results;

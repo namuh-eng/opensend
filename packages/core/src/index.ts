@@ -6,6 +6,7 @@ export * from "./db/repositories/contactRepo";
 export * from "./db/repositories/domainRepo";
 export * from "./db/repositories/emailRepo";
 export * from "./db/repositories/emailEventRepo";
+export * from "./db/repositories/suppressionRepo";
 export * from "./db/repositories/webhookRepo";
 export * from "./db/repositories/webhookDeliveryRepo";
 export * from "./db/repositories/logRepo";
