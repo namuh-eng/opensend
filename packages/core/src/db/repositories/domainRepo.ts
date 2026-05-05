@@ -34,11 +34,14 @@ export const domainRepo = {
       .returning({ id: domains.id });
   },
 
-  async list(options: { limit?: number; after?: string } = {}) {
-    const { limit = 20, after } = options;
+  async list(
+    options: { limit?: number; after?: string; userId?: string | null } = {},
+  ) {
+    const { limit = 20, after, userId } = options;
     const conditions = [];
 
     if (after) conditions.push(lt(domains.id, after));
+    if (userId) conditions.push(eq(domains.userId, userId));
 
     const results = await db
       .select()

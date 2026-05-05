@@ -1,5 +1,6 @@
 import {
   authorizeDashboardOrApiKey,
+  getServerSession,
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { autoConfigureDomain } from "@/lib/cloudflare";
@@ -13,7 +14,7 @@ import {
 import { createDomainIdentity } from "@/lib/ses";
 import { autoConfigureDomainParamsSchema } from "@/lib/validation/domains";
 import { DMARC_RECORD_VALUE, buildDmarcRecordName } from "@opensend/core";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 export async function POST(
@@ -24,6 +25,10 @@ export async function POST(
     _req.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+
+  const session = "dashboard" in auth ? await getServerSession() : null;
+  const userId = "userId" in auth ? auth.userId : session?.user?.id;
+  if (!userId) return unauthorizedResponse();
 
   const parsedParams = autoConfigureDomainParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
@@ -38,7 +43,7 @@ export async function POST(
   try {
     const domain = await getCachedDomainById(id);
 
-    if (!domain) {
+    if (!domain || domain.userId !== userId) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -104,7 +109,7 @@ export async function POST(
         records: allRecords,
         status: "pending",
       })
-      .where(eq(domains.id, id));
+      .where(and(eq(domains.id, id), eq(domains.userId, userId)));
 
     await invalidateDomainCaches({ id, name: domain.name });
 

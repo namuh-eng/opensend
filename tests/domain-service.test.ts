@@ -212,7 +212,11 @@ describe("domain service", () => {
   });
 
   it("lists with normalized pagination and maps public list fields", async () => {
-    let listOptions: { limit?: number; after?: string } | null = null;
+    let listOptions: {
+      limit?: number;
+      after?: string;
+      userId?: string | null;
+    } | null = null;
     const service = createDomainService({
       repository: createRepository({
         async list(options) {
@@ -225,9 +229,17 @@ describe("domain service", () => {
       }),
     });
 
-    const result = await service.listDomains({ limit: 500, after: "domain-3" });
+    const result = await service.listDomains({
+      limit: 500,
+      after: "domain-3",
+      userId: "user-1",
+    });
 
-    expect(listOptions).toEqual({ limit: 100, after: "domain-3" });
+    expect(listOptions).toEqual({
+      limit: 100,
+      after: "domain-3",
+      userId: "user-1",
+    });
     expect(result).toEqual({
       data: [
         {
