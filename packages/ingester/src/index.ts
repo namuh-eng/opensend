@@ -342,7 +342,7 @@ app.post("/events/ses", async (c) => {
       return c.text("OK");
     }
 
-    const { data: hooks } = await webhookRepo.list({ limit: 100 });
+    const { data: hooks } = await webhookRepo.listForDispatch({ limit: 100 });
     for (const hook of hooks) {
       const types = hook.eventTypes as string[];
       if (hook.status === "active" && types.includes(webhookEventType)) {

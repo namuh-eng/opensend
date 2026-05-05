@@ -107,7 +107,8 @@ describe("api key service", () => {
   });
 
   it("lists with normalized pagination and maps only public list fields", async () => {
-    let listOptions: { limit?: number; after?: string } | null = null;
+    let listOptions: { userId: string; limit?: number; after?: string } | null =
+      null;
     const service = createApiKeyService({
       repository: createRepository({
         async list(options) {
@@ -120,9 +121,17 @@ describe("api key service", () => {
       }),
     });
 
-    const result = await service.listApiKeys({ limit: 500, after: "key-3" });
+    const result = await service.listApiKeys({
+      userId: "user-1",
+      limit: 500,
+      after: "key-3",
+    });
 
-    expect(listOptions).toEqual({ limit: 100, after: "key-3" });
+    expect(listOptions).toEqual({
+      userId: "user-1",
+      limit: 100,
+      after: "key-3",
+    });
     expect(result).toEqual({
       data: [
         {
@@ -145,13 +154,40 @@ describe("api key service", () => {
       }),
     });
 
-    await expect(service.getApiKey("missing")).rejects.toMatchObject({
+    await expect(service.getApiKey("missing", "user-1")).rejects.toMatchObject({
       code: "not_found",
       message: "API key not found",
     } satisfies Partial<ApiKeyServiceError>);
-    await expect(service.deleteApiKey("missing")).rejects.toMatchObject({
+    await expect(
+      service.deleteApiKey("missing", "user-1"),
+    ).rejects.toMatchObject({
       code: "not_found",
       message: "API key not found",
     } satisfies Partial<ApiKeyServiceError>);
+  });
+  it("does not delete or invalidate cache for an unowned API key", async () => {
+    const findById = vi
+      .fn<ApiKeyRepository["findById"]>()
+      .mockResolvedValue(undefined);
+    const deleteKey = vi.fn<ApiKeyRepository["delete"]>();
+    const invalidateAuthCache = vi.fn<(_: string) => Promise<void>>();
+    const service = createApiKeyService({
+      invalidateAuthCache,
+      repository: createRepository({
+        findById,
+        delete: deleteKey,
+      }),
+    });
+
+    await expect(
+      service.deleteApiKey("key-user-a", "user-b"),
+    ).rejects.toMatchObject({
+      code: "not_found",
+      message: "API key not found",
+    } satisfies Partial<ApiKeyServiceError>);
+
+    expect(findById).toHaveBeenCalledWith("key-user-a", "user-b");
+    expect(deleteKey).not.toHaveBeenCalled();
+    expect(invalidateAuthCache).not.toHaveBeenCalled();
   });
 });

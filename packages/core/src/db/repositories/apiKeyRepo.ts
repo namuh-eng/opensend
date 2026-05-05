@@ -2,10 +2,14 @@ import { and, desc, eq, lt } from "drizzle-orm";
 import { db } from "../client";
 import { apiKeys } from "../schema";
 
+function ownedApiKeyWhere(id: string, userId: string) {
+  return and(eq(apiKeys.id, id), eq(apiKeys.userId, userId));
+}
+
 export const apiKeyRepo = {
-  async findById(id: string) {
+  async findById(id: string, userId: string) {
     return await db.query.apiKeys.findFirst({
-      where: eq(apiKeys.id, id),
+      where: ownedApiKeyWhere(id, userId),
     });
   },
 
@@ -19,23 +23,23 @@ export const apiKeyRepo = {
     return await db.insert(apiKeys).values(data).returning();
   },
 
-  async delete(id: string) {
+  async delete(id: string, userId: string) {
     return await db
       .delete(apiKeys)
-      .where(eq(apiKeys.id, id))
+      .where(ownedApiKeyWhere(id, userId))
       .returning({ id: apiKeys.id });
   },
 
-  async list(options: { limit?: number; after?: string } = {}) {
-    const { limit = 20, after } = options;
-    const conditions = [];
+  async list(options: { userId: string; limit?: number; after?: string }) {
+    const { userId, limit = 20, after } = options;
+    const conditions = [eq(apiKeys.userId, userId)];
 
     if (after) conditions.push(lt(apiKeys.id, after));
 
     const results = await db
       .select()
       .from(apiKeys)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .where(and(...conditions))
       .orderBy(desc(apiKeys.id))
       .limit(limit + 1);
 
