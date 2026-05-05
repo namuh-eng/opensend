@@ -1,19 +1,22 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { contacts, topics } from "@/lib/db/schema";
-import { eq, or } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 
-async function findContact(idOrEmail: string) {
+async function findContact(idOrEmail: string, userId: string) {
   const isUuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       idOrEmail,
     );
 
   return await db.query.contacts.findFirst({
-    where: isUuid
-      ? or(eq(contacts.id, idOrEmail), eq(contacts.email, idOrEmail))
-      : eq(contacts.email, idOrEmail),
+    where: and(
+      isUuid
+        ? or(eq(contacts.id, idOrEmail), eq(contacts.email, idOrEmail))
+        : eq(contacts.email, idOrEmail),
+      eq(contacts.userId, userId),
+    ),
   });
 }
 
@@ -35,10 +38,12 @@ export async function GET(
 ) {
   const auth = await validateApiKey(_request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  if (!auth.userId) return unauthorizedResponse();
+  const userId = auth.userId;
 
   try {
     const { id: idOrEmail } = await params;
-    const contact = await findContact(idOrEmail);
+    const contact = await findContact(idOrEmail, userId);
 
     if (!contact) {
       return NextResponse.json({ error: "Contact not found" }, { status: 404 });
@@ -53,7 +58,7 @@ export async function GET(
     const data = await Promise.all(
       subscriptions.map(async (sub) => {
         const topic = await db.query.topics.findFirst({
-          where: eq(topics.id, sub.topicId),
+          where: and(eq(topics.id, sub.topicId), eq(topics.userId, userId)),
         });
         if (!topic) return null;
         return {
@@ -83,10 +88,12 @@ export async function PATCH(
 ) {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  if (!auth.userId) return unauthorizedResponse();
+  const userId = auth.userId;
 
   try {
     const { id: idOrEmail } = await params;
-    const contact = await findContact(idOrEmail);
+    const contact = await findContact(idOrEmail, userId);
 
     if (!contact) {
       return NextResponse.json({ error: "Contact not found" }, { status: 404 });
@@ -114,7 +121,7 @@ export async function PATCH(
     await db
       .update(contacts)
       .set({ topicSubscriptions: updatedSubscriptions })
-      .where(eq(contacts.id, contact.id));
+      .where(and(eq(contacts.id, contact.id), eq(contacts.userId, userId)));
 
     return NextResponse.json({
       object: "contact_topics",

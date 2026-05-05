@@ -1,12 +1,14 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { contacts, segments, topics } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  if (!auth.userId) return unauthorizedResponse();
+  const userId = auth.userId;
 
   try {
     const body = await request.json();
@@ -27,7 +29,7 @@ export async function POST(request: NextRequest) {
         );
 
       const segment = await db.query.segments.findFirst({
-        where: eq(segments.id, segment_id),
+        where: and(eq(segments.id, segment_id), eq(segments.userId, userId)),
       });
       if (!segment)
         return NextResponse.json(
@@ -36,7 +38,10 @@ export async function POST(request: NextRequest) {
         );
 
       const targetContacts = await db.query.contacts.findMany({
-        where: inArray(contacts.id, contact_ids),
+        where: and(
+          inArray(contacts.id, contact_ids),
+          eq(contacts.userId, userId),
+        ),
       });
 
       await Promise.all(
@@ -46,7 +51,7 @@ export async function POST(request: NextRequest) {
             await db
               .update(contacts)
               .set({ segments: [...currentSegments, segment.name] })
-              .where(eq(contacts.id, c.id));
+              .where(and(eq(contacts.id, c.id), eq(contacts.userId, userId)));
           }
         }),
       );
@@ -66,13 +71,16 @@ export async function POST(request: NextRequest) {
         );
 
       const topic = await db.query.topics.findFirst({
-        where: eq(topics.id, topic_id),
+        where: and(eq(topics.id, topic_id), eq(topics.userId, userId)),
       });
       if (!topic)
         return NextResponse.json({ error: "Topic not found" }, { status: 404 });
 
       const targetContacts = await db.query.contacts.findMany({
-        where: inArray(contacts.id, contact_ids),
+        where: and(
+          inArray(contacts.id, contact_ids),
+          eq(contacts.userId, userId),
+        ),
       });
 
       await Promise.all(
@@ -92,7 +100,7 @@ export async function POST(request: NextRequest) {
                   { topicId: topic.id, subscribed: true },
                 ],
               })
-              .where(eq(contacts.id, c.id));
+              .where(and(eq(contacts.id, c.id), eq(contacts.userId, userId)));
           } else {
             const updated = currentTopics.map((t) =>
               t.topicId === topic.id ? { ...t, subscribed: true } : t,
@@ -100,7 +108,7 @@ export async function POST(request: NextRequest) {
             await db
               .update(contacts)
               .set({ topicSubscriptions: updated })
-              .where(eq(contacts.id, c.id));
+              .where(and(eq(contacts.id, c.id), eq(contacts.userId, userId)));
           }
         }),
       );

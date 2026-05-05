@@ -216,6 +216,7 @@ describe("route smoke coverage", () => {
     mockValidateApiKey.mockResolvedValue({
       apiKeyId: "key-1",
       permission: "full_access",
+      userId: "user-1",
     });
     mockAuthorizeDashboardOrApiKey.mockResolvedValue({
       apiKeyId: "key-1",

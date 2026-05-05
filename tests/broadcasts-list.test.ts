@@ -5,14 +5,13 @@ const mockRouter = {
   refresh: vi.fn(),
   replace: vi.fn(),
 };
+const emptySearchParams = new URLSearchParams();
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
   useRouter: () => mockRouter,
   usePathname: () => "/broadcasts",
-  useSearchParams: () => ({
-    get: () => null,
-  }),
+  useSearchParams: () => emptySearchParams,
 }));
 
 // Mock next/link
