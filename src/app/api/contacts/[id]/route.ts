@@ -1,18 +1,21 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
-import { eq, or } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 
-async function findContact(idOrEmail: string) {
+async function findContact(idOrEmail: string, userId: string) {
   const isUuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       idOrEmail,
     );
 
   return await db.query.contacts.findFirst({
-    where: isUuid
-      ? or(eq(contacts.id, idOrEmail), eq(contacts.email, idOrEmail))
-      : eq(contacts.email, idOrEmail),
+    where: and(
+      isUuid
+        ? or(eq(contacts.id, idOrEmail), eq(contacts.email, idOrEmail))
+        : eq(contacts.email, idOrEmail),
+      eq(contacts.userId, userId),
+    ),
   });
 }
 
@@ -22,11 +25,13 @@ export async function GET(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  if (!auth.userId) return unauthorizedResponse();
+  const userId = auth.userId;
 
   const { id } = await params;
 
   try {
-    const contact = await findContact(id);
+    const contact = await findContact(id, userId);
 
     if (!contact) {
       return Response.json({ error: "Contact not found" }, { status: 404 });
@@ -69,6 +74,8 @@ export async function PATCH(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  if (!auth.userId) return unauthorizedResponse();
+  const userId = auth.userId;
 
   const { id } = await params;
 
@@ -80,7 +87,7 @@ export async function PATCH(
   }
 
   try {
-    const contact = await findContact(id);
+    const contact = await findContact(id, userId);
     if (!contact) {
       return Response.json({ error: "Contact not found" }, { status: 404 });
     }
@@ -97,8 +104,12 @@ export async function PATCH(
     const [updated] = await db
       .update(contacts)
       .set(updateData)
-      .where(eq(contacts.id, contact.id))
+      .where(and(eq(contacts.id, contact.id), eq(contacts.userId, userId)))
       .returning();
+
+    if (!updated) {
+      return Response.json({ error: "Contact not found" }, { status: 404 });
+    }
 
     return Response.json({
       object: "contact",
@@ -123,18 +134,20 @@ export async function DELETE(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  if (!auth.userId) return unauthorizedResponse();
+  const userId = auth.userId;
 
   const { id } = await params;
 
   try {
-    const contact = await findContact(id);
+    const contact = await findContact(id, userId);
     if (!contact) {
       return Response.json({ error: "Contact not found" }, { status: 404 });
     }
 
     const [deleted] = await db
       .delete(contacts)
-      .where(eq(contacts.id, contact.id))
+      .where(and(eq(contacts.id, contact.id), eq(contacts.userId, userId)))
       .returning({ id: contacts.id });
 
     if (!deleted) {

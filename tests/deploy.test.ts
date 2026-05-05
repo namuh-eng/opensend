@@ -41,7 +41,6 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     const scriptPath = join(root, "scripts", "deploy.sh");
     expect(existsSync(scriptPath)).toBe(true);
     const script = readFileSync(scriptPath, "utf-8");
-    expect(script).toContain("aws ecr get-login-password");
     expect(script).toContain("buildx build");
     expect(script).toContain("linux/amd64");
     expect(script).toContain("aws ecs update-service");

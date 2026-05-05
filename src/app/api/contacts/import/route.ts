@@ -1,13 +1,15 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { contacts, segments, topics } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { contacts, segments } from "@/lib/db/schema";
+import { and, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import Papa from "papaparse";
 
 export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  if (!auth.userId) return unauthorizedResponse();
+  const userId = auth.userId;
 
   try {
     const formData = await request.formData();
@@ -31,7 +33,7 @@ export async function POST(request: NextRequest) {
     let segmentName = "";
     if (segmentId) {
       const seg = await db.query.segments.findFirst({
-        where: eq(segments.id, segmentId),
+        where: and(eq(segments.id, segmentId), eq(segments.userId, userId)),
       });
       if (seg) segmentName = seg.name;
     }
@@ -58,7 +60,7 @@ export async function POST(request: NextRequest) {
 
       // Simple upsert logic
       const existing = await db.query.contacts.findFirst({
-        where: eq(contacts.email, data.email),
+        where: and(eq(contacts.email, data.email), eq(contacts.userId, userId)),
       });
 
       if (existing) {
@@ -79,7 +81,9 @@ export async function POST(request: NextRequest) {
               ...customProps,
             },
           })
-          .where(eq(contacts.id, existing.id));
+          .where(
+            and(eq(contacts.id, existing.id), eq(contacts.userId, userId)),
+          );
         createdIds.push(existing.id);
       } else {
         const [inserted] = await db
@@ -90,6 +94,7 @@ export async function POST(request: NextRequest) {
             lastName: data.lastName || null,
             segments: segmentName ? [segmentName] : null,
             customProperties: customProps,
+            userId: userId,
           })
           .returning({ id: contacts.id });
         createdIds.push(inserted.id);

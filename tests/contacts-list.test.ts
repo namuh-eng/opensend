@@ -31,6 +31,12 @@ vi.mock("@/lib/api-auth", () => ({
       apiKeyId: "test",
       permission: "full_access",
       domainId: null,
+      userId: "user-1",
+    }),
+  getServerSession: () =>
+    Promise.resolve({
+      session: { id: "session-1" },
+      user: { id: "user-1" },
     }),
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
