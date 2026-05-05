@@ -25,4 +25,15 @@ jobs:
           # runner does not hit the keychain-bound credsStore helper.
           # The runner host owns ~/.docker-actions/config.json.
           export DOCKER_CONFIG="${HOME}/.docker-actions"
+          # Re-expose cli-plugins (buildx) since DOCKER_CONFIG overrides the
+          # plugin search path away from ~/.docker/cli-plugins.
+          mkdir -p "${DOCKER_CONFIG}/cli-plugins"
+          for src in "${HOME}/.docker/cli-plugins" "/Applications/Docker.app/Contents/Resources/cli-plugins"; do
+            [ -d "${src}" ] || continue
+            for plugin in "${src}"/*; do
+              [ -e "${plugin}" ] || continue
+              ln -sfn "${plugin}" "${DOCKER_CONFIG}/cli-plugins/$(basename "${plugin}")"
+            done
+          done
+          docker buildx version
           bash scripts/deploy.sh all
