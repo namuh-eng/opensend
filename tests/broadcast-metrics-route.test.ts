@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockValidateApiKey = vi.hoisted(() => vi.fn());
+const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
+const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockReadDashboardAggregateCache = vi.hoisted(() => vi.fn());
 const mockWriteDashboardAggregateCache = vi.hoisted(() => vi.fn());
 const mockSelect = vi.hoisted(() => vi.fn());
@@ -23,13 +24,17 @@ vi.mock("@/lib/api-auth", () => ({
       status: 401,
       headers: { "content-type": "application/json" },
     }),
-  validateApiKey: mockValidateApiKey,
+  authorizeDashboardOrApiKey: mockAuthorizeDashboardOrApiKey,
+  getServerSession: mockGetServerSession,
 }));
 
 vi.mock("@/lib/cache/dashboard-aggregates", () => ({
   BROADCAST_METRICS_CACHE_TTL_SECONDS: 120,
-  getBroadcastMetricsCacheKey: (id: string) =>
-    `dashboard-aggregate:v1:broadcast-metrics:${id}`,
+  getBroadcastMetricsCacheKey: (params: {
+    userId: string;
+    broadcastId: string;
+  }) =>
+    `dashboard-aggregate:v1:broadcast-metrics:${params.userId}:${params.broadcastId}`,
   readDashboardAggregateCache: mockReadDashboardAggregateCache,
   writeDashboardAggregateCache: mockWriteDashboardAggregateCache,
 }));
@@ -50,12 +55,17 @@ describe("broadcast metrics route cache", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    mockValidateApiKey.mockResolvedValue({ apiKeyId: "k1" });
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({
+      apiKeyId: "k1",
+      userId: "user-1",
+    });
+    mockGetServerSession.mockResolvedValue(null);
     mockReadDashboardAggregateCache.mockResolvedValue(null);
     mockWriteDashboardAggregateCache.mockResolvedValue(undefined);
   });
 
-  it("returns cached broadcast aggregates without querying the database", async () => {
+  it("returns cached broadcast aggregates after verifying broadcast ownership", async () => {
+    mockSelect.mockReturnValueOnce(makeChain([{ id: "b1" }]));
     mockReadDashboardAggregateCache.mockResolvedValue({
       object: "broadcast_metrics",
       broadcast_id: "b1",
@@ -81,7 +91,7 @@ describe("broadcast metrics route cache", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-opensend-cache")).toBe("hit");
-    expect(mockSelect).not.toHaveBeenCalled();
+    expect(mockSelect).toHaveBeenCalledOnce();
     expect(mockWriteDashboardAggregateCache).not.toHaveBeenCalled();
   });
 
@@ -113,7 +123,7 @@ describe("broadcast metrics route cache", () => {
     expect(response.headers.get("x-opensend-cache")).toBe("miss");
     expect(mockWriteDashboardAggregateCache).toHaveBeenCalledOnce();
     expect(mockWriteDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:broadcast-metrics:b1",
+      "dashboard-aggregate:v1:broadcast-metrics:user-1:b1",
       expect.objectContaining({
         object: "broadcast_metrics",
         broadcast_id: "b1",

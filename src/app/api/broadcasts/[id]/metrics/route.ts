@@ -1,4 +1,4 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { unauthorizedResponse } from "@/lib/api-auth";
 import {
   BROADCAST_METRICS_CACHE_TTL_SECONDS,
   getBroadcastMetricsCacheKey,
@@ -7,31 +7,26 @@ import {
 } from "@/lib/cache/dashboard-aggregates";
 import { db } from "@/lib/db";
 import { broadcasts, emails } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
+import { resolveBroadcastRouteUserId } from "../../auth";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  const userId = await resolveBroadcastRouteUserId(
+    request.headers.get("authorization"),
+  );
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id } = await params;
-    const cacheKey = getBroadcastMetricsCacheKey(id);
-
-    const cached = await readDashboardAggregateCache<unknown>(cacheKey);
-    if (cached) {
-      return NextResponse.json(cached, {
-        headers: { "x-opensend-cache": "hit" },
-      });
-    }
 
     const [broadcast] = await db
       .select({ id: broadcasts.id })
       .from(broadcasts)
-      .where(eq(broadcasts.id, id))
+      .where(and(eq(broadcasts.id, id), eq(broadcasts.userId, userId)))
       .limit(1);
 
     if (!broadcast) {
@@ -41,7 +36,22 @@ export async function GET(
       );
     }
 
-    const condition = sql`${emails.tags} @> ${[{ name: "broadcast_id", value: id }]}`;
+    const cacheKey = getBroadcastMetricsCacheKey({
+      userId,
+      broadcastId: id,
+    });
+
+    const cached = await readDashboardAggregateCache<unknown>(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached, {
+        headers: { "x-opensend-cache": "hit" },
+      });
+    }
+
+    const condition = and(
+      eq(emails.userId, userId),
+      sql`${emails.tags} @> ${JSON.stringify([{ name: "broadcast_id", value: id }])}::jsonb`,
+    );
 
     const result = await db
       .select({
