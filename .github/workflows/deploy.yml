@@ -20,4 +20,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Deploy app + ingester to ECS
-        run: bash scripts/deploy.sh all
+        run: |
+          # Isolate from Docker Desktop's user config so the launchd-spawned
+          # runner does not hit the keychain-bound credsStore helper.
+          # The runner host owns ~/.docker-actions/config.json.
+          export DOCKER_CONFIG="${HOME}/.docker-actions"
+          bash scripts/deploy.sh all
