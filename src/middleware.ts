@@ -73,11 +73,22 @@ async function checkRate(
 }
 
 // Rate limit tiers by route pattern
+function isSingleSendPostAlias(pathname: string, method: string): boolean {
+  return pathname === "/emails" && method === "POST";
+}
+
 function isSendApiPost(pathname: string, method: string): boolean {
   return (
     method === "POST" &&
-    (pathname === "/api/emails" || pathname === "/api/emails/batch")
+    (pathname === "/api/emails" ||
+      pathname === "/api/emails/batch" ||
+      pathname === "/emails")
   );
+}
+
+function getRateLimitPathname(pathname: string, method: string): string {
+  if (isSingleSendPostAlias(pathname, method)) return "/api/emails";
+  return pathname;
 }
 
 function getLimits(
@@ -85,7 +96,10 @@ function getLimits(
   method: string,
 ): { max: number; windowMs: number } {
   // Email sending — strictest limit
-  if (pathname === "/api/emails" && method === "POST") {
+  if (
+    (pathname === "/api/emails" || pathname === "/emails") &&
+    method === "POST"
+  ) {
     return { max: 20, windowMs: 60_000 };
   }
   if (pathname === "/api/emails/batch" && method === "POST") {
@@ -116,8 +130,10 @@ export async function middleware(request: NextRequest) {
 
   const isPublicUnsubscribeRoute = pathname.startsWith("/unsubscribe/");
 
-  // Protect non-API page routes with session check
-  if (!pathname.startsWith("/api/")) {
+  // Protect non-API page routes with session check. POST /emails is a
+  // Resend-compatible API alias and must bypass dashboard session redirects.
+  const isSingleSendAlias = isSingleSendPostAlias(pathname, request.method);
+  if (!pathname.startsWith("/api/") && !isSingleSendAlias) {
     // Allow auth page, public landing page, and static assets
     if (
       pathname === "/auth" ||
@@ -144,6 +160,12 @@ export async function middleware(request: NextRequest) {
   const responseHeaders = new Headers({ "X-RateLimit-Backend": backend });
 
   if (backend === "disabled") {
+    if (isSingleSendAlias) {
+      return NextResponse.rewrite(new URL("/api/emails", request.url), {
+        headers: responseHeaders,
+      });
+    }
+
     return NextResponse.next({ headers: responseHeaders });
   }
 
@@ -153,7 +175,8 @@ export async function middleware(request: NextRequest) {
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
   const ip = /^[\d.a-fA-F:]+$/.test(rawIp) ? rawIp : "unknown";
   const authKey = request.headers.get("authorization")?.slice(0, 20) ?? "anon";
-  const rateLimitKey = `${ip}:${authKey}:${pathname}`;
+  const rateLimitPathname = getRateLimitPathname(pathname, request.method);
+  const rateLimitKey = `${ip}:${authKey}:${rateLimitPathname}`;
 
   const { max, windowMs } = getLimits(pathname, request.method);
   const result = await checkRate(rateLimitKey, max, windowMs, rateLimit);
@@ -188,6 +211,12 @@ export async function middleware(request: NextRequest) {
       { error: message },
       { status: result.status, headers },
     );
+  }
+
+  if (isSingleSendAlias) {
+    return NextResponse.rewrite(new URL("/api/emails", request.url), {
+      headers: responseHeaders,
+    });
   }
 
   return NextResponse.next({ headers: responseHeaders });
