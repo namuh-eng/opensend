@@ -1,21 +1,25 @@
 import { LogDetail } from "@/components/log-detail";
+import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { logs } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { and, eq } from "drizzle-orm";
+import { notFound, redirect } from "next/navigation";
 
 export default async function LogDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const session = await getServerSession();
+  if (!session) redirect("/auth");
+
   const { id } = await params;
 
   try {
     const [logResult] = await db
       .select()
       .from(logs)
-      .where(eq(logs.id, id))
+      .where(and(eq(logs.id, id), eq(logs.userId, session.user.id)))
       .limit(1);
 
     if (!logResult) {
@@ -28,7 +32,13 @@ export default async function LogDetailPage({
       path: logResult.endpoint ?? "",
       statusCode: logResult.status ?? 0,
       duration: null as number | null,
-      apiKeyId: null as string | null,
+      apiKeyId:
+        typeof logResult.document === "object" &&
+        logResult.document !== null &&
+        "apiKeyId" in logResult.document &&
+        typeof logResult.document.apiKeyId === "string"
+          ? logResult.document.apiKeyId
+          : null,
       requestBody: logResult.requestBody as Record<string, unknown> | null,
       responseBody: logResult.responseBody as Record<string, unknown> | null,
       createdAt: logResult.createdAt.toISOString(),

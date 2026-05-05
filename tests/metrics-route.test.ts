@@ -55,15 +55,17 @@ vi.mock("@/lib/api-auth", () => ({
 vi.mock("@/lib/cache/dashboard-aggregates", () => ({
   DASHBOARD_METRICS_CACHE_TTL_SECONDS: 60,
   getMetricsAggregateCacheKey: ({
+    userId,
     range,
     domain,
     eventType,
   }: {
+    userId: string;
     range: string;
     domain: string | null;
     eventType: string | null;
   }) =>
-    `dashboard-aggregate:v1:metrics:${range}:${domain ?? "all"}:${eventType ?? "all"}`,
+    `dashboard-aggregate:v1:metrics:${userId}:${range}:${domain ?? "all"}:${eventType ?? "all"}`,
   readDashboardAggregateCache: mockReadDashboardAggregateCache,
   writeDashboardAggregateCache: mockWriteDashboardAggregateCache,
 }));
@@ -174,6 +176,36 @@ describe("metrics route filters", () => {
     vi.useRealTimers();
   });
 
+  it("scopes every aggregate query and cache key to the dashboard user", async () => {
+    const whereArgs: unknown[] = [];
+    queueMetricsQueries(whereArgs);
+
+    const metricsRoute = await import("@/app/api/metrics/route");
+    const response = await metricsRoute.GET(
+      makeNextRequest(
+        "http://localhost/api/metrics?range=last_7_days",
+      ) as never,
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockReadDashboardAggregateCache).toHaveBeenCalledWith(
+      "dashboard-aggregate:v1:metrics:user-1:last_7_days:all:all",
+    );
+    expect(mockEq.mock.calls.some(([, right]) => right === "user-1")).toBe(
+      true,
+    );
+    expect(whereArgs).toHaveLength(5);
+    for (const whereArg of whereArgs) {
+      const condition = whereArg as {
+        kind: string;
+        conds: Array<{ kind: string; right: unknown }>;
+      };
+      expect(condition.conds.some((cond) => cond.right === "user-1")).toBe(
+        true,
+      );
+    }
+  });
+
   it("matches Yesterday exactly instead of leaking into today", async () => {
     const whereArgs: unknown[] = [];
     queueMetricsQueries(whereArgs);
@@ -267,8 +299,12 @@ describe("metrics route filters", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mockEq).toHaveBeenCalledOnce();
-    expect(mockEq.mock.calls[0]?.[1]).toBe("example.com");
+    expect(mockEq.mock.calls.some(([, right]) => right === "user-1")).toBe(
+      true,
+    );
+    expect(mockEq.mock.calls.some(([, right]) => right === "example.com")).toBe(
+      true,
+    );
     expect(mockLike).not.toHaveBeenCalled();
 
     const firstWhere = whereArgs[0] as {
@@ -313,7 +349,7 @@ describe("metrics route filters", () => {
     const json = await response.json();
     expect(json.totalEmails).toBe(99);
     expect(mockReadDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:metrics:last_7_days:example.com:delivered",
+      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:delivered",
     );
   });
 
@@ -331,7 +367,7 @@ describe("metrics route filters", () => {
     expect(response.status).toBe(200);
     expect(mockWriteDashboardAggregateCache).toHaveBeenCalledOnce();
     expect(mockWriteDashboardAggregateCache.mock.calls[0]?.[0]).toBe(
-      "dashboard-aggregate:v1:metrics:last_7_days:all:opened",
+      "dashboard-aggregate:v1:metrics:user-1:last_7_days:all:opened",
     );
     expect(mockWriteDashboardAggregateCache.mock.calls[0]?.[2]).toBe(60);
   });

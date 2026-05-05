@@ -1,9 +1,15 @@
 import { ApiKeysList } from "@/components/api-keys-list";
+import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { apiKeys, domains } from "@/lib/db/schema";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 
 export default async function ApiKeysPage() {
+  const session = await getServerSession();
+  if (!session) redirect("/auth");
+
+  const userId = session.user.id;
   let keys: {
     id: string;
     name: string;
@@ -26,10 +32,12 @@ export default async function ApiKeysPage() {
           createdAt: apiKeys.createdAt,
         })
         .from(apiKeys)
+        .where(eq(apiKeys.userId, userId))
         .orderBy(desc(apiKeys.createdAt)),
       db
         .select({ id: domains.id, name: domains.name })
         .from(domains)
+        .where(eq(domains.userId, userId))
         .orderBy(domains.name),
     ]);
   } catch {
