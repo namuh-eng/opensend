@@ -56,13 +56,19 @@ export class ApiKeyServiceError extends Error {
 }
 
 export type ApiKeyRepository = {
-  list(options: { limit?: number; after?: string }): Promise<{
+  list(options: { limit?: number; after?: string; userId?: string }): Promise<{
     data: ApiKeyRow[];
     hasMore: boolean;
   }>;
   create(data: ApiKeyInsert): Promise<ApiKeyRow[]>;
-  findById(id: string): Promise<ApiKeyRow | undefined>;
-  delete(id: string): Promise<Array<{ id: string }>>;
+  findById(
+    id: string,
+    options?: { userId?: string },
+  ): Promise<ApiKeyRow | undefined>;
+  delete(
+    id: string,
+    options?: { userId?: string },
+  ): Promise<Array<{ id: string }>>;
 };
 
 export type ApiKeyServiceDependencies = {
@@ -96,10 +102,12 @@ export function createApiKeyService({
     async listApiKeys(options: {
       limit?: number;
       after?: string;
+      userId?: string;
     }): Promise<ApiKeyListResult> {
       const result = await repository.list({
         limit: normalizeLimit(options.limit),
         after: options.after || undefined,
+        ...(options.userId ? { userId: options.userId } : {}),
       });
 
       return {
@@ -146,8 +154,11 @@ export function createApiKeyService({
       };
     },
 
-    async getApiKey(id: string): Promise<ApiKeyDetail> {
-      const key = await repository.findById(id);
+    async getApiKey(
+      id: string,
+      options: { userId?: string } = {},
+    ): Promise<ApiKeyDetail> {
+      const key = await repository.findById(id, { userId: options.userId });
       if (!key) {
         throw new ApiKeyServiceError("not_found", "API key not found");
       }
@@ -160,13 +171,18 @@ export function createApiKeyService({
       };
     },
 
-    async deleteApiKey(id: string): Promise<DeleteApiKeyResult> {
-      const existing = await repository.findById(id);
+    async deleteApiKey(
+      id: string,
+      options: { userId?: string } = {},
+    ): Promise<DeleteApiKeyResult> {
+      const existing = await repository.findById(id, {
+        userId: options.userId,
+      });
       if (!existing) {
         throw new ApiKeyServiceError("not_found", "API key not found");
       }
 
-      const [deleted] = await repository.delete(id);
+      const [deleted] = await repository.delete(id, { userId: options.userId });
       await invalidateAuthCache(existing.tokenHash);
 
       return {

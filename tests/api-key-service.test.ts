@@ -136,6 +136,41 @@ describe("api key service", () => {
     });
   });
 
+  it("passes tenant scope to list, get, and delete repository operations", async () => {
+    const list = vi.fn<ApiKeyRepository["list"]>().mockResolvedValue({
+      data: [apiKeyRow()],
+      hasMore: false,
+    });
+    const findById = vi
+      .fn<ApiKeyRepository["findById"]>()
+      .mockResolvedValue(apiKeyRow({ tokenHash: "hash-owned" }));
+    const deleteKey = vi
+      .fn<ApiKeyRepository["delete"]>()
+      .mockResolvedValue([{ id: "key-1" }]);
+    const invalidateAuthCache = vi.fn<(_: string) => Promise<void>>();
+    const service = createApiKeyService({
+      repository: createRepository({
+        list,
+        findById,
+        delete: deleteKey,
+      }),
+      invalidateAuthCache,
+    });
+
+    await service.listApiKeys({ limit: 20, after: "key-0", userId: "user-1" });
+    await service.getApiKey("key-1", { userId: "user-1" });
+    await service.deleteApiKey("key-1", { userId: "user-1" });
+
+    expect(list).toHaveBeenCalledWith({
+      limit: 20,
+      after: "key-0",
+      userId: "user-1",
+    });
+    expect(findById).toHaveBeenCalledWith("key-1", { userId: "user-1" });
+    expect(deleteKey).toHaveBeenCalledWith("key-1", { userId: "user-1" });
+    expect(invalidateAuthCache).toHaveBeenCalledWith("hash-owned");
+  });
+
   it("returns not_found for get and delete misses", async () => {
     const service = createApiKeyService({
       repository: createRepository({

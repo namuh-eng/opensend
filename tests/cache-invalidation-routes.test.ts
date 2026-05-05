@@ -180,7 +180,9 @@ describe("cache invalidation routes", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockDeleteApiKey).toHaveBeenCalledWith("key-1");
+    expect(mockDeleteApiKey).toHaveBeenCalledWith("key-1", {
+      userId: "user-1",
+    });
   });
 
   it("invalidates domain caches after patch", async () => {

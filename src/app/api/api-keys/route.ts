@@ -48,7 +48,7 @@ function parseCreateApiKeyBody(body: unknown): {
 
 export async function GET(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth || auth.permission !== "full_access") {
+  if (!auth || auth.permission !== "full_access" || !auth.userId) {
     return unauthorizedResponse();
   }
 
@@ -57,7 +57,11 @@ export async function GET(request: Request): Promise<Response> {
   const after = url.searchParams.get("after") || "";
 
   try {
-    const result = await apiKeyService().listApiKeys({ limit, after });
+    const result = await apiKeyService().listApiKeys({
+      limit,
+      after,
+      userId: auth.userId,
+    });
 
     return Response.json({
       object: "list",
@@ -76,7 +80,7 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth || auth.permission !== "full_access") {
+  if (!auth || auth.permission !== "full_access" || !auth.userId) {
     return unauthorizedResponse();
   }
 
@@ -95,7 +99,7 @@ export async function POST(request: Request): Promise<Response> {
 
     const created = await apiKeyService().createApiKey({
       ...parseCreateApiKeyBody(body),
-      userId: auth.userId ?? undefined,
+      userId: auth.userId,
     });
 
     return Response.json(

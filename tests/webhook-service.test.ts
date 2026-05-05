@@ -87,6 +87,58 @@ describe("webhook service", () => {
     });
   });
 
+  it("passes tenant scope to list, get, update, and delete repository operations", async () => {
+    const list = vi.fn<WebhookRepository["list"]>().mockResolvedValue({
+      data: [webhookRow()],
+      hasMore: false,
+    });
+    const findById = vi
+      .fn<WebhookRepository["findById"]>()
+      .mockResolvedValue(webhookRow());
+    const update = vi
+      .fn<WebhookRepository["update"]>()
+      .mockResolvedValue([webhookRow({ status: "disabled" })]);
+    const deleteWebhook = vi
+      .fn<WebhookRepository["delete"]>()
+      .mockResolvedValue([{ id: "webhook-1" }]);
+    const service = createWebhookService({
+      repository: createRepository({
+        list,
+        findById,
+        update,
+        delete: deleteWebhook,
+      }),
+    });
+
+    await service.listWebhooks({
+      limit: 20,
+      after: "webhook-0",
+      userId: "user-1",
+    });
+    await service.getWebhook("webhook-1", { userId: "user-1" });
+    await service.updateWebhook(
+      "webhook-1",
+      { status: "disabled" },
+      { userId: "user-1" },
+    );
+    await service.deleteWebhook("webhook-1", { userId: "user-1" });
+
+    expect(list).toHaveBeenCalledWith({
+      limit: 20,
+      after: "webhook-0",
+      userId: "user-1",
+    });
+    expect(findById).toHaveBeenCalledWith("webhook-1", { userId: "user-1" });
+    expect(update).toHaveBeenCalledWith(
+      "webhook-1",
+      { status: "disabled" },
+      { userId: "user-1" },
+    );
+    expect(deleteWebhook).toHaveBeenCalledWith("webhook-1", {
+      userId: "user-1",
+    });
+  });
+
   it("creates with an injectable signing secret generator", async () => {
     const inserted: WebhookInsert[] = [];
     const generateSigningSecret = vi.fn(() => "whsec_test_secret");
@@ -118,6 +170,26 @@ describe("webhook service", () => {
       status: "enabled",
       signingSecret: "whsec_test_secret",
     });
+  });
+
+  it("stamps created webhooks with tenant scope when supplied", async () => {
+    const inserted: WebhookInsert[] = [];
+    const service = createWebhookService({
+      repository: createRepository({
+        async create(data) {
+          inserted.push(data);
+          return [webhookRow({ ...data, id: "created-webhook" })];
+        },
+      }),
+    });
+
+    await service.createWebhook({
+      endpoint: "https://example.com/created",
+      events: ["email.delivered"],
+      userId: "user-1",
+    });
+
+    expect(inserted[0]).toMatchObject({ userId: "user-1" });
   });
 
   it("maps update status and active flags to stored status", async () => {

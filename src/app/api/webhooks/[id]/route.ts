@@ -16,12 +16,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   const { id } = await params;
 
   try {
-    const webhook = await webhookService().getWebhook(id);
+    const webhook = await webhookService().getWebhook(id, {
+      userId: auth.userId,
+    });
 
     if (!webhook) {
       return Response.json({ error: "Webhook not found" }, { status: 404 });
@@ -45,7 +47,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   const { id } = await params;
 
@@ -66,12 +68,16 @@ export async function PATCH(
 
   try {
     const validated = result.data;
-    const updated = await webhookService().updateWebhook(id, {
-      endpoint: validated.endpoint ?? validated.url,
-      events: validated.events ?? validated.event_types,
-      status: validated.status,
-      active: validated.active,
-    });
+    const updated = await webhookService().updateWebhook(
+      id,
+      {
+        endpoint: validated.endpoint ?? validated.url,
+        events: validated.events ?? validated.event_types,
+        status: validated.status,
+        active: validated.active,
+      },
+      { userId: auth.userId },
+    );
 
     if (!updated) {
       return Response.json({ error: "Webhook not found" }, { status: 404 });
@@ -95,12 +101,14 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   const { id } = await params;
 
   try {
-    const deleted = await webhookService().deleteWebhook(id);
+    const deleted = await webhookService().deleteWebhook(id, {
+      userId: auth.userId,
+    });
 
     if (!deleted) {
       return Response.json({ error: "Webhook not found" }, { status: 404 });

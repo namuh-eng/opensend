@@ -13,14 +13,18 @@ function mapWebhookError(error: unknown, fallback: string): Response {
 
 export async function GET(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit")) || 20;
   const after = url.searchParams.get("after") || "";
 
   try {
-    const result = await webhookService().listWebhooks({ limit, after });
+    const result = await webhookService().listWebhooks({
+      limit,
+      after,
+      userId: auth.userId,
+    });
 
     return Response.json({
       object: "list",
@@ -40,7 +44,7 @@ export async function GET(request: Request): Promise<Response> {
 
 export async function POST(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   let body: unknown;
   try {
@@ -69,7 +73,11 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const webhook = await webhookService().createWebhook({ endpoint, events });
+    const webhook = await webhookService().createWebhook({
+      endpoint,
+      events,
+      userId: auth.userId,
+    });
 
     return Response.json(
       {
