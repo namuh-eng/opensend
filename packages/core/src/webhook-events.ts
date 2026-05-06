@@ -7,6 +7,12 @@ export const SUPPORTED_WEBHOOK_EVENT_TYPES = [
   "email.opened",
   "email.clicked",
   "email.failed",
+  "contact.created",
+  "contact.updated",
+  "contact.deleted",
+  "domain.created",
+  "domain.updated",
+  "domain.deleted",
 ] as const;
 
 export type SupportedWebhookEventType =

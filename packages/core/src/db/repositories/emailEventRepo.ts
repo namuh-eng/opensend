@@ -20,7 +20,7 @@ export const emailEventRepo = {
       const [event] = await tx.insert(emailEvents).values(data).returning();
       const nextStatus = STATUS_BY_EVENT_TYPE[data.type];
 
-      if (nextStatus) {
+      if (nextStatus && data.emailId) {
         await tx
           .update(emails)
           .set({ status: nextStatus })
@@ -55,7 +55,7 @@ export const emailEventRepo = {
 
       const nextStatus = STATUS_BY_EVENT_TYPE[data.type];
 
-      if (nextStatus) {
+      if (nextStatus && data.emailId) {
         await tx
           .update(emails)
           .set({ status: nextStatus })

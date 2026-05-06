@@ -1,59 +1,84 @@
 import { db } from "@/lib/db";
-import { emailEvents, emails, webhooks } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { emailEvents, webhookDeliveries, webhooks } from "@/lib/db/schema";
+import {
+  type SupportedWebhookEventType,
+  isSupportedWebhookEventType,
+} from "@opensend/core/src/webhook-events";
+import { and, eq, sql } from "drizzle-orm";
 
-export type SystemEventType =
-  | "domain.created"
-  | "domain.updated"
-  | "domain.deleted"
-  | "email.sent"
-  | "email.delivered"
-  | "email.bounced"
-  | "email.complained";
+export type SystemEventType = SupportedWebhookEventType;
 
 export interface QueueEventOptions {
   type: SystemEventType;
+  userId: string;
   payload: Record<string, unknown>;
   emailId?: string;
+  sourceId?: string;
 }
 
+export type QueuedWebhookEvent = {
+  eventId: string;
+  deliveryIds: string[];
+};
+
 /**
- * queueEvent
- *
- * Enqueues a system event for webhook delivery.
+ * Persists a webhook event and enqueues pending deliveries for active,
+ * same-tenant webhook subscriptions. Email events may include emailId; contact
+ * and domain lifecycle events intentionally use the same durable event store
+ * with a null email_id so the existing dispatcher can deliver them.
  */
-export async function queueEvent(options: QueueEventOptions) {
-  const { type, payload, emailId } = options;
+export async function queueEvent(
+  options: QueueEventOptions,
+): Promise<QueuedWebhookEvent> {
+  const { type, payload, emailId, sourceId, userId } = options;
 
-  await db.transaction(async (tx) => {
-    // 1. If it's an email event, log it in email_events
-    let internalEventId: string | undefined;
+  if (!isSupportedWebhookEventType(type)) {
+    throw new Error(`Unsupported webhook event type: ${type}`);
+  }
 
-    if (emailId) {
-      const [evt] = await tx
-        .insert(emailEvents)
-        .values({
-          emailId,
-          type,
-          payload,
-        })
-        .returning({ id: emailEvents.id });
-      internalEventId = evt.id;
-    }
+  return await db.transaction(async (tx) => {
+    const [event] = await tx
+      .insert(emailEvents)
+      .values({
+        emailId: emailId ?? null,
+        sourceId: sourceId ?? null,
+        type,
+        payload,
+        userId,
+      })
+      .returning({ id: emailEvents.id });
 
-    // 2. Scan for matching webhooks and enqueue deliveries
-    // In a real implementation, we'd insert into a 'webhook_deliveries' table.
-    // For now, we log the intent.
     const matchingWebhooks = await tx
-      .select()
+      .select({ id: webhooks.id })
       .from(webhooks)
-      .where(sql`${webhooks.eventTypes} ? ${type}`);
-
-    for (const webhook of matchingWebhooks) {
-      console.log(
-        `[Event] Queuing ${type} for webhook ${webhook.id} (${webhook.url})`,
+      .where(
+        and(
+          eq(webhooks.userId, userId),
+          eq(webhooks.status, "active"),
+          sql`${webhooks.eventTypes} ? ${type}`,
+        ),
       );
-      // tx.insert(webhookDeliveries).values(...)
+
+    if (matchingWebhooks.length === 0) {
+      return { eventId: event.id, deliveryIds: [] };
     }
+
+    const deliveries = await tx
+      .insert(webhookDeliveries)
+      .values(
+        matchingWebhooks.map((webhook) => ({
+          webhookId: webhook.id,
+          eventId: event.id,
+          status: "pending",
+          attempt: 0,
+          nextRetryAt: null,
+        })),
+      )
+      .returning({ id: webhookDeliveries.id });
+
+    return {
+      eventId: event.id,
+      deliveryIds: deliveries.map((delivery) => delivery.id),
+    };
   });
 }
