@@ -1,9 +1,11 @@
 import { randomBytes } from "node:crypto";
+import { webhookDeliveryRepo } from "../db/repositories/webhookDeliveryRepo";
 import { webhookRepo } from "../db/repositories/webhookRepo";
-import type { webhooks } from "../db/schema";
+import type { webhookDeliveries, webhooks } from "../db/schema";
 
 type WebhookRow = typeof webhooks.$inferSelect;
 type WebhookInsert = typeof webhooks.$inferInsert;
+type WebhookDeliveryRow = typeof webhookDeliveries.$inferSelect;
 
 type PublicWebhookStatus = "enabled" | "disabled";
 type StoredWebhookStatus = "active" | "disabled";
@@ -16,9 +18,22 @@ export type WebhookServiceListItem = {
   createdAt: WebhookRow["createdAt"];
 };
 
-export type WebhookServiceDetail = WebhookServiceListItem;
+export type WebhookDeliveryListItem = {
+  id: string;
+  status: string;
+  attempt: number;
+  statusCode: WebhookDeliveryRow["statusCode"];
+  responseBody: WebhookDeliveryRow["responseBody"];
+  attemptedAt: WebhookDeliveryRow["attemptedAt"];
+  nextRetryAt: WebhookDeliveryRow["nextRetryAt"];
+  createdAt: WebhookDeliveryRow["createdAt"];
+};
 
-export type WebhookServiceCreateResult = WebhookServiceDetail & {
+export type WebhookServiceDetail = WebhookServiceListItem & {
+  recentDeliveries: WebhookDeliveryListItem[];
+};
+
+export type WebhookServiceCreateResult = WebhookServiceListItem & {
   signingSecret: string | null;
 };
 
@@ -40,6 +55,16 @@ export type UpdateWebhookInput = {
   active?: boolean;
 };
 
+export type WebhookDeliveryRepository = {
+  listByWebhookId(
+    webhookId: string,
+    options?: { limit?: number; after?: string },
+  ): Promise<{
+    data: WebhookDeliveryRow[];
+    hasMore: boolean;
+  }>;
+};
+
 export type WebhookRepository = {
   list(options: { userId: string; limit?: number; after?: string }): Promise<{
     data: WebhookRow[];
@@ -57,6 +82,7 @@ export type WebhookRepository = {
 
 export type WebhookServiceDependencies = {
   repository?: WebhookRepository;
+  deliveryRepository?: WebhookDeliveryRepository;
   generateSigningSecret?: () => string;
 };
 
@@ -89,6 +115,31 @@ function toWebhookListItem(row: WebhookRow): WebhookServiceListItem {
   };
 }
 
+function toWebhookDeliveryListItem(
+  row: WebhookDeliveryRow,
+): WebhookDeliveryListItem {
+  return {
+    id: row.id,
+    status: row.status,
+    attempt: row.attempt,
+    statusCode: row.statusCode,
+    responseBody: row.responseBody,
+    attemptedAt: row.attemptedAt,
+    nextRetryAt: row.nextRetryAt,
+    createdAt: row.createdAt,
+  };
+}
+
+function toWebhookDetail(
+  row: WebhookRow,
+  deliveries: WebhookDeliveryRow[],
+): WebhookServiceDetail {
+  return {
+    ...toWebhookListItem(row),
+    recentDeliveries: deliveries.map(toWebhookDeliveryListItem),
+  };
+}
+
 function toWebhookCreateResult(row: WebhookRow): WebhookServiceCreateResult {
   return {
     ...toWebhookListItem(row),
@@ -111,6 +162,7 @@ function buildUpdateData(input: UpdateWebhookInput): Partial<WebhookInsert> {
 
 export function createWebhookService({
   repository = webhookRepo,
+  deliveryRepository = webhookDeliveryRepo,
   generateSigningSecret = generateSecureSigningSecret,
 }: WebhookServiceDependencies = {}) {
   return {
@@ -150,14 +202,20 @@ export function createWebhookService({
       userId: string,
     ): Promise<WebhookServiceDetail | undefined> {
       const row = await repository.findById(id, userId);
-      return row ? toWebhookListItem(row) : undefined;
+      if (!row) return undefined;
+
+      const deliveries = await deliveryRepository.listByWebhookId(row.id, {
+        limit: 20,
+      });
+
+      return toWebhookDetail(row, deliveries.data);
     },
 
     async updateWebhook(
       id: string,
       userId: string,
       input: UpdateWebhookInput,
-    ): Promise<WebhookServiceDetail | undefined> {
+    ): Promise<WebhookServiceListItem | undefined> {
       const [row] = await repository.update(id, userId, buildUpdateData(input));
       return row ? toWebhookListItem(row) : undefined;
     },

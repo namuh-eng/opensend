@@ -253,10 +253,110 @@ describe("WebhookDispatcher", () => {
         status: "pending",
         statusCode: 500,
         responseBody: "server error",
-        nextRetryAt: new Date("2026-04-28T00:00:10.000Z"),
+        nextRetryAt: new Date("2026-04-28T00:00:05.000Z"),
       }),
     );
     expect(result).toMatchObject({ status: "pending", attempt: 1 });
+  });
+
+  it("schedules a later retry from the Resend-compatible ladder", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-28T00:00:00.000Z"));
+
+    mockFindById.mockResolvedValue({
+      id: "delivery-later",
+      webhookId: "hook-later",
+      eventId: "event-later",
+      attempt: 4,
+      status: "pending",
+    });
+    mockFindWebhookById.mockResolvedValue({
+      id: "hook-later",
+      url: "https://example.com/later-fail",
+      status: "active",
+      signingSecret: "whsec_test_secret",
+    });
+    mockFindEventById.mockResolvedValue({
+      id: "event-later",
+      type: "failed",
+      payload: { reason: "smtp timeout" },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      text: async () => "still unavailable",
+    });
+    mockUpdate.mockImplementation(async (_id, data) => ({
+      id: "delivery-later",
+      ...data,
+    }));
+
+    const { WebhookDispatcher } = await import(
+      "../packages/ingester/src/dispatcher"
+    );
+    const dispatcher = new WebhookDispatcher({ fetchImpl: fetchMock });
+
+    const result = await dispatcher.dispatchDelivery("delivery-later");
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      "delivery-later",
+      expect.objectContaining({
+        attempt: 5,
+        status: "pending",
+        statusCode: 503,
+        responseBody: "still unavailable",
+        nextRetryAt: new Date("2026-04-28T05:00:00.000Z"),
+      }),
+    );
+    expect(result).toMatchObject({ status: "pending", attempt: 5 });
+  });
+
+  it("schedules thrown delivery errors from the same retry ladder", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-28T00:00:00.000Z"));
+
+    mockFindById.mockResolvedValue({
+      id: "delivery-error",
+      webhookId: "hook-error",
+      eventId: "event-error",
+      attempt: 1,
+      status: "pending",
+    });
+    mockFindWebhookById.mockResolvedValue({
+      id: "hook-error",
+      url: "https://example.com/error",
+      status: "active",
+      signingSecret: "whsec_test_secret",
+    });
+    mockFindEventById.mockResolvedValue({
+      id: "event-error",
+      type: "complained",
+      payload: { reason: "abuse" },
+    });
+    const fetchMock = vi.fn().mockRejectedValue(new Error("timeout"));
+    mockUpdate.mockImplementation(async (_id, data) => ({
+      id: "delivery-error",
+      ...data,
+    }));
+
+    const { WebhookDispatcher } = await import(
+      "../packages/ingester/src/dispatcher"
+    );
+    const dispatcher = new WebhookDispatcher({ fetchImpl: fetchMock });
+
+    const result = await dispatcher.dispatchDelivery("delivery-error");
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      "delivery-error",
+      expect.objectContaining({
+        attempt: 2,
+        status: "pending",
+        statusCode: null,
+        responseBody: "timeout",
+        nextRetryAt: new Date("2026-04-28T00:05:00.000Z"),
+      }),
+    );
+    expect(result).toMatchObject({ status: "pending", attempt: 2 });
   });
 
   it("marks a delivery dead-letter when the final attempt throws", async () => {
