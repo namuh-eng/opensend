@@ -11,6 +11,7 @@ interface LogDetailData {
   statusCode: number;
   duration: number | null;
   apiKeyId: string | null;
+  userAgent: string | null;
   requestBody: Record<string, unknown> | null;
   responseBody: Record<string, unknown> | null;
   createdAt: string;
@@ -162,6 +163,22 @@ export function LogDetail({ log }: { log: LogDetailData }) {
           </p>
           <p className="text-[14px] text-[#F0F0F0]">
             {log.duration != null ? `${log.duration}ms` : "-"}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+            API KEY
+          </p>
+          <p className="text-[14px] text-[#F0F0F0] font-mono">
+            {log.apiKeyId ?? "-"}
+          </p>
+        </div>
+        <div>
+          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+            USER AGENT
+          </p>
+          <p className="text-[14px] text-[#F0F0F0] font-mono break-all">
+            {log.userAgent ?? "-"}
           </p>
         </div>
         <div>

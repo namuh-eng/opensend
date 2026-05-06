@@ -15,37 +15,28 @@ export default async function LogDetailPage({
 
   const { id } = await params;
 
-  try {
-    const [logResult] = await db
-      .select()
-      .from(logs)
-      .where(and(eq(logs.id, id), eq(logs.userId, session.user.id)))
-      .limit(1);
+  const [logResult] = await db
+    .select()
+    .from(logs)
+    .where(and(eq(logs.id, id), eq(logs.userId, session.user.id)))
+    .limit(1);
 
-    if (!logResult) {
-      notFound();
-    }
-
-    const logData = {
-      id: logResult.id,
-      method: logResult.method ?? "GET",
-      path: logResult.endpoint ?? "",
-      statusCode: logResult.status ?? 0,
-      duration: null as number | null,
-      apiKeyId:
-        typeof logResult.document === "object" &&
-        logResult.document !== null &&
-        "apiKeyId" in logResult.document &&
-        typeof logResult.document.apiKeyId === "string"
-          ? logResult.document.apiKeyId
-          : null,
-      requestBody: logResult.requestBody as Record<string, unknown> | null,
-      responseBody: logResult.responseBody as Record<string, unknown> | null,
-      createdAt: logResult.createdAt.toISOString(),
-    };
-
-    return <LogDetail log={logData} />;
-  } catch {
+  if (!logResult) {
     notFound();
   }
+
+  const logData = {
+    id: logResult.id,
+    method: logResult.method ?? "GET",
+    path: logResult.endpoint ?? "",
+    statusCode: logResult.status ?? 0,
+    duration: null as number | null,
+    apiKeyId: logResult.apiKeyId,
+    userAgent: logResult.userAgent,
+    requestBody: logResult.requestBody as Record<string, unknown> | null,
+    responseBody: logResult.responseBody as Record<string, unknown> | null,
+    createdAt: logResult.createdAt.toISOString(),
+  };
+
+  return <LogDetail log={logData} />;
 }

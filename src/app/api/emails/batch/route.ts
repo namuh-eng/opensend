@@ -4,6 +4,7 @@ import {
   validateApiKey,
 } from "@/lib/api-auth";
 import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
+import { captureApiResponseLog } from "@/lib/api-logging";
 import { quotaExceededResponse, reserveEmailQuota } from "@/lib/billing/quota";
 import { db } from "@/lib/db";
 import { contacts, emails } from "@/lib/db/schema";
@@ -151,6 +152,22 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
   const userId = auth.userId;
+  let requestBodyForLog: unknown = null;
+  const logResponse = (
+    response: Response,
+    document?: Parameters<typeof captureApiResponseLog>[0]["document"],
+  ) =>
+    captureApiResponseLog({
+      request,
+      auth,
+      requestBody: requestBodyForLog,
+      response,
+      document: {
+        correlationId: telemetry.correlationId,
+        traceparent: telemetry.traceparent,
+        ...document,
+      },
+    });
 
   const idempotencyKey = request.headers.get("idempotency-key");
   if (
@@ -161,14 +178,16 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
     });
-    return jsonWithTelemetry(
-      publicApiError(
-        "invalid_idempotency_key",
-        "Idempotency-Key must be between 1 and 255 characters.",
-        400,
+    return await logResponse(
+      jsonWithTelemetry(
+        publicApiError(
+          "invalid_idempotency_key",
+          "Idempotency-Key must be between 1 and 255 characters.",
+          400,
+        ),
+        telemetry,
+        { status: 400 },
       ),
-      telemetry,
-      { status: 400 },
     );
   }
 
@@ -185,15 +204,18 @@ export async function POST(request: Request): Promise<Response> {
         outcome: "accepted",
         count: 0,
       });
-      return jsonWithTelemetry(
-        publicApiError(
-          "idempotency_conflict",
-          "A request with this idempotency key has already been accepted.",
-          409,
-          { id: existing.id },
+      return await logResponse(
+        jsonWithTelemetry(
+          publicApiError(
+            "idempotency_conflict",
+            "A request with this idempotency key has already been accepted.",
+            409,
+            { id: existing.id },
+          ),
+          telemetry,
+          { status: 409 },
         ),
-        telemetry,
-        { status: 409 },
+        { emailId: existing.id },
       );
     }
   }
@@ -206,12 +228,17 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
     });
-    return jsonWithTelemetry(
-      publicApiError("invalid_json", "Request body must be valid JSON.", 400),
-      telemetry,
-      { status: 400 },
+    requestBodyForLog = { error: "invalid_json" };
+    return await logResponse(
+      jsonWithTelemetry(
+        publicApiError("invalid_json", "Request body must be valid JSON.", 400),
+        telemetry,
+        { status: 400 },
+      ),
     );
   }
+
+  requestBodyForLog = body;
 
   const result = batchSendEmailSchema.safeParse(body);
   if (!result.success) {
@@ -219,15 +246,17 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
     });
-    return jsonWithTelemetry(
-      publicApiError(
-        "validation_error",
-        "Validation failed.",
-        422,
-        zodValidationDetails(result.error),
+    return await logResponse(
+      jsonWithTelemetry(
+        publicApiError(
+          "validation_error",
+          "Validation failed.",
+          422,
+          zodValidationDetails(result.error),
+        ),
+        telemetry,
+        { status: 422 },
       ),
-      telemetry,
-      { status: 422 },
     );
   }
 
@@ -338,12 +367,14 @@ export async function POST(request: Request): Promise<Response> {
         durationMs: performance.now() - startedAt,
         outcome: "invalid",
       });
-      return quotaExceededResponse(reservation.info, {
-        headers: {
-          "x-correlation-id": telemetry.correlationId,
-          traceparent: telemetry.traceparent,
-        },
-      });
+      return await logResponse(
+        quotaExceededResponse(reservation.info, {
+          headers: {
+            "x-correlation-id": telemetry.correlationId,
+            traceparent: telemetry.traceparent,
+          },
+        }),
+      );
     }
 
     const resultByIndex = new Map<number, { id: string }>();
@@ -409,7 +440,9 @@ export async function POST(request: Request): Promise<Response> {
       outcome: "accepted",
       count: acceptedCount,
     });
-    return jsonWithTelemetry({ data: results }, telemetry);
+    return await logResponse(jsonWithTelemetry({ data: results }, telemetry), {
+      emailIds: reservation.emails.map((email) => email.id),
+    });
   } catch (err) {
     recordTelemetryError(telemetry, "email.batch_accept.failed", err);
     emitCloudWatchMetric(telemetry, {
@@ -427,14 +460,16 @@ export async function POST(request: Request): Promise<Response> {
         Outcome: "failed",
       },
     });
-    return jsonWithTelemetry(
-      publicApiError(
-        "internal_server_error",
-        "Failed to send batch emails.",
-        500,
+    return await logResponse(
+      jsonWithTelemetry(
+        publicApiError(
+          "internal_server_error",
+          "Failed to send batch emails.",
+          500,
+        ),
+        telemetry,
+        { status: 500 },
       ),
-      telemetry,
-      { status: 500 },
     );
   }
 }

@@ -5,6 +5,7 @@ import {
   validateApiKey,
 } from "@/lib/api-auth";
 import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
+import { captureApiResponseLog } from "@/lib/api-logging";
 import {
   quotaExceededResponse,
   releaseEmailQuota,
@@ -156,6 +157,23 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  let requestBodyForLog: unknown = null;
+  const logResponse = (
+    response: Response,
+    document?: Parameters<typeof captureApiResponseLog>[0]["document"],
+  ) =>
+    captureApiResponseLog({
+      request,
+      auth,
+      requestBody: requestBodyForLog,
+      response,
+      document: {
+        correlationId: telemetry.correlationId,
+        traceparent: telemetry.traceparent,
+        ...document,
+      },
+    });
+
   const idempotencyKey = request.headers.get("idempotency-key");
   if (
     idempotencyKey &&
@@ -165,14 +183,16 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
     });
-    return jsonWithTelemetry(
-      publicApiError(
-        "invalid_idempotency_key",
-        "Idempotency-Key must be between 1 and 255 characters.",
-        400,
+    return await logResponse(
+      jsonWithTelemetry(
+        publicApiError(
+          "invalid_idempotency_key",
+          "Idempotency-Key must be between 1 and 255 characters.",
+          400,
+        ),
+        telemetry,
+        { status: 400 },
       ),
-      telemetry,
-      { status: 400 },
     );
   }
 
@@ -184,12 +204,17 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
     });
-    return jsonWithTelemetry(
-      publicApiError("invalid_json", "Request body must be valid JSON.", 400),
-      telemetry,
-      { status: 400 },
+    requestBodyForLog = { error: "invalid_json" };
+    return await logResponse(
+      jsonWithTelemetry(
+        publicApiError("invalid_json", "Request body must be valid JSON.", 400),
+        telemetry,
+        { status: 400 },
+      ),
     );
   }
+
+  requestBodyForLog = body;
 
   const result = sendEmailSchema.safeParse(body);
   if (!result.success) {
@@ -197,15 +222,17 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
     });
-    return jsonWithTelemetry(
-      publicApiError(
-        "validation_error",
-        "Validation failed.",
-        422,
-        zodValidationDetails(result.error),
+    return await logResponse(
+      jsonWithTelemetry(
+        publicApiError(
+          "validation_error",
+          "Validation failed.",
+          422,
+          zodValidationDetails(result.error),
+        ),
+        telemetry,
+        { status: 422 },
       ),
-      telemetry,
-      { status: 422 },
     );
   }
 
@@ -224,15 +251,18 @@ export async function POST(request: Request): Promise<Response> {
         durationMs: performance.now() - startedAt,
         outcome: "queued",
       });
-      return jsonWithTelemetry(
-        publicApiError(
-          "idempotency_conflict",
-          "A request with this idempotency key has already been accepted.",
-          409,
-          { id: existing.id },
+      return await logResponse(
+        jsonWithTelemetry(
+          publicApiError(
+            "idempotency_conflict",
+            "A request with this idempotency key has already been accepted.",
+            409,
+            { id: existing.id },
+          ),
+          telemetry,
+          { status: 409 },
         ),
-        telemetry,
-        { status: 409 },
+        { emailId: existing.id },
       );
     }
   }
@@ -254,10 +284,14 @@ export async function POST(request: Request): Promise<Response> {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
     });
-    return jsonWithTelemetry(
-      suppressedRecipientError(suppressedRecipients),
-      telemetry,
-      { status: 422 },
+    return await logResponse(
+      jsonWithTelemetry(
+        suppressedRecipientError(suppressedRecipients),
+        telemetry,
+        {
+          status: 422,
+        },
+      ),
     );
   }
 
@@ -281,10 +315,12 @@ export async function POST(request: Request): Promise<Response> {
           durationMs: performance.now() - startedAt,
           outcome: "invalid",
         });
-        return jsonWithTelemetry(
-          publicApiError("not_found", "Template not found.", 404),
-          telemetry,
-          { status: 404 },
+        return await logResponse(
+          jsonWithTelemetry(
+            publicApiError("not_found", "Template not found.", 404),
+            telemetry,
+            { status: 404 },
+          ),
         );
       }
 
@@ -305,20 +341,22 @@ export async function POST(request: Request): Promise<Response> {
             durationMs: performance.now() - startedAt,
             outcome: "invalid",
           });
-          return jsonWithTelemetry(
-            publicApiError(
-              "validation_error",
-              `Missing required template variable: ${requiredVar}`,
-              422,
-              {
-                formErrors: [],
-                fieldErrors: {
-                  template: [`Missing required variable: ${requiredVar}`],
+          return await logResponse(
+            jsonWithTelemetry(
+              publicApiError(
+                "validation_error",
+                `Missing required template variable: ${requiredVar}`,
+                422,
+                {
+                  formErrors: [],
+                  fieldErrors: {
+                    template: [`Missing required variable: ${requiredVar}`],
+                  },
                 },
-              },
+              ),
+              telemetry,
+              { status: 422 },
             ),
-            telemetry,
-            { status: 422 },
           );
         }
       }
@@ -402,12 +440,14 @@ export async function POST(request: Request): Promise<Response> {
         durationMs: performance.now() - startedAt,
         outcome: "invalid",
       });
-      return quotaExceededResponse(email.info, {
-        headers: {
-          "x-correlation-id": telemetry.correlationId,
-          traceparent: telemetry.traceparent,
-        },
-      });
+      return await logResponse(
+        quotaExceededResponse(email.info, {
+          headers: {
+            "x-correlation-id": telemetry.correlationId,
+            traceparent: telemetry.traceparent,
+          },
+        }),
+      );
     }
 
     const createdEmail = email.email;
@@ -455,7 +495,12 @@ export async function POST(request: Request): Promise<Response> {
     });
     recordAcceptMetric(telemetry, { durationMs, outcome });
     quotaReserved = false;
-    return jsonWithTelemetry({ id: createdEmail.id }, telemetry);
+    return await logResponse(
+      jsonWithTelemetry({ id: createdEmail.id }, telemetry),
+      {
+        emailId: createdEmail.id,
+      },
+    );
   } catch (err) {
     recordTelemetryError(telemetry, "email.accept.failed", err);
     recordAcceptMetric(telemetry, {
@@ -465,10 +510,12 @@ export async function POST(request: Request): Promise<Response> {
     if (quotaReserved) {
       await releaseEmailQuota(auth.userId, 1);
     }
-    return jsonWithTelemetry(
-      publicApiError("internal_server_error", "Failed to send email.", 500),
-      telemetry,
-      { status: 500 },
+    return await logResponse(
+      jsonWithTelemetry(
+        publicApiError("internal_server_error", "Failed to send email.", 500),
+        telemetry,
+        { status: 500 },
+      ),
     );
   }
 }

@@ -3,6 +3,7 @@
 import { CopyToClipboard } from "@/components/copy-to-clipboard";
 import { StatusBadge } from "@/components/status-badge";
 import { clsx } from "clsx";
+import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
 
 interface InsightItem {
@@ -109,6 +110,13 @@ export interface EmailDetailData {
     suppressedAt: string;
   } | null;
   events: Array<{ type: string; timestamp: string }>;
+  logs?: Array<{
+    id: string;
+    method: string;
+    endpoint: string;
+    statusCode: number;
+    createdAt: string;
+  }>;
 }
 
 interface EmailDetailProps {
@@ -444,6 +452,45 @@ export function EmailDetail({ email }: EmailDetailProps) {
           ) : (
             <div className="py-4 px-4 rounded-lg bg-[rgba(24,25,28,0.5)] border border-dashed border-[rgba(176,199,217,0.145)] text-center text-[13px] text-[#666]">
               No events recorded yet
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Associated Logs */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider">
+            ASSOCIATED LOGS
+          </p>
+          <Link
+            href={`/logs?q=${encodeURIComponent(email.id)}`}
+            className="text-[12px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+          >
+            View all logs
+          </Link>
+        </div>
+        <div className="space-y-3" data-testid="associated-logs">
+          {email.logs && email.logs.length > 0 ? (
+            email.logs.map((log) => (
+              <Link
+                key={log.id}
+                href={`/logs/${log.id}`}
+                className="flex items-center gap-3 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] px-4 py-3 text-[13px] hover:bg-[rgba(24,25,28,0.8)] transition-colors"
+              >
+                <StatusBadge status={log.method.toUpperCase()} variant="info" />
+                <span className="font-mono text-[#F0F0F0] truncate flex-1">
+                  {log.endpoint || "-"}
+                </span>
+                <StatusBadge
+                  status={String(log.statusCode)}
+                  variant={log.statusCode >= 400 ? "warning" : "success"}
+                />
+              </Link>
+            ))
+          ) : (
+            <div className="py-4 px-4 rounded-lg bg-[rgba(24,25,28,0.5)] border border-dashed border-[rgba(176,199,217,0.145)] text-center text-[13px] text-[#666]">
+              No associated API request logs yet
             </div>
           )}
         </div>

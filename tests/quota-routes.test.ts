@@ -89,6 +89,15 @@ function jsonRequest(url: string, body: unknown): Request {
   });
 }
 
+function isLogInsertCall(call: unknown[]): boolean {
+  const table = call[0];
+  return typeof table === "object" && table !== null && "requestBody" in table;
+}
+
+function nonLogInsertCalls(): unknown[][] {
+  return mockDb.insert.mock.calls.filter((call) => !isLogInsertCall(call));
+}
+
 describe("quota route gates", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -98,6 +107,9 @@ describe("quota route gates", () => {
     mockCheckApiKeyQuota.mockReset();
     mockCreateDomainIdentity.mockReset();
     mockDb.insert.mockReset();
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockResolvedValue(undefined),
+    });
     mockDb.select.mockReset();
     mockDb.select.mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -142,7 +154,7 @@ describe("quota route gates", () => {
       process.env,
       mockDb,
     );
-    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
   });
 
   it("returns 402 from POST /api/emails/batch when the batch would overrun quota", async () => {
@@ -174,7 +186,7 @@ describe("quota route gates", () => {
       process.env,
       mockDb,
     );
-    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
   });
 
   it("returns 402 from POST /api/domains before creating an SES identity", async () => {
@@ -194,7 +206,7 @@ describe("quota route gates", () => {
     expect(res.status).toBe(402);
     expect(mockCheckDomainQuota).toHaveBeenCalledWith("user-1");
     expect(mockCreateDomainIdentity).not.toHaveBeenCalled();
-    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
   });
 
   it("returns 402 from POST /api/api-keys before inserting a key", async () => {
@@ -210,6 +222,6 @@ describe("quota route gates", () => {
 
     expect(res.status).toBe(402);
     expect(mockCheckApiKeyQuota).toHaveBeenCalledWith("user-1");
-    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
   });
 });

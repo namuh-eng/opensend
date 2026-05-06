@@ -81,6 +81,9 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
   const [dateTo, setDateTo] = useState<string>(
     searchParams.get("before") || "",
   );
+  const [query, setQuery] = useState<string>(
+    searchParams.get("q") || searchParams.get("search") || "",
+  );
 
   const updateFilters = useCallback(
     (updates: Record<string, string>) => {
@@ -189,7 +192,23 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
       </div>
 
       {/* Filters */}
-      <div className="flex items-center gap-4 mb-4">
+      <div className="flex flex-wrap items-center gap-4 mb-4">
+        <label htmlFor="log-search" className="sr-only">
+          Search logs
+        </label>
+        <input
+          id="log-search"
+          type="search"
+          value={query}
+          onChange={(e) => {
+            const val = e.target.value;
+            setQuery(val);
+            updateFilters({ q: val });
+          }}
+          placeholder="Search logs by email id, endpoint, status, or body"
+          className="min-w-[320px] bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] text-[#F0F0F0] text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
+        />
+
         <select
           value={statusFilter}
           onChange={(e) => {
@@ -239,14 +258,15 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
           />
         </div>
 
-        {(statusFilter !== "all" || dateFrom || dateTo) && (
+        {(statusFilter !== "all" || dateFrom || dateTo || query) && (
           <button
             type="button"
             onClick={() => {
               setStatusFilter("all");
               setDateFrom("");
               setDateTo("");
-              updateFilters({ status: "", after: "", before: "" });
+              setQuery("");
+              updateFilters({ status: "", after: "", before: "", q: "" });
             }}
             className="text-[12px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
           >

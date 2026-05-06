@@ -148,6 +148,15 @@ function makeRequest(
   return new Request(url, init);
 }
 
+function isLogInsertCall(call: unknown[]): boolean {
+  const table = call[0];
+  return typeof table === "object" && table !== null && "requestBody" in table;
+}
+
+function nonLogInsertCalls(): unknown[][] {
+  return mockDb.insert.mock.calls.filter((call) => !isLogInsertCall(call));
+}
+
 // ── Auth Middleware Tests ──────────────────────────────────────────
 
 describe("API Key Authentication", () => {
@@ -245,7 +254,9 @@ describe("POST /api/emails", () => {
       emails: { findFirst: vi.fn().mockResolvedValue(null) },
       contacts: { findFirst: vi.fn().mockResolvedValue(null) },
     });
-    mockDb.insert = vi.fn();
+    mockDb.insert = vi.fn().mockReturnValue({
+      values: vi.fn().mockResolvedValue(undefined),
+    });
     mockDb.select = vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([]),
@@ -362,6 +373,21 @@ describe("POST /api/emails", () => {
       }),
     );
     expect(valuesMock.mock.calls[0][0]).not.toHaveProperty("sentAt");
+    expect(valuesMock.mock.calls[1][0]).toMatchObject({
+      endpoint: "/api/emails",
+      method: "POST",
+      status: 200,
+      userId: AUTH_RESULT.userId,
+      apiKeyId: AUTH_RESULT.apiKeyId,
+      requestBody: expect.objectContaining({
+        html: "[REDACTED]",
+      }),
+      responseBody: { id: emailId },
+      document: expect.objectContaining({
+        emailId,
+        apiKeyId: AUTH_RESULT.apiKeyId,
+      }),
+    });
     expect(mockPublishBackgroundJob).toHaveBeenCalledWith(
       expect.objectContaining({
         id: `email.send:${emailId}`,
@@ -425,7 +451,7 @@ describe("POST /api/emails", () => {
       }),
     });
     expect(mockReserveEmailQuota).not.toHaveBeenCalled();
-    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
   });
 
   it("returns p95 under 50ms when the SES mock takes 500ms", async () => {
@@ -589,7 +615,7 @@ describe("POST /api/emails", () => {
       },
     });
     expect(mockReserveEmailQuota).not.toHaveBeenCalled();
-    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
     expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
   });
 
@@ -657,7 +683,9 @@ describe("POST /api/emails/batch", () => {
       emails: { findFirst: vi.fn().mockResolvedValue(null) },
       contacts: { findFirst: vi.fn().mockResolvedValue(null) },
     });
-    mockDb.insert = vi.fn();
+    mockDb.insert = vi.fn().mockReturnValue({
+      values: vi.fn().mockResolvedValue(undefined),
+    });
     mockDb.select = vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([]),
@@ -805,7 +833,7 @@ describe("POST /api/emails/batch", () => {
     });
 
     expect(mockReserveEmailQuota).toHaveBeenCalledTimes(1);
-    expect(mockDb.insert).toHaveBeenCalledTimes(2);
+    expect(nonLogInsertCalls()).toHaveLength(2);
     expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(2);
     expect(findFirst).toHaveBeenNthCalledWith(1, {
       where: expect.objectContaining({
@@ -838,7 +866,9 @@ describe("POST /api/emails/batch", () => {
       }),
     });
     expect(
-      valuesMock.mock.calls.map(([value]) => value.idempotencyKey),
+      valuesMock.mock.calls
+        .map(([value]) => value.idempotencyKey)
+        .filter((value) => value !== undefined),
     ).toEqual(["batch-key-1", null]);
   });
 
@@ -950,7 +980,7 @@ describe("POST /api/emails/batch", () => {
       process.env,
       mockDb,
     );
-    expect(mockDb.insert).toHaveBeenCalledTimes(1);
+    expect(nonLogInsertCalls()).toHaveLength(1);
     expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(1);
   });
 
