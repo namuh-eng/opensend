@@ -1,18 +1,60 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { Opensend } from "../packages/sdk/src";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { DEFAULT_BASE_URL, Opensend, Resend } from "../packages/sdk/src";
+import type {
+  ApiError,
+  ApiResponse,
+  BatchEmailResponse,
+  EmailOptions,
+  EmailResponse,
+  RequestOptions,
+  SDKOptions,
+  SendEmailPayload,
+} from "../packages/sdk/src";
 
 describe("Opensend SDK", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("requires an explicit baseUrl", () => {
-    expect(() => new Opensend("re_test", {} as never)).toThrow(
-      "A non-empty baseUrl is required",
+  it("constructs Resend and Opensend clients with the hosted default baseUrl", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ id: "email_default" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const resend = new Resend("re_test");
+    const opensend = new Opensend("re_test");
+
+    expect(resend).toBeInstanceOf(Resend);
+    expect(opensend).toBeInstanceOf(Opensend);
+
+    await resend.emails.send({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${DEFAULT_BASE_URL}/emails`,
+      expect.objectContaining({ method: "POST" }),
     );
   });
 
-  it("normalizes the baseUrl and sends requests to the HTTP API", async () => {
+  it("validates invalid baseUrl overrides", () => {
+    expect(() => new Resend("re_test", { baseUrl: "" })).toThrow(
+      "baseUrl must be a non-empty string when provided",
+    );
+    expect(
+      () => new Resend("re_test", { baseUrl: "ftp://example.com" }),
+    ).toThrow("baseUrl must use http or https");
+  });
+
+  it("normalizes the baseUrl and sends requests to the Resend-compatible root email API", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ id: "email_123" }), {
         status: 200,
@@ -34,7 +76,7 @@ describe("Opensend SDK", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://api.example.com/api/emails",
+      "https://api.example.com/emails",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -73,7 +115,7 @@ describe("Opensend SDK", () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      "https://api.example.com/api/emails",
+      "https://api.example.com/emails",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -83,7 +125,7 @@ describe("Opensend SDK", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "https://api.example.com/api/emails/batch",
+      "https://api.example.com/emails/batch",
       expect.objectContaining({
         method: "POST",
         headers: expect.objectContaining({
@@ -91,6 +133,19 @@ describe("Opensend SDK", () => {
         }),
       }),
     );
+  });
+
+  it("keeps SDK public type exports available from the entrypoint", () => {
+    expectTypeOf<SDKOptions>().toMatchTypeOf<{ baseUrl?: string }>();
+    expectTypeOf<RequestOptions>().toMatchTypeOf<{ idempotencyKey?: string }>();
+    expectTypeOf<SendEmailPayload>().toMatchTypeOf<
+      EmailOptions & { react?: unknown }
+    >();
+    expectTypeOf<ApiResponse<EmailResponse>>().toEqualTypeOf<{
+      data: EmailResponse | null;
+      error: ApiError | null;
+    }>();
+    expectTypeOf<BatchEmailResponse>().toMatchTypeOf<{ data: unknown[] }>();
   });
 
   it("renders react payloads to html before sending", async () => {
@@ -178,6 +233,7 @@ describe("Opensend SDK", () => {
         code: "validation_error",
         message: "Validation failed.",
         statusCode: 422,
+        details: { fieldErrors: { to: ["Required"] }, formErrors: [] },
       },
     });
   });
