@@ -1,7 +1,7 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { emails } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function POST(
@@ -9,13 +9,13 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const auth = await validateApiKey(_request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   try {
     const { id } = await params;
 
     const existing = await db.query.emails.findFirst({
-      where: eq(emails.id, id),
+      where: and(eq(emails.id, id), eq(emails.userId, auth.userId)),
     });
 
     if (!existing) {
@@ -32,7 +32,7 @@ export async function POST(
     const [updated] = await db
       .update(emails)
       .set({ status: "canceled" })
-      .where(eq(emails.id, id))
+      .where(and(eq(emails.id, id), eq(emails.userId, auth.userId)))
       .returning();
 
     return NextResponse.json({
