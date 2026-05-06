@@ -91,7 +91,7 @@ Rows are ordered roughly by priority within each area. The inspector's tie-break
 | Go SDK | yes | TBD | ? | ? | ? | ? | P1 | | |
 | Ruby / PHP / .NET / Rust SDKs | yes | TBD | ? | ? | ? | ? | P2 | | |
 | MCP server | yes | TBD | ? | ? | ? | ? | P1 | | |
-| TypeScript types | strict, exported | TBD | ? | ? | ? | ? | P0 | | |
+| TypeScript types | strict, exported public SDK declarations; Resend npm `6.12.3` publishes `types: ./dist/index.d.mts` and exports many request/response aliases including `CreateEmailOptions`, `CreateEmailRequestOptions`, `CreateEmailResponse`, `ListEmailsResponse`, and `ErrorResponse` (registry tarball inspected 2026-05-06) | partial: current SDK package points consumers at generated declarations (`packages/sdk/package.json:5`, `packages/sdk/package.json:6`, `packages/sdk/package.json:7`), exports `Resend`/`Opensend` plus common request/response DTOs (`packages/sdk/src/index.ts:504`, `packages/sdk/src/index.ts:507`), and documents type imports (`packages/sdk/README.md:196`); still trails Resend's breadth of exported aliases for every resource | partial | behind | parity | n/a | P0 | #227 | 2026-05-06 |
 
 ## DX
 
@@ -110,7 +110,7 @@ Rows are ordered roughly by priority within each area. The inspector's tie-break
 | Public SLO | implied via status page | TBD | ? | ? | ? | ? | needs Jaeyun | | |
 | Multi-region send | EU/US/AP | TBD | ? | ? | ? | ? | needs Jaeyun | | |
 | Status page | yes | TBD | ? | ? | ? | ? | P1 | | |
-| Queue under provider degradation | retries, dead-letter | TBD | ? | ? | ? | ? | P0 | | |
+| Queue under provider degradation | Resend send docs return an email id for accepted sends and dashboard docs expose user-visible states including `queued`, `sent`, `failed`, and `delivery_delayed` ([docs](https://resend.com/docs/api-reference/emails/send-email), [docs](https://resend.com/docs/dashboard/emails/introduction)); Ever browser attempts failed with `Session expired` / `Session not found`, so static docs fallback was used on 2026-05-06 | partial: API routes persist queued email rows then publish `email.send` jobs (`src/app/api/emails/route.ts:408`, `src/app/api/emails/route.ts:455`, `src/app/api/emails/batch/route.ts:330`, `src/app/api/emails/batch/route.ts:386`); worker marks `processing`, calls SES, marks `sent`, and on provider error resets status to `queued` before rethrowing for SQS redelivery (`packages/ingester/src/queue-worker.ts:366`, `packages/ingester/src/queue-worker.ts:373`, `packages/ingester/src/queue-worker.ts:387`, `packages/ingester/src/queue-worker.ts:396`, `packages/ingester/src/queue-worker.ts:398`); SQS receive count/backoff is metric/log-only and there is no per-email retry/dead-letter state (`packages/ingester/src/queue-worker.ts:187`, `packages/ingester/src/queue-worker.ts:490`, `packages/core/src/db/schema.ts:120`, `packages/core/src/db/schema.ts:132`) | partial | parity | behind | n/a | P0 | #235 | 2026-05-06 |
 | Send-time observability (per-message trace) | event timeline per email_id | TBD | ? | ? | ? | ? | P1 | | |
 
 ## Compliance / security
