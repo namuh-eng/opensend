@@ -128,14 +128,15 @@ curl -i -X POST "${INGESTER_URL}/jobs/poll" \
 
 ## SNS cutover
 
-After the ingester service is healthy and reachable on a public host:
+After the ingester service is healthy and reachable on a public host, the
+SES SNS should point at the ingester's events host:
 
 ```text
 https://events.yourdomain.com/events/ses
 ```
 
-Update the SES configuration set's SNS topic subscription to point at this
-URL. The ingester verifies the SNS signature, so no shared secret is needed.
+Update the SES configuration set's SNS topic subscription accordingly. The
+ingester verifies the SNS signature, so no shared secret is needed.
 
 Don't leave SES pointing at the app/API host once the split is active —
 events would be processed by the dashboard's request loop instead of the
