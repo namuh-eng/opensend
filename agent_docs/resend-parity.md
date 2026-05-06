@@ -85,7 +85,7 @@ Rows are ordered roughly by priority within each area. The inspector's tie-break
 
 | Feature | Resend | OpenSend | Feature | DX | Reliability | Price | Priority | Issue # | Last reviewed |
 |---|---|---|---|---|---|---|---|---|---|
-| OpenAPI spec | published | TBD | ? | ? | ? | ? | P1 | | |
+| OpenAPI spec | published as OpenAPI 3.0.3 YAML/JSON in `resend/resend-openapi` (`https://raw.githubusercontent.com/resend/resend-openapi/main/resend.yaml` returned HTTP 200 with `openapi: 3.0.3` on 2026-05-06) | missing: no OpenAPI/Swagger artifact, dependency, or script in `package.json`; docs are a hand-authored client page (`src/app/docs/page.tsx:17`, `src/app/docs/page.tsx:21`); prod `GET /openapi.json` redirected to `/auth` and `GET /api/openapi.json` returned 404 on 2026-05-06; Ever browser evidence degraded because `ever start --url ... --title` failed with `unknown option --title` and retry failed with `Extension not connected` | missing | behind | parity | n/a | P1 | #214 | 2026-05-06 |
 | Node SDK | first-class | TBD | ? | ? | ? | ? | P0 | | |
 | Python SDK | first-class | TBD | ? | ? | ? | ? | P1 | | |
 | Go SDK | yes | TBD | ? | ? | ? | ? | P1 | | |
