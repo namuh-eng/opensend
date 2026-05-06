@@ -153,6 +153,8 @@ export async function middleware(request: NextRequest) {
     // Allow auth page, public landing page, and static assets
     if (
       pathname === "/auth" ||
+      pathname === "/docs" ||
+      pathname === "/openapi.json" ||
       pathname === "/landing" ||
       pathname.startsWith("/landing/") ||
       pathname.startsWith("/_next/") ||

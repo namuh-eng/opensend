@@ -371,6 +371,19 @@ export default function DocsPage() {
               https://api.opensend.com
             </code>
           </p>
+          <div className="mt-5 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] p-4">
+            <p className="text-[13px] text-[#A1A4A5]">
+              Need a machine-readable contract? Download the unauthenticated
+              OpenAPI 3.0 JSON at{" "}
+              <a
+                className="font-mono text-[#F0F0F0] underline decoration-[rgba(176,199,217,0.35)] underline-offset-4 hover:decoration-[#F0F0F0]"
+                href="/openapi.json"
+              >
+                /openapi.json
+              </a>
+              .
+            </p>
+          </div>
         </div>
 
         {/* Groups */}
