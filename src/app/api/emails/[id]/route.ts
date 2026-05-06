@@ -33,6 +33,16 @@ export async function GET(
       bcc: email.bcc,
       reply_to: email.replyTo,
       last_event: email.status,
+      provider_retry_count: email.providerRetryCount,
+      provider_last_attempted_at: email.providerLastAttemptedAt,
+      provider_next_retry_at: email.providerNextRetryAt,
+      provider_last_error: email.providerLastErrorCode
+        ? {
+            code: email.providerLastErrorCode,
+            message: email.providerLastErrorMessage ?? "Provider send failed.",
+          }
+        : null,
+      provider_dead_lettered_at: email.providerDeadLetteredAt,
       scheduled_at: email.scheduledAt,
       sent_at: email.sentAt,
       tags: email.tags,

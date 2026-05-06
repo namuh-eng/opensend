@@ -3,14 +3,27 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockFindByIdempotencyKey = vi.hoisted(() => vi.fn());
 const mockCreateEmail = vi.hoisted(() => vi.fn());
 const mockUpdateEmail = vi.hoisted(() => vi.fn());
+const mockCreateEmailEvent = vi.hoisted(() => vi.fn());
 const mockPublishBackgroundJob = vi.hoisted(() => vi.fn());
 const mockProviderSendEmail = vi.hoisted(() => vi.fn());
+
+vi.mock("../packages/core/src/db/repositories/emailEventRepo", () => ({
+  emailEventRepo: {
+    create: mockCreateEmailEvent,
+  },
+}));
 
 vi.mock("../packages/core/src/db/repositories/emailRepo", () => ({
   emailRepo: {
     findByIdempotencyKey: mockFindByIdempotencyKey,
     create: mockCreateEmail,
     update: mockUpdateEmail,
+  },
+}));
+
+vi.mock("../packages/core/src/db/repositories/suppressionRepo", () => ({
+  suppressionRepo: {
+    findByUserAndEmails: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -95,6 +108,51 @@ describe("EmailService", () => {
     );
     expect(mockCreateEmail).not.toHaveBeenCalled();
     expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("audits queue publish failures on the persisted email row and timeline", async () => {
+    mockCreateEmail.mockResolvedValue([{ id: "email-failed" }]);
+    mockPublishBackgroundJob.mockRejectedValue(
+      Object.assign(new Error("SQS unavailable"), { name: "QueueUnavailable" }),
+    );
+
+    const { EmailService } = await import(
+      "../packages/core/src/services/email"
+    );
+    const service = new EmailService();
+
+    await expect(
+      service.send({
+        from: "sender@example.com",
+        to: ["user@example.com"],
+        subject: "Hello",
+        userId: "user-1",
+      }),
+    ).rejects.toThrow("SQS unavailable");
+
+    expect(mockUpdateEmail).toHaveBeenCalledWith(
+      "email-failed",
+      {
+        status: "failed",
+        providerLastAttemptedAt: expect.any(Date),
+        providerLastErrorCode: "QueueUnavailable",
+        providerLastErrorMessage: "SQS unavailable",
+        providerNextRetryAt: null,
+        providerDeadLetteredAt: expect.any(Date),
+      },
+      "user-1",
+    );
+    expect(mockCreateEmailEvent).toHaveBeenCalledWith({
+      emailId: "email-failed",
+      userId: "user-1",
+      sourceId: "queue-publish-failed:email-failed",
+      type: "failed",
+      payload: {
+        reason: "queue_publish_failed",
+        error: { code: "QueueUnavailable", message: "SQS unavailable" },
+      },
+      receivedAt: expect.any(Date),
+    });
   });
 
   it("stores future scheduled emails without publishing an immediate send job", async () => {

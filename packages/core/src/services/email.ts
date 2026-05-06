@@ -1,9 +1,42 @@
+import { emailEventRepo } from "../db/repositories/emailEventRepo";
 import { emailRepo } from "../db/repositories/emailRepo";
 import { suppressionRepo } from "../db/repositories/suppressionRepo";
 import {
   createBackgroundJob,
   publishBackgroundJob,
 } from "../jobs/background-jobs";
+
+function summarizeQueuePublishError(error: unknown): {
+  code: string;
+  message: string;
+} {
+  if (error instanceof Error) {
+    return {
+      code: error.name || "queue_publish_failed",
+      message: error.message.slice(0, 1_000),
+    };
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    const code =
+      typeof record.code === "string"
+        ? record.code
+        : typeof record.name === "string"
+          ? record.name
+          : "queue_publish_failed";
+    const message =
+      typeof record.message === "string"
+        ? record.message
+        : "Failed to publish email send job.";
+    return { code, message: message.slice(0, 1_000) };
+  }
+
+  return {
+    code: "queue_publish_failed",
+    message: "Failed to publish email send job.",
+  };
+}
 
 export class SuppressedRecipientError extends Error {
   readonly code = "recipient_suppressed";
@@ -97,7 +130,31 @@ export class EmailService {
           },
         );
       } catch (error) {
-        await emailRepo.update(record.id, { status: "failed" }, params.userId);
+        const failedAt = new Date();
+        const errorSummary = summarizeQueuePublishError(error);
+        await emailRepo.update(
+          record.id,
+          {
+            status: "failed",
+            providerLastAttemptedAt: failedAt,
+            providerLastErrorCode: errorSummary.code,
+            providerLastErrorMessage: errorSummary.message,
+            providerNextRetryAt: null,
+            providerDeadLetteredAt: failedAt,
+          },
+          params.userId,
+        );
+        await emailEventRepo.create({
+          emailId: record.id,
+          userId: params.userId,
+          sourceId: `queue-publish-failed:${record.id}`,
+          type: "failed",
+          payload: {
+            reason: "queue_publish_failed",
+            error: errorSummary,
+          },
+          receivedAt: failedAt,
+        });
         throw error;
       }
     }

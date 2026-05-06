@@ -10,6 +10,7 @@ import {
   type TelemetryContext,
   createBackgroundJob,
   createTelemetryContext,
+  emailEventRepo,
   emailProvider,
   emailRepo,
   emitCloudWatchMetric,
@@ -28,6 +29,7 @@ const DEFAULT_WAIT_TIME_SECONDS = 20;
 const DEFAULT_VISIBILITY_TIMEOUT_SECONDS = 60;
 const DEFAULT_IDLE_SLEEP_MS = 1_000;
 const MAX_SQS_DELAY_SECONDS = 900;
+const DEFAULT_PROVIDER_MAX_ATTEMPTS = 3;
 
 type QueueWorkerOptions = {
   queueUrl?: string | null;
@@ -36,6 +38,17 @@ type QueueWorkerOptions = {
   waitTimeSeconds?: number;
   visibilityTimeoutSeconds?: number;
   idleSleepMs?: number;
+  providerMaxAttempts?: number;
+};
+
+type ProcessJobOptions = {
+  receiveCount?: number;
+  retryDelaySeconds?: number | null;
+};
+
+type ProviderErrorSummary = {
+  code: string;
+  message: string;
 };
 
 type StoredAttachment = {
@@ -70,6 +83,7 @@ export class QueueWorker {
   private readonly waitTimeSeconds: number;
   private readonly visibilityTimeoutSeconds: number;
   private readonly idleSleepMs: number;
+  private readonly providerMaxAttempts: number;
   private started = false;
 
   constructor(options: QueueWorkerOptions = {}) {
@@ -81,6 +95,8 @@ export class QueueWorker {
     this.visibilityTimeoutSeconds =
       options.visibilityTimeoutSeconds ?? DEFAULT_VISIBILITY_TIMEOUT_SECONDS;
     this.idleSleepMs = options.idleSleepMs ?? DEFAULT_IDLE_SLEEP_MS;
+    this.providerMaxAttempts =
+      options.providerMaxAttempts ?? getProviderMaxAttempts();
   }
 
   start(): void {
@@ -166,7 +182,11 @@ export class QueueWorker {
           },
         });
         failureTelemetry = jobSpan.context;
-        await this.processJob(job, jobSpan.context);
+        const receiveCount = getReceiveCount(message.Attributes);
+        const jobResult = await this.processJob(job, jobSpan.context, {
+          receiveCount,
+          retryDelaySeconds: getRetryDelaySeconds(message.Attributes),
+        });
         result.processed++;
         await this.sqsClient.send(
           new DeleteMessageCommand({
@@ -179,8 +199,8 @@ export class QueueWorker {
         emitWorkerJobMetric(jobSpan.context, {
           durationMs,
           jobType: job.type,
-          outcome: "success",
-          receiveCount: getReceiveCount(message.Attributes),
+          outcome: isTerminalProviderFailure(jobResult) ? "failed" : "success",
+          receiveCount,
         });
       } catch (error) {
         result.errors++;
@@ -274,10 +294,11 @@ export class QueueWorker {
       operation: `job.${job.type}`,
       carrier: job.trace,
     }),
+    options: ProcessJobOptions = {},
   ): Promise<unknown> {
     switch (job.type) {
       case "email.send":
-        return await this.processEmailSend(job.emailId, telemetry);
+        return await this.processEmailSend(job.emailId, telemetry, options);
       case "scheduled-email.scan":
         return await this.processDueScheduledEmails(job.limit, telemetry);
       case "webhook.dispatch":
@@ -329,8 +350,9 @@ export class QueueWorker {
   private async processEmailSend(
     emailId: string,
     telemetry: TelemetryContext,
+    options: ProcessJobOptions,
   ): Promise<{
-    status: "sent" | "skipped";
+    status: "sent" | "skipped" | "failed";
     reason?: string;
   }> {
     const email = await emailRepo.findById(emailId);
@@ -387,6 +409,8 @@ export class QueueWorker {
       await emailRepo.update(email.id, {
         status: "sent",
         sentAt: new Date(),
+        providerNextRetryAt: null,
+        providerDeadLetteredAt: null,
       });
       emitSendMetric(telemetry, {
         durationMs: sendDurationMs,
@@ -395,14 +419,56 @@ export class QueueWorker {
       return { status: "sent" };
     } catch (error) {
       finishTelemetrySpan(sesSpan, { status: "error" });
-      await emailRepo.update(email.id, { status: "queued" });
+      const attemptCount = Math.max(1, options.receiveCount ?? 1);
+      const errorSummary = summarizeProviderError(error);
+      const attemptedAt = new Date();
+      const retryDelaySeconds = options.retryDelaySeconds ?? null;
+      const nextRetryAt =
+        retryDelaySeconds === null
+          ? null
+          : new Date(attemptedAt.getTime() + retryDelaySeconds * 1000);
+      const exhausted = attemptCount >= this.providerMaxAttempts;
+
+      await emailRepo.update(email.id, {
+        status: exhausted ? "failed" : "queued",
+        providerRetryCount: attemptCount,
+        providerLastAttemptedAt: attemptedAt,
+        providerNextRetryAt: exhausted ? null : nextRetryAt,
+        providerLastErrorCode: errorSummary.code,
+        providerLastErrorMessage: errorSummary.message,
+        providerDeadLetteredAt: exhausted ? attemptedAt : null,
+      });
+
+      if (exhausted) {
+        await emailEventRepo.create({
+          emailId: email.id,
+          userId: email.userId,
+          sourceId: `provider-dead-letter:${email.id}:${attemptCount}`,
+          type: "failed",
+          payload: {
+            reason: "provider_retries_exhausted",
+            provider: "ses",
+            attempt_count: attemptCount,
+            last_error: errorSummary,
+          },
+          receivedAt: attemptedAt,
+        });
+      }
+
       recordTelemetryError(telemetry, "email.send.failed", error, {
         email_id: email.id,
+        provider_attempt_count: attemptCount,
+        provider_retries_exhausted: exhausted,
       });
       emitSendMetric(telemetry, {
         durationMs: 0,
         outcome: "failed",
       });
+
+      if (exhausted) {
+        return { status: "failed", reason: "provider_retries_exhausted" };
+      }
+
       throw error;
     }
   }
@@ -461,6 +527,22 @@ function emitSendMetric(
   });
 }
 
+function getProviderMaxAttempts(): number {
+  const value = Number(process.env.EMAIL_PROVIDER_MAX_ATTEMPTS ?? "");
+  if (!Number.isFinite(value) || value < 1)
+    return DEFAULT_PROVIDER_MAX_ATTEMPTS;
+  return Math.floor(value);
+}
+
+function isTerminalProviderFailure(result: unknown): boolean {
+  return (
+    typeof result === "object" &&
+    result !== null &&
+    "status" in result &&
+    result.status === "failed"
+  );
+}
+
 function getReceiveCount(
   attributes: Record<string, string> | undefined,
 ): number {
@@ -496,3 +578,33 @@ function getRetryDelaySeconds(
 }
 
 export const queueWorker = new QueueWorker();
+
+function summarizeProviderError(error: unknown): ProviderErrorSummary {
+  if (error instanceof Error) {
+    const maybeCode =
+      "name" in error && typeof error.name === "string" && error.name
+        ? error.name
+        : "provider_error";
+    return {
+      code: maybeCode,
+      message: error.message.slice(0, 1_000),
+    };
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    const code =
+      typeof record.code === "string"
+        ? record.code
+        : typeof record.name === "string"
+          ? record.name
+          : "provider_error";
+    const message =
+      typeof record.message === "string"
+        ? record.message
+        : "Provider send failed.";
+    return { code, message: message.slice(0, 1_000) };
+  }
+
+  return { code: "provider_error", message: "Provider send failed." };
+}

@@ -497,6 +497,35 @@ export const openApiDocument = {
           to: { type: "array", items: { type: "string", format: "email" } },
           subject: { type: "string" },
           status: { type: "string" },
+          last_event: {
+            type: "string",
+            description:
+              "Current user-visible email state, including queued, sent, and failed.",
+          },
+          provider_retry_count: { type: "integer" },
+          provider_last_attempted_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          provider_next_retry_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          provider_last_error: {
+            type: "object",
+            nullable: true,
+            properties: {
+              code: { type: "string" },
+              message: { type: "string" },
+            },
+          },
+          provider_dead_lettered_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
           created_at: { type: "string", format: "date-time" },
         },
         required: ["id", "from", "to", "subject"],
