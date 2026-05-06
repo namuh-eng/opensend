@@ -63,9 +63,7 @@ That's it. Open **http://localhost:3015** and sign in with Google (configure `GO
 
 > The `migrate` service runs database migrations automatically on first boot. Compose also launches the standalone ingester on port `3016` (`http://localhost:3016/health`) for SES/SNS events and background workers.
 >
-> Outside Docker Compose, migrations are not automatic unless your deploy path
-> runs the migrator. Team ECS/Fargate production uses `bash scripts/deploy.sh`,
-> which runs a one-off migrator task before service redeploys.
+> Outside Docker Compose, migrations are not automatic — your deploy path needs to run the `migrator` Dockerfile target (or `bun run db:migrate`) before rolling out app code that expects new columns. See [`docs/self-hosting.md`](docs/self-hosting.md#upgrades--migrations).
 
 ## Features
 
@@ -149,8 +147,8 @@ Full SDK docs: [`packages/sdk/README.md`](./packages/sdk/README.md)
 ### Requirements
 
 - Docker & Docker Compose
-- AWS account with SES access (for sending emails)
-- *(Optional)* Cloudflare account (for automatic DNS record setup)
+- AWS account with SES access (for sending real emails — local dev works without it)
+- *(Optional)* Cloudflare account for automatic DKIM/SPF/DMARC setup
 
 ### Docker Compose (recommended)
 
@@ -158,154 +156,49 @@ Full SDK docs: [`packages/sdk/README.md`](./packages/sdk/README.md)
 git clone https://github.com/namuh-eng/opensend.git
 cd opensend
 cp .env.example .env
-```
-
-Edit `.env` with your configuration:
-
-```bash
-# Required for sending emails
-AWS_ACCESS_KEY_ID=your-aws-key
-AWS_SECRET_ACCESS_KEY=your-aws-secret
-AWS_REGION=us-east-1
-
-# Optional
-POSTGRES_PASSWORD=your-db-password     # Default: opensend
-POSTGRES_PORT=5432                     # Change this and DATABASE_URL together if 5432 is taken
-PORT=3015                              # Default: 3015
-CLOUDFLARE_API_TOKEN=your-cf-token     # For auto DNS setup
-CLOUDFLARE_ZONE_ID=your-zone-id
-S3_BUCKET_NAME=your-bucket             # For email attachments
-BACKGROUND_JOBS_QUEUE_URL=...          # Optional locally; required for async production sending
-BACKGROUND_WORKER_POLL=true            # Set on the ingester worker when SQS is configured
-CLOUDWATCH_METRICS_NAMESPACE=Opensend  # Optional CloudWatch EMF namespace override
-```
-
-`.env.example` keeps `DATABASE_URL` on `localhost` for host-run commands like `bun run dev` and `bun run db:push`. Docker Compose injects its own internal `postgres` hostname for the containerized app and migration services.
-
-Start everything:
-
-```bash
+# Edit .env — at minimum set BETTER_AUTH_SECRET and (for sending) AWS credentials
 docker compose up -d
 ```
 
-This starts PostgreSQL, runs migrations, launches the app, and launches the standalone SES/SNS ingester on port `3016`. Open **http://localhost:3015** for the dashboard/API and `http://localhost:3016/health` for the ingester health endpoint.
+This starts PostgreSQL, runs migrations, launches the app on `:3015`, and the
+standalone SES/SNS ingester on `:3016`. Open **http://localhost:3015** for the
+dashboard/API and `http://localhost:3016/health` for the ingester.
 
-### Manual Setup
+### Manual setup (without Docker)
 
-If you prefer running without Docker (requires [Bun](https://bun.sh)):
+Requires [Bun](https://bun.sh) and a running Postgres instance:
 
 ```bash
 git clone https://github.com/namuh-eng/opensend.git
 cd opensend
 bun install
 cp .env.example .env
-# Edit .env — leave DATABASE_URL as localhost unless you're using another Postgres instance.
 bun run db:push
-bun run db:seed          # Optional: creates sample data
-bun run dev              # Development (port 3015)
+bun run db:seed          # Optional: sample data
+bun run dev              # Development on port 3015
 # or
-bun run build && bun start  # Production
+bun run build && bun start
 ```
 
-To suppress the optional GitHub star prompt during install, use `SKIP_STAR_PROMPT=1 bun install`.
+### Production deployments
 
-### AWS SES Sandbox
+For production setup — managed Postgres, AWS SES IAM, S3 attachments, reverse
+proxy + TLS, SQS-backed background jobs, Redis rate limiting, observability,
+and the split app/ingester service shape — read the dedicated guides:
 
-New AWS accounts start in SES **sandbox mode** — emails can only be sent to verified addresses. To send to anyone:
+- **[`docs/self-hosting.md`](docs/self-hosting.md)** — full self-hosting deep dive (environment variables, database, SES, DNS, auth, reverse proxy, background jobs, Redis, upgrades, troubleshooting)
+- **[`docs/ingester-deploy.md`](docs/ingester-deploy.md)** — running the ingester as a separate service with SNS cutover and replay runbook
+- **[`docs/observability.md`](docs/observability.md)** — log/metric/trace catalog and the API-to-provider tracing runbook
 
-1. Verify a sender domain in the Opensend dashboard
-2. Request production access in [AWS SES Console](https://console.aws.amazon.com/ses/) → Account dashboard → Request production access
-
-### Production Deployment
-
-For production, we recommend:
-
-- **Database**: Use a managed PostgreSQL (AWS RDS, Supabase, Neon, etc.) instead of the Docker Compose Postgres
-- **Migrations**: Run committed Drizzle migrations before deploying app code that expects new columns. The Dockerfile has a `migrator` target that runs `src/lib/db/migrate.ts`; team ECS deploys run it automatically via `bash scripts/deploy.sh`.
-- **Reverse proxy**: Put Nginx or Caddy in front for TLS termination
-- **Secrets**: Store credentials in your cloud provider's secrets manager
-- **Rate limiting**: Use a shared Redis/ElastiCache instance instead of the disabled local default
-- **Background jobs**: Use SQS with a redrive policy/DLQ, plus EventBridge to trigger scheduled-email and webhook retry scans
-- **Observability**: Emit structured JSON logs, trace/correlation headers, and CloudWatch EMF metrics for send and worker flows
-
-Team production on AWS ECS/Fargate:
-
-```bash
-bash scripts/deploy.sh migrate   # DB-only migration/repair
-bash scripts/deploy.sh app       # app image + migrations + app redeploy
-bash scripts/deploy.sh ingester  # ingester image + migrations + ingester redeploy
-bash scripts/deploy.sh all       # app + ingester images + migrations + both redeploys
-```
-
-If a list page works but a detail page shows 404 after a deploy, check for
-schema drift before assuming a missing Next.js route. A server component may be
-catching a database error and rendering `notFound()`.
-
-### Shared rate limiting (staging/production)
-
-Opensend now treats API rate limiting as an explicit runtime contract:
-
-- `RATE_LIMIT_BACKEND=disabled` skips API rate limiting entirely. This is the default for local single-process development only.
-- `RATE_LIMIT_BACKEND=redis` enables the middleware-backed shared limiter. If Redis is misconfigured or unavailable, API requests fail with `503` instead of silently falling back to per-process memory.
-- `REDIS_URL` must point at a TLS-enabled Redis endpoint such as `rediss://default:<password>@<primary-endpoint>:6379`.
-
-For AWS ElastiCache, enable **in-transit encryption** on the replication group/serverless cache and use the TLS endpoint that AWS exposes. AWS documents both the `TransitEncryptionEnabled=true` requirement and TLS client connections to the primary/configuration endpoint.
-
-### AWS-native background jobs
-
-Email sending is queue-first: `POST /api/emails` validates and persists the email row, then publishes an `email.send` job instead of calling SES on the request path. The ingester service owns background job execution.
-
-Configure these variables for staging/production:
-
-- `BACKGROUND_JOBS_QUEUE_URL` — SQS queue URL used for `email.send`, `webhook.dispatch`, scheduled scan, and webhook retry scan jobs.
-- `BACKGROUND_JOBS_REQUIRE_QUEUE=true` — fail API publishing if the queue URL is missing instead of silently skipping publish. Use this in staging/production.
-- `BACKGROUND_JOBS_EVENT_BUS_NAME` — optional EventBridge bus for job lifecycle events/automation hooks.
-- `BACKGROUND_WORKER_POLL=true` — set on the ingester service to long-poll SQS and execute jobs.
-- `INGESTER_JOB_TOKEN` — optional bearer token required by ingester `/jobs/*` endpoints when EventBridge invokes them over HTTP.
-
-Operational shape:
-
-1. App/control plane: persist intent in Postgres as `queued`, publish SQS job, return `{ id }`.
-2. Ingester/worker: long-poll SQS, execute SES sends, set `sent_at` when SES accepts the message, and delete messages only after success.
-3. Scheduled sends: EventBridge should call `POST /jobs/scheduled-emails` on the ingester every minute, or publish a `scheduled-email.scan` job, to enqueue due `email.send` jobs.
-4. Webhook retries: failed webhook deliveries stay `pending` with `next_retry_at`; EventBridge can call `POST /jobs/webhooks` or publish `webhook-delivery.scan` to retry due deliveries.
-5. Retries/DLQ: configure the SQS queue redrive policy with a DLQ. Worker failures leave messages undeleted so SQS retry/redrive owns retry exhaustion.
-
-Local dev remains Docker-friendly if no queue is configured: publishes are logged/skipped and API calls still persist rows. To exercise the real worker locally, set `BACKGROUND_JOBS_QUEUE_URL` and `BACKGROUND_WORKER_POLL=true` on the ingester.
-
-### Observability
-
-Email accept and worker flows emit structured JSON logs with `x-correlation-id`, W3C/OpenTelemetry-compatible `traceparent`, sanitized span events, and CloudWatch EMF metrics for accept latency, send outcomes, queue depth, retries, and worker failures. Set `CLOUDWATCH_METRICS_NAMESPACE` to override the default `Opensend` namespace.
-
-See [`docs/observability.md`](docs/observability.md) for PII-safe logging rules, metric names, alarms, and the runbook for tracing an email from API acceptance to SES/provider result.
-
-### Redis-backed auth/domain metadata cache
-
-The same `REDIS_URL` is also used for hot-path metadata caching:
-
-- API key auth lookups are cached by token hash for 5 minutes.
-- Domain DB detail lookups are cached by domain id for 5 minutes.
-- SES domain identity lookups are cached by domain name for 2 minutes.
-- API key create/delete and domain create/update/delete/verify/auto-configure flows invalidate affected cache entries immediately.
-
-Local dev stays safe if Redis is absent: requests fall back to Postgres/SES as the source of truth. In staging/production, point `REDIS_URL` at a shared TLS-enabled Redis/ElastiCache endpoint so multiple app instances see the same cache state.
-
-Quick verification after deploy:
-
-```bash
-curl -i http://localhost:3015/api/auth/verify \
-  -H 'x-forwarded-for: 203.0.113.10'
-# Expect: X-RateLimit-Backend: redis when enabled
-```
-
-The included `Dockerfile` produces an optimized multi-stage build suitable for any container platform (AWS ECS Fargate, Google Cloud Run, Fly.io, Railway, etc.):
+The included multi-stage `Dockerfile` builds the app, the migrator, and (via
+`packages/ingester/Dockerfile`) the ingester. Images run on any container
+platform — ECS Fargate, Google Cloud Run, Fly.io, Railway, Kubernetes, or a
+plain Docker host.
 
 ```bash
 docker build -t opensend .
 docker run -p 3015:8080 --env-file .env opensend
 ```
-
-For the ECS Fargate split-service shape, ALB host-based events routing, SNS cutover, and ingester log/replay runbook, see [`docs/ingester-deploy.md`](docs/ingester-deploy.md).
 
 ## Architecture
 
