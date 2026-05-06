@@ -99,7 +99,7 @@ Rows are ordered roughly by priority within each area. The inspector's tie-break
 |---|---|---|---|---|---|---|---|---|---|
 | Sandbox / test mode | dedicated `onboarding@resend.dev` + test API key behavior | TBD | ? | ? | ? | ? | P1 | | |
 | Error message quality | documented error catalog with stable names and suggested actions ([docs](https://resend.com/docs/api-reference/errors)) | partial: send routes return ad hoc string errors/details (`src/app/api/emails/route.ts:93`, `src/app/api/emails/batch/route.ts:102`); SDK exposes only `message`/`statusCode` (`packages/sdk/src/index.ts:30`) | partial | behind | parity | n/a | P0 | #170 | 2026-05-03 |
-| Logs / event explorer | searchable per email | TBD | ? | ? | ? | ? | P0 | | |
+| Logs / event explorer | searchable per email | TBD | ? | ? | ? | ? | P0 | #224 | 2026-05-06 |
 | Dashboard quality | polished, fast | TBD | ? | ? | ? | ? | P1 | | |
 | API key scopes | read/write/full per key | TBD | ? | ? | ? | ? | P1 | | |
 
