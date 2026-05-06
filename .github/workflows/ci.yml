@@ -8,6 +8,9 @@ on:
     branches: [main, staging]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -19,7 +22,7 @@ jobs:
     env:
       SKIP_STAR_PROMPT: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -37,7 +40,7 @@ jobs:
     env:
       SKIP_STAR_PROMPT: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # scripts/check-changed-files.mjs needs origin/main history to compute the merge base.
           fetch-depth: 0
@@ -58,7 +61,7 @@ jobs:
     env:
       SKIP_STAR_PROMPT: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -76,7 +79,7 @@ jobs:
     env:
       SKIP_STAR_PROMPT: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: oven-sh/setup-bun@v2
         with:
