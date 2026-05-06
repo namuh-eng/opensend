@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockFindById = vi.hoisted(() => vi.fn());
 const mockFindDueScheduled = vi.hoisted(() => vi.fn());
 const mockUpdateEmail = vi.hoisted(() => vi.fn());
+const mockCreateEmailEvent = vi.hoisted(() => vi.fn());
 const mockSendEmail = vi.hoisted(() => vi.fn());
 const mockPublishBackgroundJob = vi.hoisted(() => vi.fn());
 const mockDispatchDelivery = vi.hoisted(() => vi.fn());
@@ -32,6 +33,9 @@ vi.mock("@opensend/core", () => ({
       "00-11111111111111111111111111111111-2222222222222222-01",
     correlationId: input.carrier?.correlationId ?? "corr-worker-test",
   }),
+  emailEventRepo: {
+    create: mockCreateEmailEvent,
+  },
   emailProvider: {
     sendEmail: mockSendEmail,
   },
@@ -122,6 +126,143 @@ describe("QueueWorker", () => {
     expect(mockUpdateEmail).toHaveBeenNthCalledWith(2, "email-1", {
       status: "sent",
       sentAt: expect.any(Date),
+      providerNextRetryAt: null,
+      providerDeadLetteredAt: null,
+    });
+  });
+
+  it("persists retry metadata and leaves provider failures queued for SQS retry", async () => {
+    mockFindById.mockResolvedValue({
+      id: "email-retry",
+      from: "sender@example.com",
+      to: ["user@example.com"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "",
+      headers: {},
+      attachments: [],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+    mockSendEmail.mockRejectedValue(
+      Object.assign(new Error("SES is throttling sends"), {
+        name: "ThrottlingException",
+      }),
+    );
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({
+      queueUrl: null,
+      providerMaxAttempts: 3,
+    });
+
+    await expect(
+      worker.processJob(
+        {
+          id: "email.send:email-retry",
+          type: "email.send",
+          source: "api",
+          requestedAt: "2026-04-28T00:00:00.000Z",
+          emailId: "email-retry",
+        },
+        undefined,
+        { receiveCount: 2, retryDelaySeconds: 4 },
+      ),
+    ).rejects.toThrow("SES is throttling sends");
+
+    expect(mockUpdateEmail).toHaveBeenNthCalledWith(1, "email-retry", {
+      status: "processing",
+    });
+    expect(mockUpdateEmail).toHaveBeenNthCalledWith(2, "email-retry", {
+      status: "queued",
+      providerRetryCount: 2,
+      providerLastAttemptedAt: expect.any(Date),
+      providerNextRetryAt: expect.any(Date),
+      providerLastErrorCode: "ThrottlingException",
+      providerLastErrorMessage: "SES is throttling sends",
+      providerDeadLetteredAt: null,
+    });
+    expect(mockCreateEmailEvent).not.toHaveBeenCalled();
+  });
+
+  it("dead-letters exhausted provider retries and records a failure event", async () => {
+    mockFindById.mockResolvedValue({
+      id: "email-dead",
+      from: "sender@example.com",
+      to: ["user@example.com"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "",
+      headers: {},
+      attachments: [],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+    mockSendEmail.mockRejectedValue(
+      Object.assign(new Error("SES endpoint unavailable"), {
+        name: "ServiceUnavailableException",
+      }),
+    );
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({
+      queueUrl: null,
+      providerMaxAttempts: 3,
+    });
+
+    await expect(
+      worker.processJob(
+        {
+          id: "email.send:email-dead",
+          type: "email.send",
+          source: "api",
+          requestedAt: "2026-04-28T00:00:00.000Z",
+          emailId: "email-dead",
+        },
+        undefined,
+        { receiveCount: 3, retryDelaySeconds: 8 },
+      ),
+    ).resolves.toEqual({
+      status: "failed",
+      reason: "provider_retries_exhausted",
+    });
+
+    expect(mockUpdateEmail).toHaveBeenNthCalledWith(2, "email-dead", {
+      status: "failed",
+      providerRetryCount: 3,
+      providerLastAttemptedAt: expect.any(Date),
+      providerNextRetryAt: null,
+      providerLastErrorCode: "ServiceUnavailableException",
+      providerLastErrorMessage: "SES endpoint unavailable",
+      providerDeadLetteredAt: expect.any(Date),
+    });
+    expect(mockCreateEmailEvent).toHaveBeenCalledWith({
+      emailId: "email-dead",
+      userId: "user-1",
+      sourceId: "provider-dead-letter:email-dead:3",
+      type: "failed",
+      payload: {
+        reason: "provider_retries_exhausted",
+        provider: "ses",
+        attempt_count: 3,
+        last_error: {
+          code: "ServiceUnavailableException",
+          message: "SES endpoint unavailable",
+        },
+      },
+      receivedAt: expect.any(Date),
     });
   });
 

@@ -10,6 +10,7 @@ const mockEmitCloudWatchMetric = vi.hoisted(() => vi.fn());
 const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
 const mockReserveEmailQuota = vi.hoisted(() => vi.fn());
+const mockReleaseEmailQuota = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
   select: vi.fn(),
@@ -93,6 +94,7 @@ vi.mock("@/lib/billing/quota", async () => {
   return {
     ...actual,
     reserveEmailQuota: mockReserveEmailQuota,
+    releaseEmailQuota: mockReleaseEmailQuota,
   };
 });
 
@@ -248,6 +250,8 @@ describe("POST /api/emails", () => {
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
     mockReserveEmailQuota.mockReset();
+    mockReleaseEmailQuota.mockReset();
+    mockReleaseEmailQuota.mockResolvedValue(undefined);
     mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
     mockGetApiKeyAuthHeaderError.mockReturnValue(null);
     Object.assign(mockDb.query, {
@@ -404,6 +408,60 @@ describe("POST /api/emails", () => {
         groupId: "email.send",
       }),
     );
+  });
+
+  it("audits queue publish failures before returning 500 and releasing quota", async () => {
+    const emailId = "queue-fail-email-uuid";
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: false });
+    const returning = vi.fn().mockResolvedValue([{ id: emailId }]);
+    const valuesMock = vi.fn().mockReturnValue({ returning });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const updateWhere = vi.fn().mockResolvedValue(undefined);
+    const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+    mockDb.update = vi.fn().mockReturnValue({ set: updateSet });
+    mockPublishBackgroundJob.mockRejectedValue(
+      Object.assign(new Error("SQS unavailable"), { name: "QueueUnavailable" }),
+    );
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Test Email",
+          html: "<p>Hello</p>",
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(500);
+    expect(updateSet).toHaveBeenCalledWith({
+      status: "failed",
+      providerLastAttemptedAt: expect.any(Date),
+      providerLastErrorCode: "QueueUnavailable",
+      providerLastErrorMessage: "SQS unavailable",
+      providerNextRetryAt: null,
+      providerDeadLetteredAt: expect.any(Date),
+    });
+    expect(valuesMock).toHaveBeenCalledWith({
+      emailId,
+      userId: AUTH_RESULT.userId,
+      sourceId: `queue-publish-failed:${emailId}`,
+      type: "failed",
+      payload: {
+        reason: "queue_publish_failed",
+        error: {
+          code: "QueueUnavailable",
+          message: "SQS unavailable",
+        },
+      },
+      receivedAt: expect.any(Date),
+    });
+    expect(mockReleaseEmailQuota).toHaveBeenCalledWith(AUTH_RESULT.userId, 1);
   });
 
   it("checks duplicate Idempotency-Key retries only within the authenticated user scope", async () => {
@@ -677,6 +735,8 @@ describe("POST /api/emails/batch", () => {
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
     mockReserveEmailQuota.mockReset();
+    mockReleaseEmailQuota.mockReset();
+    mockReleaseEmailQuota.mockResolvedValue(undefined);
     mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
     mockGetApiKeyAuthHeaderError.mockReturnValue(null);
     Object.assign(mockDb.query, {

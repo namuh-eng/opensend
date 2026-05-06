@@ -64,6 +64,17 @@ export interface EmailListOptions {
   status?: EmailStatus;
 }
 
+export interface ProviderRetryVisibility {
+  provider_retry_count: number;
+  provider_last_attempted_at: string | null;
+  provider_next_retry_at: string | null;
+  provider_last_error: {
+    code: string;
+    message: string;
+  } | null;
+  provider_dead_lettered_at: string | null;
+}
+
 export interface BatchEmailItemError {
   error: {
     name?: string;
@@ -80,7 +91,7 @@ export interface BatchEmailResponse {
   data: BatchEmailItemResponse[];
 }
 
-export interface EmailListItem {
+export interface EmailListItem extends ProviderRetryVisibility {
   id: string;
   from: string;
   to: string[];
