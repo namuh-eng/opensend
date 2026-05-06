@@ -6,6 +6,28 @@ function webhookService() {
   return createWebhookService();
 }
 
+function mapDelivery(delivery: {
+  id: string;
+  status: string;
+  attempt: number;
+  statusCode: number | null;
+  responseBody: string | null;
+  attemptedAt: Date | string | null;
+  nextRetryAt: Date | string | null;
+  createdAt: Date | string;
+}) {
+  return {
+    id: delivery.id,
+    status: delivery.status,
+    attempt: delivery.attempt,
+    status_code: delivery.statusCode,
+    response_body: delivery.responseBody,
+    attempted_at: delivery.attemptedAt,
+    next_retry_at: delivery.nextRetryAt,
+    created_at: delivery.createdAt,
+  };
+}
+
 function mapWebhookError(error: unknown, fallback: string): Response {
   const message = error instanceof Error ? error.message : fallback;
   return Response.json({ error: message }, { status: 500 });
@@ -34,6 +56,7 @@ export async function GET(
       events: webhook.events,
       status: webhook.status,
       created_at: webhook.createdAt,
+      recent_deliveries: (webhook.recentDeliveries ?? []).map(mapDelivery),
     });
   } catch (error) {
     return mapWebhookError(error, "Failed to retrieve webhook");
