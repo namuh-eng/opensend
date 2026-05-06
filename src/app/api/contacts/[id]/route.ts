@@ -1,7 +1,28 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
+import { queueEvent } from "@/lib/events";
 import { and, eq, or } from "drizzle-orm";
+
+type ContactWebhookRow = typeof contacts.$inferSelect;
+
+function toContactWebhookPayload(contact: ContactWebhookRow) {
+  return {
+    id: contact.id,
+    email: contact.email,
+    first_name: contact.firstName,
+    last_name: contact.lastName,
+    unsubscribed: contact.unsubscribed,
+    properties: contact.customProperties ?? {},
+    segments: contact.segments ?? [],
+    topics: contact.topicSubscriptions ?? [],
+    created_at: contact.createdAt?.toISOString?.() ?? contact.createdAt,
+  };
+}
+
+function valuesEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
 
 async function findContact(idOrEmail: string, userId: string) {
   const isUuid =
@@ -101,6 +122,42 @@ export async function PATCH(
     if (body.properties !== undefined)
       updateData.customProperties = body.properties;
 
+    const changedFields = Object.entries({
+      email: updateData.email,
+      first_name: updateData.firstName,
+      last_name: updateData.lastName,
+      unsubscribed: updateData.unsubscribed,
+      properties: updateData.customProperties,
+    })
+      .filter(([, value]) => value !== undefined)
+      .filter(([field, value]) => {
+        const currentValue =
+          field === "first_name"
+            ? contact.firstName
+            : field === "last_name"
+              ? contact.lastName
+              : field === "properties"
+                ? contact.customProperties
+                : field === "unsubscribed"
+                  ? contact.unsubscribed
+                  : contact.email;
+        return !valuesEqual(currentValue, value);
+      })
+      .map(([field]) => field);
+
+    if (changedFields.length === 0) {
+      return Response.json({
+        object: "contact",
+        id: contact.id,
+        email: contact.email,
+        first_name: contact.firstName,
+        last_name: contact.lastName,
+        unsubscribed: contact.unsubscribed,
+        properties: contact.customProperties,
+        created_at: contact.createdAt,
+      });
+    }
+
     const [updated] = await db
       .update(contacts)
       .set(updateData)
@@ -110,6 +167,16 @@ export async function PATCH(
     if (!updated) {
       return Response.json({ error: "Contact not found" }, { status: 404 });
     }
+
+    await queueEvent({
+      type: "contact.updated",
+      userId,
+      payload: {
+        id: updated.id,
+        changed_fields: changedFields,
+        contact: toContactWebhookPayload(updated),
+      },
+    });
 
     return Response.json({
       object: "contact",
@@ -148,11 +215,20 @@ export async function DELETE(
     const [deleted] = await db
       .delete(contacts)
       .where(and(eq(contacts.id, contact.id), eq(contacts.userId, userId)))
-      .returning({ id: contacts.id });
+      .returning({ id: contacts.id, email: contacts.email });
 
     if (!deleted) {
       return Response.json({ error: "Contact not found" }, { status: 404 });
     }
+
+    await queueEvent({
+      type: "contact.deleted",
+      userId,
+      payload: {
+        id: deleted.id,
+        email: deleted.email,
+      },
+    });
 
     return Response.json({
       object: "contact",

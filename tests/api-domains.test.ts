@@ -8,9 +8,12 @@ const mockQueueEvent = vi.hoisted(() => vi.fn());
 const mockDeleteDomainIdentity = vi.hoisted(() => vi.fn());
 const mockGetDomainIdentity = vi.hoisted(() => vi.fn());
 const mockCreateDomainIdentity = vi.hoisted(() => vi.fn());
+const mockCheckDomainQuota = vi.hoisted(() => vi.fn());
+const mockCreateDomain = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
   update: vi.fn(),
+  delete: vi.fn(),
   select: vi.fn(),
   query: {
     domains: {
@@ -28,6 +31,23 @@ vi.mock("@/lib/api-auth", () => ({
   authorizeDashboardOrApiKey: mockValidateApiKey,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
+}));
+
+vi.mock("@/lib/billing/quota", () => ({
+  checkDomainQuota: mockCheckDomainQuota,
+  quotaExceededResponse: () =>
+    Response.json({ error: "Domain quota exceeded" }, { status: 402 }),
+}));
+
+vi.mock("@opensend/core", () => ({
+  DMARC_RECORD_VALUE: "v=DMARC1; p=none;",
+  buildDmarcRecordName: (domain: string) => `_dmarc.${domain}`,
+  createDomainService: () => ({
+    createDomain: mockCreateDomain,
+    listDomains: vi.fn(),
+  }),
+  getEffectiveReturnPathLabel: (value: string | null | undefined) =>
+    value?.trim() || "send",
 }));
 
 vi.mock("@/lib/cloudflare", () => ({
@@ -86,10 +106,151 @@ describe("Domain API validation", () => {
     mockDeleteDomainIdentity.mockReset();
     mockGetDomainIdentity.mockReset();
     mockCreateDomainIdentity.mockReset();
+    mockCheckDomainQuota.mockResolvedValue({
+      ok: true,
+      info: { limit: 10, used: 0 },
+    });
+    mockCreateDomain.mockReset();
     mockDb.insert.mockReset();
     mockDb.update.mockReset();
+    mockDb.delete.mockReset();
     mockDb.select.mockReset();
     mockDb.query.domains.findFirst.mockReset();
+  });
+
+  it("creates a domain and enqueues domain.created for the caller tenant", async () => {
+    const createdAt = new Date("2026-05-06T00:00:00.000Z");
+    mockCreateDomain.mockResolvedValueOnce({
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      status: "not_started",
+      region: "us-east-1",
+      records: [
+        {
+          type: "TXT",
+          name: "_dmarc.example.com",
+          value: "v=DMARC1; p=none;",
+          status: "pending",
+          ttl: "Auto",
+        },
+      ],
+      customReturnPath: null,
+      trackOpens: false,
+      trackClicks: false,
+      trackingSubdomain: null,
+      tls: "opportunistic",
+      capabilities: [{ name: "sending", enabled: true }],
+      createdAt,
+    });
+
+    const { POST } = await import("@/app/api/domains/route");
+    const req = makeRequest("http://localhost:3015/api/domains", "POST", {
+      name: "Example.com",
+    });
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(201);
+    expect(mockCreateDomain).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Example.com", userId: "user-1" }),
+    );
+    expect(mockQueueEvent).toHaveBeenCalledWith({
+      type: "domain.created",
+      userId: "user-1",
+      payload: expect.objectContaining({
+        id: VALID_DOMAIN_ID,
+        name: "example.com",
+        status: "not_started",
+        records: expect.any(Array),
+        capabilities: expect.any(Array),
+      }),
+    });
+  });
+
+  it("updates a domain and enqueues domain.updated for the caller tenant", async () => {
+    const existing = {
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      userId: "user-1",
+      status: "not_started",
+      region: "us-east-1",
+      records: [],
+      trackOpens: false,
+      trackClicks: false,
+      trackingSubdomain: null,
+      tls: "opportunistic",
+      capabilities: [{ name: "sending", enabled: true }],
+      createdAt: new Date("2026-05-06T00:00:00.000Z"),
+    };
+    const updated = { ...existing, trackOpens: true };
+    mockDb.query.domains.findFirst.mockResolvedValueOnce(existing);
+    mockDb.update.mockReturnValueOnce({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([updated]),
+        }),
+      }),
+    });
+
+    const { PATCH } = await import("@/app/api/domains/[id]/route");
+    const req = makeRequest(
+      `http://localhost:3015/api/domains/${VALID_DOMAIN_ID}`,
+      "PATCH",
+      { open_tracking: true },
+    );
+
+    const res = await PATCH(req, {
+      params: Promise.resolve({ id: VALID_DOMAIN_ID }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockQueueEvent).toHaveBeenCalledWith({
+      type: "domain.updated",
+      userId: "user-1",
+      payload: expect.objectContaining({
+        id: VALID_DOMAIN_ID,
+        changed_fields: ["open_tracking"],
+        domain: expect.objectContaining({
+          id: VALID_DOMAIN_ID,
+          name: "example.com",
+        }),
+      }),
+    });
+  });
+
+  it("deletes a domain and enqueues domain.deleted for the caller tenant", async () => {
+    mockDb.query.domains.findFirst.mockResolvedValueOnce({
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      userId: "user-1",
+      status: "not_started",
+      records: [],
+    });
+    mockListDNSRecords.mockResolvedValueOnce([]);
+    mockDb.delete.mockReturnValueOnce({
+      where: vi.fn().mockReturnValue({
+        returning: vi
+          .fn()
+          .mockResolvedValue([{ id: VALID_DOMAIN_ID, name: "example.com" }]),
+      }),
+    });
+
+    const { DELETE } = await import("@/app/api/domains/[id]/route");
+    const req = makeRequest(
+      `http://localhost:3015/api/domains/${VALID_DOMAIN_ID}`,
+      "DELETE",
+    );
+
+    const res = await DELETE(req, {
+      params: Promise.resolve({ id: VALID_DOMAIN_ID }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockQueueEvent).toHaveBeenCalledWith({
+      type: "domain.deleted",
+      userId: "user-1",
+      payload: { id: VALID_DOMAIN_ID, name: "example.com" },
+    });
   });
 
   it("returns 422 for invalid domain create payload", async () => {
@@ -219,7 +380,16 @@ describe("Domain API validation", () => {
       ttl: "Auto",
     });
     expect(mockDb.query.domains.findFirst).toHaveBeenCalledTimes(1);
-    expect(mockQueueEvent).toHaveBeenCalledTimes(1);
+    expect(mockQueueEvent).toHaveBeenCalledWith({
+      type: "domain.updated",
+      userId: "user-1",
+      payload: expect.objectContaining({
+        id: VALID_DOMAIN_ID,
+        name: "example.com",
+        status: "verified",
+        previous_status: "pending",
+      }),
+    });
   });
 
   it("returns 404 when verifying a domain owned by another tenant", async () => {

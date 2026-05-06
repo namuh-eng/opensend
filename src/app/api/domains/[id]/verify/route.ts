@@ -97,11 +97,14 @@ export async function POST(
     if (updated.status !== previousStatus) {
       await queueEvent({
         type: "domain.updated",
+        userId,
         payload: {
           id: updated.id,
           name: updated.name,
           status: updated.status,
           previous_status: previousStatus,
+          records: updated.records || [],
+          capabilities: updated.capabilities || [],
         },
       });
     }

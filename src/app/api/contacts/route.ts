@@ -5,6 +5,7 @@ import {
 } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { contacts, segments, topics } from "@/lib/db/schema";
+import { queueEvent } from "@/lib/events";
 import { createContactSchema } from "@/lib/validation/contacts";
 import { type SQL, and, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
@@ -12,6 +13,22 @@ import { type NextRequest, NextResponse } from "next/server";
 type ContactRouteAuth = NonNullable<
   Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
 >;
+
+type ContactWebhookRow = typeof contacts.$inferSelect;
+
+function toContactWebhookPayload(contact: ContactWebhookRow) {
+  return {
+    id: contact.id,
+    email: contact.email,
+    first_name: contact.firstName,
+    last_name: contact.lastName,
+    unsubscribed: contact.unsubscribed,
+    properties: contact.customProperties ?? {},
+    segments: contact.segments ?? [],
+    topics: contact.topicSubscriptions ?? [],
+    created_at: contact.createdAt?.toISOString?.() ?? contact.createdAt,
+  };
+}
 
 async function resolveUserId(auth: ContactRouteAuth): Promise<string | null> {
   if ("userId" in auth) return auth.userId;
@@ -98,7 +115,13 @@ export async function POST(request: NextRequest) {
           topicSubscriptions: resolvedTopics.length > 0 ? resolvedTopics : null,
           userId,
         })
-        .returning({ id: contacts.id });
+        .returning();
+
+      await queueEvent({
+        type: "contact.created",
+        userId,
+        payload: toContactWebhookPayload(inserted),
+      });
 
       return NextResponse.json(
         {

@@ -6,6 +6,7 @@ import {
 } from "@/lib/api-auth";
 import { checkDomainQuota, quotaExceededResponse } from "@/lib/billing/quota";
 import { invalidateDomainCaches } from "@/lib/domain-cache";
+import { queueEvent } from "@/lib/events";
 import { createDomainIdentity } from "@/lib/ses";
 import { createDomainSchema } from "@/lib/validation/domains";
 import {
@@ -20,6 +21,31 @@ function domainService() {
   });
 }
 
+type DomainWebhookPayload = {
+  id: string;
+  name: string;
+  status: string;
+  region?: string;
+  records?: unknown;
+  capabilities?: unknown;
+  created_at?: unknown;
+};
+
+function toDomainWebhookPayload(row: DomainWebhookPayload) {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    region: row.region,
+    records: row.records ?? [],
+    capabilities: row.capabilities ?? [],
+    created_at:
+      row.created_at instanceof Date
+        ? row.created_at.toISOString()
+        : row.created_at,
+  };
+}
+
 function mapDomainError(error: unknown, fallback: string): Response {
   console.error(`${fallback}:`, error);
   return Response.json({ error: fallback }, { status: 500 });
@@ -28,6 +54,7 @@ function mapDomainError(error: unknown, fallback: string): Response {
 export async function POST(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  if (!auth.userId) return unauthorizedResponse();
 
   let body: unknown;
   try {
@@ -61,6 +88,20 @@ export async function POST(request: Request): Promise<Response> {
       tls: validated.tls,
       capabilities: validated.capabilities,
       userId: auth.userId,
+    });
+
+    await queueEvent({
+      type: "domain.created",
+      userId: auth.userId,
+      payload: toDomainWebhookPayload({
+        id: row.id,
+        name: row.name,
+        status: row.status,
+        region: row.region,
+        records: row.records,
+        capabilities: row.capabilities,
+        created_at: row.createdAt,
+      }),
     });
 
     return Response.json(

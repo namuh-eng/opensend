@@ -26,6 +26,12 @@ vi.mock("@opensend/core", () => ({
       "email.opened",
       "email.clicked",
       "email.failed",
+      "contact.created",
+      "contact.updated",
+      "contact.deleted",
+      "domain.created",
+      "domain.updated",
+      "domain.deleted",
     ].includes(candidate)
       ? candidate
       : null;
@@ -173,7 +179,7 @@ describe("WebhookDispatcher", () => {
     });
     mockFindEventById.mockResolvedValue({
       id: "event-unsupported",
-      type: "domain.updated",
+      type: "email.unknown",
       payload: {},
     });
     const fetchMock = vi.fn();
@@ -194,7 +200,7 @@ describe("WebhookDispatcher", () => {
       "delivery-unsupported",
       expect.objectContaining({
         status: "failed",
-        responseBody: "Unsupported webhook event type: domain.updated",
+        responseBody: "Unsupported webhook event type: email.unknown",
         nextRetryAt: null,
       }),
     );

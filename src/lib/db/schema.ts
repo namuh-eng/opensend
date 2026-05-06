@@ -387,18 +387,18 @@ export const emailEvents = pgTable(
   "email_events",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    emailId: uuid("email_id")
-      .notNull()
-      .references(() => emails.id),
+    emailId: uuid("email_id").references(() => emails.id),
     sourceId: varchar("source_id", { length: 255 }),
     type: varchar("type", { length: 50 }).notNull(),
     payload: jsonb("payload").notNull(),
+    userId: text("user_id"),
     receivedAt: timestamp("received_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (t) => [
     index("email_events_email_id_idx").on(t.emailId),
+    index("email_events_user_id_idx").on(t.userId),
     uniqueIndex("email_events_source_id_idx").on(t.sourceId),
   ],
 );
