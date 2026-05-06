@@ -15,6 +15,8 @@ const mockDb = vi.hoisted(() => ({
 
 vi.mock("@/lib/db", () => ({ db: mockDb }));
 vi.mock("@/lib/api-auth", () => ({
+  authorizeDashboardOrApiKey: mockValidateApiKey,
+  getServerSession: vi.fn(),
   validateApiKey: mockValidateApiKey,
   getApiKeyAuthHeaderError: () => null,
   unauthorizedResponse: () =>

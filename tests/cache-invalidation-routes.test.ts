@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
+const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockInvalidateApiKeyAuthCache = vi.hoisted(() => vi.fn());
 const mockCreateApiKey = vi.hoisted(() => vi.fn());
 const mockDeleteApiKey = vi.hoisted(() => vi.fn());
@@ -43,6 +44,7 @@ vi.mock("@opensend/core", () => ({
 
 vi.mock("@/lib/api-auth", () => ({
   authorizeDashboardOrApiKey: mockValidateApiKey,
+  getServerSession: mockGetServerSession,
   invalidateApiKeyAuthCache: mockInvalidateApiKeyAuthCache,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
