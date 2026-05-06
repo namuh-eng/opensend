@@ -5,7 +5,7 @@ import { type SQL, and, desc, eq, gt, lt } from "drizzle-orm";
 
 export async function GET(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   const url = new URL(request.url);
   const limit = Math.min(
@@ -21,7 +21,7 @@ export async function GET(request: Request): Promise<Response> {
   const before = url.searchParams.get("before");
 
   try {
-    const conditions: SQL[] = [];
+    const conditions: SQL[] = [eq(logs.userId, auth.userId)];
 
     if (status) {
       conditions.push(eq(logs.status, Number(status)));

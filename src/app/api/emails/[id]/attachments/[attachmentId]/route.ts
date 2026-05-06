@@ -2,7 +2,7 @@ import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { emails } from "@/lib/db/schema";
 import { getPresignedUrl } from "@/lib/s3";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 
 export async function GET(
@@ -10,14 +10,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string; attachmentId: string }> },
 ) {
   const auth = await validateApiKey(_request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   try {
     const { id, attachmentId } = await params;
     const [email] = await db
       .select({ attachments: emails.attachments })
       .from(emails)
-      .where(eq(emails.id, id))
+      .where(and(eq(emails.id, id), eq(emails.userId, auth.userId)))
       .limit(1);
 
     if (!email) {

@@ -1,20 +1,20 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { logs } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
 
   const { id } = await params;
 
   try {
     const log = await db.query.logs.findFirst({
-      where: eq(logs.id, id),
+      where: and(eq(logs.id, id), eq(logs.userId, auth.userId)),
     });
 
     if (!log) {
