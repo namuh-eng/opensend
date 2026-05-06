@@ -11,6 +11,7 @@ function normalizeCacheSegment(value: string | null | undefined): string {
 }
 
 export function getMetricsAggregateCacheKey(params: {
+  userId: string;
   range: string;
   domain: string | null;
   eventType: string | null;
@@ -18,6 +19,7 @@ export function getMetricsAggregateCacheKey(params: {
   return [
     DASHBOARD_AGGREGATE_CACHE_PREFIX,
     "metrics",
+    normalizeCacheSegment(params.userId),
     normalizeCacheSegment(params.range),
     normalizeCacheSegment(params.domain),
     normalizeCacheSegment(params.eventType),

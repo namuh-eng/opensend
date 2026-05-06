@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   const authHeader = request.headers.get("x-cron-auth");
   const expectedToken = process.env.CRON_AUTH_TOKEN;
 
-  if (expectedToken && authHeader !== expectedToken) {
+  if (!expectedToken || authHeader !== expectedToken) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

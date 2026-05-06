@@ -1,15 +1,20 @@
 import { ApiKeyDetail } from "@/components/api-key-detail";
+import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { apiKeys, domains } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { and, eq } from "drizzle-orm";
+import { notFound, redirect } from "next/navigation";
 
 export default async function ApiKeyDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const session = await getServerSession();
+  if (!session) redirect("/auth");
+
   const { id } = await params;
+  const userId = session.user.id;
 
   const [keyResult] = await db
     .select({
@@ -21,7 +26,7 @@ export default async function ApiKeyDetailPage({
       createdAt: apiKeys.createdAt,
     })
     .from(apiKeys)
-    .where(eq(apiKeys.id, id))
+    .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, userId)))
     .limit(1);
 
   if (!keyResult) {
@@ -34,12 +39,15 @@ export default async function ApiKeyDetailPage({
       ? db
           .select({ name: domains.name })
           .from(domains)
-          .where(eq(domains.name, keyResult.domain))
+          .where(
+            and(eq(domains.name, keyResult.domain), eq(domains.userId, userId)),
+          )
           .limit(1)
       : Promise.resolve([]),
     db
       .select({ id: domains.id, name: domains.name })
       .from(domains)
+      .where(eq(domains.userId, userId))
       .orderBy(domains.name),
   ]);
 

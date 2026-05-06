@@ -10,6 +10,7 @@ import {
   getCachedDomainById,
   invalidateDomainCaches,
 } from "@/lib/domain-cache";
+import { queueEvent } from "@/lib/events";
 import { deleteDomainIdentity } from "@/lib/ses";
 import {
   domainRouteParamsSchema,
@@ -19,10 +20,31 @@ import { getEffectiveReturnPathLabel } from "@opensend/core";
 import { and, eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+type DomainWebhookRow = typeof domains.$inferSelect;
+
 const defaultCapabilities = [
   { name: "sending", enabled: true },
   { name: "receiving", enabled: false },
 ];
+
+function toDomainWebhookPayload(domain: DomainWebhookRow) {
+  return {
+    id: domain.id,
+    name: domain.name,
+    status: domain.status,
+    region: domain.region,
+    records: domain.records ?? [],
+    capabilities: domain.capabilities ?? [],
+    created_at:
+      domain.createdAt instanceof Date
+        ? domain.createdAt.toISOString()
+        : domain.createdAt,
+  };
+}
+
+function valuesEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
 
 export async function GET(
   _req: Request,
@@ -160,6 +182,36 @@ export async function PATCH(
       updates.tls = validated.tls;
     }
 
+    const changedFields = Object.entries({
+      open_tracking: updates.trackOpens,
+      click_tracking: updates.trackClicks,
+      tracking_subdomain: updates.trackingSubdomain,
+      capabilities: updates.capabilities,
+      tls: updates.tls,
+    })
+      .filter(([, value]) => value !== undefined)
+      .filter(([field, value]) => {
+        const currentValue =
+          field === "open_tracking"
+            ? existingDomain.trackOpens
+            : field === "click_tracking"
+              ? existingDomain.trackClicks
+              : field === "tracking_subdomain"
+                ? existingDomain.trackingSubdomain
+                : field === "capabilities"
+                  ? existingDomain.capabilities
+                  : existingDomain.tls;
+        return !valuesEqual(currentValue, value);
+      })
+      .map(([field]) => field);
+
+    if (changedFields.length === 0) {
+      return NextResponse.json({
+        object: "domain",
+        id: existingDomain.id,
+      });
+    }
+
     const [updated] = await db
       .update(domains)
       .set(updates)
@@ -172,6 +224,16 @@ export async function PATCH(
     }
 
     await invalidateDomainCaches({ id: updated.id, name: updated.name });
+
+    await queueEvent({
+      type: "domain.updated",
+      userId,
+      payload: {
+        id: updated.id,
+        changed_fields: changedFields,
+        domain: toDomainWebhookPayload(updated),
+      },
+    });
 
     return NextResponse.json({
       object: "domain",
@@ -241,13 +303,22 @@ export async function DELETE(
     const [deleted] = await db
       .delete(domains)
       .where(and(eq(domains.id, id), eq(domains.userId, userId)))
-      .returning({ id: domains.id });
+      .returning({ id: domains.id, name: domains.name });
 
     await invalidateDomainCaches({ id, name: domain.name });
 
     if (!deleted) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+
+    await queueEvent({
+      type: "domain.deleted",
+      userId,
+      payload: {
+        id: deleted.id,
+        name: deleted.name,
+      },
+    });
 
     return NextResponse.json({
       object: "domain",

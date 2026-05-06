@@ -11,6 +11,7 @@ const mockSelect = vi.hoisted(() => vi.fn());
 const mockInsert = vi.hoisted(() => vi.fn());
 const mockUpdate = vi.hoisted(() => vi.fn());
 const mockDelete = vi.hoisted(() => vi.fn());
+const mockQueueEvent = vi.hoisted(() => vi.fn());
 
 function makeRequest(url: string, init?: RequestInit) {
   const request = new Request(url, init) as Request & { nextUrl: URL };
@@ -77,6 +78,10 @@ vi.mock("@/lib/api-auth", () => ({
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
 
+vi.mock("@/lib/events", () => ({
+  queueEvent: mockQueueEvent,
+}));
+
 vi.mock("@/lib/db", () => ({
   db: {
     query: {
@@ -111,6 +116,176 @@ describe("contact API tenant isolation", () => {
       userId: "user-b",
     });
     mockGetServerSession.mockResolvedValue(null);
+    mockQueueEvent.mockResolvedValue({
+      eventId: "event-1",
+      deliveryIds: ["delivery-1"],
+    });
+  });
+
+  it("enqueues contact.created for the caller tenant after creating a contact", async () => {
+    const insertedContact = {
+      id: "contact-b",
+      email: "b@example.com",
+      firstName: "B",
+      lastName: "User",
+      unsubscribed: false,
+      customProperties: { plan: "pro" },
+      segments: null,
+      topicSubscriptions: null,
+      createdAt: new Date("2026-05-06T00:00:00.000Z"),
+      document: null,
+      userId: "user-b",
+    };
+    const insertChain = makeChain([insertedContact]);
+    mockInsert.mockReturnValueOnce(insertChain);
+
+    const route = await import("@/app/api/contacts/route");
+    const response = await route.POST(
+      makeRequest("http://localhost/api/contacts", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer user-b-key",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          email: "B@Example.com",
+          first_name: "B",
+          last_name: "User",
+          properties: { plan: "pro" },
+        }),
+      }) as never,
+    );
+
+    expect(response.status).toBe(201);
+    expect(insertChain.values.mock.calls[0]?.[0]).toMatchObject({
+      email: "b@example.com",
+      userId: "user-b",
+    });
+    expect(mockQueueEvent).toHaveBeenCalledWith({
+      type: "contact.created",
+      userId: "user-b",
+      payload: expect.objectContaining({
+        id: "contact-b",
+        email: "b@example.com",
+        first_name: "B",
+        properties: { plan: "pro" },
+      }),
+    });
+  });
+
+  it("enqueues contact.updated only when the caller-owned contact changes", async () => {
+    mockContactFindFirst.mockResolvedValueOnce({
+      id: "contact-b",
+      email: "b@example.com",
+      firstName: "Before",
+      lastName: null,
+      unsubscribed: false,
+      customProperties: null,
+      segments: null,
+      topicSubscriptions: null,
+      createdAt: new Date("2026-05-06T00:00:00.000Z"),
+      document: null,
+      userId: "user-b",
+    });
+    const updateChain = makeChain([
+      {
+        id: "contact-b",
+        email: "b@example.com",
+        firstName: "After",
+        lastName: null,
+        unsubscribed: false,
+        customProperties: null,
+        segments: null,
+        topicSubscriptions: null,
+        createdAt: new Date("2026-05-06T00:00:00.000Z"),
+        document: null,
+        userId: "user-b",
+      },
+    ]);
+    mockUpdate.mockReturnValueOnce(updateChain);
+
+    const route = await import("@/app/api/contacts/[id]/route");
+    const response = await route.PATCH(
+      makeRequest("http://localhost/api/contacts/contact-b", {
+        method: "PATCH",
+        headers: { authorization: "Bearer user-b-key" },
+        body: JSON.stringify({ first_name: "After" }),
+      }),
+      { params: Promise.resolve({ id: "contact-b" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockQueueEvent).toHaveBeenCalledWith({
+      type: "contact.updated",
+      userId: "user-b",
+      payload: expect.objectContaining({
+        id: "contact-b",
+        changed_fields: ["first_name"],
+        contact: expect.objectContaining({ first_name: "After" }),
+      }),
+    });
+
+    vi.clearAllMocks();
+    mockValidateApiKey.mockResolvedValue({
+      apiKeyId: "key-b",
+      permission: "full_access",
+      domain: null,
+      userId: "user-b",
+    });
+    mockContactFindFirst.mockResolvedValueOnce({
+      id: "contact-b",
+      email: "b@example.com",
+      firstName: "After",
+      lastName: null,
+      unsubscribed: false,
+      customProperties: null,
+      segments: null,
+      topicSubscriptions: null,
+      createdAt: new Date("2026-05-06T00:00:00.000Z"),
+      document: null,
+      userId: "user-b",
+    });
+
+    const unchanged = await route.PATCH(
+      makeRequest("http://localhost/api/contacts/contact-b", {
+        method: "PATCH",
+        headers: { authorization: "Bearer user-b-key" },
+        body: JSON.stringify({ first_name: "After" }),
+      }),
+      { params: Promise.resolve({ id: "contact-b" }) },
+    );
+
+    expect(unchanged.status).toBe(200);
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockQueueEvent).not.toHaveBeenCalled();
+  });
+
+  it("enqueues contact.deleted for the caller tenant after deletion", async () => {
+    mockContactFindFirst.mockResolvedValueOnce({
+      id: "contact-b",
+      email: "b@example.com",
+      userId: "user-b",
+    });
+    const deleteChain = makeChain([
+      { id: "contact-b", email: "b@example.com" },
+    ]);
+    mockDelete.mockReturnValueOnce(deleteChain);
+
+    const route = await import("@/app/api/contacts/[id]/route");
+    const response = await route.DELETE(
+      makeRequest("http://localhost/api/contacts/contact-b", {
+        method: "DELETE",
+        headers: { authorization: "Bearer user-b-key" },
+      }),
+      { params: Promise.resolve({ id: "contact-b" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockQueueEvent).toHaveBeenCalledWith({
+      type: "contact.deleted",
+      userId: "user-b",
+      payload: { id: "contact-b", email: "b@example.com" },
+    });
   });
 
   it("returns an empty contact list scoped to the caller user", async () => {

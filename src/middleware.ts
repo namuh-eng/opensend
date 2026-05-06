@@ -77,17 +77,30 @@ function isSingleSendPostAlias(pathname: string, method: string): boolean {
   return pathname === "/emails" && method === "POST";
 }
 
+function isBatchSendPostAlias(pathname: string, method: string): boolean {
+  return pathname === "/emails/batch" && method === "POST";
+}
+
+function isSendPostAlias(pathname: string, method: string): boolean {
+  return (
+    isSingleSendPostAlias(pathname, method) ||
+    isBatchSendPostAlias(pathname, method)
+  );
+}
+
 function isSendApiPost(pathname: string, method: string): boolean {
   return (
     method === "POST" &&
     (pathname === "/api/emails" ||
       pathname === "/api/emails/batch" ||
-      pathname === "/emails")
+      pathname === "/emails" ||
+      pathname === "/emails/batch")
   );
 }
 
 function getRateLimitPathname(pathname: string, method: string): string {
   if (isSingleSendPostAlias(pathname, method)) return "/api/emails";
+  if (isBatchSendPostAlias(pathname, method)) return "/api/emails/batch";
   return pathname;
 }
 
@@ -102,7 +115,10 @@ function getLimits(
   ) {
     return { max: 20, windowMs: 60_000 };
   }
-  if (pathname === "/api/emails/batch" && method === "POST") {
+  if (
+    (pathname === "/api/emails/batch" || pathname === "/emails/batch") &&
+    method === "POST"
+  ) {
     return { max: 5, windowMs: 60_000 };
   }
   // API key management — tight limit
@@ -130,13 +146,15 @@ export async function middleware(request: NextRequest) {
 
   const isPublicUnsubscribeRoute = pathname.startsWith("/unsubscribe/");
 
-  // Protect non-API page routes with session check. POST /emails is a
-  // Resend-compatible API alias and must bypass dashboard session redirects.
-  const isSingleSendAlias = isSingleSendPostAlias(pathname, request.method);
-  if (!pathname.startsWith("/api/") && !isSingleSendAlias) {
+  // Protect non-API page routes with session check. Resend-compatible send
+  // aliases must bypass dashboard session redirects and use public API auth.
+  const isSendAlias = isSendPostAlias(pathname, request.method);
+  if (!pathname.startsWith("/api/") && !isSendAlias) {
     // Allow auth page, public landing page, and static assets
     if (
       pathname === "/auth" ||
+      pathname === "/docs" ||
+      pathname === "/openapi.json" ||
       pathname === "/landing" ||
       pathname.startsWith("/landing/") ||
       pathname.startsWith("/_next/") ||
@@ -160,8 +178,13 @@ export async function middleware(request: NextRequest) {
   const responseHeaders = new Headers({ "X-RateLimit-Backend": backend });
 
   if (backend === "disabled") {
-    if (isSingleSendAlias) {
+    if (isSingleSendPostAlias(pathname, request.method)) {
       return NextResponse.rewrite(new URL("/api/emails", request.url), {
+        headers: responseHeaders,
+      });
+    }
+    if (isBatchSendPostAlias(pathname, request.method)) {
+      return NextResponse.rewrite(new URL("/api/emails/batch", request.url), {
         headers: responseHeaders,
       });
     }
@@ -213,8 +236,13 @@ export async function middleware(request: NextRequest) {
     );
   }
 
-  if (isSingleSendAlias) {
+  if (isSingleSendPostAlias(pathname, request.method)) {
     return NextResponse.rewrite(new URL("/api/emails", request.url), {
+      headers: responseHeaders,
+    });
+  }
+  if (isBatchSendPostAlias(pathname, request.method)) {
+    return NextResponse.rewrite(new URL("/api/emails/batch", request.url), {
       headers: responseHeaders,
     });
   }

@@ -726,6 +726,18 @@ describe("route smoke coverage", () => {
         events: ["email.sent"],
         status: "enabled",
         createdAt: "2026-04-23T00:00:00.000Z",
+        recentDeliveries: [
+          {
+            id: "whd-1",
+            status: "pending",
+            attempt: 2,
+            statusCode: 503,
+            responseBody: "unavailable",
+            attemptedAt: "2026-04-23T00:01:00.000Z",
+            nextRetryAt: "2026-04-23T00:05:00.000Z",
+            createdAt: "2026-04-23T00:00:00.000Z",
+          },
+        ],
       })
       .mockResolvedValueOnce(undefined);
     const updateWebhook = vi
@@ -773,7 +785,11 @@ describe("route smoke coverage", () => {
       ],
       has_more: true,
     });
-    expect(listWebhooks).toHaveBeenCalledWith({ limit: 500, after: "wh-3" });
+    expect(listWebhooks).toHaveBeenCalledWith({
+      userId: "user-1",
+      limit: 500,
+      after: "wh-3",
+    });
 
     const createRes = await listRoute.POST(
       makeNextRequest("http://localhost/api/webhooks", {
@@ -799,6 +815,7 @@ describe("route smoke coverage", () => {
       created_at: "2026-04-23T00:00:00.000Z",
     });
     expect(createWebhook).toHaveBeenCalledWith({
+      userId: "user-1",
       endpoint: "https://example.com/created",
       events: ["email.delivered"],
     });
@@ -810,6 +827,26 @@ describe("route smoke coverage", () => {
       { params: Promise.resolve({ id: "wh-1" }) },
     );
     expect(detailGetRes.status).toBe(200);
+    await expect(detailGetRes.json()).resolves.toEqual({
+      object: "webhook",
+      id: "wh-1",
+      endpoint: "https://example.com/webhook",
+      events: ["email.sent"],
+      status: "enabled",
+      created_at: "2026-04-23T00:00:00.000Z",
+      recent_deliveries: [
+        {
+          id: "whd-1",
+          status: "pending",
+          attempt: 2,
+          status_code: 503,
+          response_body: "unavailable",
+          attempted_at: "2026-04-23T00:01:00.000Z",
+          next_retry_at: "2026-04-23T00:05:00.000Z",
+          created_at: "2026-04-23T00:00:00.000Z",
+        },
+      ],
+    });
 
     const notFoundRes = await detailRoute.GET(
       makeNextRequest("http://localhost/api/webhooks/missing", {
@@ -838,7 +875,7 @@ describe("route smoke coverage", () => {
       events: ["email.sent"],
       status: "disabled",
     });
-    expect(updateWebhook).toHaveBeenCalledWith("wh-1", {
+    expect(updateWebhook).toHaveBeenCalledWith("wh-1", "user-1", {
       endpoint: undefined,
       events: undefined,
       status: undefined,

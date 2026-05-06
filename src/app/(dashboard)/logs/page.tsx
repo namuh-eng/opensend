@@ -1,7 +1,9 @@
 import { LogsListPage } from "@/components/logs-list-page";
+import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { logs } from "@/lib/db/schema";
 import { type SQL, and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { redirect } from "next/navigation";
 
 export default async function LogsPage(props: {
   searchParams: Promise<{
@@ -11,8 +13,13 @@ export default async function LogsPage(props: {
     before?: string;
     userAgent?: string;
     apiKeyId?: string;
+    q?: string;
+    search?: string;
   }>;
 }) {
+  const session = await getServerSession();
+  if (!session) redirect("/auth");
+
   const searchParams = await props.searchParams;
   const status = searchParams.status;
   const method = searchParams.method;
@@ -20,8 +27,9 @@ export default async function LogsPage(props: {
   const before = searchParams.before;
   const userAgent = searchParams.userAgent;
   const apiKeyId = searchParams.apiKeyId;
+  const search = (searchParams.q || searchParams.search || "").trim();
 
-  const conditions: SQL[] = [];
+  const conditions: SQL[] = [eq(logs.userId, session.user.id)];
 
   if (status) {
     if (status === "2xx") {
@@ -57,7 +65,11 @@ export default async function LogsPage(props: {
     conditions.push(eq(logs.apiKeyId, apiKeyId));
   }
 
-  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  if (search) {
+    conditions.push(
+      sql`(${logs.id}::text ILIKE ${`%${search}%`} OR ${logs.endpoint} ILIKE ${`%${search}%`} OR ${logs.userAgent} ILIKE ${`%${search}%`} OR ${logs.status}::text ILIKE ${`%${search}%`} OR ${logs.requestBody}::text ILIKE ${`%${search}%`} OR ${logs.responseBody}::text ILIKE ${`%${search}%`} OR ${logs.document}::text ILIKE ${`%${search}%`})`,
+    );
+  }
 
   let logRows: {
     id: string;
@@ -77,7 +89,7 @@ export default async function LogsPage(props: {
         createdAt: logs.createdAt,
       })
       .from(logs)
-      .where(whereClause)
+      .where(and(...conditions))
       .orderBy(desc(logs.createdAt))
       .limit(500);
 

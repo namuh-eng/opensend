@@ -25,13 +25,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth || auth.permission !== "full_access") {
+  if (!auth?.userId || auth.permission !== "full_access") {
     return unauthorizedResponse();
   }
 
   const { id } = await params;
   try {
-    const key = await apiKeyService().getApiKey(id);
+    const key = await apiKeyService().getApiKey(id, auth.userId);
 
     return Response.json({
       object: "api_key",
@@ -50,13 +50,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth || auth.permission !== "full_access") {
+  if (!auth?.userId || auth.permission !== "full_access") {
     return unauthorizedResponse();
   }
 
   const { id } = await params;
   try {
-    await apiKeyService().deleteApiKey(id);
+    await apiKeyService().deleteApiKey(id, auth.userId);
 
     return new Response(null, { status: 200 });
   } catch (err) {

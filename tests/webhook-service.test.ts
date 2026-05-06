@@ -34,7 +34,7 @@ function createRepository(overrides: Partial<WebhookRepository> = {}) {
     async findById() {
       return webhookRow();
     },
-    async update(id, data) {
+    async update(id, _userId, data) {
       return [webhookRow({ id, ...data })];
     },
     async delete(id: string) {
@@ -48,7 +48,8 @@ function createRepository(overrides: Partial<WebhookRepository> = {}) {
 
 describe("webhook service", () => {
   it("lists with normalized pagination and maps public list fields", async () => {
-    let listOptions: { limit?: number; after?: string } | null = null;
+    let listOptions: { userId: string; limit?: number; after?: string } | null =
+      null;
     const service = createWebhookService({
       repository: createRepository({
         async list(options) {
@@ -68,11 +69,16 @@ describe("webhook service", () => {
     });
 
     const result = await service.listWebhooks({
+      userId: "user-1",
       limit: 500,
       after: "webhook-3",
     });
 
-    expect(listOptions).toEqual({ limit: 100, after: "webhook-3" });
+    expect(listOptions).toEqual({
+      userId: "user-1",
+      limit: 100,
+      after: "webhook-3",
+    });
     expect(result).toEqual({
       data: [
         {
@@ -101,12 +107,14 @@ describe("webhook service", () => {
     });
 
     const result = await service.createWebhook({
+      userId: "user-1",
       endpoint: "https://example.com/created",
       events: ["email.delivered"],
     });
 
     expect(generateSigningSecret).toHaveBeenCalledOnce();
     expect(inserted[0]).toMatchObject({
+      userId: "user-1",
       url: "https://example.com/created",
       eventTypes: ["email.delivered"],
       signingSecret: "whsec_test_secret",
@@ -124,19 +132,21 @@ describe("webhook service", () => {
     const updates: Array<Partial<WebhookInsert>> = [];
     const service = createWebhookService({
       repository: createRepository({
-        async update(id, data) {
+        async update(id, _userId, data) {
           updates.push(data);
           return [webhookRow({ id, ...data })];
         },
       }),
     });
 
-    const disabled = await service.updateWebhook("webhook-1", {
+    const disabled = await service.updateWebhook("webhook-1", "user-1", {
       endpoint: "https://example.com/new",
       events: ["email.bounced"],
       status: "disabled",
     });
-    const enabled = await service.updateWebhook("webhook-1", { active: true });
+    const enabled = await service.updateWebhook("webhook-1", "user-1", {
+      active: true,
+    });
 
     expect(updates).toEqual([
       {
@@ -154,6 +164,54 @@ describe("webhook service", () => {
     expect(enabled).toMatchObject({ status: "enabled" });
   });
 
+  it("includes recent delivery retry visibility on webhook detail", async () => {
+    const service = createWebhookService({
+      repository: createRepository({
+        async findById(id, _userId) {
+          return webhookRow({ id });
+        },
+      }),
+      deliveryRepository: {
+        async listByWebhookId(webhookId, options) {
+          expect(webhookId).toBe("webhook-1");
+          expect(options).toEqual({ limit: 20 });
+          return {
+            data: [
+              {
+                id: "delivery-1",
+                webhookId: "webhook-1",
+                eventId: "event-1",
+                attempt: 2,
+                statusCode: 503,
+                responseBody: "unavailable",
+                status: "pending",
+                attemptedAt: new Date("2026-05-06T00:00:00.000Z"),
+                nextRetryAt: new Date("2026-05-06T00:05:00.000Z"),
+                createdAt: new Date("2026-05-05T23:59:00.000Z"),
+              },
+            ],
+            hasMore: false,
+          };
+        },
+      },
+    });
+
+    const result = await service.getWebhook("webhook-1", "user-1");
+
+    expect(result?.recentDeliveries).toEqual([
+      {
+        id: "delivery-1",
+        status: "pending",
+        attempt: 2,
+        statusCode: 503,
+        responseBody: "unavailable",
+        attemptedAt: new Date("2026-05-06T00:00:00.000Z"),
+        nextRetryAt: new Date("2026-05-06T00:05:00.000Z"),
+        createdAt: new Date("2026-05-05T23:59:00.000Z"),
+      },
+    ]);
+  });
+
   it("returns undefined for not found get, update, and delete operations", async () => {
     const service = createWebhookService({
       repository: createRepository({
@@ -169,10 +227,14 @@ describe("webhook service", () => {
       }),
     });
 
-    await expect(service.getWebhook("missing")).resolves.toBeUndefined();
     await expect(
-      service.updateWebhook("missing", { status: "enabled" }),
+      service.getWebhook("missing", "user-1"),
     ).resolves.toBeUndefined();
-    await expect(service.deleteWebhook("missing")).resolves.toBeUndefined();
+    await expect(
+      service.updateWebhook("missing", "user-1", { status: "enabled" }),
+    ).resolves.toBeUndefined();
+    await expect(
+      service.deleteWebhook("missing", "user-1"),
+    ).resolves.toBeUndefined();
   });
 });

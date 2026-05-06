@@ -1,21 +1,25 @@
 import { ContactDetail } from "@/components/contact-detail";
+import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { notFound } from "next/navigation";
+import { and, eq } from "drizzle-orm";
+import { notFound, redirect } from "next/navigation";
 
 export default async function ContactDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const session = await getServerSession();
+  if (!session) redirect("/auth");
+
   const { id } = await params;
 
   try {
     const [contact] = await db
       .select()
       .from(contacts)
-      .where(eq(contacts.id, id))
+      .where(and(eq(contacts.id, id), eq(contacts.userId, session.user.id)))
       .limit(1);
 
     if (!contact) {

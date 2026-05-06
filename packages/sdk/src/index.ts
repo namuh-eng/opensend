@@ -1,18 +1,25 @@
 import type {
+  ApiKeyListItem,
   ApiKeyListResponse,
   ApiKeyResponse,
   AutoConfigureDomainResponse,
+  BatchEmailItemError,
+  BatchEmailItemResponse,
   BatchEmailResponse,
   ContactListItem,
   ContactListResponse,
   ContactResponse,
+  ContactTopicPreference,
   CreateApiKeyPayload,
   CreateContactPayload,
   CreateContactResponse,
+  DomainCapability,
   DomainListItem,
   DomainListResponse,
   DomainOptions,
+  DomainRecord,
   DomainResponse,
+  EmailAttachment,
   EmailDetailResponse,
   EmailListItem,
   EmailListOptions,
@@ -20,22 +27,28 @@ import type {
   EmailOptions,
   EmailResponse,
   EmailStatus,
+  EmailTag,
+  EmailTemplateReference,
+  SendEmailResponse,
   UpdateDomainPayload,
 } from "../../core/src/dto";
 
 interface SDKOptions {
-  baseUrl: string;
+  baseUrl?: string;
 }
 
 export interface RequestOptions {
   idempotencyKey?: string;
 }
 
+export const DEFAULT_BASE_URL = "https://api.opensend.com";
+
 interface ApiError {
   message: string;
   statusCode: number;
   name?: string;
   code?: string;
+  details?: Record<string, unknown>;
 }
 
 interface ApiResponse<T> {
@@ -100,9 +113,9 @@ export interface AutomationRunListOptions extends ListOptions {
   status?: string;
 }
 
-function normalizeBaseUrl(baseUrl?: string): string {
-  if (!baseUrl?.trim()) {
-    throw new Error("A non-empty baseUrl is required");
+function normalizeBaseUrl(baseUrl: string = DEFAULT_BASE_URL): string {
+  if (!baseUrl.trim()) {
+    throw new Error("baseUrl must be a non-empty string when provided");
   }
 
   let normalized: URL;
@@ -127,6 +140,16 @@ function getStringProperty(
   return typeof property === "string" ? property : null;
 }
 
+function getRecordProperty(
+  value: Record<string, unknown>,
+  key: string,
+): Record<string, unknown> | null {
+  const property = value[key];
+  return property && typeof property === "object" && !Array.isArray(property)
+    ? (property as Record<string, unknown>)
+    : null;
+}
+
 function parseApiErrorBody(parsedBody: unknown, response: Response): ApiError {
   const errorBody =
     parsedBody && typeof parsedBody === "object"
@@ -147,12 +170,14 @@ function parseApiErrorBody(parsedBody: unknown, response: Response): ApiError {
     "Request failed";
   const name = getStringProperty(errorBody, "name");
   const code = getStringProperty(errorBody, "code");
+  const details = getRecordProperty(errorBody, "details");
 
   return {
     message,
     statusCode: response.status,
     ...(name ? { name } : {}),
     ...(code ? { code } : {}),
+    ...(details ? { details } : {}),
   };
 }
 
@@ -235,12 +260,7 @@ class Emails {
       }
     }
 
-    return this.http.request<EmailResponse>(
-      "POST",
-      "/api/emails",
-      rest,
-      options,
-    );
+    return this.http.request<EmailResponse>("POST", "/emails", rest, options);
   }
 
   async sendBatch(
@@ -249,7 +269,7 @@ class Emails {
   ): Promise<ApiResponse<BatchEmailResponse>> {
     return this.http.request<BatchEmailResponse>(
       "POST",
-      "/api/emails/batch",
+      "/emails/batch",
       payload,
       options,
     );
@@ -465,7 +485,7 @@ class Opensend {
   public readonly automations: Automations;
   public readonly events: Events;
 
-  constructor(apiKey: string, options: SDKOptions) {
+  constructor(apiKey: string, options: SDKOptions = {}) {
     if (!apiKey) {
       throw new Error("API key is required");
     }
@@ -481,20 +501,30 @@ class Opensend {
   }
 }
 
-export { Opensend };
+class Resend extends Opensend {}
+
+export { Opensend, Resend };
 export type {
   SDKOptions,
   ApiError,
   ApiResponse,
+  EmailAttachment,
   EmailOptions,
   EmailResponse,
+  SendEmailResponse,
   EmailStatus,
   EmailListOptions,
+  BatchEmailItemError,
+  BatchEmailItemResponse,
   BatchEmailResponse,
   EmailListItem,
   EmailListResponse,
+  EmailTag,
+  EmailTemplateReference,
   EmailDetailResponse,
+  DomainCapability,
   DomainOptions,
+  DomainRecord,
   UpdateDomainPayload,
   DomainResponse,
   DomainListItem,
@@ -502,10 +532,12 @@ export type {
   AutoConfigureDomainResponse,
   CreateApiKeyPayload,
   ApiKeyResponse,
+  ApiKeyListItem,
   ApiKeyListResponse,
   CreateContactPayload,
   CreateContactResponse,
   ContactResponse,
+  ContactTopicPreference,
   ContactListItem,
   ContactListResponse,
 };
