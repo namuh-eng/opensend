@@ -30,6 +30,7 @@ export type WebhookListResult = {
 export type CreateWebhookInput = {
   endpoint: string;
   events: string[];
+  userId: string;
 };
 
 export type UpdateWebhookInput = {
@@ -40,14 +41,22 @@ export type UpdateWebhookInput = {
 };
 
 export type WebhookRepository = {
-  list(options: { limit?: number; after?: string }): Promise<{
+  list(options: {
+    limit?: number;
+    after?: string;
+    userId?: string;
+  }): Promise<{
     data: WebhookRow[];
     hasMore: boolean;
   }>;
   create(data: WebhookInsert): Promise<WebhookRow[]>;
-  findById(id: string): Promise<WebhookRow | undefined>;
-  update(id: string, data: Partial<WebhookInsert>): Promise<WebhookRow[]>;
-  delete(id: string): Promise<Array<{ id: string }>>;
+  findById(id: string, userId?: string): Promise<WebhookRow | undefined>;
+  update(
+    id: string,
+    data: Partial<WebhookInsert>,
+    userId?: string,
+  ): Promise<WebhookRow[]>;
+  delete(id: string, userId?: string): Promise<Array<{ id: string }>>;
 };
 
 export type WebhookServiceDependencies = {
@@ -112,10 +121,12 @@ export function createWebhookService({
     async listWebhooks(options: {
       limit?: number;
       after?: string;
+      userId: string;
     }): Promise<WebhookListResult> {
       const result = await repository.list({
         limit: normalizeLimit(options.limit),
         after: options.after || undefined,
+        userId: options.userId,
       });
 
       return {
@@ -132,26 +143,34 @@ export function createWebhookService({
         url: input.endpoint,
         eventTypes: input.events,
         signingSecret,
+        userId: input.userId,
       });
 
       return toWebhookCreateResult(row);
     },
 
-    async getWebhook(id: string): Promise<WebhookServiceDetail | undefined> {
-      const row = await repository.findById(id);
+    async getWebhook(
+      id: string,
+      userId: string,
+    ): Promise<WebhookServiceDetail | undefined> {
+      const row = await repository.findById(id, userId);
       return row ? toWebhookListItem(row) : undefined;
     },
 
     async updateWebhook(
       id: string,
       input: UpdateWebhookInput,
+      userId: string,
     ): Promise<WebhookServiceDetail | undefined> {
-      const [row] = await repository.update(id, buildUpdateData(input));
+      const [row] = await repository.update(id, buildUpdateData(input), userId);
       return row ? toWebhookListItem(row) : undefined;
     },
 
-    async deleteWebhook(id: string): Promise<{ id: string } | undefined> {
-      const [deleted] = await repository.delete(id);
+    async deleteWebhook(
+      id: string,
+      userId: string,
+    ): Promise<{ id: string } | undefined> {
+      const [deleted] = await repository.delete(id, userId);
       return deleted;
     },
   };
@@ -164,7 +183,7 @@ export class WebhookService {
     this.service = createWebhookService(dependencies);
   }
 
-  async list(options: { limit?: number; after?: string }) {
+  async list(options: { limit?: number; after?: string; userId: string }) {
     return await this.service.listWebhooks(options);
   }
 
@@ -172,16 +191,16 @@ export class WebhookService {
     return await this.service.createWebhook(input);
   }
 
-  async get(id: string) {
-    return await this.service.getWebhook(id);
+  async get(id: string, userId: string) {
+    return await this.service.getWebhook(id, userId);
   }
 
-  async update(id: string, input: UpdateWebhookInput) {
-    return await this.service.updateWebhook(id, input);
+  async update(id: string, input: UpdateWebhookInput, userId: string) {
+    return await this.service.updateWebhook(id, input, userId);
   }
 
-  async delete(id: string) {
-    return await this.service.deleteWebhook(id);
+  async delete(id: string, userId: string) {
+    return await this.service.deleteWebhook(id, userId);
   }
 }
 

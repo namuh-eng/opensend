@@ -773,7 +773,11 @@ describe("route smoke coverage", () => {
       ],
       has_more: true,
     });
-    expect(listWebhooks).toHaveBeenCalledWith({ limit: 500, after: "wh-3" });
+    expect(listWebhooks).toHaveBeenCalledWith({
+      limit: 500,
+      after: "wh-3",
+      userId: "user-1",
+    });
 
     const createRes = await listRoute.POST(
       makeNextRequest("http://localhost/api/webhooks", {
@@ -801,6 +805,7 @@ describe("route smoke coverage", () => {
     expect(createWebhook).toHaveBeenCalledWith({
       endpoint: "https://example.com/created",
       events: ["email.delivered"],
+      userId: "user-1",
     });
 
     const detailGetRes = await detailRoute.GET(
@@ -838,12 +843,16 @@ describe("route smoke coverage", () => {
       events: ["email.sent"],
       status: "disabled",
     });
-    expect(updateWebhook).toHaveBeenCalledWith("wh-1", {
-      endpoint: undefined,
-      events: undefined,
-      status: undefined,
-      active: false,
-    });
+    expect(updateWebhook).toHaveBeenCalledWith(
+      "wh-1",
+      {
+        endpoint: undefined,
+        events: undefined,
+        status: undefined,
+        active: false,
+      },
+      "user-1",
+    );
 
     const patchNotFoundRes = await detailRoute.PATCH(
       makeNextRequest("http://localhost/api/webhooks/missing", {

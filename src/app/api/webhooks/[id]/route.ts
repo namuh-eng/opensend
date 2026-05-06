@@ -1,6 +1,7 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { unauthorizedResponse } from "@/lib/api-auth";
 import { updateWebhookSchema } from "@/lib/validation/webhooks";
 import { createWebhookService } from "@opensend/core";
+import { resolveWebhookRouteUserId } from "../auth";
 
 function webhookService() {
   return createWebhookService();
@@ -15,13 +16,15 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  const userId = await resolveWebhookRouteUserId(
+    request.headers.get("authorization"),
+  );
+  if (!userId) return unauthorizedResponse();
 
   const { id } = await params;
 
   try {
-    const webhook = await webhookService().getWebhook(id);
+    const webhook = await webhookService().getWebhook(id, userId);
 
     if (!webhook) {
       return Response.json({ error: "Webhook not found" }, { status: 404 });
@@ -44,8 +47,10 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  const userId = await resolveWebhookRouteUserId(
+    request.headers.get("authorization"),
+  );
+  if (!userId) return unauthorizedResponse();
 
   const { id } = await params;
 
@@ -66,12 +71,16 @@ export async function PATCH(
 
   try {
     const validated = result.data;
-    const updated = await webhookService().updateWebhook(id, {
-      endpoint: validated.endpoint ?? validated.url,
-      events: validated.events ?? validated.event_types,
-      status: validated.status,
-      active: validated.active,
-    });
+    const updated = await webhookService().updateWebhook(
+      id,
+      {
+        endpoint: validated.endpoint ?? validated.url,
+        events: validated.events ?? validated.event_types,
+        status: validated.status,
+        active: validated.active,
+      },
+      userId,
+    );
 
     if (!updated) {
       return Response.json({ error: "Webhook not found" }, { status: 404 });
@@ -94,13 +103,15 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  const userId = await resolveWebhookRouteUserId(
+    request.headers.get("authorization"),
+  );
+  if (!userId) return unauthorizedResponse();
 
   const { id } = await params;
 
   try {
-    const deleted = await webhookService().deleteWebhook(id);
+    const deleted = await webhookService().deleteWebhook(id, userId);
 
     if (!deleted) {
       return Response.json({ error: "Webhook not found" }, { status: 404 });

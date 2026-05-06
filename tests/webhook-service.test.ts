@@ -48,7 +48,11 @@ function createRepository(overrides: Partial<WebhookRepository> = {}) {
 
 describe("webhook service", () => {
   it("lists with normalized pagination and maps public list fields", async () => {
-    let listOptions: { limit?: number; after?: string } | null = null;
+    let listOptions: {
+      limit?: number;
+      after?: string;
+      userId?: string;
+    } | null = null;
     const service = createWebhookService({
       repository: createRepository({
         async list(options) {
@@ -70,9 +74,14 @@ describe("webhook service", () => {
     const result = await service.listWebhooks({
       limit: 500,
       after: "webhook-3",
+      userId: "user-a",
     });
 
-    expect(listOptions).toEqual({ limit: 100, after: "webhook-3" });
+    expect(listOptions).toEqual({
+      limit: 100,
+      after: "webhook-3",
+      userId: "user-a",
+    });
     expect(result).toEqual({
       data: [
         {
@@ -103,6 +112,7 @@ describe("webhook service", () => {
     const result = await service.createWebhook({
       endpoint: "https://example.com/created",
       events: ["email.delivered"],
+      userId: "user-a",
     });
 
     expect(generateSigningSecret).toHaveBeenCalledOnce();
@@ -131,12 +141,20 @@ describe("webhook service", () => {
       }),
     });
 
-    const disabled = await service.updateWebhook("webhook-1", {
-      endpoint: "https://example.com/new",
-      events: ["email.bounced"],
-      status: "disabled",
-    });
-    const enabled = await service.updateWebhook("webhook-1", { active: true });
+    const disabled = await service.updateWebhook(
+      "webhook-1",
+      {
+        endpoint: "https://example.com/new",
+        events: ["email.bounced"],
+        status: "disabled",
+      },
+      "user-a",
+    );
+    const enabled = await service.updateWebhook(
+      "webhook-1",
+      { active: true },
+      "user-a",
+    );
 
     expect(updates).toEqual([
       {
@@ -169,10 +187,14 @@ describe("webhook service", () => {
       }),
     });
 
-    await expect(service.getWebhook("missing")).resolves.toBeUndefined();
     await expect(
-      service.updateWebhook("missing", { status: "enabled" }),
+      service.getWebhook("missing", "user-a"),
     ).resolves.toBeUndefined();
-    await expect(service.deleteWebhook("missing")).resolves.toBeUndefined();
+    await expect(
+      service.updateWebhook("missing", { status: "enabled" }, "user-a"),
+    ).resolves.toBeUndefined();
+    await expect(
+      service.deleteWebhook("missing", "user-a"),
+    ).resolves.toBeUndefined();
   });
 });

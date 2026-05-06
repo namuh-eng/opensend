@@ -1,11 +1,17 @@
-import { and, desc, eq, lt } from "drizzle-orm";
+import { type SQL, and, desc, eq, lt } from "drizzle-orm";
 import { db } from "../client";
 import { webhooks } from "../schema";
 
+function ownership(id: string, userId: string | undefined): SQL {
+  return userId
+    ? (and(eq(webhooks.id, id), eq(webhooks.userId, userId)) as SQL)
+    : eq(webhooks.id, id);
+}
+
 export const webhookRepo = {
-  async findById(id: string) {
+  async findById(id: string, userId?: string) {
     return await db.query.webhooks.findFirst({
-      where: eq(webhooks.id, id),
+      where: ownership(id, userId),
     });
   },
 
@@ -13,25 +19,32 @@ export const webhookRepo = {
     return await db.insert(webhooks).values(data).returning();
   },
 
-  async update(id: string, data: Partial<typeof webhooks.$inferInsert>) {
+  async update(
+    id: string,
+    data: Partial<typeof webhooks.$inferInsert>,
+    userId?: string,
+  ) {
     return await db
       .update(webhooks)
       .set(data)
-      .where(eq(webhooks.id, id))
+      .where(ownership(id, userId))
       .returning();
   },
 
-  async delete(id: string) {
+  async delete(id: string, userId?: string) {
     return await db
       .delete(webhooks)
-      .where(eq(webhooks.id, id))
+      .where(ownership(id, userId))
       .returning({ id: webhooks.id });
   },
 
-  async list(options: { limit?: number; after?: string } = {}) {
-    const { limit = 20, after } = options;
-    const conditions = [];
+  async list(
+    options: { limit?: number; after?: string; userId?: string } = {},
+  ) {
+    const { limit = 20, after, userId } = options;
+    const conditions: SQL[] = [];
 
+    if (userId) conditions.push(eq(webhooks.userId, userId));
     if (after) conditions.push(lt(webhooks.id, after));
 
     const results = await db
