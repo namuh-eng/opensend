@@ -13,6 +13,8 @@ export default async function LogsPage(props: {
     before?: string;
     userAgent?: string;
     apiKeyId?: string;
+    q?: string;
+    search?: string;
   }>;
 }) {
   const session = await getServerSession();
@@ -25,6 +27,7 @@ export default async function LogsPage(props: {
   const before = searchParams.before;
   const userAgent = searchParams.userAgent;
   const apiKeyId = searchParams.apiKeyId;
+  const search = (searchParams.q || searchParams.search || "").trim();
 
   const conditions: SQL[] = [eq(logs.userId, session.user.id)];
 
@@ -59,7 +62,13 @@ export default async function LogsPage(props: {
   }
 
   if (apiKeyId) {
-    conditions.push(sql`${logs.document}->>'apiKeyId' = ${apiKeyId}`);
+    conditions.push(eq(logs.apiKeyId, apiKeyId));
+  }
+
+  if (search) {
+    conditions.push(
+      sql`(${logs.id}::text ILIKE ${`%${search}%`} OR ${logs.endpoint} ILIKE ${`%${search}%`} OR ${logs.userAgent} ILIKE ${`%${search}%`} OR ${logs.status}::text ILIKE ${`%${search}%`} OR ${logs.requestBody}::text ILIKE ${`%${search}%`} OR ${logs.responseBody}::text ILIKE ${`%${search}%`} OR ${logs.document}::text ILIKE ${`%${search}%`})`,
+    );
   }
 
   let logRows: {

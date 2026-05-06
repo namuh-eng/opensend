@@ -102,6 +102,31 @@ describe("EmailDetail", () => {
     expect(timeline.textContent).toMatch(/Mar \d+, \d+:\d+ [AP]M/);
   });
 
+  it("renders associated request logs and links to the logs explorer", () => {
+    render(
+      <EmailDetail
+        email={{
+          ...mockEmail,
+          logs: [
+            {
+              id: "log-123",
+              method: "POST",
+              endpoint: "/api/emails",
+              statusCode: 200,
+              createdAt: "2026-05-06T00:00:00.000Z",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("ASSOCIATED LOGS")).toBeTruthy();
+    expect(screen.getByText("/api/emails")).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: /View all logs/i }).getAttribute("href"),
+    ).toBe(`/logs?q=${mockEmail.id}`);
+  });
+
   it("renders envelope icon in header", () => {
     render(<EmailDetail email={mockEmail} />);
 

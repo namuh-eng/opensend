@@ -99,7 +99,7 @@ Rows are ordered roughly by priority within each area. The inspector's tie-break
 |---|---|---|---|---|---|---|---|---|---|
 | Sandbox / test mode | dedicated `onboarding@resend.dev` + test API key behavior | TBD | ? | ? | ? | ? | P1 | | |
 | Error message quality | documented error catalog with stable names and suggested actions ([docs](https://resend.com/docs/api-reference/errors)) | partial: send routes return ad hoc string errors/details (`src/app/api/emails/route.ts:93`, `src/app/api/emails/batch/route.ts:102`); SDK exposes only `message`/`statusCode` (`packages/sdk/src/index.ts:30`) | partial | behind | parity | n/a | P0 | #170 | 2026-05-03 |
-| Logs / event explorer | searchable per email | TBD | ? | ? | ? | ? | P0 | #224 | 2026-05-06 |
+| Logs / event explorer | searchable per email | parity: send APIs capture sanitized tenant-scoped request logs for accepted/failed authenticated sends (`src/app/api/emails/route.ts`, `src/app/api/emails/batch/route.ts`, `src/lib/api-logging.ts`); logs list/detail APIs are tenant-scoped and searchable/filterable (`src/app/api/logs/route.ts`, `src/app/api/logs/[id]/route.ts`); dashboard logs search and email-associated request logs are wired (`src/app/(dashboard)/logs/page.tsx`, `src/components/logs-list-page.tsx`, `src/app/(dashboard)/emails/[id]/page.tsx`, `src/components/email-detail.tsx`) | parity | parity | parity | n/a | P0 | #224 | 2026-05-07 |
 | Dashboard quality | polished, fast | TBD | ? | ? | ? | ? | P1 | | |
 | API key scopes | read/write/full per key | TBD | ? | ? | ? | ? | P1 | | |
 
