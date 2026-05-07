@@ -589,6 +589,149 @@ describe("POST /api/emails", () => {
     expect(mockPublishBackgroundJob).toHaveBeenCalledOnce();
   });
 
+  it("persists valid Resend-compatible tags unchanged", async () => {
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-tags-uuid" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const tags = [
+      { name: "campaign_id", value: "spring-2026" },
+      { name: "tenant-1", value: "A_B-123" },
+    ];
+
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: "tagged@test.com",
+        subject: "Tagged",
+        html: "<p>Hi</p>",
+        tags,
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags,
+      }),
+    );
+  });
+
+  it("rejects tag names and values with non-Resend characters before insert", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: "tagged@test.com",
+        subject: "Bad tags",
+        html: "<p>Hi</p>",
+        tags: [{ name: "campaign.id", value: "spring 2026" }],
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          "tags.0.name": [
+            expect.stringContaining("ASCII letters, numbers, underscores"),
+          ],
+          "tags.0.value": [
+            expect.stringContaining("ASCII letters, numbers, underscores"),
+          ],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects overlong tag names and values before insert", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const basePayload = {
+      from: "sender@domain.com",
+      to: "tagged@test.com",
+      subject: "Long tags",
+      html: "<p>Hi</p>",
+    };
+
+    for (const tags of [
+      [{ name: "n".repeat(257), value: "ok" }],
+      [{ name: "name", value: "v".repeat(257) }],
+    ]) {
+      const res = await POST(
+        makeRequest(
+          "POST",
+          { ...basePayload, tags },
+          {
+            Authorization: "Bearer re_test123",
+          },
+        ),
+      );
+
+      expect(res.status).toBe(422);
+      await expect(res.json()).resolves.toMatchObject({
+        name: "validation_error",
+        details: {
+          fieldErrors: expect.objectContaining({
+            [tags[0]?.name === "name" ? "tags.0.value" : "tags.0.name"]: [
+              expect.stringContaining("no more than 256 characters"),
+            ],
+          }),
+        },
+      });
+    }
+
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects more than 75 tags on a single email before insert", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: "tagged@test.com",
+        subject: "Too many tags",
+        html: "<p>Hi</p>",
+        tags: Array.from({ length: 76 }, (_, index) => ({
+          name: `tag_${index}`,
+          value: "ok",
+        })),
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          tags: [expect.stringContaining("75")],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
   it("injects one-click unsubscribe headers and replaces the managed URL placeholder for known contact sends", async () => {
     process.env.UNSUBSCRIBE_SECRET = "test-unsubscribe-secret";
     Object.assign(mockDb.query, {
@@ -1179,6 +1322,86 @@ describe("POST /api/emails/batch", () => {
     expect(mockSendEmail).not.toHaveBeenCalled();
     expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(2);
   });
+
+  it("rejects invalid tags on the specific batch item before any rows", async () => {
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        [
+          {
+            from: "sender@domain.com",
+            to: ["ok@test.com"],
+            subject: "OK",
+            html: "<p>OK</p>",
+            tags: [{ name: "valid_name", value: "valid-value" }],
+          },
+          {
+            from: "sender@domain.com",
+            to: ["bad@test.com"],
+            subject: "Bad",
+            html: "<p>Bad</p>",
+            tags: [{ name: "bad.name", value: "bad value" }],
+          },
+        ],
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          "1.tags.0.name": [
+            expect.stringContaining("ASCII letters, numbers, underscores"),
+          ],
+          "1.tags.0.value": [
+            expect.stringContaining("ASCII letters, numbers, underscores"),
+          ],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects a batch item with more than 75 tags before any rows", async () => {
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        [
+          {
+            from: "sender@domain.com",
+            to: ["bad@test.com"],
+            subject: "Too many batch tags",
+            html: "<p>Bad</p>",
+            tags: Array.from({ length: 76 }, (_, index) => ({
+              name: `tag_${index}`,
+              value: "ok",
+            })),
+          },
+        ],
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          "0.tags": [expect.stringContaining("75")],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
   it("normalizes batch ISO and natural-language scheduled_at values without queueing", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
