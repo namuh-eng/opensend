@@ -5,9 +5,13 @@ import {
 } from "@/lib/api-auth";
 import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
 import { captureApiResponseLog } from "@/lib/api-logging";
-import { quotaExceededResponse, reserveEmailQuota } from "@/lib/billing/quota";
+import {
+  quotaExceededResponse,
+  releaseEmailQuota,
+  reserveEmailQuota,
+} from "@/lib/billing/quota";
 import { db } from "@/lib/db";
-import { contacts, emails } from "@/lib/db/schema";
+import { contacts, emailEvents, emails } from "@/lib/db/schema";
 import { normalizeAttachmentsForStorage } from "@/lib/email-attachments";
 import {
   findSuppressedRecipients,
@@ -20,7 +24,10 @@ import {
   hasUnsubscribePlaceholder,
   replaceUnsubscribePlaceholder,
 } from "@/lib/unsubscribe";
-import { batchSendEmailSchema } from "@/lib/validation/emails";
+import {
+  batchSendEmailSchema,
+  normalizeScheduledAt,
+} from "@/lib/validation/emails";
 import {
   createBackgroundJob,
   createTelemetryContext,
@@ -74,6 +81,71 @@ function recordBatchMetric(
       Operation: "email.batch_accept",
       Outcome: input.outcome,
     },
+  });
+}
+
+function summarizeQueuePublishError(error: unknown): {
+  code: string;
+  message: string;
+} {
+  if (error instanceof Error) {
+    return {
+      code: error.name || "queue_publish_failed",
+      message: error.message.slice(0, 1_000),
+    };
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    const code =
+      typeof record.code === "string"
+        ? record.code
+        : typeof record.name === "string"
+          ? record.name
+          : "queue_publish_failed";
+    const message =
+      typeof record.message === "string"
+        ? record.message
+        : "Failed to publish email send job.";
+    return { code, message: message.slice(0, 1_000) };
+  }
+
+  return {
+    code: "queue_publish_failed",
+    message: "Failed to publish email send job.",
+  };
+}
+
+async function auditQueuePublishFailure(input: {
+  emailId: string;
+  userId: string;
+  error: unknown;
+}): Promise<void> {
+  const failedAt = new Date();
+  const errorSummary = summarizeQueuePublishError(input.error);
+
+  await db
+    .update(emails)
+    .set({
+      status: "failed",
+      providerLastAttemptedAt: failedAt,
+      providerLastErrorCode: errorSummary.code,
+      providerLastErrorMessage: errorSummary.message,
+      providerNextRetryAt: null,
+      providerDeadLetteredAt: failedAt,
+    })
+    .where(and(eq(emails.id, input.emailId), eq(emails.userId, input.userId)));
+
+  await db.insert(emailEvents).values({
+    emailId: input.emailId,
+    userId: input.userId,
+    sourceId: `queue-publish-failed:${input.emailId}`,
+    type: "failed",
+    payload: {
+      reason: "queue_publish_failed",
+      error: errorSummary,
+    },
+    receivedAt: failedAt,
   });
 }
 
@@ -280,6 +352,7 @@ export async function POST(request: Request): Promise<Response> {
   const acceptedCount = suppressedResults.filter(
     (entries) => entries.length === 0,
   ).length;
+  let quotaReserved = false;
   const firstAcceptedIndex = suppressedResults.findIndex(
     (entries) => entries.length === 0,
   );
@@ -314,7 +387,7 @@ export async function POST(request: Request): Promise<Response> {
         const bcc = normalizeToArray(item.bcc);
         const replyTo = normalizeToArray(item.reply_to);
         const scheduledAt = item.scheduled_at
-          ? new Date(item.scheduled_at)
+          ? normalizeScheduledAt(item.scheduled_at)
           : null;
 
         const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();
@@ -377,6 +450,8 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
+    quotaReserved = true;
+
     const resultByIndex = new Map<number, { id: string }>();
     const CONCURRENCY = 5;
     const queuedEmails = reservation.emails.filter(
@@ -402,10 +477,11 @@ export async function POST(request: Request): Promise<Response> {
               },
             );
           } catch (error) {
-            await db
-              .update(emails)
-              .set({ status: "failed" })
-              .where(and(eq(emails.id, email.id), eq(emails.userId, userId)));
+            await auditQueuePublishFailure({
+              emailId: email.id,
+              userId,
+              error,
+            });
             recordTelemetryError(
               telemetry,
               "email.batch_accept.queue_publish_failed",
@@ -440,11 +516,15 @@ export async function POST(request: Request): Promise<Response> {
       outcome: "accepted",
       count: acceptedCount,
     });
+    quotaReserved = false;
     return await logResponse(jsonWithTelemetry({ data: results }, telemetry), {
       emailIds: reservation.emails.map((email) => email.id),
     });
   } catch (err) {
     recordTelemetryError(telemetry, "email.batch_accept.failed", err);
+    if (quotaReserved) {
+      await releaseEmailQuota(userId, acceptedCount);
+    }
     emitCloudWatchMetric(telemetry, {
       metrics: [
         { name: "EmailBatchAcceptFailed", value: 1, unit: "Count" },

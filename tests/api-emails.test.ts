@@ -10,6 +10,7 @@ const mockEmitCloudWatchMetric = vi.hoisted(() => vi.fn());
 const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
 const mockReserveEmailQuota = vi.hoisted(() => vi.fn());
+const mockReleaseEmailQuota = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
   select: vi.fn(),
@@ -93,6 +94,7 @@ vi.mock("@/lib/billing/quota", async () => {
   return {
     ...actual,
     reserveEmailQuota: mockReserveEmailQuota,
+    releaseEmailQuota: mockReleaseEmailQuota,
   };
 });
 
@@ -248,6 +250,8 @@ describe("POST /api/emails", () => {
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
     mockReserveEmailQuota.mockReset();
+    mockReleaseEmailQuota.mockReset();
+    mockReleaseEmailQuota.mockResolvedValue(undefined);
     mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
     mockGetApiKeyAuthHeaderError.mockReturnValue(null);
     Object.assign(mockDb.query, {
@@ -273,6 +277,7 @@ describe("POST /api/emails", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -406,6 +411,60 @@ describe("POST /api/emails", () => {
     );
   });
 
+  it("audits queue publish failures before returning 500 and releasing quota", async () => {
+    const emailId = "queue-fail-email-uuid";
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: false });
+    const returning = vi.fn().mockResolvedValue([{ id: emailId }]);
+    const valuesMock = vi.fn().mockReturnValue({ returning });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const updateWhere = vi.fn().mockResolvedValue(undefined);
+    const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+    mockDb.update = vi.fn().mockReturnValue({ set: updateSet });
+    mockPublishBackgroundJob.mockRejectedValue(
+      Object.assign(new Error("SQS unavailable"), { name: "QueueUnavailable" }),
+    );
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Test Email",
+          html: "<p>Hello</p>",
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(500);
+    expect(updateSet).toHaveBeenCalledWith({
+      status: "failed",
+      providerLastAttemptedAt: expect.any(Date),
+      providerLastErrorCode: "QueueUnavailable",
+      providerLastErrorMessage: "SQS unavailable",
+      providerNextRetryAt: null,
+      providerDeadLetteredAt: expect.any(Date),
+    });
+    expect(valuesMock).toHaveBeenCalledWith({
+      emailId,
+      userId: AUTH_RESULT.userId,
+      sourceId: `queue-publish-failed:${emailId}`,
+      type: "failed",
+      payload: {
+        reason: "queue_publish_failed",
+        error: {
+          code: "QueueUnavailable",
+          message: "SQS unavailable",
+        },
+      },
+      receivedAt: expect.any(Date),
+    });
+    expect(mockReleaseEmailQuota).toHaveBeenCalledWith(AUTH_RESULT.userId, 1);
+  });
+
   it("checks duplicate Idempotency-Key retries only within the authenticated user scope", async () => {
     const findFirst = vi.fn().mockResolvedValue({ id: "email-1" });
     Object.assign(mockDb.query, {
@@ -528,6 +587,149 @@ describe("POST /api/emails", () => {
     expect(res.status).toBe(200);
     expect(mockSendEmail).not.toHaveBeenCalled();
     expect(mockPublishBackgroundJob).toHaveBeenCalledOnce();
+  });
+
+  it("persists valid Resend-compatible tags unchanged", async () => {
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-tags-uuid" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const tags = [
+      { name: "campaign_id", value: "spring-2026" },
+      { name: "tenant-1", value: "A_B-123" },
+    ];
+
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: "tagged@test.com",
+        subject: "Tagged",
+        html: "<p>Hi</p>",
+        tags,
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags,
+      }),
+    );
+  });
+
+  it("rejects tag names and values with non-Resend characters before insert", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: "tagged@test.com",
+        subject: "Bad tags",
+        html: "<p>Hi</p>",
+        tags: [{ name: "campaign.id", value: "spring 2026" }],
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          "tags.0.name": [
+            expect.stringContaining("ASCII letters, numbers, underscores"),
+          ],
+          "tags.0.value": [
+            expect.stringContaining("ASCII letters, numbers, underscores"),
+          ],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects overlong tag names and values before insert", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const basePayload = {
+      from: "sender@domain.com",
+      to: "tagged@test.com",
+      subject: "Long tags",
+      html: "<p>Hi</p>",
+    };
+
+    for (const tags of [
+      [{ name: "n".repeat(257), value: "ok" }],
+      [{ name: "name", value: "v".repeat(257) }],
+    ]) {
+      const res = await POST(
+        makeRequest(
+          "POST",
+          { ...basePayload, tags },
+          {
+            Authorization: "Bearer re_test123",
+          },
+        ),
+      );
+
+      expect(res.status).toBe(422);
+      await expect(res.json()).resolves.toMatchObject({
+        name: "validation_error",
+        details: {
+          fieldErrors: expect.objectContaining({
+            [tags[0]?.name === "name" ? "tags.0.value" : "tags.0.name"]: [
+              expect.stringContaining("no more than 256 characters"),
+            ],
+          }),
+        },
+      });
+    }
+
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects more than 75 tags on a single email before insert", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: "tagged@test.com",
+        subject: "Too many tags",
+        html: "<p>Hi</p>",
+        tags: Array.from({ length: 76 }, (_, index) => ({
+          name: `tag_${index}`,
+          value: "ok",
+        })),
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          tags: [expect.stringContaining("75")],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
   });
 
   it("injects one-click unsubscribe headers and replaces the managed URL placeholder for known contact sends", async () => {
@@ -664,6 +866,97 @@ describe("POST /api/emails", () => {
       }),
     );
   });
+  it("normalizes future ISO and natural-language scheduled_at values without queueing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
+
+    let callCount = 0;
+    const valuesMock = vi.fn().mockImplementation(() => ({
+      returning: vi.fn().mockResolvedValue([{ id: `email-${++callCount}` }]),
+    }));
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/route");
+
+    const isoRes = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["iso@test.com"],
+          subject: "ISO",
+          html: "<p>ISO</p>",
+          scheduled_at: "2026-05-08T00:00:00.000Z",
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+    const naturalRes = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["natural@test.com"],
+          subject: "Natural",
+          html: "<p>Natural</p>",
+          scheduled_at: "in 1 min",
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(isoRes.status).toBe(200);
+    expect(naturalRes.status).toBe(200);
+    expect(valuesMock.mock.calls[0][0]).toMatchObject({
+      status: "scheduled",
+      scheduledAt: new Date("2026-05-08T00:00:00.000Z"),
+    });
+    expect(valuesMock.mock.calls[2][0]).toMatchObject({
+      status: "scheduled",
+      scheduledAt: new Date("2026-05-07T00:01:00.000Z"),
+    });
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid, past, and out-of-policy scheduled_at values before quota or insert", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
+
+    const { POST } = await import("@/app/api/emails/route");
+    const payload = {
+      from: "sender@domain.com",
+      to: ["user@test.com"],
+      subject: "Bad schedule",
+      html: "<p>Bad</p>",
+    };
+
+    for (const scheduled_at of [
+      "tomorrow",
+      "2026-05-06T23:59:00.000Z",
+      "in 31 days",
+    ]) {
+      const res = await POST(
+        makeRequest(
+          "POST",
+          { ...payload, scheduled_at },
+          { Authorization: "Bearer re_test123" },
+        ),
+      );
+      expect(res.status).toBe(422);
+      await expect(res.json()).resolves.toMatchObject({
+        name: "validation_error",
+        details: {
+          fieldErrors: {
+            scheduled_at: [expect.stringContaining("future ISO 8601")],
+          },
+        },
+      });
+    }
+
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
 });
 
 // ── POST /api/emails/batch Tests ──────────────────────────────────
@@ -677,6 +970,8 @@ describe("POST /api/emails/batch", () => {
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
     mockReserveEmailQuota.mockReset();
+    mockReleaseEmailQuota.mockReset();
+    mockReleaseEmailQuota.mockResolvedValue(undefined);
     mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
     mockGetApiKeyAuthHeaderError.mockReturnValue(null);
     Object.assign(mockDb.query, {
@@ -699,6 +994,10 @@ describe("POST /api/emails/batch", () => {
       reason: "queue_url_missing",
     });
     mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("rejects batch exceeding 100 emails", async () => {
@@ -1023,6 +1322,165 @@ describe("POST /api/emails/batch", () => {
     expect(mockSendEmail).not.toHaveBeenCalled();
     expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(2);
   });
+
+  it("rejects invalid tags on the specific batch item before any rows", async () => {
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        [
+          {
+            from: "sender@domain.com",
+            to: ["ok@test.com"],
+            subject: "OK",
+            html: "<p>OK</p>",
+            tags: [{ name: "valid_name", value: "valid-value" }],
+          },
+          {
+            from: "sender@domain.com",
+            to: ["bad@test.com"],
+            subject: "Bad",
+            html: "<p>Bad</p>",
+            tags: [{ name: "bad.name", value: "bad value" }],
+          },
+        ],
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          "1.tags.0.name": [
+            expect.stringContaining("ASCII letters, numbers, underscores"),
+          ],
+          "1.tags.0.value": [
+            expect.stringContaining("ASCII letters, numbers, underscores"),
+          ],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects a batch item with more than 75 tags before any rows", async () => {
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        [
+          {
+            from: "sender@domain.com",
+            to: ["bad@test.com"],
+            subject: "Too many batch tags",
+            html: "<p>Bad</p>",
+            tags: Array.from({ length: 76 }, (_, index) => ({
+              name: `tag_${index}`,
+              value: "ok",
+            })),
+          },
+        ],
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          "0.tags": [expect.stringContaining("75")],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("normalizes batch ISO and natural-language scheduled_at values without queueing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
+
+    let callCount = 0;
+    const valuesMock = vi.fn().mockImplementation(() => ({
+      returning: vi.fn().mockResolvedValue([{ id: `email-${++callCount}` }]),
+    }));
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        [
+          {
+            from: "sender@domain.com",
+            to: ["iso@test.com"],
+            subject: "ISO",
+            html: "<p>ISO</p>",
+            scheduled_at: "2026-05-08T00:00:00.000Z",
+          },
+          {
+            from: "sender@domain.com",
+            to: ["natural@test.com"],
+            subject: "Natural",
+            html: "<p>Natural</p>",
+            scheduled_at: "in 2 hours",
+          },
+        ],
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect(valuesMock.mock.calls[0][0]).toMatchObject({
+      status: "scheduled",
+      scheduledAt: new Date("2026-05-08T00:00:00.000Z"),
+    });
+    expect(valuesMock.mock.calls[1][0]).toMatchObject({
+      status: "scheduled",
+      scheduledAt: new Date("2026-05-07T02:00:00.000Z"),
+    });
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid, past, and out-of-policy batch scheduled_at before any rows", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const base = {
+      from: "sender@domain.com",
+      to: ["user@test.com"],
+      subject: "Bad batch schedule",
+      html: "<p>Bad</p>",
+    };
+
+    for (const scheduled_at of [
+      "next Friday",
+      "2026-05-06T23:59:00.000Z",
+      "in 31 days",
+    ]) {
+      const res = await POST(
+        makeRequest("POST", [{ ...base, scheduled_at }], {
+          Authorization: "Bearer re_test123",
+        }),
+      );
+      expect(res.status).toBe(422);
+      await expect(res.json()).resolves.toMatchObject({
+        name: "validation_error",
+        code: "validation_error",
+      });
+    }
+
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
 });
 
 // ── GET /api/emails Tests ─────────────────────────────────────────
@@ -1229,6 +1687,10 @@ describe("PATCH /api/emails/:id", () => {
     mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("scopes scheduled email updates to the authenticated user", async () => {
     const findFirst = vi.fn().mockResolvedValue({
       id: "email-uuid",
@@ -1249,7 +1711,7 @@ describe("PATCH /api/emails/:id", () => {
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
         headers: { Authorization: "Bearer re_test123" },
-        body: JSON.stringify({ scheduled_at: "2026-05-06T00:00:00.000Z" }),
+        body: JSON.stringify({ scheduled_at: "2026-05-08T00:00:00.000Z" }),
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -1285,6 +1747,95 @@ describe("PATCH /api/emails/:id", () => {
         ]),
       }),
     );
+  });
+
+  it("normalizes ISO and natural-language scheduled_at updates", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
+
+    const findFirst = vi.fn().mockResolvedValue({
+      id: "email-uuid",
+      status: "scheduled",
+    });
+    mockDb.query = {
+      emails: { findFirst },
+    } as unknown as ReturnType<typeof vi.fn>;
+
+    const returning = vi.fn().mockResolvedValue([{ id: "email-uuid" }]);
+    const where = vi.fn().mockReturnValue({ returning });
+    const set = vi.fn().mockReturnValue({ where });
+    mockDb.update = vi.fn().mockReturnValue({ set });
+
+    const { PATCH } = await import("@/app/api/emails/[id]/route");
+    const isoRes = await PATCH(
+      new Request("http://localhost:3015/api/emails/email-uuid", {
+        method: "PATCH",
+        headers: { Authorization: "Bearer re_test123" },
+        body: JSON.stringify({ scheduled_at: "2026-05-08T00:00:00.000Z" }),
+      }),
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+    const naturalRes = await PATCH(
+      new Request("http://localhost:3015/api/emails/email-uuid", {
+        method: "PATCH",
+        headers: { Authorization: "Bearer re_test123" },
+        body: JSON.stringify({ scheduled_at: "in 1 day" }),
+      }),
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(isoRes.status).toBe(200);
+    expect(naturalRes.status).toBe(200);
+    expect(set).toHaveBeenNthCalledWith(1, {
+      scheduledAt: new Date("2026-05-08T00:00:00.000Z"),
+    });
+    expect(set).toHaveBeenNthCalledWith(2, {
+      scheduledAt: new Date("2026-05-08T00:00:00.000Z"),
+    });
+  });
+
+  it("rejects invalid, past, and out-of-policy scheduled_at updates before writing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
+
+    const findFirst = vi.fn().mockResolvedValue({
+      id: "email-uuid",
+      status: "scheduled",
+    });
+    mockDb.query = {
+      emails: { findFirst },
+    } as unknown as ReturnType<typeof vi.fn>;
+    const set = vi.fn();
+    mockDb.update = vi.fn().mockReturnValue({ set });
+
+    const { PATCH } = await import("@/app/api/emails/[id]/route");
+
+    for (const scheduled_at of [
+      "later today",
+      "2026-05-06T23:59:00.000Z",
+      "in 31 days",
+    ]) {
+      const res = await PATCH(
+        new Request("http://localhost:3015/api/emails/email-uuid", {
+          method: "PATCH",
+          headers: { Authorization: "Bearer re_test123" },
+          body: JSON.stringify({ scheduled_at }),
+        }),
+        { params: Promise.resolve({ id: "email-uuid" }) },
+      );
+      expect(res.status).toBe(422);
+      await expect(res.json()).resolves.toMatchObject({
+        name: "validation_error",
+        details: {
+          fieldErrors: {
+            scheduled_at: [expect.stringContaining("future ISO 8601")],
+          },
+        },
+      });
+    }
+
+    expect(mockDb.update).not.toHaveBeenCalled();
+    expect(set).not.toHaveBeenCalled();
   });
 });
 

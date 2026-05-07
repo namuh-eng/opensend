@@ -2,7 +2,6 @@ import {
   authorizeDashboardOrApiKey,
   getServerSession,
   unauthorizedResponse,
-  validateApiKey,
 } from "@/lib/api-auth";
 import { checkDomainQuota, quotaExceededResponse } from "@/lib/billing/quota";
 import { invalidateDomainCaches } from "@/lib/domain-cache";
@@ -52,9 +51,14 @@ function mapDomainError(error: unknown, fallback: string): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
-  if (!auth.userId) return unauthorizedResponse();
+
+  const session = "dashboard" in auth ? await getServerSession() : null;
+  const userId = "userId" in auth ? auth.userId : session?.user?.id;
+  if (!userId) return unauthorizedResponse();
 
   let body: unknown;
   try {
@@ -72,7 +76,7 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const quota = await checkDomainQuota(auth.userId);
+    const quota = await checkDomainQuota(userId);
     if (!quota.ok) {
       return quotaExceededResponse(quota.info);
     }
@@ -87,12 +91,12 @@ export async function POST(request: Request): Promise<Response> {
       trackingSubdomain: validated.tracking_subdomain,
       tls: validated.tls,
       capabilities: validated.capabilities,
-      userId: auth.userId,
+      userId,
     });
 
     await queueEvent({
       type: "domain.created",
-      userId: auth.userId,
+      userId,
       payload: toDomainWebhookPayload({
         id: row.id,
         name: row.name,

@@ -2,6 +2,7 @@ type JsonSchema = {
   type?: "array" | "boolean" | "integer" | "number" | "object" | "string";
   format?: string;
   description?: string;
+  pattern?: string;
   enum?: readonly string[];
   items?: JsonSchema | ReferenceObject;
   properties?: Record<string, JsonSchema | ReferenceObject>;
@@ -427,8 +428,16 @@ export const openApiDocument = {
       EmailTag: {
         type: "object",
         properties: {
-          name: { type: "string" },
-          value: { type: "string" },
+          name: {
+            type: "string",
+            maxLength: 256,
+            pattern: "^[A-Za-z0-9_-]+$",
+          },
+          value: {
+            type: "string",
+            maxLength: 256,
+            pattern: "^[A-Za-z0-9_-]*$",
+          },
         },
         required: ["name", "value"],
       },
@@ -459,9 +468,14 @@ export const openApiDocument = {
           },
           tags: {
             type: "array",
+            maxItems: 75,
             items: { $ref: "#/components/schemas/EmailTag" },
           },
-          scheduled_at: { type: "string", format: "date-time" },
+          scheduled_at: {
+            type: "string",
+            description:
+              "Schedule delivery with a future ISO 8601 date-time including timezone, or the supported Resend-compatible natural language form `in <positive integer> <minute|min|minutes|hour|hours|day|days>`. Values must be within 30 days.",
+          },
           topic_id: { type: "string", format: "uuid" },
           template: { $ref: "#/components/schemas/TemplateReference" },
         },
@@ -497,6 +511,35 @@ export const openApiDocument = {
           to: { type: "array", items: { type: "string", format: "email" } },
           subject: { type: "string" },
           status: { type: "string" },
+          last_event: {
+            type: "string",
+            description:
+              "Current user-visible email state, including queued, sent, and failed.",
+          },
+          provider_retry_count: { type: "integer" },
+          provider_last_attempted_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          provider_next_retry_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          provider_last_error: {
+            type: "object",
+            nullable: true,
+            properties: {
+              code: { type: "string" },
+              message: { type: "string" },
+            },
+          },
+          provider_dead_lettered_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
           created_at: { type: "string", format: "date-time" },
         },
         required: ["id", "from", "to", "subject"],

@@ -130,6 +130,18 @@ export const emails = pgTable(
     html: text("html"),
     text: text("text"),
     status: varchar("status", { length: 50 }).notNull().default("queued"),
+    providerRetryCount: integer("provider_retry_count").notNull().default(0),
+    providerLastAttemptedAt: timestamp("provider_last_attempted_at", {
+      withTimezone: true,
+    }),
+    providerNextRetryAt: timestamp("provider_next_retry_at", {
+      withTimezone: true,
+    }),
+    providerLastErrorCode: varchar("provider_last_error_code", { length: 255 }),
+    providerLastErrorMessage: text("provider_last_error_message"),
+    providerDeadLetteredAt: timestamp("provider_dead_lettered_at", {
+      withTimezone: true,
+    }),
     tags: jsonb("tags").$type<Array<{ name: string; value: string }>>(),
     headers: jsonb("headers").$type<Record<string, string>>(),
     attachments:

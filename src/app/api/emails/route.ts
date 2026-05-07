@@ -12,7 +12,7 @@ import {
   reserveEmailQuota,
 } from "@/lib/billing/quota";
 import { db } from "@/lib/db";
-import { contacts, emails, templates } from "@/lib/db/schema";
+import { contacts, emailEvents, emails, templates } from "@/lib/db/schema";
 import { normalizeAttachmentsForStorage } from "@/lib/email-attachments";
 import {
   findSuppressedRecipients,
@@ -25,7 +25,7 @@ import {
   hasUnsubscribePlaceholder,
   replaceUnsubscribePlaceholder,
 } from "@/lib/unsubscribe";
-import { sendEmailSchema } from "@/lib/validation/emails";
+import { normalizeScheduledAt, sendEmailSchema } from "@/lib/validation/emails";
 import {
   createBackgroundJob,
   createTelemetryContext,
@@ -79,6 +79,71 @@ function recordAcceptMetric(
       Operation: "email.accept",
       Outcome: input.outcome,
     },
+  });
+}
+
+function summarizeQueuePublishError(error: unknown): {
+  code: string;
+  message: string;
+} {
+  if (error instanceof Error) {
+    return {
+      code: error.name || "queue_publish_failed",
+      message: error.message.slice(0, 1_000),
+    };
+  }
+
+  if (typeof error === "object" && error !== null) {
+    const record = error as Record<string, unknown>;
+    const code =
+      typeof record.code === "string"
+        ? record.code
+        : typeof record.name === "string"
+          ? record.name
+          : "queue_publish_failed";
+    const message =
+      typeof record.message === "string"
+        ? record.message
+        : "Failed to publish email send job.";
+    return { code, message: message.slice(0, 1_000) };
+  }
+
+  return {
+    code: "queue_publish_failed",
+    message: "Failed to publish email send job.",
+  };
+}
+
+async function auditQueuePublishFailure(input: {
+  emailId: string;
+  userId: string;
+  error: unknown;
+}): Promise<void> {
+  const failedAt = new Date();
+  const errorSummary = summarizeQueuePublishError(input.error);
+
+  await db
+    .update(emails)
+    .set({
+      status: "failed",
+      providerLastAttemptedAt: failedAt,
+      providerLastErrorCode: errorSummary.code,
+      providerLastErrorMessage: errorSummary.message,
+      providerNextRetryAt: null,
+      providerDeadLetteredAt: failedAt,
+    })
+    .where(and(eq(emails.id, input.emailId), eq(emails.userId, input.userId)));
+
+  await db.insert(emailEvents).values({
+    emailId: input.emailId,
+    userId: input.userId,
+    sourceId: `queue-publish-failed:${input.emailId}`,
+    type: "failed",
+    payload: {
+      reason: "queue_publish_failed",
+      error: errorSummary,
+    },
+    receivedAt: failedAt,
   });
 }
 
@@ -272,7 +337,7 @@ export async function POST(request: Request): Promise<Response> {
   const bcc = normalizeToArray(validated.bcc);
   const replyTo = normalizeToArray(validated.reply_to);
   const scheduledAt = validated.scheduled_at
-    ? new Date(validated.scheduled_at)
+    ? normalizeScheduledAt(validated.scheduled_at)
     : null;
 
   const suppressedRecipients = await findSuppressedRecipients({
@@ -468,12 +533,11 @@ export async function POST(request: Request): Promise<Response> {
           },
         );
       } catch (error) {
-        await db
-          .update(emails)
-          .set({ status: "failed" })
-          .where(
-            and(eq(emails.id, createdEmail.id), eq(emails.userId, auth.userId)),
-          );
+        await auditQueuePublishFailure({
+          emailId: createdEmail.id,
+          userId: auth.userId,
+          error,
+        });
         recordTelemetryError(
           telemetry,
           "email.accept.queue_publish_failed",
@@ -550,6 +614,12 @@ export async function GET(request: Request): Promise<Response> {
         bcc: emails.bcc,
         replyTo: emails.replyTo,
         status: emails.status,
+        providerRetryCount: emails.providerRetryCount,
+        providerLastAttemptedAt: emails.providerLastAttemptedAt,
+        providerNextRetryAt: emails.providerNextRetryAt,
+        providerLastErrorCode: emails.providerLastErrorCode,
+        providerLastErrorMessage: emails.providerLastErrorMessage,
+        providerDeadLetteredAt: emails.providerDeadLetteredAt,
         scheduledAt: emails.scheduledAt,
         sentAt: emails.sentAt,
         createdAt: emails.createdAt,
@@ -586,6 +656,16 @@ export async function GET(request: Request): Promise<Response> {
         bcc: e.bcc,
         reply_to: e.replyTo,
         last_event: e.status,
+        provider_retry_count: e.providerRetryCount,
+        provider_last_attempted_at: e.providerLastAttemptedAt,
+        provider_next_retry_at: e.providerNextRetryAt,
+        provider_last_error: e.providerLastErrorCode
+          ? {
+              code: e.providerLastErrorCode,
+              message: e.providerLastErrorMessage ?? "Provider send failed.",
+            }
+          : null,
+        provider_dead_lettered_at: e.providerDeadLetteredAt,
         scheduled_at: e.scheduledAt,
         sent_at: e.sentAt,
         created_at: e.createdAt,
