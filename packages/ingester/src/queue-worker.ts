@@ -30,6 +30,11 @@ const DEFAULT_VISIBILITY_TIMEOUT_SECONDS = 60;
 const DEFAULT_IDLE_SLEEP_MS = 1_000;
 const MAX_SQS_DELAY_SECONDS = 900;
 const DEFAULT_PROVIDER_MAX_ATTEMPTS = 3;
+const MAX_EMAIL_ATTACHMENT_BASE64_BYTES = 40 * 1024 * 1024;
+const MAX_EMAIL_ATTACHMENT_RAW_BYTES = Math.floor(
+  (MAX_EMAIL_ATTACHMENT_BASE64_BYTES / 4) * 3,
+);
+const ATTACHMENT_FETCH_TIMEOUT_MS = 10_000;
 
 type QueueWorkerOptions = {
   queueUrl?: string | null;
@@ -54,6 +59,16 @@ type ProviderErrorSummary = {
 type StoredAttachment = {
   filename?: unknown;
   content?: unknown;
+  path?: unknown;
+  content_type?: unknown;
+  content_id?: unknown;
+};
+
+type ProviderAttachment = {
+  filename: string;
+  content: string;
+  content_type?: string;
+  content_id?: string;
 };
 
 type PollResult = {
@@ -402,7 +417,7 @@ export class QueueWorker {
         bcc: email.bcc ?? undefined,
         replyTo: email.replyTo ?? undefined,
         headers: email.headers ?? undefined,
-        attachments: normalizeAttachmentsForSend(email.attachments),
+        attachments: await normalizeAttachmentsForSend(email.attachments),
       });
       const sendDurationMs = finishTelemetrySpan(sesSpan, { status: "ok" });
 
@@ -551,22 +566,125 @@ function getReceiveCount(
   return Math.floor(receiveCount);
 }
 
-function normalizeAttachmentsForSend(
+async function normalizeAttachmentsForSend(
   attachments: StoredAttachment[] | null | undefined,
-): Array<{ filename: string; content: string }> | undefined {
+): Promise<ProviderAttachment[] | undefined> {
   if (!attachments) return undefined;
 
-  const sendable = attachments.flatMap((attachment) => {
-    if (
-      typeof attachment.filename === "string" &&
-      typeof attachment.content === "string"
-    ) {
-      return [{ filename: attachment.filename, content: attachment.content }];
+  const sendable: ProviderAttachment[] = [];
+  let totalEncodedBytes = 0;
+
+  for (const attachment of attachments) {
+    if (typeof attachment.filename !== "string") continue;
+
+    const contentType =
+      typeof attachment.content_type === "string"
+        ? attachment.content_type
+        : undefined;
+    const contentId =
+      typeof attachment.content_id === "string"
+        ? attachment.content_id
+        : undefined;
+    const metadata = {
+      filename: attachment.filename,
+      ...(contentType ? { content_type: contentType } : {}),
+      ...(contentId ? { content_id: contentId } : {}),
+    };
+
+    if (typeof attachment.content === "string") {
+      totalEncodedBytes += attachment.content.replace(/\s/g, "").length;
+      assertAttachmentSize(totalEncodedBytes);
+      sendable.push({ ...metadata, content: attachment.content });
+      continue;
     }
-    return [];
-  });
+
+    if (typeof attachment.path === "string") {
+      const content = await fetchAttachmentContent(attachment.path);
+      totalEncodedBytes += getBase64EncodedSize(content.byteLength);
+      assertAttachmentSize(totalEncodedBytes);
+      sendable.push({
+        ...metadata,
+        content: Buffer.from(content).toString("base64"),
+      });
+    }
+  }
 
   return sendable.length > 0 ? sendable : undefined;
+}
+
+async function fetchAttachmentContent(path: string): Promise<Uint8Array> {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    ATTACHMENT_FETCH_TIMEOUT_MS,
+  );
+
+  try {
+    const response = await fetch(path, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(
+        `Attachment fetch failed for ${path}: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    const contentLength = response.headers.get("content-length");
+    if (
+      contentLength &&
+      Number.isFinite(Number(contentLength)) &&
+      Number(contentLength) > MAX_EMAIL_ATTACHMENT_RAW_BYTES
+    ) {
+      throw new Error(
+        "Attachments exceed 40MB per email after Base64 encoding",
+      );
+    }
+
+    if (!response.body) {
+      const buffer = new Uint8Array(await response.arrayBuffer());
+      if (buffer.byteLength > MAX_EMAIL_ATTACHMENT_RAW_BYTES) {
+        throw new Error(
+          "Attachments exceed 40MB per email after Base64 encoding",
+        );
+      }
+      return buffer;
+    }
+
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+
+      totalBytes += result.value.byteLength;
+      if (totalBytes > MAX_EMAIL_ATTACHMENT_RAW_BYTES) {
+        throw new Error(
+          "Attachments exceed 40MB per email after Base64 encoding",
+        );
+      }
+      chunks.push(result.value);
+    }
+
+    const content = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      content.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return content;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function getBase64EncodedSize(byteLength: number): number {
+  return Math.ceil(byteLength / 3) * 4;
+}
+
+function assertAttachmentSize(encodedBytes: number): void {
+  if (encodedBytes > MAX_EMAIL_ATTACHMENT_BASE64_BYTES) {
+    throw new Error("Attachments exceed 40MB per email after Base64 encoding");
+  }
 }
 
 function getRetryDelaySeconds(

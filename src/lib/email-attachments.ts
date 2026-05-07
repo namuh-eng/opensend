@@ -15,13 +15,25 @@ export type StoredEmailAttachment = {
 
 export function normalizeAttachmentsForSend(
   attachments: SendEmailRequest["attachments"],
-): Array<{ filename: string; content: string }> | undefined {
+):
+  | Array<{
+      filename: string;
+      content: string;
+      content_type?: string;
+      content_id?: string;
+    }>
+  | undefined {
   const sendableAttachments = attachments
     ?.filter(
       (attachment): attachment is RequestAttachment & { content: string } =>
         typeof attachment.content === "string",
     )
-    .map(({ filename, content }) => ({ filename, content }));
+    .map(({ filename, content, content_type, content_id }) => ({
+      filename,
+      content,
+      content_type,
+      content_id,
+    }));
 
   return sendableAttachments && sendableAttachments.length > 0
     ? sendableAttachments

@@ -843,7 +843,12 @@ describe("POST /api/emails", () => {
         html: "<p>Hi</p>",
         attachments: [
           { filename: "inline.txt", content: "aGVsbG8=" },
-          { filename: "remote.txt", path: "https://example.com/file.txt" },
+          {
+            filename: "remote.png",
+            path: "https://example.com/file.png",
+            content_type: "image/png",
+            content_id: "hero",
+          },
         ],
       },
       { Authorization: "Bearer re_test123" },
@@ -864,12 +869,81 @@ describe("POST /api/emails", () => {
           }),
           expect.objectContaining({
             id: expect.any(String),
-            filename: "remote.txt",
-            path: "https://example.com/file.txt",
+            filename: "remote.png",
+            path: "https://example.com/file.png",
+            content_type: "image/png",
+            content_id: "hero",
           }),
         ],
       }),
     );
+  });
+
+  it("rejects attachments without content or path before quota, persistence, or queueing", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["single@test.com"],
+          subject: "Test",
+          html: "<p>Hi</p>",
+          attachments: [{ filename: "missing.txt" }],
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          "attachments.0.content": ["attachment requires content or path"],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects inline attachments above 40MB encoded before queueing", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["single@test.com"],
+          subject: "Test",
+          html: "<p>Hi</p>",
+          attachments: [
+            {
+              filename: "large.txt",
+              content: "a".repeat(40 * 1024 * 1024 + 1),
+            },
+          ],
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          attachments: [
+            "attachments must be no more than 40MB per email after Base64 encoding",
+          ],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
   });
   it("normalizes future ISO and natural-language scheduled_at values without queueing", async () => {
     vi.useFakeTimers();
@@ -1102,6 +1176,14 @@ describe("POST /api/emails/batch", () => {
         to: ["user1@test.com"],
         subject: "Test 1",
         html: "<p>1</p>",
+        attachments: [
+          {
+            filename: "batch-remote.png",
+            path: "https://example.com/batch-remote.png",
+            content_type: "image/png",
+            content_id: "batch-remote",
+          },
+        ],
       },
       {
         from: "sender@domain.com",

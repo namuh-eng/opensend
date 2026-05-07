@@ -416,12 +416,26 @@ export const openApiDocument = {
       },
       EmailAttachment: {
         type: "object",
+        description:
+          "Resend-compatible attachment. Provide content or an http(s) path. Total attachments are limited to 40MB per email after Base64 encoding.",
         properties: {
           filename: { type: "string" },
           content: { type: "string", description: "Base64-encoded content." },
-          path: { type: "string", format: "uri" },
-          content_type: { type: "string" },
-          content_id: { type: "string" },
+          path: {
+            type: "string",
+            format: "uri",
+            description: "HTTP(S) URL where the attachment file is hosted.",
+          },
+          content_type: {
+            type: "string",
+            description:
+              "MIME content type to emit for the attachment. Falls back to filename-derived/default type.",
+          },
+          content_id: {
+            type: "string",
+            description:
+              "Content-ID for inline CID references such as cid:logo.",
+          },
         },
         required: ["filename"],
       },
@@ -464,6 +478,8 @@ export const openApiDocument = {
           headers: { type: "object", additionalProperties: { type: "string" } },
           attachments: {
             type: "array",
+            description:
+              "Maximum total size is 40MB per email after Base64 encoding.",
             items: { $ref: "#/components/schemas/EmailAttachment" },
           },
           tags: {
