@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockFindById = vi.hoisted(() => vi.fn());
 const mockFindDueScheduled = vi.hoisted(() => vi.fn());
@@ -81,6 +81,10 @@ describe("QueueWorker", () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("sends queued email jobs through the worker and marks status transitions", async () => {
     mockFindById.mockResolvedValue({
       id: "email-1",
@@ -127,6 +131,138 @@ describe("QueueWorker", () => {
       status: "sent",
       sentAt: expect.any(Date),
       providerNextRetryAt: null,
+      providerDeadLetteredAt: null,
+    });
+  });
+
+  it("resolves URL path attachments and preserves content_type and content_id", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("remote file", {
+          status: 200,
+          headers: { "content-length": "11" },
+        }),
+      ),
+    );
+    mockFindById.mockResolvedValue({
+      id: "email-path",
+      from: "sender@example.com",
+      to: ["user@example.com"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: '<img src="cid:remote-logo" />',
+      text: "",
+      headers: {},
+      attachments: [
+        {
+          filename: "remote-logo.png",
+          path: "https://cdn.example.com/remote-logo.png",
+          content_type: "image/png",
+          content_id: "remote-logo",
+        },
+      ],
+      status: "queued",
+      scheduledAt: null,
+    });
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({ queueUrl: null });
+
+    await expect(
+      worker.processJob({
+        id: "email.send:email-path",
+        type: "email.send",
+        source: "api",
+        requestedAt: "2026-04-28T00:00:00.000Z",
+        emailId: "email-path",
+      }),
+    ).resolves.toEqual({ status: "sent" });
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://cdn.example.com/remote-logo.png",
+      {
+        signal: expect.any(AbortSignal),
+      },
+    );
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments: [
+          {
+            filename: "remote-logo.png",
+            content: "cmVtb3RlIGZpbGU=",
+            content_type: "image/png",
+            content_id: "remote-logo",
+          },
+        ],
+      }),
+    );
+  });
+
+  it("fails queued delivery explicitly when fetched attachments exceed 40MB encoded", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response("", {
+          status: 200,
+          headers: { "content-length": String(30 * 1024 * 1024 + 1) },
+        }),
+      ),
+    );
+    mockFindById.mockResolvedValue({
+      id: "email-large-path",
+      from: "sender@example.com",
+      to: ["user@example.com"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "",
+      headers: {},
+      attachments: [
+        {
+          filename: "huge.bin",
+          path: "https://cdn.example.com/huge.bin",
+        },
+      ],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({ queueUrl: null });
+
+    await expect(
+      worker.processJob(
+        {
+          id: "email.send:email-large-path",
+          type: "email.send",
+          source: "api",
+          requestedAt: "2026-04-28T00:00:00.000Z",
+          emailId: "email-large-path",
+        },
+        undefined,
+        { receiveCount: 1, retryDelaySeconds: null },
+      ),
+    ).rejects.toThrow("Attachments exceed 40MB");
+
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockUpdateEmail).toHaveBeenNthCalledWith(2, "email-large-path", {
+      status: "queued",
+      providerRetryCount: 1,
+      providerLastAttemptedAt: expect.any(Date),
+      providerNextRetryAt: null,
+      providerLastErrorCode: "Error",
+      providerLastErrorMessage:
+        "Attachments exceed 40MB per email after Base64 encoding",
       providerDeadLetteredAt: null,
     });
   });
