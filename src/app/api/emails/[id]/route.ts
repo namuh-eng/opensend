@@ -1,5 +1,6 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { publicApiError } from "@/lib/api-errors";
+import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { db } from "@/lib/db";
 import { emails } from "@/lib/db/schema";
 import {
@@ -14,6 +15,8 @@ export async function GET(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth || !auth.userId) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   const { id } = await params;
 
@@ -82,6 +85,8 @@ export async function PATCH(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth || !auth.userId) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   const { id } = await params;
 

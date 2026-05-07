@@ -266,6 +266,11 @@ describe("POST /api/emails", () => {
         where: vi.fn().mockResolvedValue([]),
       }),
     });
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
@@ -1917,5 +1922,97 @@ describe("GET /api/emails/:id/events", () => {
         ]),
       }),
     });
+  });
+});
+
+describe("API key sending permissions", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockPublishBackgroundJob.mockReset();
+    mockPublishBackgroundJob.mockResolvedValue({
+      status: "skipped",
+      reason: "queue_url_missing",
+    });
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
+    mockReleaseEmailQuota.mockResolvedValue(undefined);
+    mockGetApiKeyAuthHeaderError.mockReturnValue(null);
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      domains: {
+        findFirst: vi.fn().mockResolvedValue({ name: "example.com" }),
+      },
+    });
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
+    mockDb.transaction.mockImplementation(
+      async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
+    );
+  });
+
+  it("allows sending-access API keys to send email", async () => {
+    mockValidateApiKey.mockResolvedValue({
+      ...AUTH_RESULT,
+      permission: "sending_access",
+      domain: null,
+    });
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-sending-key" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@example.com",
+          to: ["user@test.com"],
+          subject: "Allowed",
+          html: "<p>Hello</p>",
+        },
+        { Authorization: "Bearer re_sending" },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ id: "email-sending-key" });
+  });
+
+  it("rejects domain-restricted sending keys from other from domains", async () => {
+    mockValidateApiKey.mockResolvedValue({
+      ...AUTH_RESULT,
+      permission: "sending_access",
+      domain: "example.com",
+    });
+    const insertMock = vi.fn().mockReturnValue({
+      values: vi.fn().mockResolvedValue(undefined),
+    });
+    mockDb.insert = insertMock;
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@other.com",
+          to: ["user@test.com"],
+          subject: "Blocked",
+          html: "<p>Hello</p>",
+        },
+        { Authorization: "Bearer re_sending" },
+      ),
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      code: "api_key_domain_restricted",
+      statusCode: 403,
+      details: { restrictedDomain: "example.com", fromDomain: "other.com" },
+    });
+    expect(nonLogInsertCalls()).toHaveLength(0);
   });
 });

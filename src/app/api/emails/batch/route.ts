@@ -4,6 +4,7 @@ import {
   validateApiKey,
 } from "@/lib/api-auth";
 import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
+import { requireAllowedBatchSendingDomains } from "@/lib/api-key-permissions";
 import { captureApiResponseLog } from "@/lib/api-logging";
 import {
   quotaExceededResponse,
@@ -333,6 +334,24 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const validatedItems = result.data;
+
+  const domainRestrictionError = await requireAllowedBatchSendingDomains(
+    auth,
+    validatedItems.map((item) => item.from),
+    {
+      headers: {
+        "x-correlation-id": telemetry.correlationId,
+        traceparent: telemetry.traceparent,
+      },
+    },
+  );
+  if (domainRestrictionError) {
+    recordBatchMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "unauthorized",
+    });
+    return await logResponse(domainRestrictionError);
+  }
   const itemRecipients = validatedItems.map(
     (item) => normalizeToArray(item.to) as string[],
   );

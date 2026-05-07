@@ -139,6 +139,8 @@ describe("api key service", () => {
           name: "Secondary",
           createdAt: new Date("2026-05-02T00:00:00.000Z"),
           lastUsedAt: null,
+          permission: "full_access",
+          domain: null,
         },
       ],
       hasMore: true,

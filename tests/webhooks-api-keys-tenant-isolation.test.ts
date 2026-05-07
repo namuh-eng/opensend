@@ -28,6 +28,8 @@ vi.mock("@/lib/api-auth", () => ({
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
   validateApiKey: mockValidateApiKey,
+  authorizeDashboardOrApiKey: mockValidateApiKey,
+  getServerSession: vi.fn(),
 }));
 
 vi.mock("@/lib/billing/quota", () => ({
@@ -237,5 +239,49 @@ describe("API key API tenant isolation", () => {
 
     expect(response.status).toBe(401);
     expect(mockListApiKeys).not.toHaveBeenCalled();
+  });
+});
+
+describe("API key permission enforcement", () => {
+  beforeEach(() => {
+    mockValidateApiKey.mockResolvedValue({
+      apiKeyId: "sending-key",
+      permission: "sending_access",
+      domain: null,
+      userId: "user-b",
+    });
+  });
+
+  it("rejects sending-access keys from listing API keys", async () => {
+    const route = await import("@/app/api/api-keys/route");
+    const response = await route.GET(request("http://localhost/api/api-keys"));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "insufficient_api_key_permission",
+      statusCode: 403,
+    });
+    expect(mockListApiKeys).not.toHaveBeenCalled();
+  });
+
+  it("rejects sending-access keys from creating webhooks", async () => {
+    const route = await import("@/app/api/webhooks/route");
+    const response = await route.POST(
+      request("http://localhost/api/webhooks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          endpoint: "https://example.com/b",
+          events: ["email.delivered"],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "insufficient_api_key_permission",
+      statusCode: 403,
+    });
+    expect(mockCreateWebhook).not.toHaveBeenCalled();
   });
 });

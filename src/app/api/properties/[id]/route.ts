@@ -1,4 +1,5 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { db } from "@/lib/db";
 import { contactProperties } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -10,6 +11,8 @@ export async function GET(
 ) {
   const auth = await validateApiKey(_request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   try {
     const { id } = await params;
@@ -49,6 +52,8 @@ export async function PATCH(
 ) {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   try {
     const { id } = await params;
@@ -102,6 +107,8 @@ export async function DELETE(
 ) {
   const auth = await validateApiKey(_request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   try {
     const { id } = await params;
