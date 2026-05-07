@@ -384,6 +384,41 @@ export default function DocsPage() {
               .
             </p>
           </div>
+
+          <div className="mt-5 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] p-4 space-y-3">
+            <h2 className="text-[15px] font-semibold text-[#F0F0F0]">
+              MCP server for agent clients
+            </h2>
+            <p className="text-[13px] text-[#A1A4A5]">
+              OpenSend includes an initial MCP parity slice for Codex and other
+              MCP clients. HTTP mode is served by the control-plane API at{" "}
+              <code className="font-mono text-[#F0F0F0]">/mcp</code> and uses{" "}
+              <code className="font-mono text-[#F0F0F0]">
+                Authorization: Bearer
+              </code>{" "}
+              API-key auth, not dashboard cookies. The first tools cover
+              send/list/get emails, create/list/get contacts, create/list/get
+              domains, and create/list/get webhooks.
+            </p>
+            <pre className="text-[12px] text-[#A1A4A5] font-mono bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
+              {`# Codex stdio
+codex mcp add opensend \
+  --env OPENSEND_API_KEY=os_... \
+  --env OPENSEND_API_BASE_URL=https://api.opensend.com \
+  -- bun /path/to/opensend/packages/mcp/src/stdio.ts
+
+# Streamable HTTP /mcp
+POST https://api.opensend.com/mcp
+Authorization: Bearer os_...
+Content-Type: application/json
+
+{"jsonrpc":"2.0","id":"tools","method":"tools/list"}`}
+            </pre>
+            <p className="text-[12px] text-[#A1A4A5]">
+              Deferred tools: received emails, broadcasts, segments, topics,
+              contact properties, API-key management, and public npx packaging.
+            </p>
+          </div>
         </div>
 
         {/* Groups */}
