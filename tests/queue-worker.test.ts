@@ -6,6 +6,9 @@ const mockUpdateEmail = vi.hoisted(() => vi.fn());
 const mockCreateEmailEvent = vi.hoisted(() => vi.fn());
 const mockSendEmail = vi.hoisted(() => vi.fn());
 const mockPublishBackgroundJob = vi.hoisted(() => vi.fn());
+const mockSuppress = vi.hoisted(() => vi.fn());
+const mockListWebhooksForDispatch = vi.hoisted(() => vi.fn());
+const mockEnqueueWebhookDelivery = vi.hoisted(() => vi.fn());
 const mockDispatchDelivery = vi.hoisted(() => vi.fn());
 const mockDispatchPendingDeliveries = vi.hoisted(() => vi.fn());
 const mockEmitCloudWatchMetric = vi.hoisted(() => vi.fn());
@@ -44,6 +47,22 @@ vi.mock("@opensend/core", () => ({
     findDueScheduled: mockFindDueScheduled,
     update: mockUpdateEmail,
   },
+  getSandboxTestOutcomeForRecipients: (recipients: string[]) => {
+    const outcomes = recipients.map((recipient) => {
+      const [local, domain] = recipient.trim().toLowerCase().split("@");
+      if (domain !== "resend.dev") return null;
+      const outcome = local?.split("+")[0];
+      return outcome === "delivered" ||
+        outcome === "bounced" ||
+        outcome === "complained" ||
+        (outcome === "suppressed" && local === "suppressed")
+        ? outcome
+        : null;
+    });
+    return outcomes.every((outcome) => outcome && outcome === outcomes[0])
+      ? outcomes[0]
+      : null;
+  },
   emitCloudWatchMetric: mockEmitCloudWatchMetric,
   finishTelemetrySpan: () => 12,
   getTelemetryCarrier: (context: {
@@ -57,6 +76,9 @@ vi.mock("@opensend/core", () => ({
   parseBackgroundJob: (raw: string) => JSON.parse(raw),
   publishBackgroundJob: mockPublishBackgroundJob,
   recordTelemetryError: mockRecordTelemetryError,
+  suppressionRepo: {
+    suppress: mockSuppress,
+  },
   startTelemetrySpan: (context: {
     service: string;
     operation: string;
@@ -66,12 +88,18 @@ vi.mock("@opensend/core", () => ({
     context,
     startedAt: 0,
   }),
+  toWebhookEventType: (eventType: string) =>
+    eventType.includes(".") ? eventType : `email.${eventType}`,
+  webhookRepo: {
+    listForDispatch: mockListWebhooksForDispatch,
+  },
 }));
 
 vi.mock("../packages/ingester/src/dispatcher", () => ({
   webhookDispatcher: {
     dispatchDelivery: mockDispatchDelivery,
     dispatchPendingDeliveries: mockDispatchPendingDeliveries,
+    enqueue: mockEnqueueWebhookDelivery,
   },
 }));
 
@@ -79,6 +107,8 @@ describe("QueueWorker", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    mockListWebhooksForDispatch.mockResolvedValue({ data: [] });
+    mockEnqueueWebhookDelivery.mockResolvedValue({ id: "delivery-1" });
   });
 
   afterEach(() => {
@@ -133,6 +163,203 @@ describe("QueueWorker", () => {
       providerNextRetryAt: null,
       providerDeadLetteredAt: null,
     });
+  });
+
+  it("simulates delivered resend.dev recipients without calling the provider", async () => {
+    mockFindById.mockResolvedValue({
+      id: "email-sandbox-delivered",
+      from: "Acme <onboarding@resend.dev>",
+      to: ["delivered+signup@resend.dev"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "",
+      headers: {},
+      attachments: [],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+    mockCreateEmailEvent.mockResolvedValue({ id: "event-delivered" });
+    mockListWebhooksForDispatch.mockResolvedValue({
+      data: [
+        {
+          id: "webhook-1",
+          userId: "user-1",
+          status: "active",
+          eventTypes: ["email.delivered"],
+        },
+      ],
+    });
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({ queueUrl: null });
+
+    await expect(
+      worker.processJob({
+        id: "email.send:email-sandbox-delivered",
+        type: "email.send",
+        source: "api",
+        requestedAt: "2026-04-28T00:00:00.000Z",
+        emailId: "email-sandbox-delivered",
+      }),
+    ).resolves.toEqual({ status: "sent" });
+
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockUpdateEmail).toHaveBeenNthCalledWith(
+      1,
+      "email-sandbox-delivered",
+      {
+        status: "processing",
+      },
+    );
+    expect(mockUpdateEmail).toHaveBeenNthCalledWith(
+      2,
+      "email-sandbox-delivered",
+      {
+        status: "sent",
+        sentAt: expect.any(Date),
+        providerNextRetryAt: null,
+        providerDeadLetteredAt: null,
+      },
+    );
+    expect(mockCreateEmailEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        emailId: "email-sandbox-delivered",
+        userId: "user-1",
+        sourceId: "sandbox:sent:email-sandbox-delivered",
+        type: "sent",
+      }),
+    );
+    expect(mockCreateEmailEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        emailId: "email-sandbox-delivered",
+        userId: "user-1",
+        sourceId: "sandbox:delivered:email-sandbox-delivered",
+        type: "delivered",
+      }),
+    );
+    expect(mockEnqueueWebhookDelivery).toHaveBeenCalledWith(
+      "webhook-1",
+      "event-delivered",
+    );
+  });
+
+  it("simulates bounced resend.dev recipients and records hard-bounce suppression evidence", async () => {
+    mockFindById.mockResolvedValue({
+      id: "email-sandbox-bounced",
+      from: "sender@example.com",
+      to: ["bounced@resend.dev"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "",
+      headers: {},
+      attachments: [],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({ queueUrl: null });
+
+    await expect(
+      worker.processJob({
+        id: "email.send:email-sandbox-bounced",
+        type: "email.send",
+        source: "api",
+        requestedAt: "2026-04-28T00:00:00.000Z",
+        emailId: "email-sandbox-bounced",
+      }),
+    ).resolves.toEqual({ status: "sent" });
+
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockCreateEmailEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        emailId: "email-sandbox-bounced",
+        sourceId: "sandbox:bounced:email-sandbox-bounced",
+        type: "bounced",
+        payload: expect.objectContaining({
+          bounceType: "Permanent",
+          bouncedRecipients: [
+            expect.objectContaining({
+              emailAddress: "bounced@resend.dev",
+              diagnosticCode: "smtp; 550 5.1.1 (Unknown User)",
+            }),
+          ],
+        }),
+      }),
+    );
+    expect(mockSuppress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        email: "bounced@resend.dev",
+        reason: "bounced",
+        sourceEmailId: "email-sandbox-bounced",
+      }),
+    );
+  });
+
+  it("simulates complained resend.dev recipients and records complaint suppressions", async () => {
+    mockFindById.mockResolvedValue({
+      id: "email-sandbox-complained",
+      from: "sender@example.com",
+      to: ["complained+flow@resend.dev"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "",
+      headers: {},
+      attachments: [],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({ queueUrl: null });
+
+    await expect(
+      worker.processJob({
+        id: "email.send:email-sandbox-complained",
+        type: "email.send",
+        source: "api",
+        requestedAt: "2026-04-28T00:00:00.000Z",
+        emailId: "email-sandbox-complained",
+      }),
+    ).resolves.toEqual({ status: "sent" });
+
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockCreateEmailEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceId: "sandbox:complained:email-sandbox-complained",
+        type: "complained",
+        payload: expect.objectContaining({
+          complainedRecipients: [
+            { emailAddress: "complained+flow@resend.dev" },
+          ],
+        }),
+      }),
+    );
+    expect(mockSuppress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "complained+flow@resend.dev",
+        reason: "complained",
+      }),
+    );
   });
 
   it("resolves URL path attachments and preserves content_type and content_id", async () => {
