@@ -4,6 +4,9 @@ import type {
   ApiError,
   ApiResponse,
   BatchEmailResponse,
+  ContactListResponse,
+  ContactResponse,
+  DeleteContactResponse,
   EmailOptions,
   EmailResponse,
   RequestOptions,
@@ -146,6 +149,20 @@ describe("Opensend SDK", () => {
       error: ApiError | null;
     }>();
     expectTypeOf<BatchEmailResponse>().toMatchTypeOf<{ data: unknown[] }>();
+    expectTypeOf<ContactListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{
+        email: string;
+        first_name: string | null;
+        last_name: string | null;
+        unsubscribed: boolean;
+      }>;
+    }>();
+    expectTypeOf<ContactResponse>().toMatchTypeOf<{ object: "contact" }>();
+    expectTypeOf<DeleteContactResponse>().toMatchTypeOf<{
+      object: "contact";
+      deleted: true;
+    }>();
   });
 
   it("renders react payloads to html before sending", async () => {
@@ -196,6 +213,53 @@ describe("Opensend SDK", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "https://api.example.com/api/emails?limit=10&status=queued",
       expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("uses Resend-compatible root contacts endpoints for CRUD", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "contact", id: "contact_123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.contacts.create({ email: "user@example.com" });
+    await client.contacts.list();
+    await client.contacts.get("user@example.com");
+    await client.contacts.update("user@example.com", { unsubscribed: true });
+    await client.contacts.delete("user@example.com");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/contacts",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/contacts",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/contacts/user@example.com",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "https://api.example.com/contacts/user@example.com",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "https://api.example.com/contacts/user@example.com",
+      expect.objectContaining({ method: "DELETE" }),
     );
   });
 
