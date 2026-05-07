@@ -581,3 +581,31 @@ describe("Domain API validation", () => {
     );
   });
 });
+
+describe("Domain API key permission enforcement", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockValidateApiKey.mockResolvedValue({
+      apiKeyId: "sending-key",
+      permission: "sending_access",
+      domain: null,
+      userId: "user-1",
+    });
+  });
+
+  it("rejects sending-access keys from managing domains", async () => {
+    const { POST } = await import("@/app/api/domains/route");
+    const res = await POST(
+      makeRequest("http://localhost:3015/api/domains", "POST", {
+        name: "blocked.example.com",
+      }),
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      code: "insufficient_api_key_permission",
+      statusCode: 403,
+    });
+    expect(mockCreateDomain).not.toHaveBeenCalled();
+  });
+});

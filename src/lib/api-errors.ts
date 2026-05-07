@@ -7,6 +7,8 @@ export type PublicApiErrorCode =
   | "malformed_api_key"
   | "invalid_api_key"
   | "invalid_idempotency_key"
+  | "insufficient_api_key_permission"
+  | "api_key_domain_restricted"
   | "idempotency_conflict"
   | "not_found"
   | "quota_exceeded"

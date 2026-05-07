@@ -1,4 +1,5 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { db } from "@/lib/db";
 import { emailEvents, emails } from "@/lib/db/schema";
 import { and, asc, eq } from "drizzle-orm";
@@ -10,6 +11,8 @@ export async function GET(
 ) {
   const auth = await validateApiKey(_request.headers.get("authorization"));
   if (!auth || !auth.userId) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   try {
     const { id: emailId } = await params;

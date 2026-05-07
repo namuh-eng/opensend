@@ -3,6 +3,7 @@ import {
   getServerSession,
   unauthorizedResponse,
 } from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { autoConfigureDomain } from "@/lib/cloudflare";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
@@ -25,6 +26,8 @@ export async function POST(
     _req.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
+  if (permissionError) return permissionError;
 
   const session = "dashboard" in auth ? await getServerSession() : null;
   const userId = "userId" in auth ? auth.userId : session?.user?.id;
