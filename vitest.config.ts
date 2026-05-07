@@ -22,6 +22,10 @@ export default defineConfig({
         find: "@opensend/core",
         replacement: path.resolve(__dirname, "./packages/core/src/index.ts"),
       },
+      {
+        find: "@opensend/mcp",
+        replacement: path.resolve(__dirname, "./packages/mcp/src/index.ts"),
+      },
       { find: "@", replacement: path.resolve(__dirname, "./src") },
     ],
   },

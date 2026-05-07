@@ -63,6 +63,13 @@
       "name": "@opensend/ingester",
       "version": "0.1.0",
     },
+    "packages/mcp": {
+      "name": "@opensend/mcp",
+      "version": "0.1.0",
+      "bin": {
+        "opensend-mcp": "src/stdio.ts",
+      },
+    },
     "packages/sdk": {
       "name": "opensend",
       "version": "1.0.0",
@@ -74,6 +81,7 @@
       "name": "@opensend/api",
       "version": "0.1.0",
       "dependencies": {
+        "@opensend/mcp": "workspace:*",
         "hono": "^4.12.15",
       },
     },
@@ -426,6 +434,8 @@
     "@opensend/core": ["@opensend/core@workspace:packages/core"],
 
     "@opensend/ingester": ["@opensend/ingester@workspace:packages/ingester"],
+
+    "@opensend/mcp": ["@opensend/mcp@workspace:packages/mcp"],
 
     "@opentelemetry/semantic-conventions": ["@opentelemetry/semantic-conventions@1.40.0", "", {}, "sha512-cifvXDhcqMwwTlTK04GBNeIe7yyo28Mfby85QXFe1Yk8nmi36Ab/5UQwptOx84SsoGNRg+EVSjwzfSZMy6pmlw=="],
 
