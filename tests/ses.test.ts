@@ -229,6 +229,38 @@ describe("SES Client", () => {
       );
       expect(mockSend).not.toHaveBeenCalled();
     });
+
+    it("adopts an existing SES identity when AlreadyExistsException is thrown", async () => {
+      const alreadyExists = Object.assign(new Error("identity exists"), {
+        name: "AlreadyExistsException",
+      });
+      mockSend.mockRejectedValueOnce(alreadyExists);
+      mockSend.mockResolvedValueOnce({
+        VerifiedForSendingStatus: true,
+        DkimAttributes: {
+          Tokens: ["existing1", "existing2", "existing3"],
+          Status: "SUCCESS",
+        },
+      });
+
+      const result = await createDomainIdentity("foreverbrowsing.com");
+
+      expect(result).toEqual({
+        dkimTokens: ["existing1", "existing2", "existing3"],
+        status: "SUCCESS",
+      });
+      expect(mockSend).toHaveBeenCalledTimes(2);
+    });
+
+    it("rethrows non-AlreadyExists SES errors", async () => {
+      mockSend.mockRejectedValueOnce(
+        Object.assign(new Error("denied"), { name: "AccessDeniedException" }),
+      );
+      await expect(createDomainIdentity("example.com")).rejects.toThrow(
+        "denied",
+      );
+      expect(mockSend).toHaveBeenCalledOnce();
+    });
   });
 
   describe("getDomainIdentity", () => {

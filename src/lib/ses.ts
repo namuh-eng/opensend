@@ -154,16 +154,37 @@ export async function createDomainIdentity(
     };
   }
 
-  const command = new CreateEmailIdentityCommand({
-    EmailIdentity: domain,
-  });
+  try {
+    const response = await ses.send(
+      new CreateEmailIdentityCommand({ EmailIdentity: domain }),
+    );
+    return {
+      dkimTokens: response.DkimAttributes?.Tokens ?? [],
+      status: response.DkimAttributes?.Status ?? "PENDING",
+    };
+  } catch (error) {
+    // SES is account-scoped while opensend rows are tenant-scoped, so an
+    // identity may already exist (prior install, manual setup, or an earlier
+    // create where the DB write failed). Adopt it instead of failing so DNS
+    // already in place keeps working.
+    if (!isAlreadyExistsError(error)) throw error;
+    const response = await ses.send(
+      new GetEmailIdentityCommand({ EmailIdentity: domain }),
+    );
+    return {
+      dkimTokens: response.DkimAttributes?.Tokens ?? [],
+      status: response.DkimAttributes?.Status ?? "PENDING",
+    };
+  }
+}
 
-  const response = await ses.send(command);
-
-  return {
-    dkimTokens: response.DkimAttributes?.Tokens ?? [],
-    status: response.DkimAttributes?.Status ?? "PENDING",
-  };
+function isAlreadyExistsError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name: string }).name === "AlreadyExistsException"
+  );
 }
 
 export async function getDomainIdentity(
