@@ -28,6 +28,11 @@ export interface EmailOptions {
   headers?: Record<string, string>;
   attachments?: EmailAttachment[];
   tags?: EmailTag[];
+  /**
+   * Schedule delivery with a future ISO 8601 date-time including timezone,
+   * or `in <positive integer> <minute|min|minutes|hour|hours|day|days>`
+   * within 30 days.
+   */
   scheduled_at?: string;
   topic_id?: string;
   template?: EmailTemplateReference;

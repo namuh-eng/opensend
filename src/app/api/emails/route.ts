@@ -25,7 +25,7 @@ import {
   hasUnsubscribePlaceholder,
   replaceUnsubscribePlaceholder,
 } from "@/lib/unsubscribe";
-import { sendEmailSchema } from "@/lib/validation/emails";
+import { normalizeScheduledAt, sendEmailSchema } from "@/lib/validation/emails";
 import {
   createBackgroundJob,
   createTelemetryContext,
@@ -337,7 +337,7 @@ export async function POST(request: Request): Promise<Response> {
   const bcc = normalizeToArray(validated.bcc);
   const replyTo = normalizeToArray(validated.reply_to);
   const scheduledAt = validated.scheduled_at
-    ? new Date(validated.scheduled_at)
+    ? normalizeScheduledAt(validated.scheduled_at)
     : null;
 
   const suppressedRecipients = await findSuppressedRecipients({
