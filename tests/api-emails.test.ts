@@ -48,6 +48,42 @@ vi.mock("@opensend/core", () => {
       ...job,
       requestedAt: "2026-04-28T00:00:00.000Z",
     }),
+    detectSandboxTestRecipient: (recipient: string) => {
+      const normalized = recipient.trim().toLowerCase();
+      const [local, domain] = normalized.split("@");
+      if (domain !== "resend.dev") return null;
+      const outcome = local?.split("+")[0];
+      if (
+        outcome === "delivered" ||
+        outcome === "bounced" ||
+        outcome === "complained" ||
+        (outcome === "suppressed" && local === "suppressed")
+      ) {
+        return { email: normalized, outcome };
+      }
+      return null;
+    },
+    getSandboxTestOutcomeForRecipients: (recipients: string[]) => {
+      const outcomes = recipients.map((recipient) => {
+        const normalized = recipient.trim().toLowerCase();
+        const [local, domain] = normalized.split("@");
+        if (domain !== "resend.dev") return null;
+        const outcome = local?.split("+")[0];
+        if (
+          outcome === "delivered" ||
+          outcome === "bounced" ||
+          outcome === "complained" ||
+          (outcome === "suppressed" && local === "suppressed")
+        ) {
+          return outcome;
+        }
+        return null;
+      });
+      return outcomes.length > 0 &&
+        outcomes.every((outcome) => outcome && outcome === outcomes[0])
+        ? outcomes[0]
+        : null;
+    },
     createTelemetryContext: (input: {
       service: string;
       operation: string;
@@ -783,6 +819,79 @@ describe("POST /api/emails", () => {
     });
   });
 
+  it("accepts resend.dev delivered test recipients through the normal queued response shape", async () => {
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-sandbox-1" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "onboarding@resend.dev",
+        to: "delivered+signup@resend.dev",
+        subject: "Sandbox delivered",
+        html: "<p>Sandbox</p>",
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ id: "email-sandbox-1" });
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: ["delivered+signup@resend.dev"],
+        status: "queued",
+      }),
+    );
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "email.send:email-sandbox-1",
+        type: "email.send",
+        emailId: "email-sandbox-1",
+      }),
+      {
+        deduplicationId: "email.send:email-sandbox-1",
+        groupId: "email.send",
+      },
+    );
+  });
+
+  it("rejects suppressed resend.dev test recipients before quota, persistence, or queueing", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: ["suppressed@resend.dev"],
+        subject: "Suppressed sandbox",
+        html: "<p>No send</p>",
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "recipient_suppressed",
+      code: "recipient_suppressed",
+      statusCode: 422,
+      details: {
+        recipients: "suppressed@resend.dev",
+        reason: "suppressed",
+        scope: "sandbox",
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
   it("rejects suppressed to recipients before quota, persistence, or queueing", async () => {
     mockDb.select = vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -1301,6 +1410,74 @@ describe("POST /api/emails/batch", () => {
       ),
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
+  });
+
+  it("mixes real, sandbox delivered, and sandbox suppressed recipients in batch", async () => {
+    let callCount = 0;
+    mockDb.insert = vi.fn().mockImplementation(() => {
+      callCount++;
+      return {
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: `email-${callCount}` }]),
+        }),
+      };
+    });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const req = makeRequest(
+      "POST",
+      [
+        {
+          from: "sender@domain.com",
+          to: ["real@test.com"],
+          subject: "Real",
+          html: "<p>Real</p>",
+        },
+        {
+          from: "onboarding@resend.dev",
+          to: ["delivered@resend.dev"],
+          subject: "Sandbox",
+          html: "<p>Sandbox</p>",
+        },
+        {
+          from: "sender@domain.com",
+          to: ["suppressed@resend.dev"],
+          subject: "Suppressed",
+          html: "<p>Suppressed</p>",
+        },
+      ],
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      data: [
+        { id: "email-1" },
+        { id: "email-2" },
+        {
+          error: {
+            code: "recipient_suppressed",
+            statusCode: 422,
+            details: {
+              recipients: "suppressed@resend.dev",
+              reason: "suppressed",
+              scope: "sandbox",
+            },
+          },
+        },
+      ],
+    });
+    expect(mockReserveEmailQuota).toHaveBeenCalledWith(
+      "user-1",
+      2,
+      expect.any(Date),
+      process.env,
+      mockDb,
+    );
+    expect(nonLogInsertCalls()).toHaveLength(2);
+    expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(2);
   });
 
   it("returns per-item suppression errors while preserving accepted batch sends", async () => {

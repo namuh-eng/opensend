@@ -35,6 +35,7 @@ export * from "./services/webhook";
 export * from "./services/apiKeys";
 export * from "./services/email";
 export * from "./services/emailProvider";
+export * from "./services/sandboxTestRecipients";
 export * from "./services/storage";
 export * from "./jobs/background-jobs";
 export * from "./observability/telemetry";
