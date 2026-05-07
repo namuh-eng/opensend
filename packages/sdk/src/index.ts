@@ -13,6 +13,7 @@ import type {
   CreateApiKeyPayload,
   CreateContactPayload,
   CreateContactResponse,
+  DeleteContactResponse,
   DomainCapability,
   DomainListItem,
   DomainListResponse,
@@ -30,6 +31,7 @@ import type {
   EmailTag,
   EmailTemplateReference,
   SendEmailResponse,
+  UpdateContactPayload,
   UpdateDomainPayload,
 } from "../../core/src/dto";
 
@@ -373,17 +375,35 @@ class Contacts {
   ): Promise<ApiResponse<CreateContactResponse>> {
     return this.http.request<CreateContactResponse>(
       "POST",
-      "/api/contacts",
+      "/contacts",
       payload,
     );
   }
 
   async list(): Promise<ApiResponse<ContactListResponse>> {
-    return this.http.request<ContactListResponse>("GET", "/api/contacts");
+    return this.http.request<ContactListResponse>("GET", "/contacts");
   }
 
   async get(id: string): Promise<ApiResponse<ContactResponse>> {
-    return this.http.request<ContactResponse>("GET", `/api/contacts/${id}`);
+    return this.http.request<ContactResponse>("GET", `/contacts/${id}`);
+  }
+
+  async update(
+    id: string,
+    payload: UpdateContactPayload,
+  ): Promise<ApiResponse<ContactResponse>> {
+    return this.http.request<ContactResponse>(
+      "PATCH",
+      `/contacts/${id}`,
+      payload,
+    );
+  }
+
+  async delete(id: string): Promise<ApiResponse<DeleteContactResponse>> {
+    return this.http.request<DeleteContactResponse>(
+      "DELETE",
+      `/contacts/${id}`,
+    );
   }
 }
 
@@ -536,6 +556,8 @@ export type {
   ApiKeyListResponse,
   CreateContactPayload,
   CreateContactResponse,
+  UpdateContactPayload,
+  DeleteContactResponse,
   ContactResponse,
   ContactTopicPreference,
   ContactListItem,

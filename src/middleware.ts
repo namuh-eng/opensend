@@ -88,6 +88,14 @@ function isSendPostAlias(pathname: string, method: string): boolean {
   );
 }
 
+function isContactsAlias(pathname: string, method: string): boolean {
+  if (pathname === "/contacts") return ["GET", "POST"].includes(method);
+  if (pathname.startsWith("/contacts/")) {
+    return ["GET", "PATCH", "DELETE"].includes(method);
+  }
+  return false;
+}
+
 function isSendApiPost(pathname: string, method: string): boolean {
   return (
     method === "POST" &&
@@ -101,6 +109,11 @@ function isSendApiPost(pathname: string, method: string): boolean {
 function getRateLimitPathname(pathname: string, method: string): string {
   if (isSingleSendPostAlias(pathname, method)) return "/api/emails";
   if (isBatchSendPostAlias(pathname, method)) return "/api/emails/batch";
+  if (isContactsAlias(pathname, method)) {
+    return pathname === "/contacts"
+      ? "/api/contacts"
+      : pathname.replace(/^\/contacts/, "/api/contacts");
+  }
   return pathname;
 }
 
@@ -149,7 +162,8 @@ export async function middleware(request: NextRequest) {
   // Protect non-API page routes with session check. Resend-compatible send
   // aliases must bypass dashboard session redirects and use public API auth.
   const isSendAlias = isSendPostAlias(pathname, request.method);
-  if (!pathname.startsWith("/api/") && !isSendAlias) {
+  const isContactAlias = isContactsAlias(pathname, request.method);
+  if (!pathname.startsWith("/api/") && !isSendAlias && !isContactAlias) {
     // Allow auth page, public landing page, and static assets
     if (
       pathname === "/auth" ||

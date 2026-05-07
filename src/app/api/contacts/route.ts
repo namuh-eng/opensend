@@ -243,6 +243,9 @@ export async function GET(request: Request) {
     const data = dataRows.map((c) => ({
       id: c.id,
       email: c.email,
+      first_name: c.firstName,
+      last_name: c.lastName,
+      unsubscribed: c.unsubscribed,
       firstName: c.firstName,
       lastName: c.lastName,
       status: c.unsubscribed ? "unsubscribed" : "subscribed",

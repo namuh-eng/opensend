@@ -201,6 +201,12 @@ const { data } = await resend.contacts.list();
 
 // Get a contact
 await resend.contacts.get("contact-id");
+
+// Update a contact by id or email
+await resend.contacts.update("user@example.com", { unsubscribed: true });
+
+// Delete a contact by id or email
+await resend.contacts.delete("user@example.com");
 ```
 
 ## TypeScript
