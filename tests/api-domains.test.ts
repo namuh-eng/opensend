@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
+const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockDeleteDNSRecord = vi.hoisted(() => vi.fn());
 const mockListDNSRecords = vi.hoisted(() => vi.fn());
 const mockAutoConfigureDomain = vi.hoisted(() => vi.fn());
@@ -29,6 +30,7 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/api-auth", () => ({
   validateApiKey: mockValidateApiKey,
   authorizeDashboardOrApiKey: mockValidateApiKey,
+  getServerSession: mockGetServerSession,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
@@ -99,6 +101,7 @@ describe("Domain API validation", () => {
   beforeEach(() => {
     vi.resetModules();
     mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
+    mockGetServerSession.mockReset();
     mockDeleteDNSRecord.mockReset();
     mockListDNSRecords.mockReset();
     mockAutoConfigureDomain.mockReset();
@@ -165,6 +168,51 @@ describe("Domain API validation", () => {
         capabilities: expect.any(Array),
       }),
     });
+  });
+
+  it("creates a domain from an authenticated dashboard session", async () => {
+    const createdAt = new Date("2026-05-06T00:00:00.000Z");
+    mockValidateApiKey.mockResolvedValueOnce({ dashboard: true });
+    mockGetServerSession.mockResolvedValueOnce({
+      user: { id: "dashboard-user-1" },
+    });
+    mockCreateDomain.mockResolvedValueOnce({
+      id: VALID_DOMAIN_ID,
+      name: "dashboard.example.com",
+      status: "not_started",
+      region: "us-east-1",
+      records: [],
+      customReturnPath: null,
+      trackOpens: false,
+      trackClicks: false,
+      trackingSubdomain: null,
+      tls: "opportunistic",
+      capabilities: [{ name: "sending", enabled: true }],
+      createdAt,
+    });
+
+    const { POST } = await import("@/app/api/domains/route");
+    const res = await POST(
+      new Request("http://localhost:3015/api/domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Dashboard.Example.com" }),
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(mockCreateDomain).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Dashboard.Example.com",
+        userId: "dashboard-user-1",
+      }),
+    );
+    expect(mockQueueEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "domain.created",
+        userId: "dashboard-user-1",
+      }),
+    );
   });
 
   it("updates a domain and enqueues domain.updated for the caller tenant", async () => {
