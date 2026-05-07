@@ -24,7 +24,10 @@ import {
   hasUnsubscribePlaceholder,
   replaceUnsubscribePlaceholder,
 } from "@/lib/unsubscribe";
-import { batchSendEmailSchema } from "@/lib/validation/emails";
+import {
+  batchSendEmailSchema,
+  normalizeScheduledAt,
+} from "@/lib/validation/emails";
 import {
   createBackgroundJob,
   createTelemetryContext,
@@ -384,7 +387,7 @@ export async function POST(request: Request): Promise<Response> {
         const bcc = normalizeToArray(item.bcc);
         const replyTo = normalizeToArray(item.reply_to);
         const scheduledAt = item.scheduled_at
-          ? new Date(item.scheduled_at)
+          ? normalizeScheduledAt(item.scheduled_at)
           : null;
 
         const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();

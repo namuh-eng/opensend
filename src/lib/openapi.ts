@@ -461,7 +461,11 @@ export const openApiDocument = {
             type: "array",
             items: { $ref: "#/components/schemas/EmailTag" },
           },
-          scheduled_at: { type: "string", format: "date-time" },
+          scheduled_at: {
+            type: "string",
+            description:
+              "Schedule delivery with a future ISO 8601 date-time including timezone, or the supported Resend-compatible natural language form `in <positive integer> <minute|min|minutes|hour|hours|day|days>`. Values must be within 30 days.",
+          },
           topic_id: { type: "string", format: "uuid" },
           template: { $ref: "#/components/schemas/TemplateReference" },
         },

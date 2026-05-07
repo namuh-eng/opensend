@@ -96,6 +96,16 @@ const { data, error } = await resend.emails.sendBatch([
 `resend.emails.sendBatch()` posts to the Resend-compatible `/emails/batch`
 endpoint.
 
+## Scheduled Sends
+
+Pass `scheduled_at` as a string to defer delivery for `send` or `sendBatch`.
+The API reschedule endpoint accepts the same formats. Supported values are
+future ISO 8601 date-times with a timezone (for example `2026-05-08T00:00:00.000Z`) or the small
+Resend-compatible natural-language form `in <positive integer>
+<minute|min|minutes|hour|hours|day|days>` such as `in 1 min`. Values must be
+within 30 days; unparseable, past, or out-of-policy values return
+`validation_error`.
+
 ## Idempotency Keys
 
 Pass a per-request `idempotencyKey` option to prevent accidental duplicate
