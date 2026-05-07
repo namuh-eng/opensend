@@ -60,8 +60,17 @@ export function zodValidationDetails(error: ZodError): {
   fieldErrors: Record<string, string[]>;
 } {
   const flattened = flattenError(error);
+  const fieldErrors: Record<string, string[]> = { ...flattened.fieldErrors };
+
+  for (const issue of error.issues) {
+    if (issue.path.length < 2) continue;
+
+    const fieldPath = issue.path.join(".");
+    fieldErrors[fieldPath] = [...(fieldErrors[fieldPath] ?? []), issue.message];
+  }
+
   return {
     formErrors: flattened.formErrors,
-    fieldErrors: flattened.fieldErrors,
+    fieldErrors,
   };
 }

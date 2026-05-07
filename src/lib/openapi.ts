@@ -2,6 +2,7 @@ type JsonSchema = {
   type?: "array" | "boolean" | "integer" | "number" | "object" | "string";
   format?: string;
   description?: string;
+  pattern?: string;
   enum?: readonly string[];
   items?: JsonSchema | ReferenceObject;
   properties?: Record<string, JsonSchema | ReferenceObject>;
@@ -427,8 +428,16 @@ export const openApiDocument = {
       EmailTag: {
         type: "object",
         properties: {
-          name: { type: "string" },
-          value: { type: "string" },
+          name: {
+            type: "string",
+            maxLength: 256,
+            pattern: "^[A-Za-z0-9_-]+$",
+          },
+          value: {
+            type: "string",
+            maxLength: 256,
+            pattern: "^[A-Za-z0-9_-]*$",
+          },
         },
         required: ["name", "value"],
       },
@@ -459,6 +468,7 @@ export const openApiDocument = {
           },
           tags: {
             type: "array",
+            maxItems: 75,
             items: { $ref: "#/components/schemas/EmailTag" },
           },
           scheduled_at: {

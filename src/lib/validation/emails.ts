@@ -9,9 +9,22 @@ export const emailRecipientSchema = z.union([
   z.array(emailAddressSchema),
 ]);
 
+const EMAIL_TAG_PATTERN = /^[A-Za-z0-9_-]*$/;
+const EMAIL_TAG_PATTERN_MESSAGE =
+  "Tag names and values may only contain ASCII letters, numbers, underscores, or dashes.";
+const EMAIL_TAG_LENGTH_MESSAGE =
+  "Tag names and values must be no more than 256 characters.";
+
 export const tagSchema = z.object({
-  name: z.string().min(1).max(255),
-  value: z.string().max(1024),
+  name: z
+    .string()
+    .min(1)
+    .max(256, EMAIL_TAG_LENGTH_MESSAGE)
+    .regex(EMAIL_TAG_PATTERN, EMAIL_TAG_PATTERN_MESSAGE),
+  value: z
+    .string()
+    .max(256, EMAIL_TAG_LENGTH_MESSAGE)
+    .regex(EMAIL_TAG_PATTERN, EMAIL_TAG_PATTERN_MESSAGE),
 });
 
 export const attachmentSchema = z.object({
@@ -121,7 +134,7 @@ export const sendEmailSchema = z
     reply_to: emailRecipientSchema.optional(),
     headers: z.record(z.string(), z.string()).optional(),
     attachments: z.array(attachmentSchema).optional(),
-    tags: z.array(tagSchema).optional(),
+    tags: z.array(tagSchema).max(75).optional(),
     scheduled_at: scheduledAtSchema.optional(),
     topic_id: z.string().uuid().optional(),
     template: z
