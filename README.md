@@ -289,7 +289,7 @@ bun run hooks:install  # optional manual reinstall if you used --ignore-scripts
 bun run check          # runs the same change-scoped push guardrail used on pre-push
 make check             # full repo typecheck + lint
 make test              # Unit tests
-make test-e2e          # E2E tests (requires dev server)
+make test-e2e          # E2E tests (sources .env; Playwright starts dev server)
 make all               # Everything
 ```
 

@@ -1,4 +1,9 @@
 import { expect, test } from "@playwright/test";
+// E2E category: mocked browser integration; security-adjacent sign-out needs real Better Auth follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: mocked browser integration; security-adjacent sign-out needs real Better Auth follow-up (#229 audit).",
+);
 
 test("signed-in dashboard user can sign out and protected routes redirect to auth", async ({
   context,

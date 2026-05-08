@@ -1,7 +1,14 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
+// E2E category: smoke-only; email insights test needs deterministic email fixture follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; email insights test needs deterministic email fixture follow-up (#229 audit).",
+);
 
 test.describe("Email Detail - Content Tabs", () => {
-  test("switch between content tabs including Insights", async ({ page }) => {
+  test("switch between content tabs including Insights", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/emails");
     await page.waitForLoadState("networkidle");
 

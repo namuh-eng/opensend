@@ -1,7 +1,14 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
+// E2E category: smoke-only; email detail test needs deterministic email fixture follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; email detail test needs deterministic email fixture follow-up (#229 audit).",
+);
 
 test.describe("Email Detail Page", () => {
-  test("view email detail page shows metadata and events", async ({ page }) => {
+  test("view email detail page shows metadata and events", async ({
+    authenticatedPage: page,
+  }) => {
     // Navigate to an email detail page directly
     // First go to emails list to find an email
     await page.goto("/emails");

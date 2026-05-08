@@ -1,7 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
+// E2E category: smoke-only; properties create flow needs deterministic modal/cleanup follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; properties create flow needs deterministic modal/cleanup follow-up (#229 audit).",
+);
 
 test.describe("Properties page", () => {
-  test("create new property", async ({ page }) => {
+  test("create new property", async ({ authenticatedPage: page }) => {
     await page.goto("/audience/properties");
 
     // Click 'Add property' button

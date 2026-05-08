@@ -1,7 +1,10 @@
-import { expect, test } from "@playwright/test";
+// E2E category: smoke-only; DNS records tab requires an existing verified domain fixture and skips explicitly when absent.
+import { expect, test } from "./fixtures/auth";
 
 test.describe("Domain DNS Records Tab (feature-025)", () => {
-  test("view DNS records for verified domain", async ({ page }) => {
+  test("view DNS records for verified domain", async ({
+    authenticatedPage: page,
+  }) => {
     // Navigate to domains list first
     await page.goto("/domains");
     await page.waitForLoadState("networkidle");

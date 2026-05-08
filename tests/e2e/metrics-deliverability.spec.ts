@@ -1,9 +1,9 @@
 // ABOUTME: E2E test for Metrics page deliverability section — event type filter dropdown interaction
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 test.describe("Metrics — Deliverability Rate section", () => {
-  test("filter chart by event type", async ({ page }) => {
+  test("filter chart by event type", async ({ authenticatedPage: page }) => {
     await page.goto("/metrics");
 
     // The deliverability section should be visible

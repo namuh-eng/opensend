@@ -25,9 +25,9 @@ format:
 test:
 	@echo "→ Unit Tests..." && bunx vitest run && echo "  ✓ Unit Tests passed"
 
-# E2E tests (Playwright — requires dev server running)
+# E2E tests (Playwright — sources .env and starts/reuses dev server)
 test-e2e:
-	@echo "→ E2E Tests..." && bunx playwright test && echo "  ✓ E2E Tests passed"
+	@echo "→ E2E Tests..." && if [ -f .env ]; then set -a; . ./.env; set +a; fi; bunx playwright test && echo "  ✓ E2E Tests passed"
 
 # Dev server
 dev:

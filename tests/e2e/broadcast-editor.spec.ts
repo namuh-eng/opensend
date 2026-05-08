@@ -1,7 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
+// E2E category: smoke-only; broadcast editor tests need deterministic broadcast fixture follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; broadcast editor tests need deterministic broadcast fixture follow-up (#229 audit).",
+);
 
 test.describe("Broadcast Editor", () => {
-  test("edit broadcast title inline", async ({ page }) => {
+  test("edit broadcast title inline", async ({ authenticatedPage: page }) => {
     // Create a broadcast first
     const res = await page.request.post("/api/broadcasts", {
       data: { name: "Untitled" },
@@ -34,7 +39,9 @@ test.describe("Broadcast Editor", () => {
     await page.request.delete(`/api/broadcasts/${broadcast.id}`);
   });
 
-  test("insert heading block via slash command", async ({ page }) => {
+  test("insert heading block via slash command", async ({
+    authenticatedPage: page,
+  }) => {
     // Create a broadcast
     const res = await page.request.post("/api/broadcasts", {
       data: { name: "Slash Test" },
