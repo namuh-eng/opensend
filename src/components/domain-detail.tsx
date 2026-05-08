@@ -577,33 +577,10 @@ function DNSRecordTable({
 
 function RecordsTab({ domain }: { domain: DomainDetailData }) {
   const router = useRouter();
-  const [autoConfiguring, setAutoConfiguring] = useState(false);
-  const [autoConfigureError, setAutoConfigureError] = useState<string | null>(
-    null,
-  );
   const [sendingEnabled, setSendingEnabled] = useState(domain.sendingEnabled);
   const [receivingEnabled, setReceivingEnabled] = useState(
     domain.receivingEnabled,
   );
-
-  const handleAutoConfigure = useCallback(async () => {
-    setAutoConfiguring(true);
-    setAutoConfigureError(null);
-
-    try {
-      await apiRequest(`/api/domains/${domain.id}/auto-configure`, {
-        method: "POST",
-      });
-
-      router.refresh();
-    } catch (error) {
-      setAutoConfigureError(
-        error instanceof Error ? error.message : "Auto-configure failed",
-      );
-    } finally {
-      setAutoConfiguring(false);
-    }
-  }, [domain.id, router]);
 
   const handleToggle = useCallback(
     async (field: "sending_enabled" | "receiving_enabled", value: boolean) => {
@@ -643,40 +620,9 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
 
   return (
     <div className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-[18px] font-semibold text-[#F0F0F0]">
-          DNS Records
-        </h2>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleAutoConfigure}
-            disabled={autoConfiguring}
-            className="flex items-center gap-2 px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] bg-[rgba(176,199,217,0.08)] border border-[rgba(176,199,217,0.145)] rounded-lg hover:bg-[rgba(176,199,217,0.15)] transition-colors disabled:opacity-50"
-          >
-            <svg
-              aria-hidden="true"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 6v6l4 2" />
-            </svg>
-            Auto configure
-          </button>
-        </div>
-      </div>
-
-      {autoConfigureError && (
-        <p role="alert" className="mb-4 text-[13px] text-red-400">
-          {autoConfigureError}
-        </p>
-      )}
+      <h2 className="text-[18px] font-semibold text-[#F0F0F0] mb-6">
+        DNS Records
+      </h2>
 
       {/* Section 1: Domain Verification (DKIM) */}
       <div className="mb-8">

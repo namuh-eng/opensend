@@ -70,7 +70,6 @@ export const updateDomainSchema = z
   );
 
 export const verifyDomainParamsSchema = domainRouteParamsSchema;
-export const autoConfigureDomainParamsSchema = domainRouteParamsSchema;
 
 export type DomainRouteParams = z.infer<typeof domainRouteParamsSchema>;
 export type CreateDomainRequest = z.infer<typeof createDomainSchema>;

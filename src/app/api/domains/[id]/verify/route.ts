@@ -50,35 +50,23 @@ export async function POST(
 
     const identity = await getCachedDomainIdentity(domain.name);
 
-    let verificationStatus:
-      | "pending"
-      | "verified"
-      | "partially_verified"
-      | "failed"
-      | "temporary_failure" = "pending";
+    type DomainRecord = {
+      type: string;
+      name: string;
+      value: string;
+      status: string;
+      ttl: string;
+      priority?: number;
+    };
+    const existingRecords = (domain.records as DomainRecord[] | null) ?? [];
+    const recordsForUpdate: DomainRecord[] = existingRecords.map((record) => ({
+      ...record,
+      status: identity.verified ? "verified" : "pending",
+    }));
 
-    if (identity.verified) {
-      verificationStatus = "verified";
-    } else {
-      const records =
-        (domain.records as Array<{
-          type: string;
-          name: string;
-          value: string;
-          status: string;
-          ttl: string;
-          priority?: number;
-        }>) ?? [];
-      const verifiedCount = records.filter(
-        (record) => record.status === "verified",
-      ).length;
-
-      if (verifiedCount > 0 && verifiedCount < records.length) {
-        verificationStatus = "partially_verified";
-      } else if (verifiedCount === 0 && records.length > 0) {
-        verificationStatus = "pending";
-      }
-    }
+    const verificationStatus: "pending" | "verified" = identity.verified
+      ? "verified"
+      : "pending";
 
     const previousStatus = domain.status;
 
@@ -86,6 +74,7 @@ export async function POST(
       .update(domains)
       .set({
         status: verificationStatus,
+        records: recordsForUpdate,
       })
       .where(and(eq(domains.id, id), eq(domains.userId, userId)))
       .returning();

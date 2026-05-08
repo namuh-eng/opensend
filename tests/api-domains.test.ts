@@ -4,7 +4,6 @@ const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockDeleteDNSRecord = vi.hoisted(() => vi.fn());
 const mockListDNSRecords = vi.hoisted(() => vi.fn());
-const mockAutoConfigureDomain = vi.hoisted(() => vi.fn());
 const mockQueueEvent = vi.hoisted(() => vi.fn());
 const mockDeleteDomainIdentity = vi.hoisted(() => vi.fn());
 const mockGetDomainIdentity = vi.hoisted(() => vi.fn());
@@ -53,7 +52,6 @@ vi.mock("@opensend/core", () => ({
 }));
 
 vi.mock("@/lib/cloudflare", () => ({
-  autoConfigureDomain: mockAutoConfigureDomain,
   deleteDNSRecord: mockDeleteDNSRecord,
   listDNSRecords: mockListDNSRecords,
 }));
@@ -104,7 +102,6 @@ describe("Domain API validation", () => {
     mockGetServerSession.mockReset();
     mockDeleteDNSRecord.mockReset();
     mockListDNSRecords.mockReset();
-    mockAutoConfigureDomain.mockReset();
     mockQueueEvent.mockReset();
     mockDeleteDomainIdentity.mockReset();
     mockGetDomainIdentity.mockReset();
@@ -462,123 +459,6 @@ describe("Domain API validation", () => {
     expect(res.status).toBe(404);
     expect(mockGetDomainIdentity).not.toHaveBeenCalled();
     expect(mockDb.update).not.toHaveBeenCalled();
-  });
-
-  it("returns 422 for invalid auto-configure params", async () => {
-    const { POST } = await import(
-      "@/app/api/domains/[id]/auto-configure/route"
-    );
-    const req = makeRequest(
-      "http://localhost:3015/api/domains/not-a-uuid/auto-configure",
-      "POST",
-    );
-
-    const res = await POST(req, {
-      params: Promise.resolve({ id: "not-a-uuid" }),
-    });
-    const json = await res.json();
-
-    expect(res.status).toBe(422);
-    expect(json.error).toBe("Validation failed");
-    expect(json.details.fieldErrors.id).toBeDefined();
-    expect(mockDb.query.domains.findFirst).not.toHaveBeenCalled();
-  });
-
-  it("returns 404 when auto-configuring a domain owned by another tenant", async () => {
-    mockDb.query.domains.findFirst.mockResolvedValue({
-      id: VALID_DOMAIN_ID,
-      name: "example.com",
-      userId: "other-user",
-      customReturnPath: "outbound",
-      records: [],
-    });
-
-    const { POST } = await import(
-      "@/app/api/domains/[id]/auto-configure/route"
-    );
-    const req = makeRequest(
-      `http://localhost:3015/api/domains/${VALID_DOMAIN_ID}/auto-configure`,
-      "POST",
-    );
-
-    const res = await POST(req, {
-      params: Promise.resolve({ id: VALID_DOMAIN_ID }),
-    });
-
-    expect(res.status).toBe(404);
-    expect(mockCreateDomainIdentity).not.toHaveBeenCalled();
-    expect(mockAutoConfigureDomain).not.toHaveBeenCalled();
-    expect(mockDb.update).not.toHaveBeenCalled();
-  });
-
-  it("auto-configures domain when params are valid", async () => {
-    mockDb.query.domains.findFirst.mockResolvedValue({
-      id: VALID_DOMAIN_ID,
-      name: "example.com",
-      userId: "user-1",
-      customReturnPath: "outbound",
-      records: [
-        {
-          type: "TXT",
-          name: "_dmarc.example.com",
-          value: "v=DMARC1; p=none;",
-          status: "pending",
-          ttl: "Auto",
-        },
-      ],
-    });
-    mockCreateDomainIdentity.mockResolvedValue({
-      dkimTokens: ["dkim-1", "dkim-2", "dkim-3"],
-    });
-    mockAutoConfigureDomain.mockResolvedValue({
-      records: [
-        {
-          type: "TXT",
-          name: "outbound.example.com",
-          content: "v=spf1 include:amazonses.com ~all",
-        },
-        {
-          type: "TXT",
-          name: "_dmarc.example.com",
-          content: "v=DMARC1; p=none;",
-        },
-      ],
-      warnings: [],
-    });
-    mockDb.update.mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue(undefined),
-      }),
-    });
-
-    const { POST } = await import(
-      "@/app/api/domains/[id]/auto-configure/route"
-    );
-    const req = makeRequest(
-      `http://localhost:3015/api/domains/${VALID_DOMAIN_ID}/auto-configure`,
-      "POST",
-    );
-
-    const res = await POST(req, {
-      params: Promise.resolve({ id: VALID_DOMAIN_ID }),
-    });
-    const json = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
-    expect(json.cloudflare_records).toBe(2);
-    expect(json.records).toContainEqual({
-      type: "TXT",
-      name: "_dmarc.example.com",
-      value: "v=DMARC1; p=none;",
-      status: "pending",
-      ttl: "Auto",
-    });
-    expect(mockAutoConfigureDomain).toHaveBeenCalledWith(
-      "example.com",
-      ["dkim-1", "dkim-2", "dkim-3"],
-      "outbound",
-    );
   });
 });
 

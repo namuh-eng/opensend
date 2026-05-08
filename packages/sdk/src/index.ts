@@ -2,7 +2,6 @@ import type {
   ApiKeyListItem,
   ApiKeyListResponse,
   ApiKeyResponse,
-  AutoConfigureDomainResponse,
   BatchEmailItemError,
   BatchEmailItemResponse,
   BatchEmailResponse,
@@ -338,15 +337,6 @@ class Domains {
       `/api/domains/${id}/verify`,
     );
   }
-
-  async autoConfigure(
-    id: string,
-  ): Promise<ApiResponse<AutoConfigureDomainResponse>> {
-    return this.http.request<AutoConfigureDomainResponse>(
-      "POST",
-      `/api/domains/${id}/auto-configure`,
-    );
-  }
 }
 
 class ApiKeys {
@@ -549,7 +539,6 @@ export type {
   DomainResponse,
   DomainListItem,
   DomainListResponse,
-  AutoConfigureDomainResponse,
   CreateApiKeyPayload,
   ApiKeyResponse,
   ApiKeyListItem,

@@ -325,23 +325,6 @@ export const openApiDocument = {
         },
       },
     },
-    "/api/domains/{id}/auto-configure": {
-      post: {
-        tags: ["Domains"],
-        summary: "Auto-configure DNS records",
-        operationId: "autoConfigureDomain",
-        security: bearerSecurity,
-        parameters: [idPathParameter],
-        responses: {
-          "200": {
-            description: "DNS configuration result.",
-            content: jsonContent({ $ref: "#/components/schemas/Domain" }),
-          },
-          "404": { $ref: "#/components/responses/NotFound" },
-          ...errorResponses,
-        },
-      },
-    },
     "/api/contacts": {
       get: {
         tags: ["Contacts"],
