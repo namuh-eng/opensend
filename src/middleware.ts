@@ -166,6 +166,7 @@ export async function middleware(request: NextRequest) {
   if (!pathname.startsWith("/api/") && !isSendAlias && !isContactAlias) {
     // Allow auth page, public landing page, and static assets
     if (
+      pathname === "/" ||
       pathname === "/auth" ||
       pathname === "/docs" ||
       pathname === "/openapi.json" ||

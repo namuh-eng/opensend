@@ -1970,12 +1970,13 @@ describe("PATCH /api/emails/:id", () => {
     const set = vi.fn().mockReturnValue({ where });
     mockDb.update = vi.fn().mockReturnValue({ set });
 
+    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const { PATCH } = await import("@/app/api/emails/[id]/route");
     const res = await PATCH(
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
         headers: { Authorization: "Bearer re_test123" },
-        body: JSON.stringify({ scheduled_at: "2026-05-08T00:00:00.000Z" }),
+        body: JSON.stringify({ scheduled_at: scheduledAt }),
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
