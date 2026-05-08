@@ -1,3 +1,4 @@
+// E2E category: mocked browser integration; API responses are route-mocked to exercise automation dashboard client state only.
 import { type BrowserContext, type Page, expect, test } from "@playwright/test";
 
 const automation = {

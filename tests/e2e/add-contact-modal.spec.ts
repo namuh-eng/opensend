@@ -1,7 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 test.describe("Add contact modal", () => {
-  test("opens modal from Add contacts dropdown", async ({ page }) => {
+  test("opens modal from Add contacts dropdown", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/audience");
 
     // Click "Add contacts" button
@@ -24,7 +26,7 @@ test.describe("Add contact modal", () => {
     ).toBeVisible();
   });
 
-  test("add single contact manually", async ({ page }) => {
+  test("add single contact manually", async ({ authenticatedPage: page }) => {
     await page.goto("/audience");
 
     await page.getByRole("button", { name: /add contacts/i }).click();
@@ -45,7 +47,9 @@ test.describe("Add contact modal", () => {
     ).not.toBeVisible();
   });
 
-  test("closes modal with Cancel button", async ({ page }) => {
+  test("closes modal with Cancel button", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/audience");
 
     await page.getByRole("button", { name: /add contacts/i }).click();
@@ -62,7 +66,7 @@ test.describe("Add contact modal", () => {
     ).not.toBeVisible();
   });
 
-  test("closes modal with X button", async ({ page }) => {
+  test("closes modal with X button", async ({ authenticatedPage: page }) => {
     await page.goto("/audience");
 
     await page.getByRole("button", { name: /add contacts/i }).click();
@@ -79,7 +83,7 @@ test.describe("Add contact modal", () => {
     ).not.toBeVisible();
   });
 
-  test("shows segments search field", async ({ page }) => {
+  test("shows segments search field", async ({ authenticatedPage: page }) => {
     await page.goto("/audience");
 
     await page.getByRole("button", { name: /add contacts/i }).click();

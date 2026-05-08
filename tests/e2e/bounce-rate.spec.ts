@@ -1,9 +1,11 @@
 // ABOUTME: E2E tests for bounce rate section — info panel open/close, breakdown links
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 test.describe("Bounce Rate Section", () => {
-  test("should open and close bounce rate info panel", async ({ page }) => {
+  test("should open and close bounce rate info panel", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/metrics");
 
     // Find the bounce rate section and its info button
@@ -31,7 +33,7 @@ test.describe("Bounce Rate Section", () => {
   });
 
   test("should show bounce breakdown table with category rows", async ({
-    page,
+    authenticatedPage: page,
   }) => {
     await page.goto("/metrics");
 
@@ -47,7 +49,9 @@ test.describe("Bounce Rate Section", () => {
     await expect(bounceSection.getByText("Undetermined")).toBeVisible();
   });
 
-  test("should close info panel on Escape key", async ({ page }) => {
+  test("should close info panel on Escape key", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/metrics");
 
     const infoBtn = page.getByRole("button", { name: /bounce rate info/i });

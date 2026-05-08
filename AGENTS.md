@@ -41,7 +41,7 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 ## Commands
 - `make check` — typecheck + Biome
 - `make test` — Vitest unit tests
-- `make test-e2e` — Playwright (requires `bun run dev` running on port 3015)
+- `make test-e2e` — Playwright (sources `.env` and starts/reuses dev server on port 3015)
 - `make all` — check + test
 - `bun run dev` — Next.js dev server on port 3015
 - `bun run build` — production build
@@ -53,7 +53,10 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 
 ## Quality Standards
 - TypeScript strict mode, no `any` types
-- Every feature: at least one Vitest unit test AND at least one Playwright E2E test
+- Every feature: at least one Vitest unit test AND one Playwright E2E/scenario proof where applicable
+- Auth, tenant isolation, security, API, or persistence-sensitive work must use real-dependency Playwright proof: real Postgres rows, real Next.js routes, and `tests/e2e/fixtures/auth.ts` helpers for Better Auth sessions, tenant A/B users, API keys, and cleanup
+- Do not close security/tenant work with `page.route` auth mocks, conditional no-op tests, or smoke-only checks; mocked/provider-gated tests must be labeled as such and cannot be backend correctness proof
+- `make test-e2e` sources `.env` and starts the dev server through Playwright; run `bun run db:push` first if the local DB schema is stale
 - Run `make check && make test` before every commit
 - Small, focused commits — one feature per commit
 

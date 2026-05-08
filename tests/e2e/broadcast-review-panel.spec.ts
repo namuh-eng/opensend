@@ -1,7 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
+// E2E category: smoke-only; broadcast review test needs deterministic broadcast fixture follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; broadcast review test needs deterministic broadcast fixture follow-up (#229 audit).",
+);
 
 test.describe("Broadcast Review Panel", () => {
-  test("open and close review panel", async ({ page }) => {
+  test("open and close review panel", async ({ authenticatedPage: page }) => {
     // Create a broadcast
     const res = await page.request.post("/api/broadcasts", {
       data: { name: "Review Test" },

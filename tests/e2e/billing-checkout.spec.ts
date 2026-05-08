@@ -1,3 +1,4 @@
+// E2E category: provider-gated API E2E; live Stripe checkout requires explicit billing env prerequisites.
 import { expect, test } from "@playwright/test";
 
 const sessionCookie = process.env.BILLING_E2E_SESSION_COOKIE;

@@ -1,3 +1,4 @@
+// E2E category: provider-gated/mocked integration; Stripe paths are skipped or route-mocked unless billing env is configured.
 import { expect, test } from "@playwright/test";
 
 const billingBackend = process.env.BILLING_BACKEND?.toLowerCase() ?? "disabled";

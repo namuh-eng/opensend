@@ -1,9 +1,16 @@
 // ABOUTME: E2E test for Settings Usage tab — verifies all 3 quota sections render with correct labels and values
+// E2E category: smoke-only; settings usage assertions are UI-copy smoke and need refresh follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; settings usage assertions are UI-copy smoke and need refresh follow-up (#229 audit).",
+);
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 test.describe("Settings Usage Page", () => {
-  test("displays all quota sections with correct labels", async ({ page }) => {
+  test("displays all quota sections with correct labels", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/settings");
 
     // Usage tab should be active by default

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 const NAV_ITEMS = [
   { label: "Emails", path: "/emails" },
@@ -14,7 +14,9 @@ const NAV_ITEMS = [
   { label: "Settings", path: "/settings" },
 ];
 
-test("sidebar renders with all nav items", async ({ page }) => {
+test("sidebar renders with all nav items", async ({
+  authenticatedPage: page,
+}) => {
   await page.goto("/");
   const sidebar = page.locator("nav");
   for (const item of NAV_ITEMS) {
@@ -22,7 +24,9 @@ test("sidebar renders with all nav items", async ({ page }) => {
   }
 });
 
-test("navigate between pages via sidebar", async ({ page }) => {
+test("navigate between pages via sidebar", async ({
+  authenticatedPage: page,
+}) => {
   await page.goto("/");
 
   // Click Emails
@@ -36,18 +40,20 @@ test("navigate between pages via sidebar", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Domains" })).toBeVisible();
 });
 
-test("active nav item is highlighted", async ({ page }) => {
+test("active nav item is highlighted", async ({ authenticatedPage: page }) => {
   await page.goto("/emails");
   const emailsLink = page.getByRole("link", { name: "Emails" });
   await expect(emailsLink).toHaveAttribute("data-active", "true");
 });
 
-test("home page redirects to emails", async ({ page }) => {
+test("home page redirects to emails", async ({ authenticatedPage: page }) => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/emails/);
 });
 
-test("sidebar is persistent across navigation", async ({ page }) => {
+test("sidebar is persistent across navigation", async ({
+  authenticatedPage: page,
+}) => {
   await page.goto("/emails");
   const sidebar = page.locator("nav");
   await expect(sidebar).toBeVisible();
@@ -65,18 +71,20 @@ test("sidebar is persistent across navigation", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("footer exposes feedback, help, and docs links", async ({ page }) => {
+test("footer exposes feedback, help, and docs links", async ({
+  authenticatedPage: page,
+}) => {
   await page.goto("/emails");
 
   const footer = page.locator("footer");
   await expect(footer).toBeVisible();
   await expect(footer.getByRole("link", { name: "Feedback" })).toHaveAttribute(
     "href",
-    "mailto:feedback@foreverbrowsing.com?subject=Opensend%20Feedback",
+    "mailto:feedback@example.com?subject=Opensend%20Feedback",
   );
   await expect(footer.getByRole("link", { name: "Help" })).toHaveAttribute(
     "href",
-    "mailto:help@foreverbrowsing.com?subject=Opensend%20Help",
+    "mailto:help@example.com?subject=Opensend%20Help",
   );
   await expect(footer.getByRole("link", { name: "Docs" })).toHaveAttribute(
     "href",

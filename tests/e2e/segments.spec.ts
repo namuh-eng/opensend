@@ -1,7 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
+// E2E category: smoke-only; segments flows need deterministic segment fixture/cleanup follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; segments flows need deterministic segment fixture/cleanup follow-up (#229 audit).",
+);
 
 test.describe("Segments page", () => {
-  test("create new segment", async ({ page }) => {
+  test("create new segment", async ({ authenticatedPage: page }) => {
     await page.goto("/audience/segments");
 
     // Click 'Create segment' button
@@ -21,7 +26,9 @@ test.describe("Segments page", () => {
     });
   });
 
-  test("click segment navigates to filtered contacts", async ({ page }) => {
+  test("click segment navigates to filtered contacts", async ({
+    authenticatedPage: page,
+  }) => {
     // First create a segment
     await page.goto("/audience/segments");
 

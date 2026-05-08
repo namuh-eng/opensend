@@ -1,5 +1,11 @@
 import { expect, test } from "./fixtures/auth";
 
+// E2E category: real browser E2E; requires local DKIM_ENCRYPTION_KEY because domain creation generates DKIM keys.
+test.skip(
+  !process.env.DKIM_ENCRYPTION_KEY,
+  "Set DKIM_ENCRYPTION_KEY to run domain creation E2E.",
+);
+
 test("dashboard user can add a domain with session auth", async ({
   authenticatedPage,
   e2eDb,
