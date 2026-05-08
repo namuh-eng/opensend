@@ -1,6 +1,6 @@
 # Control-plane API service
 
-`services/api` is the Bun + Hono skeleton for the future OpenSend/Namuh Send control-plane API runtime.
+`services/api` is the Bun + Hono control-plane API runtime for route families that have been moved out of Next.js ownership.
 
 Local development convention:
 
@@ -11,11 +11,35 @@ bun run dev:api
 
 Current endpoints:
 
+- `POST /emails` — transactional send API. Uses the shared send implementation that also backs the compatibility Next.js adapter at `POST /api/emails`; preserves OpenSend/Resend-compatible auth, validation, idempotency, queueing, response, and error shapes.
+- `POST /emails/batch` — transactional batch send API with the same shared behavior as `POST /api/emails/batch`.
 - `GET /healthz` — service/version health metadata
 - `GET /readyz` — static readiness response that does not require AWS, database, queue, or other external credentials
 - `POST /mcp` — Streamable HTTP-compatible JSON-RPC MCP endpoint for agent clients. Requires `Authorization: Bearer <opensend_api_key>` and forwards tool calls to the existing public OpenSend API (`OPENSEND_API_BASE_URL`, default `http://localhost:3015`).
 
-This service is intentionally a skeleton. The existing Next.js route handlers under `src/app/api` remain the current public API until follow-up route-move/thin-adapter PRs move route ownership behind this boundary.
+The transactional send route family is now owned by shared send handlers consumed by this Hono service. The existing Next.js handlers remain compatibility adapters for the current public `/api/emails` URLs; no production routing cutover is implied by local service ownership.
+
+### Transactional send local testing
+
+Start the Hono service on the default port:
+
+```bash
+bun run dev:api
+# http://localhost:3026
+```
+
+Exercise the service route with an OpenSend API key:
+
+```bash
+bun -e 'const r = await fetch("http://localhost:3026/emails", { method: "POST", headers: { "authorization": "Bearer os_...", "content-type": "application/json" }, body: JSON.stringify({ from: "sender@example.com", to: "recipient@example.com", subject: "Hello", html: "<p>Hello</p>" }) }); console.log(r.status, await r.text())'
+```
+
+Focused tests for this route family live in `tests/api-emails.test.ts` and cover both the Hono service routes and the Next.js compatibility adapters:
+
+```bash
+bun run test -- tests/api-emails.test.ts
+```
+
 
 ## Thin-adapter pilot pattern
 
