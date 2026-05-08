@@ -70,6 +70,7 @@ That's it. Open **http://localhost:3015** and sign in with Google (configure `GO
 - **REST API** — Send emails via a simple POST request with API key auth, including a `/api/emails/batch` endpoint for bulk sends
 - **Idempotency Keys** — Opt-in `Idempotency-Key` header (or per-row keys on batch sends) so retries collapse safely
 - **TypeScript SDK** — [`opensend`](./packages/sdk) npm package with full type safety
+- **Python SDK** — [`opensend`](./packages/python-sdk) package with a Resend-shaped transactional email surface
 - **React Email Templates** — Pass React components via the SDK's `react` prop
 - **Domain Verification** — DKIM, SPF, DMARC records auto-written to Cloudflare DNS, with click-tracking subdomains and custom return paths supported
 - **API Key Management** — `full_access` and `sending_access` permission scopes
@@ -141,6 +142,31 @@ console.log("Queued email", data?.id);
 ```
 
 Full SDK docs: [`packages/sdk/README.md`](./packages/sdk/README.md)
+
+### Python SDK
+
+```bash
+python -m pip install ./packages/python-sdk
+```
+
+```python
+import os
+import opensend
+
+opensend.api_key = os.environ["OPENSEND_API_KEY"]
+opensend.base_url = os.environ.get("OPENSEND_BASE_URL", "https://api.opensend.com")
+
+email = opensend.Emails.send({
+    "from": "hello@yourdomain.com",
+    "to": "recipient@example.com",
+    "subject": "Hello from Opensend",
+    "html": "<h1>It works!</h1>",
+})
+
+print("Queued email", email["id"])
+```
+
+Full Python SDK docs: [`packages/python-sdk/README.md`](./packages/python-sdk/README.md) and [`docs/sdk/python.md`](./docs/sdk/python.md)
 
 ## Self-Hosting
 
@@ -218,7 +244,8 @@ packages/
 ├── core/            # @opensend/core — shared DB client, repos, DTOs, webhook helpers
 ├── ingester/        # @opensend/ingester — Hono service for SES/SNS events,
 │                    #   scheduled-email worker, webhook retry scan (port 3016)
-└── sdk/             # opensend — published TypeScript SDK
+├── sdk/             # opensend — published TypeScript SDK
+└── python-sdk/      # opensend — first-party Python SDK package
 
 tests/               # Vitest unit tests
 tests/e2e/           # Playwright E2E tests
