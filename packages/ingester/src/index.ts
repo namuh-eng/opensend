@@ -1,9 +1,11 @@
 import {
   createBackgroundJob,
   createTelemetryContext,
+  domainService,
   emailEventRepo,
   emailService,
   emitCloudWatchMetric,
+  enqueueDomainEvent,
   getTelemetryCarrier,
   logTelemetry,
   publishBackgroundJob,
@@ -119,6 +121,76 @@ app.post("/jobs/webhooks", async (c) =>
     c,
     async () => await webhookDispatcher.dispatchPendingDeliveries(),
   ),
+);
+
+app.post("/jobs/domain-verify", async (c) =>
+  runJobEndpoint(c, async () => {
+    const telemetry = createTelemetryContext({
+      service: "ingester",
+      operation: "POST /jobs/domain-verify",
+    });
+
+    let result: Awaited<
+      ReturnType<typeof domainService.reconcileAllPendingVerifications>
+    >;
+    try {
+      result = await domainService.reconcileAllPendingVerifications();
+    } catch (error) {
+      recordTelemetryError(telemetry, "domain.verify.reconcile_failed", error);
+      throw error;
+    }
+
+    for (const change of result.changes) {
+      if (!change.userId) continue;
+      try {
+        await enqueueDomainEvent({
+          type: "domain.updated",
+          userId: change.userId,
+          payload: {
+            id: change.domainId,
+            name: change.domainName,
+            status: change.nextStatus,
+            previous_status: change.previousStatus,
+            records: change.records,
+            capabilities: change.capabilities,
+          },
+        });
+      } catch (error) {
+        recordTelemetryError(
+          telemetry,
+          "domain.verify.event_enqueue_failed",
+          error,
+          { domain_id: change.domainId },
+        );
+      }
+    }
+
+    logTelemetry("info", "domain.verify.reconcile_completed", telemetry, {
+      scanned: result.scanned,
+      updated: result.updated,
+      unchanged: result.unchanged,
+      failed: result.failed,
+    });
+
+    emitCloudWatchMetric(telemetry, {
+      metrics: [
+        { name: "DomainVerifyScanned", value: result.scanned, unit: "Count" },
+        { name: "DomainVerifyUpdated", value: result.updated, unit: "Count" },
+        { name: "DomainVerifyFailed", value: result.failed, unit: "Count" },
+      ],
+      dimensions: {
+        Service: "ingester",
+        Operation: "domain.verify.reconcile",
+      },
+    });
+
+    return {
+      scanned: result.scanned,
+      updated: result.updated,
+      unchanged: result.unchanged,
+      failed: result.failed,
+    };
+  }),
 );
 
 app.post("/webhooks/stripe", async (c) => {

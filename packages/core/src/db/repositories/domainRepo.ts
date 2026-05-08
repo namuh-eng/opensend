@@ -1,6 +1,8 @@
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt } from "drizzle-orm";
 import { db } from "../client";
 import { domains } from "../schema";
+
+const PENDING_VERIFICATION_STATUSES = ["not_started", "pending"] as const;
 
 export const domainRepo = {
   async findById(id: string) {
@@ -32,6 +34,16 @@ export const domainRepo = {
       .delete(domains)
       .where(eq(domains.id, id))
       .returning({ id: domains.id });
+  },
+
+  async listPendingVerification(options: { limit?: number } = {}) {
+    const { limit = 100 } = options;
+    return await db
+      .select()
+      .from(domains)
+      .where(inArray(domains.status, [...PENDING_VERIFICATION_STATUSES]))
+      .orderBy(asc(domains.createdAt))
+      .limit(limit);
   },
 
   async list(

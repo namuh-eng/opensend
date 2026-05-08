@@ -10,6 +10,7 @@ const mockGetDomainIdentity = vi.hoisted(() => vi.fn());
 const mockCreateDomainIdentity = vi.hoisted(() => vi.fn());
 const mockCheckDomainQuota = vi.hoisted(() => vi.fn());
 const mockCreateDomain = vi.hoisted(() => vi.fn());
+const mockReconcileVerification = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
   update: vi.fn(),
@@ -47,6 +48,9 @@ vi.mock("@opensend/core", () => ({
     createDomain: mockCreateDomain,
     listDomains: vi.fn(),
   }),
+  domainService: {
+    reconcileVerification: mockReconcileVerification,
+  },
   getEffectiveReturnPathLabel: (value: string | null | undefined) =>
     value?.trim() || "send",
 }));
@@ -106,6 +110,7 @@ describe("Domain API validation", () => {
     mockDeleteDomainIdentity.mockReset();
     mockGetDomainIdentity.mockReset();
     mockCreateDomainIdentity.mockReset();
+    mockReconcileVerification.mockReset();
     mockCheckDomainQuota.mockResolvedValue({
       ok: true,
       info: { limit: 10, used: 0 },
@@ -391,17 +396,25 @@ describe("Domain API validation", () => {
     const updated = {
       ...domain,
       status: "verified",
+      records: [
+        {
+          type: "TXT",
+          name: "_dmarc.example.com",
+          value: "v=DMARC1; p=none;",
+          status: "verified",
+          ttl: "Auto",
+        },
+      ],
+      capabilities: [],
+      customReturnPath: null,
       createdAt: new Date("2024-01-01T00:00:00.000Z"),
     };
 
     mockDb.query.domains.findFirst.mockResolvedValue(domain);
-    mockGetDomainIdentity.mockResolvedValue({ verified: true });
-    mockDb.update.mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([updated]),
-        }),
-      }),
+    mockReconcileVerification.mockResolvedValue({
+      status: "updated",
+      domain: updated,
+      previousStatus: "pending",
     });
 
     const { POST } = await import("@/app/api/domains/[id]/verify/route");
@@ -421,10 +434,10 @@ describe("Domain API validation", () => {
       type: "TXT",
       name: "_dmarc.example.com",
       value: "v=DMARC1; p=none;",
-      status: "pending",
+      status: "verified",
       ttl: "Auto",
     });
-    expect(mockDb.query.domains.findFirst).toHaveBeenCalledTimes(1);
+    expect(mockReconcileVerification).toHaveBeenCalledWith(VALID_DOMAIN_ID);
     expect(mockQueueEvent).toHaveBeenCalledWith({
       type: "domain.updated",
       userId: "user-1",
@@ -457,8 +470,7 @@ describe("Domain API validation", () => {
     });
 
     expect(res.status).toBe(404);
-    expect(mockGetDomainIdentity).not.toHaveBeenCalled();
-    expect(mockDb.update).not.toHaveBeenCalled();
+    expect(mockReconcileVerification).not.toHaveBeenCalled();
   });
 });
 

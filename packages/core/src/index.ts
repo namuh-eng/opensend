@@ -31,6 +31,7 @@ export * from "./webhook-signing";
 export * from "./webhook-events";
 export * from "./services/dns";
 export * from "./services/domain";
+export * from "./services/domain-events";
 export * from "./services/webhook";
 export * from "./services/apiKeys";
 export * from "./services/email";
