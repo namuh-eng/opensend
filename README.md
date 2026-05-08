@@ -118,6 +118,18 @@ curl http://localhost:3026/readyz
 
 For now, the Next.js routes under `src/app/api` remain the current public API and own production request handling. The control-plane service only exposes health/readiness endpoints until follow-up thin-adapter PRs move route ownership behind this boundary.
 
+### Go ingester skeleton
+
+This repository also includes an experimental Go data-plane skeleton at [`services/ingester-go`](./services/ingester-go). It reserves local port **3027** and exposes only static `GET /health` and `GET /readyz` endpoints:
+
+```bash
+cd services/ingester-go
+go test ./...
+go run .
+```
+
+The Go ingester is shadow-only for future issue #71 parity slices. The current production ingester remains `packages/ingester` on port **3016** for SES/SNS ingestion, Stripe webhooks, scheduled jobs, and webhook dispatch.
+
 ### TypeScript SDK
 
 ```bash
@@ -228,7 +240,7 @@ docker run -p 3015:8080 --env-file .env opensend
 
 ## Architecture
 
-Opensend is a Bun workspace monorepo. The Next.js app and a standalone Hono ingester service share a typed core package.
+Opensend is a Bun workspace monorepo. The Next.js app and the production Hono ingester service share a typed core package; an experimental Go ingester skeleton lives under `services/ingester-go` for the planned data-plane migration.
 
 ```
 src/                 # Next.js app (App Router)
@@ -246,6 +258,10 @@ packages/
 │                    #   scheduled-email worker, webhook retry scan (port 3016)
 ├── sdk/             # opensend — published TypeScript SDK
 └── python-sdk/      # opensend — first-party Python SDK package
+
+services/
+├── api/             # Bun + Hono control-plane skeleton (port 3026)
+└── ingester-go/     # Experimental Go ingester skeleton (shadow-only, port 3027)
 
 tests/               # Vitest unit tests
 tests/e2e/           # Playwright E2E tests
