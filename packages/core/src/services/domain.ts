@@ -253,7 +253,9 @@ export function createDomainService({
         name: domainName,
         region,
         status: "not_started",
-        dkimTokens: identity.dkimTokens ?? null,
+        // Production schema has NOT NULL on dkim_tokens; EXTERNAL rows
+        // legitimately have no SES-managed tokens, so insert an empty array.
+        dkimTokens: identity.dkimTokens ?? [],
         records,
         customReturnPath: input.customReturnPath ?? null,
         trackOpens: input.openTracking ?? false,
