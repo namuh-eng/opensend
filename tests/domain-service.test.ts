@@ -24,6 +24,11 @@ function domainRow(overrides: Partial<DomainRow> = {}): DomainRow {
     customReturnPath: null,
     trackingSubdomain: null,
     capabilities: [{ name: "sending", enabled: true }],
+    dkimOrigin: "AWS_SES",
+    dkimSelector: null,
+    dkimPublicKey: null,
+    dkimPrivateKeyCt: null,
+    dkimPrivateKeyIv: null,
     ...overrides,
   };
 }
@@ -91,7 +96,9 @@ describe("domain service", () => {
       userId: "user-1",
     });
 
-    expect(createDomainIdentity).toHaveBeenCalledWith("example.com");
+    expect(createDomainIdentity).toHaveBeenCalledWith("example.com", {
+      userId: "user-1",
+    });
     expect(inserted[0]).toMatchObject({
       name: "example.com",
       region: "eu-west-1",

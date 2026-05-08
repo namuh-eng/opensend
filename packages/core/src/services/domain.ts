@@ -29,8 +29,14 @@ export function buildReturnPathRecordName(
 }
 
 export type CreateDomainIdentityResult = {
-  dkimTokens: string[];
+  dkimOrigin?: "AWS_SES" | "EXTERNAL";
   status?: string;
+  // AWS_SES path
+  dkimTokens?: string[];
+  // EXTERNAL (BYO-DKIM) path — opensend owns the keypair, SES signs with it.
+  dkimSelector?: string;
+  dkimPublicKey?: string;
+  dkimPrivateKeyEnc?: { ct: string; iv: string };
 };
 
 export type CreateDomainInput = {
@@ -90,6 +96,7 @@ export type DomainServiceDependencies = {
   repository?: DomainRepository;
   createDomainIdentity?: (
     domain: string,
+    options?: { userId?: string },
   ) => Promise<CreateDomainIdentityResult>;
   getDomainIdentity?: (domain: string) => Promise<{ verified?: boolean }>;
   deleteDomainIdentity?: (domain: string) => Promise<void>;
@@ -111,16 +118,29 @@ function normalizeLimit(limit: number | undefined): number {
 function buildDomainRecords(
   domainName: string,
   region: string,
-  dkimTokens: string[],
+  identity: CreateDomainIdentityResult,
   customReturnPath: string | null | undefined,
 ): DomainRecord[] {
-  const dkimRecords: DomainRecord[] = dkimTokens.map((token) => ({
-    type: "CNAME",
-    name: `${token}._domainkey.${domainName}`,
-    value: `${token}.dkim.amazonses.com`,
-    status: "pending",
-    ttl: "Auto",
-  }));
+  const dkimRecords: DomainRecord[] =
+    identity.dkimOrigin === "EXTERNAL" &&
+    identity.dkimSelector &&
+    identity.dkimPublicKey
+      ? [
+          {
+            type: "TXT",
+            name: `${identity.dkimSelector}._domainkey.${domainName}`,
+            value: `v=DKIM1; k=rsa; p=${identity.dkimPublicKey}`,
+            status: "pending",
+            ttl: "Auto",
+          },
+        ]
+      : (identity.dkimTokens ?? []).map((token) => ({
+          type: "CNAME",
+          name: `${token}._domainkey.${domainName}`,
+          value: `${token}.dkim.amazonses.com`,
+          status: "pending",
+          ttl: "Auto",
+        }));
 
   const returnPathRecordName = buildReturnPathRecordName(
     domainName,
@@ -187,6 +207,7 @@ export function createDomainService({
   repository = domainRepo,
   createDomainIdentity = (domain: string) =>
     emailProvider.createDomainIdentity(domain).then((result) => ({
+      dkimOrigin: "AWS_SES" as const,
       dkimTokens: result.dkimTokens ?? [],
     })),
   getDomainIdentity = (domain: string) =>
@@ -216,19 +237,23 @@ export function createDomainService({
     async createDomain(input: CreateDomainInput): Promise<DomainDetail> {
       const domainName = input.name.toLowerCase();
       const region = input.region ?? "us-east-1";
-      const identity = await createDomainIdentity(domainName);
+      const identity = await createDomainIdentity(domainName, {
+        userId: input.userId ?? undefined,
+      });
       const records = buildDomainRecords(
         domainName,
         region,
-        identity.dkimTokens,
+        identity,
         input.customReturnPath,
       );
+
+      const dkimOrigin = identity.dkimOrigin ?? "AWS_SES";
 
       const [row] = await repository.create({
         name: domainName,
         region,
         status: "not_started",
-        dkimTokens: identity.dkimTokens,
+        dkimTokens: identity.dkimTokens ?? null,
         records,
         customReturnPath: input.customReturnPath ?? null,
         trackOpens: input.openTracking ?? false,
@@ -237,6 +262,11 @@ export function createDomainService({
         tls: input.tls ?? "opportunistic",
         capabilities: input.capabilities ?? defaultCapabilities,
         userId: input.userId ?? null,
+        dkimOrigin,
+        dkimSelector: identity.dkimSelector ?? null,
+        dkimPublicKey: identity.dkimPublicKey ?? null,
+        dkimPrivateKeyCt: identity.dkimPrivateKeyEnc?.ct ?? null,
+        dkimPrivateKeyIv: identity.dkimPrivateKeyEnc?.iv ?? null,
       });
 
       await invalidateDomainCaches({ id: row.id, name: row.name });
