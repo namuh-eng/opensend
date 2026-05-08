@@ -1,10 +1,4 @@
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mockFetch = vi.hoisted(() => vi.fn());
@@ -167,45 +161,5 @@ describe("DomainDetail", () => {
     expect(
       screen.queryByText(/Your domain is ready to send emails/),
     ).toBeNull();
-  });
-
-  it("renders Auto configure button in Records tab", () => {
-    render(<DomainDetail domain={baseDomain} />);
-    expect(screen.getByText("Auto configure")).toBeTruthy();
-  });
-
-  it("posts to the auto-configure endpoint without an Authorization header", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ ok: true }),
-    });
-
-    render(<DomainDetail domain={baseDomain} />);
-    fireEvent.click(screen.getByText("Auto configure"));
-
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        "/api/domains/d1/auto-configure",
-        expect.objectContaining({ method: "POST" }),
-      );
-    });
-    const [, init] = mockFetch.mock.calls[0] ?? [];
-    expect(init?.headers).toBeUndefined();
-    expect(mockRefresh).toHaveBeenCalled();
-  });
-
-  it("does not refresh the page when auto-configure fails", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      json: async () => ({ error: "Missing or invalid API key" }),
-    });
-
-    render(<DomainDetail domain={baseDomain} />);
-    fireEvent.click(screen.getByText("Auto configure"));
-
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledTimes(1);
-    });
-    expect(mockRefresh).not.toHaveBeenCalled();
   });
 });

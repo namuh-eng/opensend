@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -127,11 +127,6 @@ describe("Domain DNS Records Tab (feature-025)", () => {
     render(<DomainDetail domain={domainWithRecords} />);
     const spfCells = screen.getAllByText(/v=spf1 include:amazonses.com/);
     expect(spfCells.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("renders Auto configure button", () => {
-    render(<DomainDetail domain={domainWithRecords} />);
-    expect(screen.getByText("Auto configure")).toBeTruthy();
   });
 
   it("renders verified status badges for records", () => {

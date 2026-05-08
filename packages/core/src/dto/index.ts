@@ -190,13 +190,6 @@ export interface DomainListResponse {
   has_more: boolean;
 }
 
-export interface AutoConfigureDomainResponse {
-  ok: boolean;
-  records: DomainRecord[];
-  cloudflare_records: number;
-  warnings?: string[];
-}
-
 export interface CreateApiKeyPayload {
   name: string;
   permission?: "full_access" | "sending_access";

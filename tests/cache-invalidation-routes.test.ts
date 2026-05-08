@@ -11,7 +11,6 @@ const mockGetCachedDomainIdentity = vi.hoisted(() => vi.fn());
 const mockInvalidateDomainCaches = vi.hoisted(() => vi.fn());
 const mockCreateDomainIdentity = vi.hoisted(() => vi.fn());
 const mockDeleteDomainIdentity = vi.hoisted(() => vi.fn());
-const mockAutoConfigureDomain = vi.hoisted(() => vi.fn());
 const mockListDNSRecords = vi.hoisted(() => vi.fn());
 const mockDeleteDNSRecord = vi.hoisted(() => vi.fn());
 const mockQueueEvent = vi.hoisted(() => vi.fn());
@@ -67,7 +66,6 @@ vi.mock("@/lib/ses", () => ({
 }));
 
 vi.mock("@/lib/cloudflare", () => ({
-  autoConfigureDomain: mockAutoConfigureDomain,
   deleteDNSRecord: mockDeleteDNSRecord,
   listDNSRecords: mockListDNSRecords,
 }));
@@ -249,39 +247,6 @@ describe("cache invalidation routes", () => {
     expect(response.status).toBe(404);
     expect(mockDb.update).not.toHaveBeenCalled();
     expect(mockInvalidateDomainCaches).not.toHaveBeenCalled();
-  });
-
-  it("invalidates domain caches after auto-configure", async () => {
-    mockGetCachedDomainById.mockResolvedValue({
-      id: VALID_DOMAIN_ID,
-      name: "example.com",
-      userId: "user-1",
-    });
-    mockCreateDomainIdentity.mockResolvedValue({
-      dkimTokens: ["a", "b", "c"],
-    });
-    mockAutoConfigureDomain.mockResolvedValue({
-      records: [
-        { type: "TXT", name: "example.com", content: "v=spf1", priority: 10 },
-      ],
-      warnings: [],
-    });
-    mockDb.update.mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockResolvedValue(undefined),
-      }),
-    });
-
-    const route = await import("@/app/api/domains/[id]/auto-configure/route");
-    const response = await route.POST(new Request("http://localhost"), {
-      params: Promise.resolve({ id: VALID_DOMAIN_ID }),
-    });
-
-    expect(response.status).toBe(200);
-    expect(mockInvalidateDomainCaches).toHaveBeenCalledWith({
-      id: VALID_DOMAIN_ID,
-      name: "example.com",
-    });
   });
 
   it("invalidates domain caches after verify", async () => {

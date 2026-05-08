@@ -1,5 +1,3 @@
-import { DMARC_RECORD_VALUE, buildDmarcRecordName } from "@opensend/core";
-
 // ── Types ──────────────────────────────────────────────────────────
 
 export interface DNSRecord {
@@ -41,13 +39,6 @@ function headers(token: string) {
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
   };
-}
-
-function buildReturnPathRecordName(
-  domainName: string,
-  customReturnPath: string | null | undefined,
-): string {
-  return `${customReturnPath?.trim() || "send"}.${domainName}`;
 }
 
 async function handleResponse<T>(response: Response): Promise<T> {
@@ -144,115 +135,4 @@ export async function updateDNSRecord(
   });
 
   return handleResponse<DNSRecordResult>(response);
-}
-
-// ── Auto-configure Domain ──────────────────────────────────────────
-
-export interface AutoConfigureResult {
-  records: DNSRecordResult[];
-  warnings: string[];
-}
-
-export async function autoConfigureDomain(
-  domain: string,
-  dkimTokens: string[],
-  customReturnPath?: string | null,
-): Promise<AutoConfigureResult> {
-  if (!domain) throw new Error("domain is required");
-  if (!dkimTokens || dkimTokens.length === 0)
-    throw new Error("DKIM tokens are required");
-
-  const returnPathRecordName = buildReturnPathRecordName(
-    domain,
-    customReturnPath,
-  );
-  const warnings: string[] = [];
-  const results: DNSRecordResult[] = [];
-
-  const dmarcRecordName = buildDmarcRecordName(domain);
-
-  // Check existing MX, SPF TXT, and DMARC TXT records before creating anything
-  const [existingMX, existingTXT, existingDmarcTXT] = await Promise.all([
-    listDNSRecords({ name: returnPathRecordName, type: "MX" }),
-    listDNSRecords({ name: returnPathRecordName, type: "TXT" }),
-    listDNSRecords({ name: dmarcRecordName, type: "TXT" }),
-  ]);
-
-  // DKIM CNAME records — skip gracefully if already exist
-  const dkimResults = await Promise.all(
-    dkimTokens.map((token) =>
-      createDNSRecord({
-        type: "CNAME",
-        name: `${token}._domainkey.${domain}`,
-        content: `${token}.dkim.amazonses.com`,
-        ttl: 300,
-      }).catch(() => null),
-    ),
-  );
-  results.push(...dkimResults.filter((r): r is DNSRecordResult => r !== null));
-
-  // SPF TXT record — merge into existing if one is found
-  const existingSPF = existingTXT.find((r) =>
-    r.content.replace(/^"|"$/g, "").startsWith("v=spf1"),
-  );
-  if (existingSPF) {
-    const spfContent = existingSPF.content.replace(/^"|"$/g, "");
-    if (spfContent.includes("amazonses.com")) {
-      warnings.push("SPF record already includes amazonses.com — skipped");
-    } else {
-      const merged = spfContent.replace(
-        /\s([~?+-]?all)/,
-        " include:amazonses.com $1",
-      );
-      const updated = await updateDNSRecord(existingSPF.id, {
-        ...existingSPF,
-        content: merged,
-      });
-      results.push(updated);
-      warnings.push("Merged amazonses.com into existing SPF record");
-    }
-  } else {
-    const spfRecord = await createDNSRecord({
-      type: "TXT",
-      name: returnPathRecordName,
-      content: "v=spf1 include:amazonses.com ~all",
-      ttl: 300,
-    });
-    results.push(spfRecord);
-  }
-
-  // DMARC TXT record — create starter guidance only when missing. Never
-  // overwrite an existing customer DMARC policy.
-  if (existingDmarcTXT.length > 0) {
-    warnings.push(
-      "DMARC record already exists — skipped to avoid overwriting your policy",
-    );
-  } else {
-    const dmarcRecord = await createDNSRecord({
-      type: "TXT",
-      name: dmarcRecordName,
-      content: DMARC_RECORD_VALUE,
-      ttl: 300,
-    });
-    results.push(dmarcRecord);
-  }
-
-  // MX record — skip entirely if any MX records already exist to avoid
-  // polluting setups like iCloud or Google Workspace custom domains
-  if (existingMX.length > 0) {
-    warnings.push(
-      `Existing MX records found (${existingMX.map((r) => r.content).join(", ")}) — skipped adding SES feedback MX to avoid conflicts`,
-    );
-  } else {
-    const mxRecord = await createDNSRecord({
-      type: "MX",
-      name: returnPathRecordName,
-      content: "feedback-smtp.us-east-1.amazonses.com",
-      ttl: 300,
-      priority: 10,
-    });
-    results.push(mxRecord);
-  }
-
-  return { records: results, warnings };
 }
