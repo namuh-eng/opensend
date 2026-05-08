@@ -3,6 +3,7 @@ import {
   getServerSession,
   unauthorizedResponse,
 } from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { db } from "@/lib/db";
 import { contacts, segments, topics } from "@/lib/db/schema";
 import { queueEvent } from "@/lib/events";
@@ -42,6 +43,8 @@ export async function POST(request: NextRequest) {
     request.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
+  if (permissionError) return permissionError;
   const userId = await resolveUserId(auth);
   if (!userId) return unauthorizedResponse();
 
@@ -159,6 +162,8 @@ export async function GET(request: Request) {
     request.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
+  if (permissionError) return permissionError;
   const userId = await resolveUserId(auth);
   if (!userId) return unauthorizedResponse();
 
@@ -238,6 +243,9 @@ export async function GET(request: Request) {
     const data = dataRows.map((c) => ({
       id: c.id,
       email: c.email,
+      first_name: c.firstName,
+      last_name: c.lastName,
+      unsubscribed: c.unsubscribed,
       firstName: c.firstName,
       lastName: c.lastName,
       status: c.unsubscribed ? "unsubscribed" : "subscribed",

@@ -124,6 +124,22 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("location")).toBe("https://example.com/auth");
   });
 
+  it("allows root contacts API aliases without requiring a dashboard session", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/contacts/user@example.com", {
+        method: "PATCH",
+        headers: { authorization: "Bearer test-api-key" },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(response.status).not.toBe(307);
+    expect(response.headers.get("x-ratelimit-backend")).toBe("disabled");
+  });
+
   it("enforces Redis-backed limits for API routes", async () => {
     process.env.RATE_LIMIT_BACKEND = "redis";
     mockIncrCache.mockResolvedValue(1);
@@ -194,6 +210,29 @@ describe("middleware rate limiting", () => {
     );
     expect(response.headers.get("x-middleware-rewrite")).toBe(
       "https://example.com/api/emails/batch",
+    );
+    expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
+  });
+
+  it("shares rate-limit buckets between root contacts aliases and /api/contacts", async () => {
+    process.env.RATE_LIMIT_BACKEND = "redis";
+    mockGetSessionCookie.mockReturnValue(null);
+    mockIncrCache.mockResolvedValue(1);
+
+    const { middleware } = await import("@/middleware");
+    const response = await middleware(
+      makeRequest("https://example.com/contacts/user@example.com", {
+        method: "DELETE",
+        headers: {
+          "x-forwarded-for": "203.0.113.10",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+
+    expect(mockIncrCache).toHaveBeenCalledWith(
+      "ratelimit:203.0.113.10:Bearer test-api-key:/api/contacts/user@example.com",
+      60,
     );
     expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
   });

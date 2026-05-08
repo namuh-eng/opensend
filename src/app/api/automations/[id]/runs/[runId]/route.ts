@@ -1,4 +1,5 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { formatRunDetail } from "@/lib/automations";
 import { db } from "@/lib/db";
 import { automationRuns, automations } from "@/lib/db/schema";
@@ -10,6 +11,8 @@ export async function GET(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   const { id, runId } = await params;
   try {

@@ -3,6 +3,7 @@ import {
   getServerSession,
   unauthorizedResponse,
 } from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { checkDomainQuota, quotaExceededResponse } from "@/lib/billing/quota";
 import { invalidateDomainCaches } from "@/lib/domain-cache";
 import { queueEvent } from "@/lib/events";
@@ -55,6 +56,8 @@ export async function POST(request: Request): Promise<Response> {
     request.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
+  if (permissionError) return permissionError;
 
   const session = "dashboard" in auth ? await getServerSession() : null;
   const userId = "userId" in auth ? auth.userId : session?.user?.id;
@@ -137,6 +140,8 @@ export async function GET(request: Request): Promise<Response> {
     request.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
+  if (permissionError) return permissionError;
 
   const session = "dashboard" in auth ? await getServerSession() : null;
   const userId = "userId" in auth ? auth.userId : session?.user?.id;

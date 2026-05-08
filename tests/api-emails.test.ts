@@ -48,6 +48,42 @@ vi.mock("@opensend/core", () => {
       ...job,
       requestedAt: "2026-04-28T00:00:00.000Z",
     }),
+    detectSandboxTestRecipient: (recipient: string) => {
+      const normalized = recipient.trim().toLowerCase();
+      const [local, domain] = normalized.split("@");
+      if (domain !== "resend.dev") return null;
+      const outcome = local?.split("+")[0];
+      if (
+        outcome === "delivered" ||
+        outcome === "bounced" ||
+        outcome === "complained" ||
+        (outcome === "suppressed" && local === "suppressed")
+      ) {
+        return { email: normalized, outcome };
+      }
+      return null;
+    },
+    getSandboxTestOutcomeForRecipients: (recipients: string[]) => {
+      const outcomes = recipients.map((recipient) => {
+        const normalized = recipient.trim().toLowerCase();
+        const [local, domain] = normalized.split("@");
+        if (domain !== "resend.dev") return null;
+        const outcome = local?.split("+")[0];
+        if (
+          outcome === "delivered" ||
+          outcome === "bounced" ||
+          outcome === "complained" ||
+          (outcome === "suppressed" && local === "suppressed")
+        ) {
+          return outcome;
+        }
+        return null;
+      });
+      return outcomes.length > 0 &&
+        outcomes.every((outcome) => outcome && outcome === outcomes[0])
+        ? outcomes[0]
+        : null;
+    },
     createTelemetryContext: (input: {
       service: string;
       operation: string;
@@ -260,6 +296,11 @@ describe("POST /api/emails", () => {
     });
     mockDb.insert = vi.fn().mockReturnValue({
       values: vi.fn().mockResolvedValue(undefined),
+    });
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
     });
     mockDb.select = vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -778,6 +819,79 @@ describe("POST /api/emails", () => {
     });
   });
 
+  it("accepts resend.dev delivered test recipients through the normal queued response shape", async () => {
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-sandbox-1" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "onboarding@resend.dev",
+        to: "delivered+signup@resend.dev",
+        subject: "Sandbox delivered",
+        html: "<p>Sandbox</p>",
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ id: "email-sandbox-1" });
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: ["delivered+signup@resend.dev"],
+        status: "queued",
+      }),
+    );
+    expect(mockSendEmail).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "email.send:email-sandbox-1",
+        type: "email.send",
+        emailId: "email-sandbox-1",
+      }),
+      {
+        deduplicationId: "email.send:email-sandbox-1",
+        groupId: "email.send",
+      },
+    );
+  });
+
+  it("rejects suppressed resend.dev test recipients before quota, persistence, or queueing", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const req = makeRequest(
+      "POST",
+      {
+        from: "sender@domain.com",
+        to: ["suppressed@resend.dev"],
+        subject: "Suppressed sandbox",
+        html: "<p>No send</p>",
+      },
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "recipient_suppressed",
+      code: "recipient_suppressed",
+      statusCode: 422,
+      details: {
+        recipients: "suppressed@resend.dev",
+        reason: "suppressed",
+        scope: "sandbox",
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
   it("rejects suppressed to recipients before quota, persistence, or queueing", async () => {
     mockDb.select = vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -838,7 +952,12 @@ describe("POST /api/emails", () => {
         html: "<p>Hi</p>",
         attachments: [
           { filename: "inline.txt", content: "aGVsbG8=" },
-          { filename: "remote.txt", path: "https://example.com/file.txt" },
+          {
+            filename: "remote.png",
+            path: "https://example.com/file.png",
+            content_type: "image/png",
+            content_id: "hero",
+          },
         ],
       },
       { Authorization: "Bearer re_test123" },
@@ -859,12 +978,81 @@ describe("POST /api/emails", () => {
           }),
           expect.objectContaining({
             id: expect.any(String),
-            filename: "remote.txt",
-            path: "https://example.com/file.txt",
+            filename: "remote.png",
+            path: "https://example.com/file.png",
+            content_type: "image/png",
+            content_id: "hero",
           }),
         ],
       }),
     );
+  });
+
+  it("rejects attachments without content or path before quota, persistence, or queueing", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["single@test.com"],
+          subject: "Test",
+          html: "<p>Hi</p>",
+          attachments: [{ filename: "missing.txt" }],
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          "attachments.0.content": ["attachment requires content or path"],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects inline attachments above 40MB encoded before queueing", async () => {
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["single@test.com"],
+          subject: "Test",
+          html: "<p>Hi</p>",
+          attachments: [
+            {
+              filename: "large.txt",
+              content: "a".repeat(40 * 1024 * 1024 + 1),
+            },
+          ],
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          attachments: [
+            "attachments must be no more than 40MB per email after Base64 encoding",
+          ],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
   });
   it("normalizes future ISO and natural-language scheduled_at values without queueing", async () => {
     vi.useFakeTimers();
@@ -1097,6 +1285,14 @@ describe("POST /api/emails/batch", () => {
         to: ["user1@test.com"],
         subject: "Test 1",
         html: "<p>1</p>",
+        attachments: [
+          {
+            filename: "batch-remote.png",
+            path: "https://example.com/batch-remote.png",
+            content_type: "image/png",
+            content_id: "batch-remote",
+          },
+        ],
       },
       {
         from: "sender@domain.com",
@@ -1214,6 +1410,74 @@ describe("POST /api/emails/batch", () => {
       ),
       "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
     });
+  });
+
+  it("mixes real, sandbox delivered, and sandbox suppressed recipients in batch", async () => {
+    let callCount = 0;
+    mockDb.insert = vi.fn().mockImplementation(() => {
+      callCount++;
+      return {
+        values: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue([{ id: `email-${callCount}` }]),
+        }),
+      };
+    });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const req = makeRequest(
+      "POST",
+      [
+        {
+          from: "sender@domain.com",
+          to: ["real@test.com"],
+          subject: "Real",
+          html: "<p>Real</p>",
+        },
+        {
+          from: "onboarding@resend.dev",
+          to: ["delivered@resend.dev"],
+          subject: "Sandbox",
+          html: "<p>Sandbox</p>",
+        },
+        {
+          from: "sender@domain.com",
+          to: ["suppressed@resend.dev"],
+          subject: "Suppressed",
+          html: "<p>Suppressed</p>",
+        },
+      ],
+      { Authorization: "Bearer re_test123" },
+    );
+
+    const res = await POST(req);
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      data: [
+        { id: "email-1" },
+        { id: "email-2" },
+        {
+          error: {
+            code: "recipient_suppressed",
+            statusCode: 422,
+            details: {
+              recipients: "suppressed@resend.dev",
+              reason: "suppressed",
+              scope: "sandbox",
+            },
+          },
+        },
+      ],
+    });
+    expect(mockReserveEmailQuota).toHaveBeenCalledWith(
+      "user-1",
+      2,
+      expect.any(Date),
+      process.env,
+      mockDb,
+    );
+    expect(nonLogInsertCalls()).toHaveLength(2);
+    expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(2);
   });
 
   it("returns per-item suppression errors while preserving accepted batch sends", async () => {
@@ -1711,12 +1975,13 @@ describe("PATCH /api/emails/:id", () => {
     const set = vi.fn().mockReturnValue({ where });
     mockDb.update = vi.fn().mockReturnValue({ set });
 
+    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const { PATCH } = await import("@/app/api/emails/[id]/route");
     const res = await PATCH(
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
         headers: { Authorization: "Bearer re_test123" },
-        body: JSON.stringify({ scheduled_at: "2026-05-08T00:00:00.000Z" }),
+        body: JSON.stringify({ scheduled_at: scheduledAt }),
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -1922,5 +2187,97 @@ describe("GET /api/emails/:id/events", () => {
         ]),
       }),
     });
+  });
+});
+
+describe("API key sending permissions", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockPublishBackgroundJob.mockReset();
+    mockPublishBackgroundJob.mockResolvedValue({
+      status: "skipped",
+      reason: "queue_url_missing",
+    });
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
+    mockReleaseEmailQuota.mockResolvedValue(undefined);
+    mockGetApiKeyAuthHeaderError.mockReturnValue(null);
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      domains: {
+        findFirst: vi.fn().mockResolvedValue({ name: "example.com" }),
+      },
+    });
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
+    mockDb.transaction.mockImplementation(
+      async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
+    );
+  });
+
+  it("allows sending-access API keys to send email", async () => {
+    mockValidateApiKey.mockResolvedValue({
+      ...AUTH_RESULT,
+      permission: "sending_access",
+      domain: null,
+    });
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-sending-key" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@example.com",
+          to: ["user@test.com"],
+          subject: "Allowed",
+          html: "<p>Hello</p>",
+        },
+        { Authorization: "Bearer re_sending" },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ id: "email-sending-key" });
+  });
+
+  it("rejects domain-restricted sending keys from other from domains", async () => {
+    mockValidateApiKey.mockResolvedValue({
+      ...AUTH_RESULT,
+      permission: "sending_access",
+      domain: "example.com",
+    });
+    const insertMock = vi.fn().mockReturnValue({
+      values: vi.fn().mockResolvedValue(undefined),
+    });
+    mockDb.insert = insertMock;
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@other.com",
+          to: ["user@test.com"],
+          subject: "Blocked",
+          html: "<p>Hello</p>",
+        },
+        { Authorization: "Bearer re_sending" },
+      ),
+    );
+
+    expect(res.status).toBe(403);
+    await expect(res.json()).resolves.toMatchObject({
+      code: "api_key_domain_restricted",
+      statusCode: 403,
+      details: { restrictedDomain: "example.com", fromDomain: "other.com" },
+    });
+    expect(nonLogInsertCalls()).toHaveLength(0);
   });
 });

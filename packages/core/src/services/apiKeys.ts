@@ -9,12 +9,12 @@ export type ApiKeyPermission = "full_access" | "sending_access";
 
 export type ApiKeyServiceListItem = Pick<
   ApiKeyRow,
-  "id" | "name" | "createdAt" | "lastUsedAt"
+  "id" | "name" | "permission" | "domain" | "createdAt" | "lastUsedAt"
 >;
 
 export type ApiKeyDetail = Pick<
   ApiKeyRow,
-  "id" | "name" | "createdAt" | "lastUsedAt"
+  "id" | "name" | "permission" | "domain" | "createdAt" | "lastUsedAt"
 >;
 
 export type ApiKeyListResult = {
@@ -110,6 +110,8 @@ export function createApiKeyService({
           name: key.name,
           createdAt: key.createdAt,
           lastUsedAt: key.lastUsedAt,
+          permission: key.permission,
+          domain: key.domain,
         })),
         hasMore: result.hasMore,
       };
@@ -159,6 +161,8 @@ export function createApiKeyService({
         name: key.name,
         createdAt: key.createdAt,
         lastUsedAt: key.lastUsedAt,
+        permission: key.permission,
+        domain: key.domain,
       };
     },
 

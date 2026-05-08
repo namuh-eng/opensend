@@ -7,6 +7,7 @@ import {
 } from "@aws-sdk/client-sqs";
 import {
   type BackgroundJob,
+  type SandboxTestOutcome,
   type TelemetryContext,
   createBackgroundJob,
   createTelemetryContext,
@@ -15,12 +16,16 @@ import {
   emailRepo,
   emitCloudWatchMetric,
   finishTelemetrySpan,
+  getSandboxTestOutcomeForRecipients,
   getTelemetryCarrier,
   logTelemetry,
   parseBackgroundJob,
   publishBackgroundJob,
   recordTelemetryError,
   startTelemetrySpan,
+  suppressionRepo,
+  toWebhookEventType,
+  webhookRepo,
 } from "@opensend/core";
 import { webhookDispatcher } from "./dispatcher";
 
@@ -30,6 +35,11 @@ const DEFAULT_VISIBILITY_TIMEOUT_SECONDS = 60;
 const DEFAULT_IDLE_SLEEP_MS = 1_000;
 const MAX_SQS_DELAY_SECONDS = 900;
 const DEFAULT_PROVIDER_MAX_ATTEMPTS = 3;
+const MAX_EMAIL_ATTACHMENT_BASE64_BYTES = 40 * 1024 * 1024;
+const MAX_EMAIL_ATTACHMENT_RAW_BYTES = Math.floor(
+  (MAX_EMAIL_ATTACHMENT_BASE64_BYTES / 4) * 3,
+);
+const ATTACHMENT_FETCH_TIMEOUT_MS = 10_000;
 
 type QueueWorkerOptions = {
   queueUrl?: string | null;
@@ -54,6 +64,16 @@ type ProviderErrorSummary = {
 type StoredAttachment = {
   filename?: unknown;
   content?: unknown;
+  path?: unknown;
+  content_type?: unknown;
+  content_id?: unknown;
+};
+
+type ProviderAttachment = {
+  filename: string;
+  content: string;
+  content_type?: string;
+  content_id?: string;
 };
 
 type PollResult = {
@@ -363,12 +383,13 @@ export class QueueWorker {
       });
       return { status: "skipped", reason: "not_found" };
     }
-    if (email.status === "sent") {
+    const terminalSkipReason = getTerminalEmailSkipReason(email.status);
+    if (terminalSkipReason) {
       logTelemetry("info", "email.send.skipped", telemetry, {
-        reason: "already_sent",
+        reason: terminalSkipReason,
         email_id: email.id,
       });
-      return { status: "skipped", reason: "already_sent" };
+      return { status: "skipped", reason: terminalSkipReason };
     }
     if (email.status === "cancelled" || email.status === "canceled") {
       logTelemetry("info", "email.send.skipped", telemetry, {
@@ -387,6 +408,19 @@ export class QueueWorker {
 
     await emailRepo.update(email.id, { status: "processing" });
 
+    const sandboxOutcome = getSandboxTestOutcomeForRecipients([
+      ...email.to,
+      ...(email.cc ?? []),
+      ...(email.bcc ?? []),
+    ]);
+    if (sandboxOutcome) {
+      return await simulateSandboxTestOutcome({
+        email,
+        outcome: sandboxOutcome,
+        telemetry,
+      });
+    }
+
     const sesSpan = startTelemetrySpan(telemetry, {
       operation: "ses.send",
       attributes: { email_id: email.id },
@@ -402,7 +436,7 @@ export class QueueWorker {
         bcc: email.bcc ?? undefined,
         replyTo: email.replyTo ?? undefined,
         headers: email.headers ?? undefined,
-        attachments: normalizeAttachmentsForSend(email.attachments),
+        attachments: await normalizeAttachmentsForSend(email.attachments),
       });
       const sendDurationMs = finishTelemetrySpan(sesSpan, { status: "ok" });
 
@@ -471,6 +505,221 @@ export class QueueWorker {
 
       throw error;
     }
+  }
+}
+
+function getTerminalEmailSkipReason(status: string): string | null {
+  switch (status) {
+    case "sent":
+      return "already_sent";
+    case "delivered":
+    case "bounced":
+    case "complained":
+    case "suppressed":
+    case "failed":
+      return `already_${status}`;
+    default:
+      return null;
+  }
+}
+
+type SandboxEmailRecord = NonNullable<
+  Awaited<ReturnType<typeof emailRepo.findById>>
+>;
+
+async function simulateSandboxTestOutcome(input: {
+  email: SandboxEmailRecord;
+  outcome: SandboxTestOutcome;
+  telemetry: TelemetryContext;
+}): Promise<{ status: "sent" | "skipped"; reason?: string }> {
+  const simulatedAt = new Date();
+  const sandboxSpan = startTelemetrySpan(input.telemetry, {
+    operation: "sandbox.send",
+    attributes: {
+      email_id: input.email.id,
+      sandbox_outcome: input.outcome,
+    },
+  });
+
+  try {
+    switch (input.outcome) {
+      case "delivered": {
+        await emailRepo.update(input.email.id, {
+          status: "sent",
+          sentAt: simulatedAt,
+          providerNextRetryAt: null,
+          providerDeadLetteredAt: null,
+        });
+        await createSandboxEvent(
+          input.email,
+          "sent",
+          {
+            sandbox: true,
+            provider: "opensend-sandbox",
+            recipients: input.email.to,
+          },
+          simulatedAt,
+          input.telemetry,
+        );
+        await createSandboxEvent(
+          input.email,
+          "delivered",
+          {
+            sandbox: true,
+            provider: "opensend-sandbox",
+            delivery: {
+              recipients: input.email.to,
+              timestamp: simulatedAt.toISOString(),
+            },
+          },
+          simulatedAt,
+          input.telemetry,
+        );
+        break;
+      }
+      case "bounced": {
+        await emailRepo.update(input.email.id, {
+          status: "sent",
+          sentAt: simulatedAt,
+          providerNextRetryAt: null,
+          providerDeadLetteredAt: null,
+        });
+        await createSandboxEvent(
+          input.email,
+          "bounced",
+          {
+            sandbox: true,
+            provider: "opensend-sandbox",
+            bounceType: "Permanent",
+            bouncedRecipients: input.email.to.map((recipient) => ({
+              emailAddress: recipient,
+              diagnosticCode: "smtp; 550 5.1.1 (Unknown User)",
+              status: "5.1.1",
+            })),
+          },
+          simulatedAt,
+          input.telemetry,
+        );
+        await suppressSandboxRecipients(input.email, "bounced", simulatedAt);
+        break;
+      }
+      case "complained": {
+        await emailRepo.update(input.email.id, {
+          status: "sent",
+          sentAt: simulatedAt,
+          providerNextRetryAt: null,
+          providerDeadLetteredAt: null,
+        });
+        await createSandboxEvent(
+          input.email,
+          "complained",
+          {
+            sandbox: true,
+            provider: "opensend-sandbox",
+            complainedRecipients: input.email.to.map((recipient) => ({
+              emailAddress: recipient,
+            })),
+          },
+          simulatedAt,
+          input.telemetry,
+        );
+        await suppressSandboxRecipients(input.email, "complained", simulatedAt);
+        break;
+      }
+      case "suppressed": {
+        await emailRepo.update(input.email.id, { status: "suppressed" });
+        await createSandboxEvent(
+          input.email,
+          "suppressed",
+          {
+            sandbox: true,
+            provider: "opensend-sandbox",
+            recipients: input.email.to,
+            reason: "recipient_suppressed",
+          },
+          simulatedAt,
+          input.telemetry,
+        );
+        break;
+      }
+    }
+
+    finishTelemetrySpan(sandboxSpan, { status: "ok" });
+    emitSendMetric(input.telemetry, { durationMs: 0, outcome: "sent" });
+    return { status: "sent" };
+  } catch (error) {
+    finishTelemetrySpan(sandboxSpan, { status: "error" });
+    throw error;
+  }
+}
+
+async function createSandboxEvent(
+  email: SandboxEmailRecord,
+  type: string,
+  payload: Record<string, unknown>,
+  receivedAt: Date,
+  telemetry: TelemetryContext,
+): Promise<void> {
+  const event = await emailEventRepo.create({
+    emailId: email.id,
+    userId: email.userId,
+    sourceId: `sandbox:${type}:${email.id}`,
+    type,
+    payload,
+    receivedAt,
+  });
+
+  const webhookEventType = toWebhookEventType(type);
+  if (!webhookEventType || !email.userId) return;
+
+  const { data: hooks } = await webhookRepo.listForDispatch({ limit: 100 });
+  for (const hook of hooks) {
+    const types = hook.eventTypes as string[];
+    if (
+      hook.userId === email.userId &&
+      hook.status === "active" &&
+      types.includes(webhookEventType)
+    ) {
+      const delivery = await webhookDispatcher.enqueue(hook.id, event.id);
+      await publishBackgroundJob(
+        createBackgroundJob({
+          id: `webhook.dispatch:${delivery.id}`,
+          type: "webhook.dispatch",
+          source: "manual",
+          deliveryId: delivery.id,
+          trace: getTelemetryCarrier(telemetry),
+        }),
+        {
+          deduplicationId: `webhook.dispatch:${delivery.id}`,
+          groupId: "webhook.dispatch",
+        },
+      );
+    }
+  }
+}
+
+async function suppressSandboxRecipients(
+  email: SandboxEmailRecord,
+  reason: "bounced" | "complained",
+  _receivedAt: Date,
+): Promise<void> {
+  if (!email.userId) return;
+
+  for (const recipient of email.to) {
+    await suppressionRepo.suppress({
+      userId: email.userId,
+      email: recipient,
+      reason,
+      sourceEventId: `sandbox:${reason}:${email.id}`,
+      sourceEmailId: email.id,
+      sourceMessageId: `sandbox-${email.id}`,
+      metadata: {
+        source: "ses",
+        sourceEventId: `sandbox:${reason}:${email.id}`,
+        sourceEmailId: email.id,
+        sourceMessageId: `sandbox-${email.id}`,
+      },
+    });
   }
 }
 
@@ -551,22 +800,125 @@ function getReceiveCount(
   return Math.floor(receiveCount);
 }
 
-function normalizeAttachmentsForSend(
+async function normalizeAttachmentsForSend(
   attachments: StoredAttachment[] | null | undefined,
-): Array<{ filename: string; content: string }> | undefined {
+): Promise<ProviderAttachment[] | undefined> {
   if (!attachments) return undefined;
 
-  const sendable = attachments.flatMap((attachment) => {
-    if (
-      typeof attachment.filename === "string" &&
-      typeof attachment.content === "string"
-    ) {
-      return [{ filename: attachment.filename, content: attachment.content }];
+  const sendable: ProviderAttachment[] = [];
+  let totalEncodedBytes = 0;
+
+  for (const attachment of attachments) {
+    if (typeof attachment.filename !== "string") continue;
+
+    const contentType =
+      typeof attachment.content_type === "string"
+        ? attachment.content_type
+        : undefined;
+    const contentId =
+      typeof attachment.content_id === "string"
+        ? attachment.content_id
+        : undefined;
+    const metadata = {
+      filename: attachment.filename,
+      ...(contentType ? { content_type: contentType } : {}),
+      ...(contentId ? { content_id: contentId } : {}),
+    };
+
+    if (typeof attachment.content === "string") {
+      totalEncodedBytes += attachment.content.replace(/\s/g, "").length;
+      assertAttachmentSize(totalEncodedBytes);
+      sendable.push({ ...metadata, content: attachment.content });
+      continue;
     }
-    return [];
-  });
+
+    if (typeof attachment.path === "string") {
+      const content = await fetchAttachmentContent(attachment.path);
+      totalEncodedBytes += getBase64EncodedSize(content.byteLength);
+      assertAttachmentSize(totalEncodedBytes);
+      sendable.push({
+        ...metadata,
+        content: Buffer.from(content).toString("base64"),
+      });
+    }
+  }
 
   return sendable.length > 0 ? sendable : undefined;
+}
+
+async function fetchAttachmentContent(path: string): Promise<Uint8Array> {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    ATTACHMENT_FETCH_TIMEOUT_MS,
+  );
+
+  try {
+    const response = await fetch(path, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(
+        `Attachment fetch failed for ${path}: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    const contentLength = response.headers.get("content-length");
+    if (
+      contentLength &&
+      Number.isFinite(Number(contentLength)) &&
+      Number(contentLength) > MAX_EMAIL_ATTACHMENT_RAW_BYTES
+    ) {
+      throw new Error(
+        "Attachments exceed 40MB per email after Base64 encoding",
+      );
+    }
+
+    if (!response.body) {
+      const buffer = new Uint8Array(await response.arrayBuffer());
+      if (buffer.byteLength > MAX_EMAIL_ATTACHMENT_RAW_BYTES) {
+        throw new Error(
+          "Attachments exceed 40MB per email after Base64 encoding",
+        );
+      }
+      return buffer;
+    }
+
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+
+    while (true) {
+      const result = await reader.read();
+      if (result.done) break;
+
+      totalBytes += result.value.byteLength;
+      if (totalBytes > MAX_EMAIL_ATTACHMENT_RAW_BYTES) {
+        throw new Error(
+          "Attachments exceed 40MB per email after Base64 encoding",
+        );
+      }
+      chunks.push(result.value);
+    }
+
+    const content = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      content.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return content;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function getBase64EncodedSize(byteLength: number): number {
+  return Math.ceil(byteLength / 3) * 4;
+}
+
+function assertAttachmentSize(encodedBytes: number): void {
+  if (encodedBytes > MAX_EMAIL_ATTACHMENT_BASE64_BYTES) {
+    throw new Error("Attachments exceed 40MB per email after Base64 encoding");
+  }
 }
 
 function getRetryDelaySeconds(

@@ -1,4 +1,5 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { formatAutomation } from "@/lib/automations";
 import { db } from "@/lib/db";
 import { automationSteps, automations } from "@/lib/db/schema";
@@ -49,6 +50,8 @@ export async function GET(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   const { id } = await params;
   try {
@@ -70,6 +73,8 @@ export async function PATCH(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   let body: unknown;
   try {
@@ -194,6 +199,8 @@ export async function DELETE(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   const { id } = await params;
   try {

@@ -1,3 +1,4 @@
+import { handleMcpHttpRequest } from "@opensend/mcp";
 import { Hono } from "hono";
 
 export const CONTROL_PLANE_API_SERVICE = "control-plane-api";
@@ -16,7 +17,12 @@ export type ReadinessResponse = HealthResponse & {
   };
 };
 
-export function createApp() {
+export type ControlPlaneAppOptions = {
+  mcpApiBaseUrl?: string;
+  fetcher?: typeof fetch;
+};
+
+export function createApp(options: ControlPlaneAppOptions = {}) {
   const app = new Hono();
 
   app.get("/healthz", (c) =>
@@ -25,6 +31,18 @@ export function createApp() {
       service: CONTROL_PLANE_API_SERVICE,
       version: CONTROL_PLANE_API_VERSION,
     } satisfies HealthResponse),
+  );
+
+  app.all(
+    "/mcp",
+    async (c) =>
+      await handleMcpHttpRequest(c.req.raw, {
+        apiBaseUrl:
+          options.mcpApiBaseUrl ??
+          process.env.OPENSEND_API_BASE_URL ??
+          process.env.NEXT_PUBLIC_APP_URL,
+        fetcher: options.fetcher,
+      }),
   );
 
   app.get("/readyz", (c) =>

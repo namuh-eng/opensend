@@ -5,6 +5,10 @@ import {
   validateApiKey,
 } from "@/lib/api-auth";
 import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
+import {
+  requireAllowedSendingDomain,
+  requireFullAccessApiKey,
+} from "@/lib/api-key-permissions";
 import { captureApiResponseLog } from "@/lib/api-logging";
 import {
   quotaExceededResponse,
@@ -29,7 +33,9 @@ import { normalizeScheduledAt, sendEmailSchema } from "@/lib/validation/emails";
 import {
   createBackgroundJob,
   createTelemetryContext,
+  detectSandboxTestRecipient,
   emitCloudWatchMetric,
+  getSandboxTestOutcomeForRecipients,
   getTelemetryCarrier,
   logTelemetry,
   publishBackgroundJob,
@@ -112,6 +118,54 @@ function summarizeQueuePublishError(error: unknown): {
     code: "queue_publish_failed",
     message: "Failed to publish email send job.",
   };
+}
+
+function sandboxMixedRecipientError() {
+  return publicApiError(
+    "validation_error",
+    "Sandbox test recipients cannot be mixed with real recipients or different sandbox outcomes in the same email. Use separate batch items instead.",
+    422,
+    {
+      formErrors: [
+        "Sandbox test recipients cannot be mixed with real recipients or different sandbox outcomes in the same email.",
+      ],
+      fieldErrors: {},
+    },
+  );
+}
+
+function hasSandboxTestRecipient(recipients: string[]): boolean {
+  return recipients.some((recipient) => detectSandboxTestRecipient(recipient));
+}
+
+function getSandboxRecipientsForMessage(input: {
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+}): string[] {
+  return [...input.to, ...(input.cc ?? []), ...(input.bcc ?? [])];
+}
+
+function sandboxSuppressedRecipientError(recipients: string[]) {
+  return publicApiError(
+    "recipient_suppressed",
+    recipients.length === 1
+      ? `Recipient ${recipients[0]} is suppressed. Remove the suppression before sending again.`
+      : "One or more recipients are suppressed.",
+    422,
+    {
+      recipients: recipients.join(","),
+      reason: "suppressed",
+      scope: "sandbox",
+    },
+  );
+}
+
+function findSandboxSuppressedRecipients(recipients: string[]): string[] {
+  return recipients.filter(
+    (recipient) =>
+      detectSandboxTestRecipient(recipient)?.outcome === "suppressed",
+  );
 }
 
 async function auditQueuePublishFailure(input: {
@@ -303,6 +357,24 @@ export async function POST(request: Request): Promise<Response> {
 
   const validated = result.data;
 
+  const domainRestrictionError = await requireAllowedSendingDomain(
+    auth,
+    validated.from,
+    {
+      headers: {
+        "x-correlation-id": telemetry.correlationId,
+        traceparent: telemetry.traceparent,
+      },
+    },
+  );
+  if (domainRestrictionError) {
+    recordAcceptMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "unauthorized",
+    });
+    return await logResponse(domainRestrictionError);
+  }
+
   // Idempotency check
   if (idempotencyKey) {
     const existing = await db.query.emails.findFirst({
@@ -339,6 +411,38 @@ export async function POST(request: Request): Promise<Response> {
   const scheduledAt = validated.scheduled_at
     ? normalizeScheduledAt(validated.scheduled_at)
     : null;
+
+  const sandboxRecipients = getSandboxRecipientsForMessage({ to, cc, bcc });
+  const sandboxOutcome = getSandboxTestOutcomeForRecipients(sandboxRecipients);
+  if (hasSandboxTestRecipient(sandboxRecipients) && !sandboxOutcome) {
+    recordAcceptMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "invalid",
+    });
+    return await logResponse(
+      jsonWithTelemetry(sandboxMixedRecipientError(), telemetry, {
+        status: 422,
+      }),
+    );
+  }
+
+  const sandboxSuppressedRecipients =
+    findSandboxSuppressedRecipients(sandboxRecipients);
+  if (sandboxSuppressedRecipients.length > 0) {
+    recordAcceptMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "invalid",
+    });
+    return await logResponse(
+      jsonWithTelemetry(
+        sandboxSuppressedRecipientError(sandboxSuppressedRecipients),
+        telemetry,
+        {
+          status: 422,
+        },
+      ),
+    );
+  }
 
   const suppressedRecipients = await findSuppressedRecipients({
     userId: auth.userId,
@@ -589,6 +693,8 @@ export async function POST(request: Request): Promise<Response> {
 export async function GET(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth || !auth.userId) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   const url = new URL(request.url);
   const limit = Math.min(
@@ -683,6 +789,8 @@ export async function GET(request: Request): Promise<Response> {
 export async function DELETE(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth || !auth.userId) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   const url = new URL(request.url);
   const id = url.searchParams.get("id");

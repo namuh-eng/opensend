@@ -44,7 +44,14 @@ export interface SendEmailInput {
   text?: string;
   replyTo?: string[];
   headers?: Record<string, string>;
-  attachments?: Array<{ filename: string; content: string }>;
+  attachments?: Array<{
+    filename: string;
+    content: string;
+    contentType?: string;
+    contentId?: string;
+    content_type?: string;
+    content_id?: string;
+  }>;
 }
 
 export interface SendEmailResult {
@@ -372,13 +379,19 @@ function buildMimeMessage(input: SendEmailInput): string {
 
   // Attachments
   for (const attachment of input.attachments ?? []) {
+    const contentType =
+      attachment.contentType ??
+      attachment.content_type ??
+      inferContentType(attachment.filename);
+    const contentId = attachment.contentId ?? attachment.content_id;
     lines.push(`--${boundary}`);
-    lines.push(
-      `Content-Type: application/octet-stream; name="${attachment.filename}"`,
-    );
+    lines.push(`Content-Type: ${contentType}; name="${attachment.filename}"`);
     lines.push("Content-Transfer-Encoding: base64");
+    if (contentId) {
+      lines.push(`Content-ID: ${formatContentId(contentId)}`);
+    }
     lines.push(
-      `Content-Disposition: attachment; filename="${attachment.filename}"`,
+      `Content-Disposition: ${contentId ? "inline" : "attachment"}; filename="${attachment.filename}"`,
     );
     lines.push("");
     lines.push(attachment.content);
@@ -386,4 +399,40 @@ function buildMimeMessage(input: SendEmailInput): string {
 
   lines.push(`--${boundary}--`);
   return lines.join("\r\n");
+}
+
+function inferContentType(filename: string): string {
+  const extension = filename.toLowerCase().split(".").pop();
+  switch (extension) {
+    case "txt":
+      return "text/plain";
+    case "html":
+    case "htm":
+      return "text/html";
+    case "json":
+      return "application/json";
+    case "csv":
+      return "text/csv";
+    case "pdf":
+      return "application/pdf";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    case "gif":
+      return "image/gif";
+    case "svg":
+      return "image/svg+xml";
+    case "webp":
+      return "image/webp";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+function formatContentId(contentId: string): string {
+  const trimmed = contentId.trim();
+  if (trimmed.startsWith("<") && trimmed.endsWith(">")) return trimmed;
+  return `<${trimmed}>`;
 }

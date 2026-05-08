@@ -1,4 +1,5 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { updateWebhookSchema } from "@/lib/validation/webhooks";
 import { createWebhookService } from "@opensend/core";
 
@@ -39,6 +40,8 @@ export async function GET(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth?.userId) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   const { id } = await params;
 
@@ -69,6 +72,8 @@ export async function PATCH(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth?.userId) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   const { id } = await params;
 
@@ -119,6 +124,8 @@ export async function DELETE(
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth?.userId) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   const { id } = await params;
 

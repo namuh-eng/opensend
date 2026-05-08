@@ -2,6 +2,8 @@ import { z } from "zod";
 
 // ── Common Fragments ──────────────────────────────────────────────
 
+export const MAX_EMAIL_ATTACHMENT_BASE64_BYTES = 40 * 1024 * 1024;
+
 export const emailAddressSchema = z.string().email().min(3).max(512);
 
 export const emailRecipientSchema = z.union([
@@ -27,13 +29,68 @@ export const tagSchema = z.object({
     .regex(EMAIL_TAG_PATTERN, EMAIL_TAG_PATTERN_MESSAGE),
 });
 
-export const attachmentSchema = z.object({
-  filename: z.string().min(1).max(255),
-  content: z.string().optional(),
-  path: z.string().url().optional(),
-  content_type: z.string().optional(),
-  content_id: z.string().optional(),
-});
+function hasAllowedAttachmentUrlScheme(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+function getBase64EncodedSize(byteLength: number): number {
+  return Math.ceil(byteLength / 3) * 4;
+}
+
+function getInlineAttachmentEncodedSize(content: string): number {
+  const normalized = content.replace(/\s/g, "");
+  return normalized.length;
+}
+
+function getTotalInlineAttachmentEncodedSize(
+  attachments: Array<{ content?: string }> | undefined,
+): number {
+  return (
+    attachments?.reduce(
+      (total, attachment) =>
+        total +
+        (typeof attachment.content === "string"
+          ? getInlineAttachmentEncodedSize(attachment.content)
+          : 0),
+      0,
+    ) ?? 0
+  );
+}
+
+export function getAttachmentBase64EncodedSize(byteLength: number): number {
+  return getBase64EncodedSize(byteLength);
+}
+
+export const attachmentSchema = z
+  .object({
+    filename: z.string().min(1).max(255),
+    content: z.string().optional(),
+    path: z.string().url().optional(),
+    content_type: z.string().min(1).optional(),
+    content_id: z.string().min(1).optional(),
+  })
+  .superRefine((attachment, ctx) => {
+    if (!attachment.content && !attachment.path) {
+      ctx.addIssue({
+        code: "custom",
+        message: "attachment requires content or path",
+        path: ["content"],
+      });
+    }
+
+    if (attachment.path && !hasAllowedAttachmentUrlScheme(attachment.path)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "attachment path must use http or https",
+        path: ["path"],
+      });
+    }
+  });
 
 // ── Scheduled send parsing ────────────────────────────────────────
 
@@ -147,7 +204,17 @@ export const sendEmailSchema = z
   .refine((data) => data.html || data.text || data.template, {
     message: "html, text, or template is required",
     path: ["html"],
-  });
+  })
+  .refine(
+    (data) =>
+      getTotalInlineAttachmentEncodedSize(data.attachments) <=
+      MAX_EMAIL_ATTACHMENT_BASE64_BYTES,
+    {
+      message:
+        "attachments must be no more than 40MB per email after Base64 encoding",
+      path: ["attachments"],
+    },
+  );
 
 export const batchSendEmailSchema = z.array(sendEmailSchema).max(100);
 

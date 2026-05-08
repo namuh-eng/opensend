@@ -1,4 +1,5 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { db } from "@/lib/db";
 import { contacts, segments } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -8,6 +9,8 @@ import Papa from "papaparse";
 export async function POST(request: NextRequest) {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
   if (!auth.userId) return unauthorizedResponse();
   const userId = auth.userId;
 

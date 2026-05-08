@@ -4,6 +4,7 @@ import {
   validateApiKey,
 } from "@/lib/api-auth";
 import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
+import { requireAllowedBatchSendingDomains } from "@/lib/api-key-permissions";
 import { captureApiResponseLog } from "@/lib/api-logging";
 import {
   quotaExceededResponse,
@@ -31,7 +32,9 @@ import {
 import {
   createBackgroundJob,
   createTelemetryContext,
+  detectSandboxTestRecipient,
   emitCloudWatchMetric,
+  getSandboxTestOutcomeForRecipients,
   getTelemetryCarrier,
   logTelemetry,
   publishBackgroundJob,
@@ -114,6 +117,54 @@ function summarizeQueuePublishError(error: unknown): {
     code: "queue_publish_failed",
     message: "Failed to publish email send job.",
   };
+}
+
+function sandboxMixedRecipientError() {
+  return publicApiError(
+    "validation_error",
+    "Sandbox test recipients cannot be mixed with real recipients or different sandbox outcomes in the same email. Use separate batch items instead.",
+    422,
+    {
+      formErrors: [
+        "Sandbox test recipients cannot be mixed with real recipients or different sandbox outcomes in the same email.",
+      ],
+      fieldErrors: {},
+    },
+  );
+}
+
+function hasSandboxTestRecipient(recipients: string[]): boolean {
+  return recipients.some((recipient) => detectSandboxTestRecipient(recipient));
+}
+
+function getSandboxRecipientsForMessage(input: {
+  to: string[];
+  cc?: string[];
+  bcc?: string[];
+}): string[] {
+  return [...input.to, ...(input.cc ?? []), ...(input.bcc ?? [])];
+}
+
+function sandboxSuppressedRecipientError(recipients: string[]) {
+  return publicApiError(
+    "recipient_suppressed",
+    recipients.length === 1
+      ? `Recipient ${recipients[0]} is suppressed. Remove the suppression before sending again.`
+      : "One or more recipients are suppressed.",
+    422,
+    {
+      recipients: recipients.join(","),
+      reason: "suppressed",
+      scope: "sandbox",
+    },
+  );
+}
+
+function findSandboxSuppressedRecipients(recipients: string[]): string[] {
+  return recipients.filter(
+    (recipient) =>
+      detectSandboxTestRecipient(recipient)?.outcome === "suppressed",
+  );
 }
 
 async function auditQueuePublishFailure(input: {
@@ -333,8 +384,53 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const validatedItems = result.data;
+
+  const domainRestrictionError = await requireAllowedBatchSendingDomains(
+    auth,
+    validatedItems.map((item) => item.from),
+    {
+      headers: {
+        "x-correlation-id": telemetry.correlationId,
+        traceparent: telemetry.traceparent,
+      },
+    },
+  );
+  if (domainRestrictionError) {
+    recordBatchMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "unauthorized",
+    });
+    return await logResponse(domainRestrictionError);
+  }
   const itemRecipients = validatedItems.map(
     (item) => normalizeToArray(item.to) as string[],
+  );
+  const itemSandboxRecipients = validatedItems.map((item, index) =>
+    getSandboxRecipientsForMessage({
+      to: itemRecipients[index] ?? [],
+      cc: normalizeToArray(item.cc),
+      bcc: normalizeToArray(item.bcc),
+    }),
+  );
+  const hasMixedSandboxItem = itemSandboxRecipients.some(
+    (recipients) =>
+      hasSandboxTestRecipient(recipients) &&
+      !getSandboxTestOutcomeForRecipients(recipients),
+  );
+  if (hasMixedSandboxItem) {
+    recordBatchMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "invalid",
+    });
+    return await logResponse(
+      jsonWithTelemetry(sandboxMixedRecipientError(), telemetry, {
+        status: 422,
+      }),
+    );
+  }
+
+  const sandboxSuppressedResults = itemSandboxRecipients.map((recipients) =>
+    findSandboxSuppressedRecipients(recipients),
   );
   const suppressedByEmail = new Map(
     (
@@ -350,11 +446,13 @@ export async function POST(request: Request): Promise<Response> {
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry)),
   );
   const acceptedCount = suppressedResults.filter(
-    (entries) => entries.length === 0,
+    (entries, index) =>
+      entries.length === 0 && sandboxSuppressedResults[index]?.length === 0,
   ).length;
   let quotaReserved = false;
   const firstAcceptedIndex = suppressedResults.findIndex(
-    (entries) => entries.length === 0,
+    (entries, index) =>
+      entries.length === 0 && sandboxSuppressedResults[index]?.length === 0,
   );
 
   try {
@@ -379,7 +477,10 @@ export async function POST(request: Request): Promise<Response> {
       }> = [];
 
       for (const [index, item] of validatedItems.entries()) {
-        if (suppressedResults[index]?.length) {
+        if (
+          suppressedResults[index]?.length ||
+          sandboxSuppressedResults[index]?.length
+        ) {
           continue;
         }
         const to = normalizeToArray(item.to) as string[];
@@ -501,6 +602,10 @@ export async function POST(request: Request): Promise<Response> {
     const results = validatedItems.map((_, index) => {
       const success = resultByIndex.get(index);
       if (success) return success;
+      const sandboxSuppressed = sandboxSuppressedResults[index] ?? [];
+      if (sandboxSuppressed.length > 0) {
+        return { error: sandboxSuppressedRecipientError(sandboxSuppressed) };
+      }
       return {
         error: suppressedRecipientError(suppressedResults[index] ?? []),
       };

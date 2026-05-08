@@ -1,4 +1,5 @@
-import LandingPage, { metadata } from "@/app/landing/page";
+import { metadata } from "@/app/landing/page";
+import { LandingPage } from "@/components/landing/landing-page";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -16,6 +17,25 @@ vi.mock("next/link", () => ({
   ),
 }));
 
+vi.mock("next/image", () => ({
+  default: ({
+    alt,
+    src,
+    width,
+    height,
+    priority: _priority,
+    sizes: _sizes,
+    ...props
+  }: {
+    alt: string;
+    src: string;
+    width: number;
+    height: number;
+    priority?: boolean;
+    sizes?: string;
+  }) => <img {...props} alt={alt} src={src} width={width} height={height} />,
+}));
+
 describe("Landing page metadata", () => {
   it("exposes a marketing-friendly title and description", () => {
     expect(metadata.title).toMatch(/OpenSend/);
@@ -26,9 +46,7 @@ describe("Landing page metadata", () => {
   it("declares OpenGraph + canonical metadata for SEO", () => {
     expect(metadata.openGraph?.title).toMatch(/OpenSend/);
     expect(metadata.openGraph?.url).toBe("https://opensend.namuh.co");
-    expect(metadata.alternates?.canonical).toBe(
-      "https://opensend.namuh.co/landing",
-    );
+    expect(metadata.alternates?.canonical).toBe("https://opensend.namuh.co/");
   });
 });
 
@@ -69,9 +87,30 @@ describe("Landing page route", () => {
     ).toBe(true);
   });
 
+  it("renders the dev-focused landing sections", () => {
+    render(<LandingPage />);
+
+    expect(screen.getByText(/opensend\.emails\.send/i)).toBeDefined();
+    expect(
+      screen.getByRole("table", {
+        name: /comparison of opensend, resend, and postmark/i,
+      }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("heading", { name: /pricing that matches/i }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("heading", { name: /frequently asked questions/i }),
+    ).toBeDefined();
+    expect(screen.getAllByText(/\?/).length).toBeGreaterThanOrEqual(4);
+    expect(screen.getByAltText(/OpenSend dashboard/i)).toBeDefined();
+  });
+
   it("renders a footer with copyright and license attribution", () => {
     render(<LandingPage />);
-    expect(screen.getByText(/Elastic License 2\.0/i)).toBeDefined();
+    expect(screen.getAllByText(/Elastic License 2\.0/i).length).toBeGreaterThan(
+      0,
+    );
   });
 
   it("includes a self-host quickstart code block", () => {

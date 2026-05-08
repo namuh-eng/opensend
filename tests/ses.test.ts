@@ -210,6 +210,47 @@ describe("SES Client", () => {
 
       expect(result).toEqual({ id: "ses-msg-attach" });
       expect(mockSend).toHaveBeenCalledOnce();
+      const command = mockSend.mock.calls[0]?.[0] as {
+        Content?: { Raw?: { Data?: Uint8Array } };
+      };
+      const raw = new TextDecoder().decode(command.Content?.Raw?.Data);
+      expect(raw).toContain('Content-Type: text/plain; name="test.txt"');
+      expect(raw).toContain(
+        'Content-Disposition: attachment; filename="test.txt"',
+      );
+      expect(raw).toContain("SGVsbG8gV29ybGQ=");
+    });
+
+    it("emits content_type and Content-ID headers for CID attachments", async () => {
+      mockSend.mockResolvedValueOnce({
+        MessageId: "ses-msg-cid",
+      });
+
+      const input: SendEmailInput = {
+        from: "hello@acme.com",
+        to: ["user@example.com"],
+        subject: "Inline image",
+        html: '<img src="cid:logo" />',
+        attachments: [
+          {
+            filename: "logo.bin",
+            content: "aW1hZ2U=",
+            content_type: "image/png",
+            content_id: "logo",
+          },
+        ],
+      };
+
+      const result = await sendEmail(input);
+
+      expect(result).toEqual({ id: "ses-msg-cid" });
+      const command = mockSend.mock.calls[0]?.[0] as {
+        Content?: { Raw?: { Data?: Uint8Array } };
+      };
+      const raw = new TextDecoder().decode(command.Content?.Raw?.Data);
+      expect(raw).toContain('Content-Type: image/png; name="logo.bin"');
+      expect(raw).toContain("Content-ID: <logo>");
+      expect(raw).toContain('Content-Disposition: inline; filename="logo.bin"');
     });
   });
 

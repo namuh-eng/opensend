@@ -1,4 +1,5 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { createWebhookSchema } from "@/lib/validation/webhooks";
 import { createWebhookService } from "@opensend/core";
 
@@ -14,6 +15,8 @@ function mapWebhookError(error: unknown, fallback: string): Response {
 export async function GET(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth?.userId) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit")) || 20;
@@ -45,6 +48,8 @@ export async function GET(request: Request): Promise<Response> {
 export async function POST(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth?.userId) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
 
   let body: unknown;
   try {

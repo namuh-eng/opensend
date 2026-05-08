@@ -45,3 +45,4 @@ ralph_to_ralph_archive/
 
 # Local clawhip repo metadata (single-machine only)
 .clawhip/
+.scratch/

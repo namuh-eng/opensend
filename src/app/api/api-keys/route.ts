@@ -1,8 +1,10 @@
 import {
+  authorizeDashboardOrApiKey,
+  getServerSession,
   invalidateApiKeyAuthCache,
   unauthorizedResponse,
-  validateApiKey,
 } from "@/lib/api-auth";
+import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { checkApiKeyQuota, quotaExceededResponse } from "@/lib/billing/quota";
 import {
   type ApiKeyPermission,
@@ -47,10 +49,18 @@ function parseCreateApiKeyBody(body: unknown): {
 }
 
 export async function GET(request: Request): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth?.userId || auth.permission !== "full_access") {
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
+  if (!auth) {
     return unauthorizedResponse();
   }
+  const permissionError =
+    "apiKeyId" in auth ? requireFullAccessApiKey(auth) : null;
+  if (permissionError) return permissionError;
+  const session = "dashboard" in auth ? await getServerSession() : null;
+  const userId = "userId" in auth ? auth.userId : session?.user?.id;
+  if (!userId) return unauthorizedResponse();
 
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit")) || 20;
@@ -58,7 +68,7 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const result = await apiKeyService().listApiKeys({
-      userId: auth.userId,
+      userId,
       limit,
       after,
     });
@@ -70,6 +80,8 @@ export async function GET(request: Request): Promise<Response> {
         name: key.name,
         created_at: key.createdAt,
         last_used_at: key.lastUsedAt,
+        permission: key.permission,
+        domain: key.domain,
       })),
       has_more: result.hasMore,
     });
@@ -79,10 +91,18 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth?.userId || auth.permission !== "full_access") {
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
+  if (!auth) {
     return unauthorizedResponse();
   }
+  const permissionError =
+    "apiKeyId" in auth ? requireFullAccessApiKey(auth) : null;
+  if (permissionError) return permissionError;
+  const session = "dashboard" in auth ? await getServerSession() : null;
+  const userId = "userId" in auth ? auth.userId : session?.user?.id;
+  if (!userId) return unauthorizedResponse();
 
   let body: unknown;
   try {
@@ -92,14 +112,14 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const quota = await checkApiKeyQuota(auth.userId);
+    const quota = await checkApiKeyQuota(userId);
     if (!quota.ok) {
       return quotaExceededResponse(quota.info);
     }
 
     const created = await apiKeyService().createApiKey({
       ...parseCreateApiKeyBody(body),
-      userId: auth.userId,
+      userId,
     });
 
     return Response.json(

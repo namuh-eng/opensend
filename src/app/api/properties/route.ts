@@ -2,6 +2,7 @@ import {
   authorizeDashboardOrApiKey,
   unauthorizedResponse,
 } from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { db } from "@/lib/db";
 import { contactProperties } from "@/lib/db/schema";
 import { asc, count } from "drizzle-orm";
@@ -12,6 +13,8 @@ export async function GET(request: NextRequest) {
     request.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
+  if (permissionError) return permissionError;
 
   try {
     const url = request.nextUrl;
@@ -67,6 +70,8 @@ export async function POST(request: NextRequest) {
     request.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
+  if (permissionError) return permissionError;
 
   try {
     const body = await request.json();

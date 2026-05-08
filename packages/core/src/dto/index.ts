@@ -229,6 +229,14 @@ export interface CreateContactResponse {
   id: string;
 }
 
+export type UpdateContactPayload = Partial<CreateContactPayload>;
+
+export interface DeleteContactResponse {
+  object: "contact";
+  id: string;
+  deleted: true;
+}
+
 export interface ContactTopicPreference {
   id: string;
   subscription: "opt_in" | "opt_out";
@@ -250,6 +258,9 @@ export interface ContactResponse {
 export interface ContactListItem {
   id: string;
   email: string;
+  first_name: string | null;
+  last_name: string | null;
+  unsubscribed: boolean;
   firstName: string | null;
   lastName: string | null;
   status: "subscribed" | "unsubscribed";
