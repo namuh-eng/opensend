@@ -25,7 +25,16 @@ vi.mock("@aws-sdk/client-sesv2", () => ({
     ...input,
     _type: "DeleteEmailIdentityCommand",
   })),
+  PutEmailIdentityDkimSigningAttributesCommand: vi
+    .fn()
+    .mockImplementation((input) => ({
+      ...input,
+      _type: "PutEmailIdentityDkimSigningAttributesCommand",
+    })),
 }));
+
+import { randomBytes } from "node:crypto";
+process.env.DKIM_ENCRYPTION_KEY = randomBytes(32).toString("base64");
 
 import {
   type SendEmailInput,
@@ -204,7 +213,7 @@ describe("SES Client", () => {
     });
   });
 
-  describe("createDomainIdentity", () => {
+  describe("createDomainIdentity (legacy AWS_SES managed)", () => {
     it("creates a domain identity and returns DKIM tokens", async () => {
       mockSend.mockResolvedValueOnce({
         DkimAttributes: {
@@ -217,6 +226,7 @@ describe("SES Client", () => {
       const result = await createDomainIdentity("example.com");
 
       expect(result).toEqual({
+        dkimOrigin: "AWS_SES",
         dkimTokens: ["token1", "token2", "token3"],
         status: "PENDING",
       });
@@ -246,6 +256,7 @@ describe("SES Client", () => {
       const result = await createDomainIdentity("foreverbrowsing.com");
 
       expect(result).toEqual({
+        dkimOrigin: "AWS_SES",
         dkimTokens: ["existing1", "existing2", "existing3"],
         status: "SUCCESS",
       });
@@ -260,6 +271,54 @@ describe("SES Client", () => {
         "denied",
       );
       expect(mockSend).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("createDomainIdentity (BYO-DKIM EXTERNAL)", () => {
+    it("generates a keypair, registers EXTERNAL signing, and returns selector + public key", async () => {
+      mockSend.mockResolvedValueOnce({
+        DkimAttributes: { Status: "PENDING" },
+      });
+
+      const result = await createDomainIdentity("example.com", {
+        userId: "user-abc",
+      });
+
+      expect(result.dkimOrigin).toBe("EXTERNAL");
+      expect(result.status).toBe("PENDING");
+      expect(result.dkimSelector).toMatch(/^opensend-/);
+      expect(result.dkimPublicKey?.length).toBeGreaterThan(200);
+      expect(result.dkimPrivateKeyEnc?.ct).toBeTruthy();
+      expect(result.dkimPrivateKeyEnc?.iv).toBeTruthy();
+      expect(result.dkimTokens).toBeUndefined();
+
+      const command = mockSend.mock.calls[0]?.[0];
+      expect(command._type).toBe("CreateEmailIdentityCommand");
+      expect(command.EmailIdentity).toBe("example.com");
+      expect(command.DkimSigningAttributes.DomainSigningSelector).toBe(
+        result.dkimSelector,
+      );
+      // SES wants the raw base64 PKCS8 body, not the PEM envelope
+      expect(command.DkimSigningAttributes.DomainSigningPrivateKey).not.toMatch(
+        /BEGIN/,
+      );
+    });
+
+    it("re-keys via PutEmailIdentityDkimSigningAttributes when identity already exists", async () => {
+      mockSend.mockRejectedValueOnce(
+        Object.assign(new Error("exists"), { name: "AlreadyExistsException" }),
+      );
+      mockSend.mockResolvedValueOnce({});
+
+      const result = await createDomainIdentity("foreverbrowsing.com", {
+        userId: "user-abc",
+      });
+
+      expect(result.dkimOrigin).toBe("EXTERNAL");
+      expect(mockSend).toHaveBeenCalledTimes(2);
+      const second = mockSend.mock.calls[1]?.[0];
+      expect(second._type).toBe("PutEmailIdentityDkimSigningAttributesCommand");
+      expect(second.SigningAttributesOrigin).toBe("EXTERNAL");
     });
   });
 

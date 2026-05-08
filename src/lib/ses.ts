@@ -4,9 +4,15 @@ import {
   CreateEmailIdentityCommand,
   DeleteEmailIdentityCommand,
   GetEmailIdentityCommand,
+  PutEmailIdentityDkimSigningAttributesCommand,
   SESv2Client,
   SendEmailCommand,
 } from "@aws-sdk/client-sesv2";
+import {
+  type EncryptedBlob,
+  decryptSecret,
+  generateDkimKeypair,
+} from "./dkim-keys";
 
 // ── Local Dev Detection ───────────────────────────────────────────
 // Stub SES only in development mode with no creds. In test, we want the
@@ -46,8 +52,24 @@ export interface SendEmailResult {
 }
 
 export interface CreateDomainResult {
-  dkimTokens: string[];
+  // BYO-DKIM (EXTERNAL origin) — opensend owns the keypair, SES signs with it.
+  dkimOrigin: "AWS_SES" | "EXTERNAL";
   status: string;
+  // Populated for EXTERNAL: persist these on the domain row.
+  dkimSelector?: string;
+  dkimPublicKey?: string;
+  dkimPrivateKeyEnc?: EncryptedBlob;
+  // Populated for AWS_SES (legacy / no-userId callers): SES-managed CNAMEs.
+  dkimTokens?: string[];
+}
+
+export interface CreateDomainIdentityOptions {
+  // When provided, opensend generates an RSA-2048 keypair and registers the
+  // identity in SES with `SigningAttributesOrigin: EXTERNAL`. This is the
+  // path the dashboard uses — DKIM ownership is proven via DNS, the private
+  // key never leaves our DB, and we publish a single TXT record. Without a
+  // userId we fall back to legacy SES-managed signing (3 CNAMEs).
+  userId?: string;
 }
 
 export interface GetDomainResult {
@@ -143,12 +165,94 @@ export async function sendEmail(
 
 export async function createDomainIdentity(
   domain: string,
+  options: CreateDomainIdentityOptions = {},
 ): Promise<CreateDomainResult> {
   if (!domain) throw new Error("domain is required");
 
+  // BYO-DKIM path — opensend owns the keypair. SES signs with the private
+  // key we hand it; the public key goes into one DNS TXT record. This is
+  // the path Resend uses and what the dashboard takes for new domains.
+  if (options.userId) {
+    return createExternalDkimIdentity(domain, options.userId);
+  }
+
+  // Legacy SES-managed signing — kept for SDK callers that don't pass a
+  // userId yet, and for any pre-BYO rows already in production.
+  return createSesManagedIdentity(domain);
+}
+
+async function createExternalDkimIdentity(
+  domain: string,
+  userId: string,
+): Promise<CreateDomainResult> {
+  const keypair = generateDkimKeypair(userId);
+
+  if (useDevStub) {
+    console.log(
+      `[DEV] Would create SES EXTERNAL identity for ${domain} (selector ${keypair.selector})`,
+    );
+    return {
+      dkimOrigin: "EXTERNAL",
+      status: "PENDING",
+      dkimSelector: keypair.selector,
+      dkimPublicKey: keypair.publicKeyDnsValue,
+      dkimPrivateKeyEnc: keypair.privateKeyPemEncrypted,
+    };
+  }
+
+  const privateKeyPem = decryptSecret(keypair.privateKeyPemEncrypted);
+  const privateKeyForSes = pemToBase64Body(privateKeyPem);
+
+  const signingAttributes = {
+    DomainSigningSelector: keypair.selector,
+    DomainSigningPrivateKey: privateKeyForSes,
+  };
+
+  try {
+    const response = await ses.send(
+      new CreateEmailIdentityCommand({
+        EmailIdentity: domain,
+        DkimSigningAttributes: signingAttributes,
+      }),
+    );
+    return {
+      dkimOrigin: "EXTERNAL",
+      status: response.DkimAttributes?.Status ?? "PENDING",
+      dkimSelector: keypair.selector,
+      dkimPublicKey: keypair.publicKeyDnsValue,
+      dkimPrivateKeyEnc: keypair.privateKeyPemEncrypted,
+    };
+  } catch (error) {
+    // Identity already registered in this AWS account (single-tenant
+    // self-host posture — the only way to share an account is to share
+    // ownership). Re-key it with the new selector via Put*, so each
+    // dashboard add yields a fresh keypair instead of inheriting whatever
+    // was there before.
+    if (!isAlreadyExistsError(error)) throw error;
+    await ses.send(
+      new PutEmailIdentityDkimSigningAttributesCommand({
+        EmailIdentity: domain,
+        SigningAttributesOrigin: "EXTERNAL",
+        SigningAttributes: signingAttributes,
+      }),
+    );
+    return {
+      dkimOrigin: "EXTERNAL",
+      status: "PENDING",
+      dkimSelector: keypair.selector,
+      dkimPublicKey: keypair.publicKeyDnsValue,
+      dkimPrivateKeyEnc: keypair.privateKeyPemEncrypted,
+    };
+  }
+}
+
+async function createSesManagedIdentity(
+  domain: string,
+): Promise<CreateDomainResult> {
   if (useDevStub) {
     console.log(`[DEV] Would create SES identity for domain: ${domain}`);
     return {
+      dkimOrigin: "AWS_SES",
       dkimTokens: ["dev-token-1", "dev-token-2", "dev-token-3"],
       status: "PENDING",
     };
@@ -159,31 +263,29 @@ export async function createDomainIdentity(
       new CreateEmailIdentityCommand({ EmailIdentity: domain }),
     );
     return {
+      dkimOrigin: "AWS_SES",
       dkimTokens: response.DkimAttributes?.Tokens ?? [],
       status: response.DkimAttributes?.Status ?? "PENDING",
     };
   } catch (error) {
-    // Adopt-existing fallback. SES is account+region scoped while opensend
-    // rows are tenant-scoped, so an identity may already exist from a prior
-    // install, manual `aws sesv2 create-email-identity`, or an earlier add
-    // where the DB write rolled back.
-    //
-    // SAFETY: this assumes a single opensend tenant per AWS account — the
-    // self-hostable deploy posture. Under that assumption, "identity exists
-    // in this AWS account" implies "this tenant owns it." If opensend is
-    // ever run multi-tenant on a shared AWS account, this branch hands the
-    // dashboard caller live DKIM tokens for a domain they may not own —
-    // do not enable shared-AWS multi-tenant without first migrating to
-    // BYO-DKIM (per-tenant keypair + selector). Tracked separately.
     if (!isAlreadyExistsError(error)) throw error;
     const response = await ses.send(
       new GetEmailIdentityCommand({ EmailIdentity: domain }),
     );
     return {
+      dkimOrigin: "AWS_SES",
       dkimTokens: response.DkimAttributes?.Tokens ?? [],
       status: response.DkimAttributes?.Status ?? "PENDING",
     };
   }
+}
+
+function pemToBase64Body(pem: string): string {
+  // SES expects the raw base64 PKCS8 body, not the PEM envelope.
+  return pem
+    .replace(/-----BEGIN [^-]+-----/g, "")
+    .replace(/-----END [^-]+-----/g, "")
+    .replace(/\s+/g, "");
 }
 
 function isAlreadyExistsError(error: unknown): boolean {

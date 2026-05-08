@@ -94,6 +94,16 @@ export const domains = pgTable("domains", {
   trackingSubdomain: varchar("tracking_subdomain", { length: 255 }),
   capabilities:
     jsonb("capabilities").$type<Array<{ name: string; enabled: boolean }>>(),
+  // BYO-DKIM (issue #262): "AWS_SES" rows use SES-managed DKIM CNAMEs and
+  // legacy dkim_tokens. "EXTERNAL" rows store an opensend-generated keypair
+  // and publish a single DKIM TXT at <dkim_selector>._domainkey.<name>.
+  dkimOrigin: varchar("dkim_origin", { length: 16 })
+    .notNull()
+    .default("AWS_SES"),
+  dkimSelector: varchar("dkim_selector", { length: 63 }),
+  dkimPublicKey: text("dkim_public_key"),
+  dkimPrivateKeyCt: text("dkim_private_key_ct"),
+  dkimPrivateKeyIv: text("dkim_private_key_iv"),
 });
 
 export const apiKeys = pgTable(

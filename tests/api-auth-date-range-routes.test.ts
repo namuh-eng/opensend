@@ -143,7 +143,9 @@ describe("lib/date-range", () => {
     });
     expect(parseCustomDateRange("custom:2026-04-10")).toBeNull();
     expect(parseCustomDateRange("Today")).toBeNull();
-    expect(toIsoDate(new Date("2026-04-01T00:00:00Z"))).toBe("2026-04-01");
+    // Use local-midnight, consistent with parseIsoDate which also constructs
+    // local-time dates. UTC input would cross day boundaries west of UTC.
+    expect(toIsoDate(new Date("2026-04-01T00:00:00"))).toBe("2026-04-01");
     expect(formatDateRangeLabel(serialized)).toBe("Apr 10 - Apr 12");
     expect(formatDateRangeLabel("custom:2026-04-10:2026-04-10")).toBe("Apr 10");
 

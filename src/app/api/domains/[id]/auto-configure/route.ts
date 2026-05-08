@@ -47,10 +47,14 @@ export async function POST(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    // Legacy AWS_SES managed-DKIM path. BYO-DKIM domains publish a single
+    // TXT record built into `domain.records` at create-time; auto-configure
+    // for those should diff `domain.records` directly rather than re-call
+    // SES. Tracked under issue #262 follow-ups.
     let dkimTokens: string[];
     try {
       const identity = await createDomainIdentity(domain.name);
-      dkimTokens = identity.dkimTokens;
+      dkimTokens = identity.dkimTokens ?? [];
     } catch {
       const existing = await getCachedDomainIdentity(domain.name);
       dkimTokens = existing.dkimTokens;

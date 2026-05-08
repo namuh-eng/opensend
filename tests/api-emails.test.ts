@@ -1692,6 +1692,11 @@ describe("PATCH /api/emails/:id", () => {
   });
 
   it("scopes scheduled email updates to the authenticated user", async () => {
+    // Freeze time so the hardcoded `scheduled_at` stays a valid future moment
+    // regardless of when CI runs the suite.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
+
     const findFirst = vi.fn().mockResolvedValue({
       id: "email-uuid",
       status: "scheduled",
