@@ -1975,7 +1975,7 @@ describe("PATCH /api/emails/:id", () => {
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
         headers: { Authorization: "Bearer re_test123" },
-        body: JSON.stringify({ scheduled_at: "2026-05-08T00:00:00.000Z" }),
+        body: JSON.stringify({ scheduled_at: "2026-05-20T00:00:00.000Z" }),
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
