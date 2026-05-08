@@ -86,10 +86,39 @@ export type DomainRepository = {
     data: DomainRow[];
     hasMore: boolean;
   }>;
+  listPendingVerification(options?: { limit?: number }): Promise<DomainRow[]>;
   create(data: DomainInsert): Promise<DomainRow[]>;
   findById(id: string): Promise<DomainRow | undefined>;
   update(id: string, data: Partial<DomainInsert>): Promise<DomainRow[]>;
   delete(id: string): Promise<Array<{ id: string }>>;
+};
+
+export type DomainReconcileResult =
+  | { status: "not_found" }
+  | {
+      status: "unchanged";
+      domain: DomainRow;
+    }
+  | {
+      status: "updated";
+      domain: DomainRow;
+      previousStatus: string;
+    };
+
+export type DomainReconcileBatchResult = {
+  scanned: number;
+  updated: number;
+  unchanged: number;
+  failed: number;
+  changes: Array<{
+    domainId: string;
+    domainName: string;
+    userId: string | null;
+    previousStatus: string;
+    nextStatus: string;
+    records: NonNullable<DomainRow["records"]>;
+    capabilities: NonNullable<DomainRow["capabilities"]>;
+  }>;
 };
 
 export type DomainServiceDependencies = {
@@ -276,16 +305,106 @@ export function createDomainService({
       return toDomainDetail(row);
     },
 
-    async verify(id: string) {
+    async reconcileVerification(id: string): Promise<DomainReconcileResult> {
       const domain = await repository.findById(id);
-      if (!domain) throw new Error("Domain not found");
+      if (!domain) return { status: "not_found" };
 
       const identity = await getDomainIdentity(domain.name);
-      const status: "pending" | "verified" | "failed" = identity.verified
+      const nextStatus: "pending" | "verified" = identity.verified
         ? "verified"
         : "pending";
 
-      return await repository.update(id, { status });
+      const existingRecords = (domain.records ?? []) as DomainRecord[];
+      const recordsForUpdate: DomainRecord[] = existingRecords.map(
+        (record) => ({
+          ...record,
+          status: identity.verified ? "verified" : "pending",
+        }),
+      );
+
+      const recordsChanged =
+        existingRecords.length !== recordsForUpdate.length ||
+        existingRecords.some(
+          (record, idx) => record.status !== recordsForUpdate[idx].status,
+        );
+      const statusChanged = domain.status !== nextStatus;
+
+      if (!statusChanged && !recordsChanged) {
+        return { status: "unchanged", domain };
+      }
+
+      const previousStatus = domain.status;
+      const [updated] = await repository.update(id, {
+        status: nextStatus,
+        records: recordsForUpdate,
+      });
+
+      if (!updated) {
+        await invalidateDomainCaches({ id, name: domain.name });
+        return { status: "not_found" };
+      }
+
+      await invalidateDomainCaches({ id: updated.id, name: updated.name });
+
+      if (!statusChanged) {
+        return { status: "unchanged", domain: updated };
+      }
+
+      return {
+        status: "updated",
+        domain: updated,
+        previousStatus,
+      };
+    },
+
+    async verify(id: string) {
+      const result = await this.reconcileVerification(id);
+      if (result.status === "not_found") {
+        throw new Error("Domain not found");
+      }
+      return [result.domain];
+    },
+
+    async reconcileAllPendingVerifications(
+      options: { limit?: number } = {},
+    ): Promise<DomainReconcileBatchResult> {
+      const pending = await repository.listPendingVerification({
+        limit: options.limit,
+      });
+
+      const result: DomainReconcileBatchResult = {
+        scanned: pending.length,
+        updated: 0,
+        unchanged: 0,
+        failed: 0,
+        changes: [],
+      };
+
+      for (const domain of pending) {
+        try {
+          const reconciled = await this.reconcileVerification(domain.id);
+          if (reconciled.status === "updated") {
+            result.updated++;
+            result.changes.push({
+              domainId: reconciled.domain.id,
+              domainName: reconciled.domain.name,
+              userId: reconciled.domain.userId ?? null,
+              previousStatus: reconciled.previousStatus,
+              nextStatus: reconciled.domain.status,
+              records: reconciled.domain.records ?? [],
+              capabilities: reconciled.domain.capabilities ?? [],
+            });
+          } else if (reconciled.status === "unchanged") {
+            result.unchanged++;
+          } else {
+            result.failed++;
+          }
+        } catch {
+          result.failed++;
+        }
+      }
+
+      return result;
     },
 
     async delete(id: string) {

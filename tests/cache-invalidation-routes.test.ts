@@ -14,6 +14,7 @@ const mockDeleteDomainIdentity = vi.hoisted(() => vi.fn());
 const mockListDNSRecords = vi.hoisted(() => vi.fn());
 const mockDeleteDNSRecord = vi.hoisted(() => vi.fn());
 const mockQueueEvent = vi.hoisted(() => vi.fn());
+const mockReconcileVerification = vi.hoisted(() => vi.fn());
 
 const VALID_DOMAIN_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -35,6 +36,9 @@ vi.mock("@opensend/core", () => ({
   createDomainService: () => ({
     createDomain: mockCreateDomain,
   }),
+  domainService: {
+    reconcileVerification: mockReconcileVerification,
+  },
   DMARC_RECORD_VALUE: "v=DMARC1; p=none;",
   buildDmarcRecordName: (domainName: string) => `_dmarc.${domainName}`,
   getEffectiveReturnPathLabel: (customReturnPath: string | null | undefined) =>
@@ -257,25 +261,18 @@ describe("cache invalidation routes", () => {
       status: "pending",
       records: [],
     });
-    mockGetCachedDomainIdentity.mockResolvedValue({
-      verified: true,
-      dkimStatus: "SUCCESS",
-      dkimTokens: ["a"],
-    });
-    mockDb.update.mockReturnValue({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([
-            {
-              id: VALID_DOMAIN_ID,
-              name: "example.com",
-              status: "verified",
-              records: [],
-              createdAt: new Date("2026-04-28T00:00:00.000Z"),
-            },
-          ]),
-        }),
-      }),
+    mockReconcileVerification.mockResolvedValue({
+      status: "updated",
+      domain: {
+        id: VALID_DOMAIN_ID,
+        name: "example.com",
+        status: "verified",
+        records: [],
+        capabilities: [],
+        customReturnPath: null,
+        createdAt: new Date("2026-04-28T00:00:00.000Z"),
+      },
+      previousStatus: "pending",
     });
 
     const route = await import("@/app/api/domains/[id]/verify/route");

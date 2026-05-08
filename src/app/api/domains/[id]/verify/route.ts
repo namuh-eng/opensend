@@ -4,17 +4,13 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { domains } from "@/lib/db/schema";
 import {
   getCachedDomainById,
-  getCachedDomainIdentity,
   invalidateDomainCaches,
 } from "@/lib/domain-cache";
 import { queueEvent } from "@/lib/events";
 import { verifyDomainParamsSchema } from "@/lib/validation/domains";
-import { getEffectiveReturnPathLabel } from "@opensend/core";
-import { and, eq } from "drizzle-orm";
+import { domainService, getEffectiveReturnPathLabel } from "@opensend/core";
 
 export async function POST(
   request: Request,
@@ -48,68 +44,40 @@ export async function POST(
       return Response.json({ error: "Domain not found" }, { status: 404 });
     }
 
-    const identity = await getCachedDomainIdentity(domain.name);
+    const result = await domainService.reconcileVerification(id);
 
-    type DomainRecord = {
-      type: string;
-      name: string;
-      value: string;
-      status: string;
-      ttl: string;
-      priority?: number;
-    };
-    const existingRecords = (domain.records as DomainRecord[] | null) ?? [];
-    const recordsForUpdate: DomainRecord[] = existingRecords.map((record) => ({
-      ...record,
-      status: identity.verified ? "verified" : "pending",
-    }));
-
-    const verificationStatus: "pending" | "verified" = identity.verified
-      ? "verified"
-      : "pending";
-
-    const previousStatus = domain.status;
-
-    const [updated] = await db
-      .update(domains)
-      .set({
-        status: verificationStatus,
-        records: recordsForUpdate,
-      })
-      .where(and(eq(domains.id, id), eq(domains.userId, userId)))
-      .returning();
-
-    if (!updated) {
+    if (result.status === "not_found") {
       await invalidateDomainCaches({ id, name: domain.name });
       return Response.json({ error: "Domain not found" }, { status: 404 });
     }
 
-    await invalidateDomainCaches({ id: updated.id, name: updated.name });
+    const reconciled = result.domain;
+    await invalidateDomainCaches({ id: reconciled.id, name: reconciled.name });
 
-    if (updated.status !== previousStatus) {
+    if (result.status === "updated") {
       await queueEvent({
         type: "domain.updated",
         userId,
         payload: {
-          id: updated.id,
-          name: updated.name,
-          status: updated.status,
-          previous_status: previousStatus,
-          records: updated.records || [],
-          capabilities: updated.capabilities || [],
+          id: reconciled.id,
+          name: reconciled.name,
+          status: reconciled.status,
+          previous_status: result.previousStatus,
+          records: reconciled.records || [],
+          capabilities: reconciled.capabilities || [],
         },
       });
     }
 
     return Response.json({
       object: "domain",
-      id: updated.id,
-      name: updated.name,
-      status: updated.status,
-      records: updated.records || [],
-      custom_return_path: updated.customReturnPath,
-      return_path: getEffectiveReturnPathLabel(updated.customReturnPath),
-      created_at: updated.createdAt,
+      id: reconciled.id,
+      name: reconciled.name,
+      status: reconciled.status,
+      records: reconciled.records || [],
+      custom_return_path: reconciled.customReturnPath,
+      return_path: getEffectiveReturnPathLabel(reconciled.customReturnPath),
+      created_at: reconciled.createdAt,
     });
   } catch (err) {
     const message =
