@@ -179,9 +179,27 @@ export function DomainDetail({ domain }: DomainDetailProps) {
   );
   const [actionsOpen, setActionsOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const regionFriendly = REGION_DISPLAY[domain.region] || domain.region;
   const isVerified = domain.status === "verified";
+
+  const handleVerify = useCallback(async () => {
+    if (verifying) return;
+    setVerifying(true);
+    setVerifyError(null);
+    try {
+      await apiRequest(`/api/domains/${domain.id}/verify`, { method: "POST" });
+      router.refresh();
+    } catch (err) {
+      setVerifyError(
+        err instanceof Error ? err.message : "Failed to verify domain",
+      );
+    } finally {
+      setVerifying(false);
+    }
+  }, [domain.id, verifying, router]);
 
   const handleDelete = useCallback(async () => {
     if (deleting) return;
@@ -249,6 +267,21 @@ export function DomainDetail({ domain }: DomainDetailProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {!isVerified && (
+            <button
+              type="button"
+              onClick={handleVerify}
+              disabled={verifying}
+              className="px-3 py-2 rounded-md border border-[rgba(176,199,217,0.145)] text-[13px] font-medium text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {verifying ? "Verifying…" : "Verify DNS Records"}
+            </button>
+          )}
+          {verifyError && (
+            <span className="text-[12px] text-red-400" role="alert">
+              {verifyError}
+            </span>
+          )}
           <button
             type="button"
             aria-label="API drawer"
