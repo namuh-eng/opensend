@@ -17,6 +17,7 @@ import {
   automationRunRepo,
   emailService,
   normalizeConditionConfig,
+  normalizeContactDeleteConfig,
   normalizeContactUpdateConfig,
   normalizeWaitForEventConfig,
   parseDurationToCappedSeconds,
@@ -56,6 +57,7 @@ export interface AutomationRunnerDeps {
     id: string,
     data: Partial<typeof contacts.$inferInsert>,
   ) => Promise<Contact | null>;
+  deleteContact: (id: string) => Promise<{ id: string } | null>;
   listWaitingRunsByContact: (input: {
     contactId: string;
     userId?: string | null;
@@ -119,6 +121,13 @@ const defaultDeps: AutomationRunnerDeps = {
       .where(eq(contacts.id, id))
       .returning();
     return updated ?? null;
+  },
+  async deleteContact(id) {
+    const [deleted] = await db
+      .delete(contacts)
+      .where(eq(contacts.id, id))
+      .returning({ id: contacts.id });
+    return deleted ?? null;
   },
   async listWaitingRunsByContact(input) {
     return await automationRunRepo.listWaitingByContact(input);
@@ -788,6 +797,72 @@ async function processContactUpdateStep(
   });
 }
 
+async function processContactDeleteStep(
+  deps: AutomationRunnerDeps,
+  run: AutomationRun,
+  step: AutomationStep,
+  states: StepStates,
+  now: Date,
+) {
+  normalizeContactDeleteConfig(step.config ?? {});
+
+  if (!run.contactId) {
+    const skippedStates = setStepState(states, step.key, {
+      status: "skipped",
+      startedAt: states[step.key]?.startedAt ?? iso(now),
+      completedAt: iso(now),
+      output: { reason: "contact_already_deleted" },
+    });
+    return await deps.updateRun(run.id, {
+      status: "completed",
+      currentStepKey: null,
+      stepStates: skippedStates,
+      completedAt: now,
+      nextStepAt: null,
+      failureReason: null,
+    });
+  }
+
+  const contact = await deps.getContact(run.contactId);
+  if (!contact) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "contact_delete contact not found",
+    );
+  }
+
+  const deleted = await deps.deleteContact(contact.id);
+  if (!deleted) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "contact_delete contact not found",
+    );
+  }
+
+  const completedStates = setStepState(states, step.key, {
+    status: "completed",
+    completedAt: iso(now),
+    output: { deleted_contact_id: deleted.id },
+  });
+  return await deps.updateRun(run.id, {
+    status: "completed",
+    currentStepKey: null,
+    stepStates: completedStates,
+    completedAt: now,
+    nextStepAt: null,
+    failureReason: null,
+    contactId: null,
+  });
+}
+
 async function processSendEmailStep(
   deps: AutomationRunnerDeps,
   run: AutomationRun,
@@ -1030,6 +1105,10 @@ export async function processAutomationRunStep(
         states,
         now,
       );
+    }
+
+    if (step.type === "contact_delete") {
+      return await processContactDeleteStep(deps, run, step, states, now);
     }
 
     if (step.type === "send_email") {

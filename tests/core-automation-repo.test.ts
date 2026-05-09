@@ -368,6 +368,49 @@ describe("automationRepo.create", () => {
     ).rejects.toMatchObject({ code: "contact_update_field_invalid" });
   });
 
+  it("accepts contact_delete steps with empty config and minimal connections", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.deleted" },
+          },
+          { key: "delete", type: "contact_delete", config: {} },
+        ],
+        connections: [{ from: "trigger", to: "delete" }],
+      }),
+    ).resolves.toMatchObject({ automation: { id: "auto_1" } });
+  });
+
+  it("rejects contact_delete configs with extra keys", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.deleted" },
+          },
+          {
+            key: "delete",
+            type: "contact_delete",
+            config: { reason: "spam" },
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "contact_delete_config_invalid" });
+  });
+
   it("rejects condition branch labels from non-condition steps", async () => {
     const { automationRepo } = await import(
       "../packages/core/src/db/repositories/automationRepo"
