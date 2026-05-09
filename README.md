@@ -128,7 +128,7 @@ go test ./...
 go run .
 ```
 
-The Go ingester is shadow-only for future issue #71 parity slices. The current production ingester remains `packages/ingester` on port **3016** for SES/SNS ingestion, Stripe webhooks, scheduled jobs, and webhook dispatch.
+The Go ingester is shadow-only for future issue #71 parity slices. The current production ingester remains `packages/ingester` on port **3016** for SES/SNS ingestion, Stripe webhooks, scheduled jobs, webhook dispatch, and automatic domain-verification reconciliation. Docker Compose also starts a `scheduler` sidecar that posts to `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify` every minute, using `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when configured.
 
 ### TypeScript SDK
 

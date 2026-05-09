@@ -38,6 +38,9 @@ function createRepository(overrides: Partial<DomainRepository> = {}) {
     async list() {
       return { data: [], hasMore: false };
     },
+    async listPendingVerification() {
+      return [];
+    },
     async create(data: DomainInsert) {
       return [domainRow({ ...data, id: "created-domain" })];
     },
@@ -216,6 +219,157 @@ describe("domain service", () => {
         ttl: "Auto",
       },
     ]);
+  });
+
+  it("reconciles verification: maps records[].status from identity.verified", async () => {
+    const updates: Array<{ id: string; data: Partial<DomainInsert> }> = [];
+    const existingDomain = domainRow({
+      id: "dom-1",
+      name: "example.com",
+      status: "pending",
+      records: [
+        {
+          type: "TXT",
+          name: "_dmarc.example.com",
+          value: "v=DMARC1; p=none;",
+          status: "pending",
+          ttl: "Auto",
+        },
+        {
+          type: "TXT",
+          name: "send.example.com",
+          value: "v=spf1 include:amazonses.com ~all",
+          status: "pending",
+          ttl: "Auto",
+        },
+      ],
+    });
+    const repository = createRepository({
+      async findById() {
+        return existingDomain;
+      },
+      async update(id, data) {
+        updates.push({ id, data });
+        return [domainRow({ ...existingDomain, ...data })];
+      },
+    });
+
+    const service = createDomainService({
+      repository,
+      getDomainIdentity: async () => ({ verified: true }),
+    });
+
+    const result = await service.reconcileVerification("dom-1");
+
+    expect(result.status).toBe("updated");
+    expect(updates).toHaveLength(1);
+    expect(updates[0].data.status).toBe("verified");
+    expect(updates[0].data.records).toEqual([
+      expect.objectContaining({
+        name: "_dmarc.example.com",
+        status: "verified",
+      }),
+      expect.objectContaining({
+        name: "send.example.com",
+        status: "verified",
+      }),
+    ]);
+    if (result.status === "updated") {
+      expect(result.previousStatus).toBe("pending");
+      expect(result.domain.status).toBe("verified");
+    }
+  });
+
+  it("reconciles verification: returns unchanged when status and records are stable", async () => {
+    const updates: Array<{ id: string; data: Partial<DomainInsert> }> = [];
+    const existingDomain = domainRow({
+      id: "dom-2",
+      status: "pending",
+      records: [
+        {
+          type: "TXT",
+          name: "_dmarc.example.com",
+          value: "v=DMARC1; p=none;",
+          status: "pending",
+          ttl: "Auto",
+        },
+      ],
+    });
+    const repository = createRepository({
+      async findById() {
+        return existingDomain;
+      },
+      async update(id, data) {
+        updates.push({ id, data });
+        return [domainRow({ ...existingDomain, ...data })];
+      },
+    });
+
+    const service = createDomainService({
+      repository,
+      getDomainIdentity: async () => ({ verified: false }),
+    });
+
+    const result = await service.reconcileVerification("dom-2");
+
+    expect(result.status).toBe("unchanged");
+    expect(updates).toHaveLength(0);
+  });
+
+  it("reconcileAllPendingVerifications: tolerates per-domain failures", async () => {
+    const pendingA = domainRow({
+      id: "dom-a",
+      name: "a.example",
+      status: "not_started",
+      userId: "user-a",
+      records: [],
+    });
+    const pendingB = domainRow({
+      id: "dom-b",
+      name: "b.example",
+      status: "pending",
+      userId: "user-b",
+      records: [],
+    });
+
+    const repository = createRepository({
+      async listPendingVerification() {
+        return [pendingA, pendingB];
+      },
+      async findById(id) {
+        return id === "dom-a" ? pendingA : pendingB;
+      },
+      async update(id, data) {
+        return [
+          domainRow({
+            ...(id === "dom-a" ? pendingA : pendingB),
+            ...data,
+          }),
+        ];
+      },
+    });
+
+    const service = createDomainService({
+      repository,
+      getDomainIdentity: async (name) => {
+        if (name === "a.example") return { verified: true };
+        throw new Error("ses unavailable");
+      },
+    });
+
+    const result = await service.reconcileAllPendingVerifications();
+
+    expect(result.scanned).toBe(2);
+    expect(result.updated).toBe(1);
+    expect(result.failed).toBe(1);
+    expect(result.changes).toHaveLength(1);
+    expect(result.changes[0]).toMatchObject({
+      domainId: "dom-a",
+      domainName: "a.example",
+      userId: "user-a",
+      previousStatus: "not_started",
+      nextStatus: "verified",
+    });
   });
 
   it("lists with normalized pagination and maps public list fields", async () => {
