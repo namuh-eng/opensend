@@ -6,13 +6,18 @@ import {
 } from "@/lib/automations";
 import { db } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
-import { sendEventSchema } from "@/lib/validation/events";
+import {
+  isRecord,
+  sendEventSchema,
+  validateEventPayloadAgainstSchema,
+} from "@/lib/validation/events";
 import { resumeWaitingRunsForEvent } from "@/lib/workers/automation-runner";
 import {
   AutomationValidationError,
   automationRepo,
   automationRunRepo,
   customEventDeliveryRepo,
+  customEventRepo,
 } from "@opensend/core";
 import { eq } from "drizzle-orm";
 
@@ -62,6 +67,45 @@ export async function POST(request: Request): Promise<Response> {
   const contactId = event.contact_id ?? event.contactId;
 
   try {
+    const customEvent = await customEventRepo.findByName(
+      event.event,
+      auth.userId,
+    );
+    const payload = event.payload ?? {};
+    if (customEvent?.schema !== null && customEvent?.schema !== undefined) {
+      if (!isRecord(customEvent.schema)) {
+        return Response.json(
+          {
+            error: "Stored event schema is invalid",
+            code: "event_schema_invalid",
+            details: [{ path: "schema", message: "schema must be an object" }],
+          },
+          { status: 422 },
+        );
+      }
+
+      const details = validateEventPayloadAgainstSchema(
+        payload,
+        customEvent.schema,
+      );
+      if (details.length > 0) {
+        const code = details.some((detail) => detail.path.startsWith("schema"))
+          ? "event_schema_invalid"
+          : "event_payload_invalid";
+        return Response.json(
+          {
+            error:
+              code === "event_schema_invalid"
+                ? "Stored event schema is invalid"
+                : "Event payload does not match schema",
+            code,
+            details,
+          },
+          { status: 422 },
+        );
+      }
+    }
+
     const resolvedContactId = await resolveContactId({
       contactId,
       email: event.email,
@@ -69,7 +113,7 @@ export async function POST(request: Request): Promise<Response> {
     });
     const delivery = await customEventDeliveryRepo.record({
       eventName: event.event,
-      payload: event.payload ?? {},
+      payload,
       contactId: resolvedContactId,
       email: event.email?.toLowerCase().trim() ?? null,
       userId: auth.userId,
