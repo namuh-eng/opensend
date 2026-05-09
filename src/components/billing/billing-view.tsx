@@ -147,7 +147,7 @@ export function BillingView({ initial }: BillingViewProps) {
           </p>
         </div>
         <Link
-          href="/pricing"
+          href="/settings/billing/plans"
           className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] transition-colors hover:bg-[rgba(24,25,28,1)]"
           data-testid="view-plans-link"
         >
