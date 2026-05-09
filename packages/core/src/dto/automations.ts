@@ -9,6 +9,7 @@ export type AutomationStepType =
   | "condition"
   | "wait_for_event"
   | "contact_update"
+  | "contact_delete"
   | "add_to_segment";
 
 export type AutomationRunStatus =
@@ -95,6 +96,8 @@ export interface ContactUpdateStepConfig {
   properties?: Record<string, ContactUpdateValue>;
 }
 
+export type ContactDeleteStepConfig = Record<string, never>;
+
 export interface AddToSegmentStepConfig {
   segment_id: string;
 }
@@ -107,6 +110,7 @@ export type AutomationStepConfig =
   | ConditionStepConfig
   | WaitForEventStepConfig
   | ContactUpdateStepConfig
+  | ContactDeleteStepConfig
   | AddToSegmentStepConfig;
 
 export interface AutomationStepInput {
@@ -593,6 +597,18 @@ export function normalizeContactUpdateConfig(
   return config;
 }
 
+export function normalizeContactDeleteConfig(
+  raw: Record<string, unknown>,
+): ContactDeleteStepConfig {
+  if (raw && Object.keys(raw).length > 0) {
+    throw new AutomationValidationError(
+      "contact_delete config must be empty",
+      "contact_delete_config_invalid",
+    );
+  }
+  return {} as ContactDeleteStepConfig;
+}
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -652,6 +668,11 @@ export function normalizeStepConfig(
       >;
     case "contact_update":
       return normalizeContactUpdateConfig(config) as unknown as Record<
+        string,
+        unknown
+      >;
+    case "contact_delete":
+      return normalizeContactDeleteConfig(config) as unknown as Record<
         string,
         unknown
       >;

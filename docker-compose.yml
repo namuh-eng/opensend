@@ -8,8 +8,10 @@
 #   - postgres   : Postgres 16 with the OpenSend schema, persisted in the named volume `pgdata`.
 #   - migrate    : One-shot job that runs Drizzle migrations and exits.
 #   - app        : Next.js dashboard + REST API on http://localhost:${PORT:-3015}.
-#   - ingester   : Standalone Hono service that handles SES/SNS, Stripe, and scheduled-email
+#   - ingester   : Production Bun/Hono service that handles SES/SNS, Stripe, and scheduled-email
 #                  webhooks on http://localhost:${INGESTER_PORT:-3016}.
+#                  Experimental Go shadow skeleton lives at services/ingester-go
+#                  and defaults to 3027, but is intentionally not wired into Compose.
 #
 # Optional overrides (all read from .env):
 #   - PORT                        : host port for the app (default 3015)
@@ -91,8 +93,9 @@ services:
       retries: 3
       start_period: 10s
 
-  # Standalone Hono service for inbound webhooks (SES bounces/complaints, Stripe billing
-  # events, scheduled-email worker). Point your SES SNS topic and Stripe webhook at:
+  # Production Bun/Hono service for inbound webhooks (SES bounces/complaints, Stripe billing
+  # events, scheduled-email worker). The Go ingester skeleton under services/ingester-go
+  # is experimental/shadow-only and must not receive production traffic yet. Point your SES SNS topic and Stripe webhook at:
   #   http://<host>:${INGESTER_PORT:-3016}/events/ses
   #   http://<host>:${INGESTER_PORT:-3016}/events/stripe
   # Set BACKGROUND_WORKER_POLL=true to enable the SQS long-poll loop in this container.

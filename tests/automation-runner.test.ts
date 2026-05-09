@@ -168,13 +168,14 @@ function deps(overrides: Partial<AutomationRunnerDeps> = {}) {
     getTemplate: vi.fn().mockResolvedValue(template),
     sendEmail,
     updateContact: vi.fn().mockResolvedValue(contact),
+    deleteContact: vi.fn().mockResolvedValue({ id: contact.id }),
+    getSegment: vi.fn().mockResolvedValue(segmentRow),
+    addContactToSegmentMembership: vi.fn().mockResolvedValue({ added: true }),
     listWaitingRunsByContact: vi.fn().mockResolvedValue([]),
     updateRun: vi.fn(async (_id, data) => {
       updates.push(data as Partial<AutomationRun>);
       return { ...run(), ...data } as AutomationRun;
     }),
-    getSegment: vi.fn().mockResolvedValue(segmentRow),
-    addContactToSegmentMembership: vi.fn().mockResolvedValue({ added: true }),
     ...overrides,
   };
   return { deps: base, updates, sendEmail };
@@ -837,6 +838,186 @@ describe("automation runner", () => {
     expect(setup.updates[0]?.stepStates?.send).toMatchObject({
       status: "failed",
       error: "send_email template is missing or unpublished",
+    });
+  });
+
+  it("deletes the current contact and terminates the run with minimal output", async () => {
+    const deleteAutomation: Automation = {
+      ...automation,
+      connections: [
+        { from: "trigger", to: "delete" },
+        { from: "delete", to: "send" },
+      ],
+    };
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete",
+      type: "contact_delete",
+      config: {},
+      position: 1,
+    };
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(deleteAutomation),
+      listSteps: vi.fn().mockResolvedValue([steps[0], deleteStep, steps[2]]),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "delete" }),
+      setup.deps,
+    );
+
+    expect(setup.deps.deleteContact).toHaveBeenCalledWith(contact.id);
+    expect(setup.sendEmail).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "completed",
+      currentStepKey: null,
+      contactId: null,
+    });
+    expect(setup.updates[0]?.stepStates?.delete).toMatchObject({
+      status: "completed",
+      output: { deleted_contact_id: contact.id },
+    });
+  });
+
+  it("does not run downstream contact-dependent steps after a successful delete", async () => {
+    const deleteAutomation: Automation = {
+      ...automation,
+      connections: [
+        { from: "delete", to: "send" },
+        { from: "send", to: "end" },
+      ],
+    };
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete",
+      type: "contact_delete",
+      config: {},
+      position: 0,
+    };
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(deleteAutomation),
+      listSteps: vi.fn().mockResolvedValue([deleteStep, steps[2], steps[3]]),
+    });
+
+    const completed = await processAutomationRunStep(
+      run({ currentStepKey: "delete" }),
+      setup.deps,
+    );
+
+    // Run is terminal — no further dispatch happens. Simulate the scheduler
+    // re-loading this run and confirm the runner does not attempt downstream work.
+    expect(completed?.status).toBe("completed");
+    expect(completed?.currentStepKey).toBeNull();
+    expect(setup.sendEmail).not.toHaveBeenCalled();
+    expect(setup.deps.updateContact).not.toHaveBeenCalled();
+  });
+
+  it("fails contact_delete deterministically when the contact is missing", async () => {
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete",
+      type: "contact_delete",
+      config: {},
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([deleteStep]),
+      getContact: vi.fn().mockResolvedValue(null),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "delete" }),
+      setup.deps,
+    );
+
+    expect(setup.deps.deleteContact).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "delete",
+      failureReason: "contact_delete contact not found",
+    });
+    expect(setup.updates[0]?.stepStates?.delete).toMatchObject({
+      status: "failed",
+      error: "contact_delete contact not found",
+    });
+  });
+
+  it("fails contact_delete when delete returns no rows (idempotent storage race)", async () => {
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete",
+      type: "contact_delete",
+      config: {},
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([deleteStep]),
+      deleteContact: vi.fn().mockResolvedValue(null),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "delete" }),
+      setup.deps,
+    );
+
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "delete",
+      failureReason: "contact_delete contact not found",
+    });
+  });
+
+  it("skips repeated contact_delete steps when the run already lost its contact", async () => {
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete_again",
+      type: "contact_delete",
+      config: {},
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([deleteStep]),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "delete_again", contactId: null }),
+      setup.deps,
+    );
+
+    expect(setup.deps.getContact).not.toHaveBeenCalled();
+    expect(setup.deps.deleteContact).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "completed",
+      currentStepKey: null,
+    });
+    expect(setup.updates[0]?.stepStates?.delete_again).toMatchObject({
+      status: "skipped",
+      output: { reason: "contact_already_deleted" },
+    });
+  });
+
+  it("fails contact_delete steps with non-empty config persisted on disk", async () => {
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete",
+      type: "contact_delete",
+      config: { foo: "bar" },
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([deleteStep]),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "delete" }),
+      setup.deps,
+    );
+
+    expect(setup.deps.deleteContact).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "delete",
+      failureReason: "contact_delete config must be empty",
     });
   });
 
