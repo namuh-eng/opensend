@@ -7,6 +7,7 @@ const mockAutomationValidate = vi.hoisted(() => vi.fn());
 const mockAutomationDelete = vi.hoisted(() => vi.fn());
 const mockFindEnabledByTriggerEventName = vi.hoisted(() => vi.fn());
 const mockCustomEventCreate = vi.hoisted(() => vi.fn());
+const mockCustomEventFindByName = vi.hoisted(() => vi.fn());
 const mockCustomEventList = vi.hoisted(() => vi.fn());
 const mockDeliveryRecord = vi.hoisted(() => vi.fn());
 const mockRunCreateFromTrigger = vi.hoisted(() => vi.fn());
@@ -87,6 +88,7 @@ vi.mock("@opensend/core", () => ({
   },
   customEventRepo: {
     create: mockCustomEventCreate,
+    findByName: mockCustomEventFindByName,
     list: mockCustomEventList,
   },
   customEventDeliveryRepo: {
@@ -606,6 +608,7 @@ describe("events API routes", () => {
     vi.resetModules();
     vi.clearAllMocks();
     mockValidateApiKey.mockResolvedValue(auth);
+    mockCustomEventFindByName.mockResolvedValue(null);
     mockResumeWaitingRunsForEvent.mockResolvedValue([]);
   });
 
@@ -648,6 +651,35 @@ describe("events API routes", () => {
     await expect(response.json()).resolves.toMatchObject({
       code: "event_name_reserved",
     });
+  });
+
+  it("rejects invalid custom event schema definitions with 422 details", async () => {
+    const { POST } = await import("@/app/api/events/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/events", {
+        name: "user.signed_up",
+        schema: {
+          type: "object",
+          properties: {
+            plan: { type: "text" },
+          },
+        },
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      error: "Validation failed",
+      details: {
+        fieldErrors: {
+          schema: expect.arrayContaining([
+            "schema.properties.plan.type must be one of: string, number, boolean, object, array",
+          ]),
+        },
+      },
+    });
+    expect(mockCustomEventCreate).not.toHaveBeenCalled();
   });
 
   it("requires exactly one contact identifier when sending events", async () => {
@@ -735,6 +767,180 @@ describe("events API routes", () => {
       expect.objectContaining({ id: "delivery_1" }),
     );
     expect(mockRunCreateFromTrigger).toHaveBeenCalledTimes(2);
+  });
+
+  it("validates a payload against a stored custom event schema before recording delivery", async () => {
+    mockCustomEventFindByName.mockResolvedValue({
+      ...customEvent,
+      schema: {
+        type: "object",
+        required: ["plan", "trial"],
+        properties: {
+          plan: { type: "string" },
+          seats: { type: "number" },
+          trial: { type: "boolean" },
+        },
+      },
+    });
+    mockContactFindFirst.mockResolvedValue({ id: "contact_1" });
+    mockDeliveryRecord.mockResolvedValue({
+      id: "delivery_1",
+      eventName: "user.signed_up",
+      contactId: "contact_1",
+      email: "user@example.com",
+      payload: { plan: "pro", seats: 3, trial: false },
+      receivedAt: now,
+    });
+    mockFindEnabledByTriggerEventName.mockResolvedValue([
+      { ...automation, id: "auto_1" },
+    ]);
+    mockRunCreateFromTrigger.mockResolvedValue({
+      id: "run_1",
+      automationId: "auto_1",
+      status: "queued",
+      triggerEventId: "delivery_1",
+      contactId: "contact_1",
+      stepStates: {},
+      startedAt: null,
+      completedAt: null,
+      currentStepKey: "trigger",
+      failureReason: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const { POST } = await import("@/app/api/events/send/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/events/send", {
+        event: "user.signed_up",
+        email: "user@example.com",
+        payload: { plan: "pro", seats: 3, trial: false },
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(mockCustomEventFindByName).toHaveBeenCalledWith(
+      "user.signed_up",
+      "user_1",
+    );
+    expect(mockDeliveryRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: { plan: "pro", seats: 3, trial: false },
+      }),
+    );
+    expect(mockRunCreateFromTrigger).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 422 path details and creates no delivery or runs when schema validation fails", async () => {
+    mockCustomEventFindByName.mockResolvedValue({
+      ...customEvent,
+      schema: {
+        type: "object",
+        required: ["plan", "trial"],
+        properties: {
+          plan: { type: "string" },
+          trial: { type: "boolean" },
+        },
+      },
+    });
+    const { POST } = await import("@/app/api/events/send/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/events/send", {
+        event: "user.signed_up",
+        email: "user@example.com",
+        payload: { plan: 42 },
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "event_payload_invalid",
+      details: expect.arrayContaining([
+        {
+          path: "payload.plan",
+          message: 'Expected payload.plan to be "string"',
+        },
+        {
+          path: "payload.trial",
+          message: "Missing required field payload.trial",
+        },
+      ]),
+    });
+    expect(mockContactFindFirst).not.toHaveBeenCalled();
+    expect(mockDbInsert).not.toHaveBeenCalled();
+    expect(mockDeliveryRecord).not.toHaveBeenCalled();
+    expect(mockResumeWaitingRunsForEvent).not.toHaveBeenCalled();
+    expect(mockFindEnabledByTriggerEventName).not.toHaveBeenCalled();
+    expect(mockRunCreateFromTrigger).not.toHaveBeenCalled();
+  });
+
+  it("keeps schema-less custom events accepting arbitrary object payloads", async () => {
+    mockCustomEventFindByName.mockResolvedValue({
+      ...customEvent,
+      schema: null,
+    });
+    mockContactFindFirst.mockResolvedValue({ id: "contact_1" });
+    mockDeliveryRecord.mockResolvedValue({
+      id: "delivery_1",
+      eventName: "user.signed_up",
+      contactId: "contact_1",
+      email: "user@example.com",
+      payload: { nested: { ok: true }, extra: ["anything"] },
+      receivedAt: now,
+    });
+    mockFindEnabledByTriggerEventName.mockResolvedValue([]);
+    const { POST } = await import("@/app/api/events/send/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/events/send", {
+        event: "user.signed_up",
+        email: "user@example.com",
+        payload: { nested: { ok: true }, extra: ["anything"] },
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(mockDeliveryRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: { nested: { ok: true }, extra: ["anything"] },
+      }),
+    );
+  });
+
+  it("documents current-compatible unknown event names as schema-less sends", async () => {
+    mockCustomEventFindByName.mockResolvedValue(null);
+    mockContactFindFirst.mockResolvedValue({ id: "contact_1" });
+    mockDeliveryRecord.mockResolvedValue({
+      id: "delivery_unknown",
+      eventName: "unknown.event",
+      contactId: "contact_1",
+      email: "user@example.com",
+      payload: { arbitrary: true },
+      receivedAt: now,
+    });
+    mockFindEnabledByTriggerEventName.mockResolvedValue([]);
+    const { POST } = await import("@/app/api/events/send/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/events/send", {
+        event: "unknown.event",
+        email: "user@example.com",
+        payload: { arbitrary: true },
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(mockCustomEventFindByName).toHaveBeenCalledWith(
+      "unknown.event",
+      "user_1",
+    );
+    expect(mockDeliveryRecord).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventName: "unknown.event",
+        payload: { arbitrary: true },
+      }),
+    );
   });
 
   it("includes wait_for_event resumed runs when sending a matching event", async () => {
