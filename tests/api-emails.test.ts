@@ -293,6 +293,7 @@ describe("POST /api/emails", () => {
     Object.assign(mockDb.query, {
       emails: { findFirst: vi.fn().mockResolvedValue(null) },
       contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: { findFirst: vi.fn().mockResolvedValue(null) },
     });
     mockDb.insert = vi.fn().mockReturnValue({
       values: vi.fn().mockResolvedValue(undefined),
@@ -450,6 +451,185 @@ describe("POST /api/emails", () => {
         groupId: "email.send",
       }),
     );
+  });
+
+  it("renders template triple-brace placeholders with fallback values", async () => {
+    const emailId = "templated-email-uuid";
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: emailId }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          userId: AUTH_RESULT.userId,
+          subject: "Receipt for {{{PRODUCT}}}",
+          html: "<p>{{{PRODUCT}}}</p><p>{{ PRICE }}</p>",
+          text: "Text {{{PRODUCT}}} {{ PRICE }}",
+          variables: [
+            {
+              name: "PRODUCT",
+              key: "PRODUCT",
+              type: "string",
+              required: false,
+              fallbackValue: "item",
+            },
+            {
+              name: "PRICE",
+              key: "PRICE",
+              type: "number",
+              required: false,
+              fallbackValue: 25,
+            },
+          ],
+        }),
+      },
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Ignored when template has subject",
+          template: {
+            id: "11111111-1111-4111-8111-111111111111",
+            variables: {},
+          },
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect(valuesMock.mock.calls[0][0]).toMatchObject({
+      subject: "Receipt for item",
+      html: "<p>item</p><p>25</p>",
+      text: "Text item 25",
+      status: "queued",
+    });
+  });
+
+  it("renders provided template variables over fallbacks across triple and double braces", async () => {
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "templated-email-2" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          userId: AUTH_RESULT.userId,
+          subject: "Receipt for {{ PRODUCT }}",
+          html: "<p>{{{PRODUCT}}}</p><p>{{{PRICE}}}</p>",
+          text: null,
+          variables: [
+            {
+              name: "PRODUCT",
+              key: "PRODUCT",
+              type: "string",
+              required: true,
+              fallbackValue: null,
+            },
+            {
+              name: "PRICE",
+              key: "PRICE",
+              type: "number",
+              required: false,
+              fallbackValue: 25,
+            },
+          ],
+        }),
+      },
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Ignored when template has subject",
+          template: {
+            id: "11111111-1111-4111-8111-111111111111",
+            variables: { PRODUCT: "Widget" },
+          },
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect(valuesMock.mock.calls[0][0]).toMatchObject({
+      subject: "Receipt for Widget",
+      html: "<p>Widget</p><p>25</p>",
+      text: "",
+    });
+  });
+
+  it("keeps the public validation_error envelope for missing template variables without fallbacks", async () => {
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          userId: AUTH_RESULT.userId,
+          subject: "Receipt for {{{PRODUCT}}}",
+          html: "<p>{{{PRODUCT}}}</p>",
+          text: null,
+          variables: [
+            {
+              name: "PRODUCT",
+              key: "PRODUCT",
+              type: "string",
+              required: true,
+              fallbackValue: null,
+            },
+          ],
+        }),
+      },
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Ignored when template has subject",
+          template: {
+            id: "11111111-1111-4111-8111-111111111111",
+            variables: {},
+          },
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      code: "validation_error",
+      statusCode: 422,
+      message: "Missing required template variable: PRODUCT",
+      details: {
+        fieldErrors: {
+          template: ["Missing required variable: PRODUCT"],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
   });
 
   it("audits queue publish failures before returning 500 and releasing quota", async () => {

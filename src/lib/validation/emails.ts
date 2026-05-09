@@ -197,7 +197,7 @@ export const sendEmailSchema = z
     template: z
       .object({
         id: z.string().uuid(),
-        variables: z.record(z.string(), z.any()).optional(),
+        variables: z.record(z.string(), z.unknown()).optional(),
       })
       .optional(),
   })
