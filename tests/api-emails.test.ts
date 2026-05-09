@@ -1747,6 +1747,228 @@ describe("POST /api/emails/batch", () => {
   });
 });
 
+// ── Hono services/api transactional send routes ───────────────────
+
+describe("services/api transactional email routes", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockSendEmail.mockReset();
+    mockPublishBackgroundJob.mockReset();
+    mockEmitCloudWatchMetric.mockReset();
+    mockLogTelemetry.mockReset();
+    mockRecordTelemetryError.mockReset();
+    mockReserveEmailQuota.mockReset();
+    mockReleaseEmailQuota.mockReset();
+    mockReleaseEmailQuota.mockResolvedValue(undefined);
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
+    mockGetApiKeyAuthHeaderError.mockImplementation(
+      (authHeader: string | null | undefined) => {
+        if (!authHeader) return "missing_api_key";
+        const parts = authHeader.split(" ");
+        return parts.length === 2 && parts[0] === "Bearer" && parts[1]
+          ? null
+          : "malformed_api_key";
+      },
+    );
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+    mockDb.select = vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue([]),
+      }),
+    });
+    mockDb.transaction.mockImplementation(
+      async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
+    );
+    mockPublishBackgroundJob.mockResolvedValue({
+      status: "skipped",
+      reason: "queue_url_missing",
+    });
+    mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
+  });
+
+  it("exposes POST /emails with the same queued success shape", async () => {
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "svc-email-1" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { createApp } = await import("../services/api/src/index");
+    const res = await createApp().request("/emails", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer re_test123",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "sender@domain.com",
+        to: "svc@test.com",
+        subject: "Service send",
+        html: "<p>Hello</p>",
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ id: "svc-email-1" });
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: ["svc@test.com"],
+        status: "queued",
+      }),
+    );
+    expect(mockPublishBackgroundJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "email.send:svc-email-1",
+        type: "email.send",
+        source: "api",
+        emailId: "svc-email-1",
+      }),
+      {
+        deduplicationId: "email.send:svc-email-1",
+        groupId: "email.send",
+      },
+    );
+  });
+
+  it("exposes POST /emails validation and auth errors with public envelopes", async () => {
+    const { createApp } = await import("../services/api/src/index");
+    const app = createApp();
+
+    const unauthenticated = await app.request("/emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(unauthenticated.status).toBe(401);
+    await expect(unauthenticated.json()).resolves.toMatchObject({
+      name: "missing_api_key",
+      code: "missing_api_key",
+      statusCode: 401,
+    });
+
+    const invalid = await app.request("/emails", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer re_test123",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from: "sender@domain.com" }),
+    });
+    expect(invalid.status).toBe(422);
+    await expect(invalid.json()).resolves.toMatchObject({
+      name: "validation_error",
+      code: "validation_error",
+      statusCode: 422,
+      details: {
+        fieldErrors: {
+          to: [expect.any(String)],
+          subject: [expect.any(String)],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+  });
+
+  it("preserves service idempotency conflict behavior before quota or rows", async () => {
+    const findFirst = vi.fn().mockResolvedValue({ id: "existing-email" });
+    Object.assign(mockDb.query, {
+      emails: { findFirst },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+    mockDb.insert = vi.fn().mockReturnValue({
+      values: vi.fn().mockResolvedValue(undefined),
+    });
+
+    const { createApp } = await import("../services/api/src/index");
+    const res = await createApp().request("/emails", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer re_test123",
+        "Content-Type": "application/json",
+        "Idempotency-Key": "svc-idempotency-1",
+      },
+      body: JSON.stringify({
+        from: "sender@domain.com",
+        to: "svc@test.com",
+        subject: "Service send",
+        html: "<p>Hello</p>",
+      }),
+    });
+
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "idempotency_conflict",
+      details: { id: "existing-email" },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
+  });
+
+  it("exposes POST /emails/batch with compatible mixed item results", async () => {
+    let callCount = 0;
+    mockDb.insert = vi.fn().mockImplementation(() => ({
+      values: vi.fn().mockReturnValue({
+        returning: vi
+          .fn()
+          .mockResolvedValue([{ id: `svc-batch-${++callCount}` }]),
+      }),
+    }));
+
+    const { createApp } = await import("../services/api/src/index");
+    const res = await createApp().request("/emails/batch", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer re_test123",
+        "Content-Type": "application/json",
+        "Idempotency-Key": "svc-batch-key-1",
+      },
+      body: JSON.stringify([
+        {
+          from: "sender@domain.com",
+          to: "one@test.com",
+          subject: "One",
+          html: "<p>One</p>",
+        },
+        {
+          from: "sender@domain.com",
+          to: "suppressed@resend.dev",
+          subject: "Suppressed",
+          html: "<p>Suppressed</p>",
+        },
+      ]),
+    });
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      data: [
+        { id: "svc-batch-1" },
+        {
+          error: {
+            name: "recipient_suppressed",
+            code: "recipient_suppressed",
+            statusCode: 422,
+          },
+        },
+      ],
+    });
+    expect(mockReserveEmailQuota).toHaveBeenCalledWith(
+      AUTH_RESULT.userId,
+      1,
+      expect.any(Date),
+      process.env,
+      mockDb,
+    );
+    expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(1);
+    expect(
+      nonLogInsertCalls()
+        .map(([value]) => value)
+        .filter(Boolean),
+    ).toHaveLength(1);
+  });
+});
+
 // ── GET /api/emails Tests ─────────────────────────────────────────
 
 describe("GET /api/emails", () => {

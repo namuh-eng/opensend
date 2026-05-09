@@ -34,7 +34,9 @@ for (const route of ["/", "/landing"] as const) {
         page.getByRole("heading", { name: /cloud, or yours/i }),
       ).toBeVisible();
       await expect(page.getByText(/option B · default/i)).toBeVisible();
-      await expect(page.getByText("docker compose up -d")).toBeVisible();
+      await expect(
+        page.getByText("docker compose up -d").first(),
+      ).toBeVisible();
       await expect(
         page.getByRole("heading", { name: /shipping in public/i }),
       ).toBeVisible();

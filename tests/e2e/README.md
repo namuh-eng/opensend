@@ -1,29 +1,37 @@
-# E2E testing standards
+# Playwright E2E testing standards
 
-Issue #229 makes Playwright coverage the close-loop proof for behavior that must
-work through the real app boundary. Unit tests remain the fast regression layer;
-Playwright proves real HTTP/browser behavior.
+Issue #229 sets the E2E bar for future agent work: prove behavior through the
+real app boundary whenever possible, and label narrower smoke/mocked tests so
+reviewers do not mistake them for full end-to-end coverage.
 
 ## Decision tree
 
-- **Vitest unit tests**: pure functions, validators, repositories, DTOs, and
-  route predicates where an isolated fast check gives useful edge-case coverage.
-- **Playwright API route E2E**: real HTTP behavior, auth headers, API-key
-  permissions, tenant isolation, response envelopes, pagination, and status
-  codes. Use `request` against Next.js routes and real Postgres rows.
-- **Playwright browser E2E**: session cookies, server-rendered dashboard pages,
-  navigation, forms, and UI behavior. Dashboard tests must use the real Better
-  Auth fixture, not a route mock.
-- **Mocked browser integration**: allowed only for provider/client-state flows
-  where backend correctness is explicitly not under test. File comments and this
-  audit must say that the test is not backend proof.
-- **Smoke-only tests**: allowed for legacy or fixture-missing UI checks, but they
-  cannot support correctness, auth, tenant, or security claims. If they require
-  seed data, they must skip explicitly with the missing prerequisite.
+1. **Vitest unit tests** — use for pure functions, schema validation, DTO
+   mapping, repository/service branching with injected dependencies, and fast
+   edge-case matrices. Do not use Vitest alone to claim a browser, auth, route,
+   or database workflow works end-to-end.
+2. **Playwright API request tests** — use when the product contract is an app
+   route or public API. These tests should call `request`/`APIRequestContext`
+   against the running Next app and use real Postgres rows for auth, tenants,
+   API keys, and seeded data. This is the default for tenant isolation and route
+   authorization regressions.
+3. **Playwright browser UI tests** — use when the claim includes rendered UI,
+   navigation, forms, server components, cookies, or browser-visible behavior.
+   Use the real Better Auth session fixture for authenticated dashboard pages.
+4. **Mocked smoke/integration tests** — allowed only for UI component flows that
+   would otherwise require external providers or unfinished backend contracts.
+   Keep route mocks local to the spec, state that the test is mocked/smoke in
+   the title or classification table below, and do not cite it as proof of real
+   API/database behavior.
 
-## Authenticated dashboard tests
+Do not make every UI test hit SES, Stripe, Cloudflare, S3, or other real
+external services. Prefer sandbox/dev stubs at the app boundary and reserve real
+external-provider coverage for explicitly scoped scenarios.
 
-Use the real Better Auth fixture instead of mocking `/api/auth/get-session`:
+## Shared fixtures and helpers
+
+Import from `./fixtures/auth` for tests that need real auth, tenants, API keys,
+or deterministic cleanup:
 
 ```ts
 import { expect, test } from "./fixtures/auth";
@@ -31,37 +39,55 @@ import { expect, test } from "./fixtures/auth";
 test("dashboard flow", async ({ authenticatedPage, e2eUser, e2eDb }) => {
   await authenticatedPage.goto("/domains");
   await expect(authenticatedPage.getByRole("heading", { name: "Domains" })).toBeVisible();
+
+  const { rows } = await e2eDb.query("select id from domains where user_id = $1", [
+    e2eUser.id,
+  ]);
+  expect(rows).toBeDefined();
+});
+
+test("API route flow", async ({ e2eApiRequest }) => {
+  const response = await e2eApiRequest.get("/api/contacts");
+  expect(response.status()).toBe(200);
 });
 ```
 
-The fixture creates real Postgres `user` + `session` rows, signs the
-`better-auth.session_token` cookie the same way Better Auth expects, adds it to
-the browser context, and removes auth plus common tenant-owned rows after the
-test.
+The fixture provides:
 
-## Shared fixtures/helpers
+- `e2eDb` — a real `pg` client connected through `DATABASE_URL`.
+- `e2eRunId` — a deterministic marker derived from the Playwright test title,
+  worker, retry, and parallel index, or from `E2E_RUN_ID` when provided.
+- `createE2EUser(client, runId, suffix)` — inserts a Better Auth `user` and
+  `session` row.
+- `authenticatedPage` — adds a signed `better-auth.session_token` cookie for a
+  real session; this is the canonical dashboard auth path. Client-side mocks of
+  `/api/auth/get-session` do **not** authenticate server components or app
+  routes that call `getServerSession()`.
+- `createE2EApiKey(client, runId, userId, suffix)` — inserts a full-access API
+  key with a deterministic raw token and hash compatible with `validateApiKey()`.
+- `createE2ETenant(client, runId, suffix)` — creates a user plus API key for
+  multi-tenant API-route tests. Create multiple tenants with different suffixes
+  for isolation checks.
+- `e2eTenant` and `e2eApiRequest` — a default tenant and API request context
+  with the tenant's bearer token.
+- `cleanupE2ERun(client, runId)` — deletes rows owned by the deterministic test
+  users/API keys and contact rows marked with the run id. Call it in `finally`
+  when a spec creates extra tenants or app data.
 
-`tests/e2e/fixtures/auth.ts` exports:
+## Database and cleanup rules
 
-- `authenticatedPage` — browser page with a signed Better Auth session cookie.
-- `e2eDb` — connected `pg` client for deterministic setup/assertion/cleanup.
-- `e2eRun` — per-test run id and email prefix.
-- `e2eUser` — single authenticated user convenience fixture.
-- `e2eTenantA` / `e2eTenantB` — two real users for tenant-isolation scenarios.
-- `createE2EUser` / `cleanupE2EUser` — explicit auth row setup/teardown.
-- `createE2EApiKey` / `cleanupE2EApiKey` — real API key rows with SHA-256 token
-  hashes compatible with `validateApiKey()`.
-- `cleanupE2EContactsByEmailPrefix` / `countE2ERowsByPrefix` — exact-prefix
-  cleanup helpers for contact scenarios.
-
-## Cleanup contract
-
-- Use `e2eRun.emailPrefix` or exact returned IDs for every row created by a
-  Playwright test.
-- Clean app rows in `finally` before user teardown when the test creates records
-  outside the built-in fixture cleanup.
-- Do not delete by broad patterns that could match developer data.
-- Security/tenant tests should include a post-cleanup assertion when practical.
+- Every DB-backed E2E test must skip with a clear reason when `DATABASE_URL` is
+  missing.
+- Use deterministic emails like `name@${e2eRunId}.e2e.opensend.test` and store
+  `{ test_run_id: e2eRunId }` in `document`/properties when the table supports
+  it.
+- Clean before and after by `e2eRunId`. Avoid data-dependent no-op assertions;
+  assert exact IDs or exact status codes.
+- Avoid brittle sleeps. Prefer URL assertions, locator assertions, route/API
+  responses, or DB polling tied to a concrete condition.
+- For SES-touching scenarios, run with an isolated `HOME` that has no AWS
+  credentials so local development uses the SES dev stub instead of creating
+  real SES identities.
 
 ## Provider-gated and external-service tests
 
@@ -72,39 +98,26 @@ external credentials or optional provider state must either:
 2. call `test.skip(...)` with a named env/prerequisite reason and list that
    prerequisite in the audit table below.
 
-Examples: live Stripe checkout requires explicit billing env; domain creation
-requires `DKIM_ENCRYPTION_KEY` because the route generates DKIM key material.
+## Running E2E tests
 
-## Clean local setup
+`make test-e2e` runs `bun run test:e2e`, which starts `bun run dev` on port
+`3015` through `playwright.config.ts` unless a server already exists.
+
+Prerequisites for DB/auth-backed specs:
+
+1. Install dependencies with Bun.
+2. Start or provide Postgres and set `DATABASE_URL`.
+3. Apply migrations: `bun run db:migrate` (or use `docker compose up -d`, whose
+   migrator service applies migrations for the compose database).
+4. Set `BETTER_AUTH_SECRET` consistently when overriding the local default.
+5. Optional: set `E2E_RUN_ID=<short-id>` to group cleanup for a local run.
+
+Targeted examples:
 
 ```bash
-cp .env.example .env     # if needed
-make setup               # starts Postgres, pushes schema, seeds sample data
-make test-e2e            # sources .env, starts Next via Playwright webServer
+bunx playwright test tests/e2e/tenant-isolation.spec.ts
+bunx playwright test tests/e2e/domain-create-auth.spec.ts
 ```
-
-If the database already exists but schema is stale, run:
-
-```bash
-set -a; . ./.env; set +a; bun run db:push
-make test-e2e
-```
-
-For SES-touching scenarios, run with a `HOME` that does not contain AWS
-credentials unless the test explicitly targets live SES.
-
-## Feature PR proof shape
-
-For auth, tenant, security, API, or persistence-sensitive changes, the closing
-Playwright proof should:
-
-1. create deterministic real data via the fixtures/helpers;
-2. exercise the app from outside through browser or HTTP;
-3. assert observable response/UI behavior;
-4. assert persisted DB state where relevant;
-5. clean all test-owned rows;
-6. state whether the test is real browser E2E, API route E2E, mocked browser
-   integration, provider-gated, or smoke-only.
 
 ## Complete E2E audit
 

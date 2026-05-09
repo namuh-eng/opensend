@@ -146,6 +146,16 @@ function run(overrides: Partial<AutomationRun> = {}): AutomationRun {
   };
 }
 
+const segmentRow = {
+  id: "71111111-1111-1111-1111-111111111111",
+  name: "vip",
+  contactsCount: 0,
+  unsubscribedCount: 0,
+  createdAt: now,
+  document: null,
+  userId: "user_1",
+};
+
 function deps(overrides: Partial<AutomationRunnerDeps> = {}) {
   const updates: Array<Partial<AutomationRun>> = [];
   const sendEmail = vi.fn().mockResolvedValue({ id: "email_1" });
@@ -158,6 +168,9 @@ function deps(overrides: Partial<AutomationRunnerDeps> = {}) {
     getTemplate: vi.fn().mockResolvedValue(template),
     sendEmail,
     updateContact: vi.fn().mockResolvedValue(contact),
+    deleteContact: vi.fn().mockResolvedValue({ id: contact.id }),
+    getSegment: vi.fn().mockResolvedValue(segmentRow),
+    addContactToSegmentMembership: vi.fn().mockResolvedValue({ added: true }),
     listWaitingRunsByContact: vi.fn().mockResolvedValue([]),
     updateRun: vi.fn(async (_id, data) => {
       updates.push(data as Partial<AutomationRun>);
@@ -825,6 +838,315 @@ describe("automation runner", () => {
     expect(setup.updates[0]?.stepStates?.send).toMatchObject({
       status: "failed",
       error: "send_email template is missing or unpublished",
+    });
+  });
+
+  it("deletes the current contact and terminates the run with minimal output", async () => {
+    const deleteAutomation: Automation = {
+      ...automation,
+      connections: [
+        { from: "trigger", to: "delete" },
+        { from: "delete", to: "send" },
+      ],
+    };
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete",
+      type: "contact_delete",
+      config: {},
+      position: 1,
+    };
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(deleteAutomation),
+      listSteps: vi.fn().mockResolvedValue([steps[0], deleteStep, steps[2]]),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "delete" }),
+      setup.deps,
+    );
+
+    expect(setup.deps.deleteContact).toHaveBeenCalledWith(contact.id);
+    expect(setup.sendEmail).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "completed",
+      currentStepKey: null,
+      contactId: null,
+    });
+    expect(setup.updates[0]?.stepStates?.delete).toMatchObject({
+      status: "completed",
+      output: { deleted_contact_id: contact.id },
+    });
+  });
+
+  it("does not run downstream contact-dependent steps after a successful delete", async () => {
+    const deleteAutomation: Automation = {
+      ...automation,
+      connections: [
+        { from: "delete", to: "send" },
+        { from: "send", to: "end" },
+      ],
+    };
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete",
+      type: "contact_delete",
+      config: {},
+      position: 0,
+    };
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(deleteAutomation),
+      listSteps: vi.fn().mockResolvedValue([deleteStep, steps[2], steps[3]]),
+    });
+
+    const completed = await processAutomationRunStep(
+      run({ currentStepKey: "delete" }),
+      setup.deps,
+    );
+
+    // Run is terminal — no further dispatch happens. Simulate the scheduler
+    // re-loading this run and confirm the runner does not attempt downstream work.
+    expect(completed?.status).toBe("completed");
+    expect(completed?.currentStepKey).toBeNull();
+    expect(setup.sendEmail).not.toHaveBeenCalled();
+    expect(setup.deps.updateContact).not.toHaveBeenCalled();
+  });
+
+  it("fails contact_delete deterministically when the contact is missing", async () => {
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete",
+      type: "contact_delete",
+      config: {},
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([deleteStep]),
+      getContact: vi.fn().mockResolvedValue(null),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "delete" }),
+      setup.deps,
+    );
+
+    expect(setup.deps.deleteContact).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "delete",
+      failureReason: "contact_delete contact not found",
+    });
+    expect(setup.updates[0]?.stepStates?.delete).toMatchObject({
+      status: "failed",
+      error: "contact_delete contact not found",
+    });
+  });
+
+  it("fails contact_delete when delete returns no rows (idempotent storage race)", async () => {
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete",
+      type: "contact_delete",
+      config: {},
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([deleteStep]),
+      deleteContact: vi.fn().mockResolvedValue(null),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "delete" }),
+      setup.deps,
+    );
+
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "delete",
+      failureReason: "contact_delete contact not found",
+    });
+  });
+
+  it("skips repeated contact_delete steps when the run already lost its contact", async () => {
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete_again",
+      type: "contact_delete",
+      config: {},
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([deleteStep]),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "delete_again", contactId: null }),
+      setup.deps,
+    );
+
+    expect(setup.deps.getContact).not.toHaveBeenCalled();
+    expect(setup.deps.deleteContact).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "completed",
+      currentStepKey: null,
+    });
+    expect(setup.updates[0]?.stepStates?.delete_again).toMatchObject({
+      status: "skipped",
+      output: { reason: "contact_already_deleted" },
+    });
+  });
+
+  it("fails contact_delete steps with non-empty config persisted on disk", async () => {
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete",
+      type: "contact_delete",
+      config: { foo: "bar" },
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([deleteStep]),
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "delete" }),
+      setup.deps,
+    );
+
+    expect(setup.deps.deleteContact).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "delete",
+      failureReason: "contact_delete config must be empty",
+    });
+  });
+
+  it("adds the current contact to a segment with minimal output", async () => {
+    const addStep: AutomationStep = {
+      ...steps[1],
+      key: "add",
+      type: "add_to_segment",
+      config: { segment_id: segmentRow.id },
+      position: 0,
+    };
+    const addAutomation: Automation = {
+      ...automation,
+      connections: [{ from: "add", to: "end" }],
+    };
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(addAutomation),
+      listSteps: vi.fn().mockResolvedValue([addStep, steps[3]]),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "add" }), setup.deps);
+
+    expect(setup.deps.getSegment).toHaveBeenCalledWith(segmentRow.id, "user_1");
+    expect(setup.deps.addContactToSegmentMembership).toHaveBeenCalledWith({
+      contactId: contact.id,
+      segmentId: segmentRow.id,
+      segmentName: segmentRow.name,
+      userId: "user_1",
+    });
+    expect(setup.updates[0]).toMatchObject({
+      status: "queued",
+      currentStepKey: "end",
+    });
+    expect(setup.updates[0]?.stepStates?.add.output).toEqual({
+      segment_id: segmentRow.id,
+      added: true,
+    });
+  });
+
+  it("reports added=false when the contact already belongs to the segment", async () => {
+    const addStep: AutomationStep = {
+      ...steps[1],
+      key: "add",
+      type: "add_to_segment",
+      config: { segment_id: segmentRow.id },
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([addStep, steps[3]]),
+      addContactToSegmentMembership: vi
+        .fn()
+        .mockResolvedValue({ added: false }),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "add" }), setup.deps);
+
+    expect(setup.updates[0]?.stepStates?.add.output).toEqual({
+      segment_id: segmentRow.id,
+      added: false,
+    });
+    expect(setup.updates[0]).toMatchObject({ status: "queued" });
+  });
+
+  it("fails add_to_segment without a current contact", async () => {
+    const addStep: AutomationStep = {
+      ...steps[1],
+      key: "add",
+      type: "add_to_segment",
+      config: { segment_id: segmentRow.id },
+      position: 0,
+    };
+    const setup = deps({ listSteps: vi.fn().mockResolvedValue([addStep]) });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "add", contactId: null }),
+      setup.deps,
+    );
+
+    expect(setup.deps.getSegment).not.toHaveBeenCalled();
+    expect(setup.deps.addContactToSegmentMembership).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "add",
+      failureReason: "add_to_segment requires a contact",
+    });
+  });
+
+  it("fails add_to_segment when the segment does not exist", async () => {
+    const addStep: AutomationStep = {
+      ...steps[1],
+      key: "add",
+      type: "add_to_segment",
+      config: { segment_id: segmentRow.id },
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([addStep]),
+      getSegment: vi.fn().mockResolvedValue(null),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "add" }), setup.deps);
+
+    expect(setup.deps.addContactToSegmentMembership).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "add",
+      failureReason: "add_to_segment segment not found",
+    });
+  });
+
+  it("fails add_to_segment when the contact is missing at runtime", async () => {
+    const addStep: AutomationStep = {
+      ...steps[1],
+      key: "add",
+      type: "add_to_segment",
+      config: { segment_id: segmentRow.id },
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([addStep]),
+      getContact: vi.fn().mockResolvedValue(null),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "add" }), setup.deps);
+
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "add",
+      failureReason: "add_to_segment contact not found",
     });
   });
 

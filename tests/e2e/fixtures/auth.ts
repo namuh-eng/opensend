@@ -1,6 +1,6 @@
-import { createHash, createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { test as base, expect } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { APIRequestContext, Page, TestInfo } from "@playwright/test";
 import { Client } from "pg";
 
 export interface E2EUser {
@@ -14,26 +14,23 @@ export interface E2EUser {
 
 export interface E2EApiKey {
   id: string;
-  name: string;
   token: string;
   tokenHash: string;
-  authorization: string;
   userId: string;
-  permission: "full_access" | "sending_access";
+  authorization: string;
 }
 
-export interface E2ERunContext {
-  runId: string;
-  emailPrefix: string;
+export interface E2ETenant {
+  user: E2EUser;
+  apiKey: E2EApiKey;
 }
 
 type AuthFixtures = {
   authenticatedPage: Page;
-  e2eApiKey: E2EApiKey;
+  e2eApiRequest: APIRequestContext;
   e2eDb: Client;
-  e2eRun: E2ERunContext;
-  e2eTenantA: E2EUser;
-  e2eTenantB: E2EUser;
+  e2eRunId: string;
+  e2eTenant: E2ETenant;
   e2eUser: E2EUser;
 };
 
@@ -41,26 +38,38 @@ function getDatabaseUrl(): string | null {
   return process.env.DATABASE_URL ?? null;
 }
 
-function getBaseUrl(): string {
+export function getE2EBaseUrl(): string {
   return (
-    process.env.E2E_BASE_URL ?? `http://localhost:${process.env.PORT ?? "3015"}`
+    process.env.E2E_BASE_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    `http://localhost:${process.env.PORT ?? "3015"}`
   );
 }
 
-function normalizeRunPart(value: string): string {
-  return value.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase();
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
 }
 
-export function makeE2ERunContext(testInfo: {
-  workerIndex: number;
-  title: string;
-}): E2ERunContext {
-  const title = normalizeRunPart(testInfo.title).slice(0, 32) || "test";
-  const runId = `${testInfo.workerIndex}-${Date.now()}-${randomUUID().slice(0, 8)}-${title}`;
-  return {
-    runId,
-    emailPrefix: `e2e-${runId}`,
-  };
+function buildRunId(testInfo: TestInfo): string {
+  const provided = process.env.E2E_RUN_ID?.trim();
+  if (provided) return slugify(provided);
+
+  const stableTitle = slugify(testInfo.titlePath.slice(1).join("-"));
+  return [
+    "e2e",
+    stableTitle,
+    `w${testInfo.workerIndex}`,
+    `r${testInfo.retry}`,
+    `p${testInfo.parallelIndex}`,
+  ].join("-");
+}
+
+function hashApiKey(rawKey: string): string {
+  return createHash("sha256").update(rawKey).digest("hex");
 }
 
 export function signBetterAuthSessionToken(sessionToken: string): string {
@@ -72,17 +81,56 @@ export function signBetterAuthSessionToken(sessionToken: string): string {
   return `${sessionToken}.${signature}`;
 }
 
+export async function cleanupE2ERun(
+  client: Client,
+  runId: string,
+): Promise<void> {
+  const userPrefix = `e2e-user-${runId}`;
+  const apiKeyPrefix = `e2e-api-key-${runId}`;
+  const emailPattern = `%@${runId}.e2e.opensend.test`;
+
+  await client.query(
+    `delete from webhook_deliveries
+     where event_id in (
+       select id from email_events
+       where user_id like $1
+     )`,
+    [`${userPrefix}%`],
+  );
+  await client.query("delete from email_events where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query(
+    "delete from contacts_to_segments where contact_id in (select id from contacts where user_id like $1 or email like $2 or document->>'test_run_id' = $3)",
+    [`${userPrefix}%`, emailPattern, runId],
+  );
+  await client.query(
+    "delete from contacts where user_id like $1 or email like $2 or document->>'test_run_id' = $3",
+    [`${userPrefix}%`, emailPattern, runId],
+  );
+  await client.query(
+    "delete from api_keys where user_id like $1 or name like $2 or document->>'test_run_id' = $3",
+    [`${userPrefix}%`, `${apiKeyPrefix}%`, runId],
+  );
+  await client.query('delete from "session" where user_id like $1', [
+    `${userPrefix}%`,
+  ]);
+  await client.query('delete from "account" where user_id like $1', [
+    `${userPrefix}%`,
+  ]);
+  await client.query('delete from "user" where id like $1', [`${userPrefix}%`]);
+}
+
 export async function createE2EUser(
   client: Client,
   runId: string,
-  label = "user",
+  suffix = "primary",
 ): Promise<E2EUser> {
-  const normalizedLabel = normalizeRunPart(label);
-  const userId = `e2e-${normalizedLabel}-${runId}`;
-  const sessionToken = `e2e-session-${normalizedLabel}-${runId}`;
-  const sessionId = `e2e-session-id-${normalizedLabel}-${runId}`;
-  const email = `${userId}@example.com`;
-  const name = `OpenSend E2E ${label}`;
+  const userId = `e2e-user-${runId}-${suffix}`;
+  const sessionToken = `e2e-session-${runId}-${suffix}`;
+  const sessionId = `e2e-session-id-${runId}-${suffix}`;
+  const email = `${userId}@${runId}.e2e.opensend.test`;
+  const name = `OpenSend E2E ${suffix}`;
 
   await client.query(
     `insert into "user" (id, name, email, email_verified, created_at, updated_at)
@@ -107,101 +155,51 @@ export async function createE2EUser(
   };
 }
 
-export async function cleanupE2EUser(
-  client: Client,
-  user: E2EUser,
-): Promise<void> {
-  await client.query('delete from "session" where token = $1 or user_id = $2', [
-    user.sessionToken,
-    user.id,
-  ]);
-  await client.query('delete from "account" where user_id = $1', [user.id]);
-  await client.query('delete from "email_events" where user_id = $1', [
-    user.id,
-  ]);
-  await client.query("delete from api_keys where user_id = $1", [user.id]);
-  await client.query("delete from contacts where user_id = $1", [user.id]);
-  await client.query('delete from "user" where id = $1', [user.id]);
-}
-
-export function hashE2EApiKey(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
-
 export async function createE2EApiKey(
   client: Client,
-  options: {
-    userId: string;
-    runId: string;
-    label?: string;
-    permission?: "full_access" | "sending_access";
-  },
+  runId: string,
+  userId: string,
+  suffix = "primary",
 ): Promise<E2EApiKey> {
-  const label = normalizeRunPart(options.label ?? "api-key");
-  const token = `os_e2e_${options.runId}_${label}_${randomUUID()}`;
-  const tokenHash = hashE2EApiKey(token);
-  const permission = options.permission ?? "full_access";
-  const name = `E2E ${label} ${options.runId}`;
-
+  const rawKey = `re_e2e_${hashApiKey(`${runId}:${suffix}:${userId}`).slice(0, 32)}`;
+  const tokenHash = hashApiKey(rawKey);
   const { rows } = await client.query<{ id: string }>(
-    `insert into api_keys (name, token_hash, token_preview, permission, user_id, created_at)
-     values ($1, $2, $3, $4, $5, now())
+    `insert into api_keys (name, token_hash, token_preview, permission, user_id, document)
+     values ($1, $2, $3, 'full_access', $4, $5::jsonb)
+     on conflict (token_hash) do update set user_id = excluded.user_id
      returning id`,
     [
-      name,
+      `e2e-api-key-${runId}-${suffix}`,
       tokenHash,
-      `${token.slice(0, 8)}...${token.slice(-4)}`,
-      permission,
-      options.userId,
+      `${rawKey.slice(0, 6)}...${rawKey.slice(-4)}`,
+      userId,
+      JSON.stringify({ test_run_id: runId }),
     ],
   );
-  const id = rows[0]?.id;
-  if (!id) throw new Error("Failed to create E2E API key");
 
   return {
-    id,
-    name,
-    token,
+    id: rows[0]?.id ?? "",
+    token: rawKey,
     tokenHash,
-    authorization: `Bearer ${token}`,
-    userId: options.userId,
-    permission,
+    userId,
+    authorization: `Bearer ${rawKey}`,
   };
 }
 
-export async function cleanupE2EApiKey(
+export async function createE2ETenant(
   client: Client,
-  apiKey: E2EApiKey,
-): Promise<void> {
-  await client.query("delete from api_keys where id = $1 and token_hash = $2", [
-    apiKey.id,
-    apiKey.tokenHash,
-  ]);
-}
-
-export async function cleanupE2EContactsByEmailPrefix(
-  client: Client,
-  emailPrefix: string,
-): Promise<void> {
-  await client.query("delete from contacts where email like $1", [
-    `${emailPrefix}%@example.com`,
-  ]);
-}
-
-export async function countE2ERowsByPrefix(
-  client: Client,
-  emailPrefix: string,
-): Promise<number> {
-  const { rows } = await client.query<{ count: string }>(
-    `select count(*)::text as count
-     from contacts
-     where email like $1`,
-    [`${emailPrefix}%@example.com`],
-  );
-  return Number(rows[0]?.count ?? "0");
+  runId: string,
+  suffix: string,
+): Promise<E2ETenant> {
+  const user = await createE2EUser(client, runId, suffix);
+  const apiKey = await createE2EApiKey(client, runId, user.id, suffix);
+  return { user, apiKey };
 }
 
 export const test = base.extend<AuthFixtures>({
+  e2eRunId: async ({ browserName: _browserName }, use, testInfo) => {
+    await use(buildRunId(testInfo));
+  },
   e2eDb: async ({ browserName: _browserName }, use, testInfo) => {
     const databaseUrl = getDatabaseUrl();
     testInfo.skip(!databaseUrl, "DATABASE_URL is required for auth-backed E2E");
@@ -215,46 +213,31 @@ export const test = base.extend<AuthFixtures>({
       await client.end();
     }
   },
-  e2eRun: async ({ browserName: _browserName }, use, testInfo) => {
-    await use(makeE2ERunContext(testInfo));
-  },
-  e2eUser: async ({ e2eDb, e2eRun }, use) => {
-    const user = await createE2EUser(e2eDb, e2eRun.runId, "user");
+  e2eTenant: async ({ e2eDb, e2eRunId }, use) => {
+    await cleanupE2ERun(e2eDb, e2eRunId);
+    const tenant = await createE2ETenant(e2eDb, e2eRunId, "primary");
 
     try {
-      await use(user);
+      await use(tenant);
     } finally {
-      await cleanupE2EUser(e2eDb, user);
+      await cleanupE2ERun(e2eDb, e2eRunId);
     }
   },
-  e2eTenantA: async ({ e2eDb, e2eRun }, use) => {
-    const user = await createE2EUser(e2eDb, e2eRun.runId, "tenant-a");
-
-    try {
-      await use(user);
-    } finally {
-      await cleanupE2EUser(e2eDb, user);
-    }
+  e2eUser: async ({ e2eTenant }, use) => {
+    await use(e2eTenant.user);
   },
-  e2eTenantB: async ({ e2eDb, e2eRun }, use) => {
-    const user = await createE2EUser(e2eDb, e2eRun.runId, "tenant-b");
-
-    try {
-      await use(user);
-    } finally {
-      await cleanupE2EUser(e2eDb, user);
-    }
-  },
-  e2eApiKey: async ({ e2eDb, e2eRun, e2eUser }, use) => {
-    const apiKey = await createE2EApiKey(e2eDb, {
-      userId: e2eUser.id,
-      runId: e2eRun.runId,
+  e2eApiRequest: async ({ playwright, e2eTenant }, use) => {
+    const request = await playwright.request.newContext({
+      baseURL: getE2EBaseUrl(),
+      extraHTTPHeaders: {
+        Authorization: e2eTenant.apiKey.authorization,
+      },
     });
 
     try {
-      await use(apiKey);
+      await use(request);
     } finally {
-      await cleanupE2EApiKey(e2eDb, apiKey);
+      await request.dispose();
     }
   },
   authenticatedPage: async ({ context, e2eUser, page }, use) => {
@@ -262,7 +245,7 @@ export const test = base.extend<AuthFixtures>({
       {
         name: "better-auth.session_token",
         value: e2eUser.signedSessionToken,
-        url: getBaseUrl(),
+        url: getE2EBaseUrl(),
         httpOnly: true,
         sameSite: "Lax",
       },
