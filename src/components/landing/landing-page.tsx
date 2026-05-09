@@ -1,7 +1,9 @@
+import { type GithubStars, OPENSEND_GITHUB_REPO_URL } from "@/lib/github-stars";
 import Image from "next/image";
 import Link from "next/link";
 
-const GITHUB_URL = "https://github.com/namuh-eng/opensend";
+const GITHUB_URL = OPENSEND_GITHUB_REPO_URL;
+const GITHUB_CTA_LABEL = "Star on GitHub";
 const DOCS_URL = "/docs";
 const HOSTED_SIGNIN_URL = "/auth";
 const SELF_HOST_URL = `${GITHUB_URL}#self-host`;
@@ -121,7 +123,11 @@ await opensend.emails.send({
   html: "<strong>Your self-hosted email API is ready.</strong>",
 });`;
 
-export function LandingPage() {
+type LandingPageProps = {
+  githubStars?: GithubStars | null;
+};
+
+export function LandingPage({ githubStars = null }: LandingPageProps) {
   return (
     <div className="min-h-screen bg-black text-[#F0F0F0]">
       <header className="border-b border-[rgba(176,199,217,0.145)]">
@@ -144,11 +150,17 @@ export function LandingPage() {
             </Link>
             <a
               href={GITHUB_URL}
-              className="transition-colors hover:text-[#F0F0F0]"
+              className="inline-flex items-center gap-1.5 transition-colors hover:text-[#F0F0F0]"
+              data-testid="nav-github"
               rel="noreferrer noopener"
               target="_blank"
             >
-              GitHub
+              <span>{GITHUB_CTA_LABEL}</span>
+              {githubStars ? (
+                <span className="rounded-full border border-[rgba(176,199,217,0.145)] px-1.5 py-0.5 text-[11px] leading-none text-[#F0F0F0]">
+                  {githubStars.formattedCount} stars
+                </span>
+              ) : null}
             </a>
             <Link
               href={HOSTED_SIGNIN_URL}
@@ -200,7 +212,7 @@ export function LandingPage() {
                 target="_blank"
                 className="inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-[14px] font-medium text-[#A1A4A5] transition-colors hover:text-[#F0F0F0]"
               >
-                Star on GitHub →
+                {GITHUB_CTA_LABEL} →
               </a>
             </div>
           </div>
