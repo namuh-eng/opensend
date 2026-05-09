@@ -1,10 +1,12 @@
 # Ingester service deployment
 
-The ingester is a standalone process that handles two things:
+The production ingester is the Bun/Hono service in `packages/ingester`. It is a standalone process that handles two things:
 
 1. SES/SNS event ingestion at `POST /events/ses`
 2. Background job execution (queued email sends, scheduled-email scans,
    webhook dispatch, webhook retry scans)
+
+A separate Go skeleton now exists at `services/ingester-go` for the planned issue #71 data-plane migration. It is experimental and shadow-only: it exposes static `GET /health` and `GET /readyz` endpoints on local port `3027` by default, but it does **not** process SES/SNS events, jobs, Stripe webhooks, or webhook fan-out. Keep production traffic on `packages/ingester` until future parity and cutover slices explicitly change this.
 
 In Docker Compose it runs side-by-side with the app. In production we strongly
 recommend running it as a **separate service** so webhook bursts and worker
@@ -25,10 +27,19 @@ Endpoints:
 - App: `http://localhost:${PORT:-3015}`
 - Ingester health: `http://localhost:${INGESTER_PORT:-3016}/health`
 - SES SNS webhook target: `http://localhost:${INGESTER_PORT:-3016}/events/ses`
+- Experimental Go ingester health, when run separately: `http://localhost:3027/health`
 
 ```bash
 docker compose ps ingester
 docker compose logs -f ingester
+```
+
+The Go ingester skeleton is not wired into Compose on purpose. Run it separately for shadow validation:
+
+```bash
+cd services/ingester-go
+go test ./...
+go run .
 ```
 
 ## Production shape
@@ -40,6 +51,7 @@ and SQS:
 | --- | --- | --- | --- |
 | App | `Dockerfile` (default target) | `app.yourdomain.com` and `api.app.yourdomain.com` | `8080` |
 | Ingester | `packages/ingester/Dockerfile` | `events.app.yourdomain.com` | `3016` |
+| Go ingester skeleton | `services/ingester-go/Dockerfile` | none; shadow-only | `3027` |
 
 If your platform has host-based routing (AWS ALB, GCP Load Balancer, Cloudflare
 Spectrum), point each hostname at its target service. The events host has to
@@ -54,6 +66,14 @@ docker buildx build --platform linux/amd64 \
 docker buildx build --platform linux/amd64 \
   -f packages/ingester/Dockerfile \
   -t yourorg/opensend-ingester:latest --push .
+```
+
+Optional shadow-only Go ingester image build:
+
+```bash
+docker buildx build --platform linux/amd64 \
+  -f services/ingester-go/Dockerfile \
+  -t yourorg/opensend-ingester-go:shadow --push .
 ```
 
 Run a one-shot migrator container against the production `DATABASE_URL`
