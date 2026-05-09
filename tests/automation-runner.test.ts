@@ -146,6 +146,16 @@ function run(overrides: Partial<AutomationRun> = {}): AutomationRun {
   };
 }
 
+const segmentRow = {
+  id: "71111111-1111-1111-1111-111111111111",
+  name: "vip",
+  contactsCount: 0,
+  unsubscribedCount: 0,
+  createdAt: now,
+  document: null,
+  userId: "user_1",
+};
+
 function deps(overrides: Partial<AutomationRunnerDeps> = {}) {
   const updates: Array<Partial<AutomationRun>> = [];
   const sendEmail = vi.fn().mockResolvedValue({ id: "email_1" });
@@ -163,6 +173,8 @@ function deps(overrides: Partial<AutomationRunnerDeps> = {}) {
       updates.push(data as Partial<AutomationRun>);
       return { ...run(), ...data } as AutomationRun;
     }),
+    getSegment: vi.fn().mockResolvedValue(segmentRow),
+    addContactToSegmentMembership: vi.fn().mockResolvedValue({ added: true }),
     ...overrides,
   };
   return { deps: base, updates, sendEmail };
@@ -825,6 +837,135 @@ describe("automation runner", () => {
     expect(setup.updates[0]?.stepStates?.send).toMatchObject({
       status: "failed",
       error: "send_email template is missing or unpublished",
+    });
+  });
+
+  it("adds the current contact to a segment with minimal output", async () => {
+    const addStep: AutomationStep = {
+      ...steps[1],
+      key: "add",
+      type: "add_to_segment",
+      config: { segment_id: segmentRow.id },
+      position: 0,
+    };
+    const addAutomation: Automation = {
+      ...automation,
+      connections: [{ from: "add", to: "end" }],
+    };
+    const setup = deps({
+      getAutomation: vi.fn().mockResolvedValue(addAutomation),
+      listSteps: vi.fn().mockResolvedValue([addStep, steps[3]]),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "add" }), setup.deps);
+
+    expect(setup.deps.getSegment).toHaveBeenCalledWith(segmentRow.id, "user_1");
+    expect(setup.deps.addContactToSegmentMembership).toHaveBeenCalledWith({
+      contactId: contact.id,
+      segmentId: segmentRow.id,
+      segmentName: segmentRow.name,
+      userId: "user_1",
+    });
+    expect(setup.updates[0]).toMatchObject({
+      status: "queued",
+      currentStepKey: "end",
+    });
+    expect(setup.updates[0]?.stepStates?.add.output).toEqual({
+      segment_id: segmentRow.id,
+      added: true,
+    });
+  });
+
+  it("reports added=false when the contact already belongs to the segment", async () => {
+    const addStep: AutomationStep = {
+      ...steps[1],
+      key: "add",
+      type: "add_to_segment",
+      config: { segment_id: segmentRow.id },
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([addStep, steps[3]]),
+      addContactToSegmentMembership: vi
+        .fn()
+        .mockResolvedValue({ added: false }),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "add" }), setup.deps);
+
+    expect(setup.updates[0]?.stepStates?.add.output).toEqual({
+      segment_id: segmentRow.id,
+      added: false,
+    });
+    expect(setup.updates[0]).toMatchObject({ status: "queued" });
+  });
+
+  it("fails add_to_segment without a current contact", async () => {
+    const addStep: AutomationStep = {
+      ...steps[1],
+      key: "add",
+      type: "add_to_segment",
+      config: { segment_id: segmentRow.id },
+      position: 0,
+    };
+    const setup = deps({ listSteps: vi.fn().mockResolvedValue([addStep]) });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "add", contactId: null }),
+      setup.deps,
+    );
+
+    expect(setup.deps.getSegment).not.toHaveBeenCalled();
+    expect(setup.deps.addContactToSegmentMembership).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "add",
+      failureReason: "add_to_segment requires a contact",
+    });
+  });
+
+  it("fails add_to_segment when the segment does not exist", async () => {
+    const addStep: AutomationStep = {
+      ...steps[1],
+      key: "add",
+      type: "add_to_segment",
+      config: { segment_id: segmentRow.id },
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([addStep]),
+      getSegment: vi.fn().mockResolvedValue(null),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "add" }), setup.deps);
+
+    expect(setup.deps.addContactToSegmentMembership).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "add",
+      failureReason: "add_to_segment segment not found",
+    });
+  });
+
+  it("fails add_to_segment when the contact is missing at runtime", async () => {
+    const addStep: AutomationStep = {
+      ...steps[1],
+      key: "add",
+      type: "add_to_segment",
+      config: { segment_id: segmentRow.id },
+      position: 0,
+    };
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([addStep]),
+      getContact: vi.fn().mockResolvedValue(null),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "add" }), setup.deps);
+
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "add",
+      failureReason: "add_to_segment contact not found",
     });
   });
 
