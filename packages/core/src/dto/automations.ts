@@ -98,6 +98,10 @@ export interface ContactUpdateStepConfig {
 
 export type ContactDeleteStepConfig = Record<string, never>;
 
+export interface AddToSegmentStepConfig {
+  segment_id: string;
+}
+
 export type AutomationStepConfig =
   | TriggerStepConfig
   | DelayStepConfig
@@ -106,7 +110,8 @@ export type AutomationStepConfig =
   | ConditionStepConfig
   | WaitForEventStepConfig
   | ContactUpdateStepConfig
-  | ContactDeleteStepConfig;
+  | ContactDeleteStepConfig
+  | AddToSegmentStepConfig;
 
 export interface AutomationStepInput {
   key: string;
@@ -604,6 +609,36 @@ export function normalizeContactDeleteConfig(
   return {} as ContactDeleteStepConfig;
 }
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function normalizeAddToSegmentConfig(
+  raw: Record<string, unknown>,
+): AddToSegmentStepConfig {
+  assertNoUnknownKeys(
+    raw,
+    new Set(["segment_id"]),
+    "add_to_segment_config_invalid",
+    "add_to_segment config",
+  );
+
+  const segmentId =
+    typeof raw.segment_id === "string" ? raw.segment_id.trim() : "";
+  if (!segmentId) {
+    throw new AutomationValidationError(
+      "add_to_segment requires config.segment_id",
+      "add_to_segment_segment_id_required",
+    );
+  }
+  if (!UUID_PATTERN.test(segmentId)) {
+    throw new AutomationValidationError(
+      "add_to_segment config.segment_id must be a UUID",
+      "add_to_segment_segment_id_invalid",
+    );
+  }
+  return { segment_id: segmentId };
+}
+
 export function normalizeStepConfig(
   type: AutomationStepType,
   config: Record<string, unknown>,
@@ -638,6 +673,11 @@ export function normalizeStepConfig(
       >;
     case "contact_delete":
       return normalizeContactDeleteConfig(config) as unknown as Record<
+        string,
+        unknown
+      >;
+    case "add_to_segment":
+      return normalizeAddToSegmentConfig(config) as unknown as Record<
         string,
         unknown
       >;

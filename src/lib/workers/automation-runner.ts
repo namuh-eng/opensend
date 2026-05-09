@@ -6,7 +6,9 @@ import {
   automationSteps,
   automations,
   contacts,
+  contactsToSegments,
   customEventDeliveries,
+  segments,
   templates,
 } from "@/lib/db/schema";
 import {
@@ -16,13 +18,14 @@ import {
   type WaitForEventStepConfig,
   automationRunRepo,
   emailService,
+  normalizeAddToSegmentConfig,
   normalizeConditionConfig,
   normalizeContactDeleteConfig,
   normalizeContactUpdateConfig,
   normalizeWaitForEventConfig,
   parseDurationToCappedSeconds,
 } from "@opensend/core";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 
 type AutomationRun = typeof automationRuns.$inferSelect;
 type Automation = typeof automations.$inferSelect;
@@ -30,6 +33,7 @@ type AutomationStep = typeof automationSteps.$inferSelect;
 type CustomEventDelivery = typeof customEventDeliveries.$inferSelect;
 type Contact = typeof contacts.$inferSelect;
 type Template = typeof templates.$inferSelect;
+type Segment = typeof segments.$inferSelect;
 
 type StepStates = Record<string, AutomationStepStateEntry>;
 
@@ -58,6 +62,13 @@ export interface AutomationRunnerDeps {
     data: Partial<typeof contacts.$inferInsert>,
   ) => Promise<Contact | null>;
   deleteContact: (id: string) => Promise<{ id: string } | null>;
+  getSegment: (id: string, userId?: string | null) => Promise<Segment | null>;
+  addContactToSegmentMembership: (input: {
+    contactId: string;
+    segmentId: string;
+    segmentName: string;
+    userId?: string | null;
+  }) => Promise<{ added: boolean }>;
   listWaitingRunsByContact: (input: {
     contactId: string;
     userId?: string | null;
@@ -128,6 +139,50 @@ const defaultDeps: AutomationRunnerDeps = {
       .where(eq(contacts.id, id))
       .returning({ id: contacts.id });
     return deleted ?? null;
+  },
+
+  async getSegment(id, userId) {
+    const conditions = [eq(segments.id, id)];
+    if (userId) conditions.push(eq(segments.userId, userId));
+    return (
+      (await db.query.segments.findFirst({
+        where: conditions.length === 1 ? conditions[0] : and(...conditions),
+      })) ?? null
+    );
+  },
+  async addContactToSegmentMembership({
+    contactId,
+    segmentId,
+    segmentName,
+    userId,
+  }) {
+    const inserted = await db
+      .insert(contactsToSegments)
+      .values({ contactId, segmentId })
+      .onConflictDoNothing()
+      .returning({ contactId: contactsToSegments.contactId });
+    const added = inserted.length > 0;
+
+    // Legacy contacts.segments array remains the source of truth for the
+    // broadcast worker; keep both representations aligned until the legacy
+    // path is removed.
+    const contact = await db.query.contacts.findFirst({
+      where: eq(contacts.id, contactId),
+    });
+    if (contact) {
+      const existing = (contact.segments as string[] | null) ?? [];
+      if (!existing.includes(segmentName)) {
+        const updatedSegments = [...existing, segmentName];
+        const conditions = [eq(contacts.id, contactId)];
+        if (userId) conditions.push(eq(contacts.userId, userId));
+        await db
+          .update(contacts)
+          .set({ segments: updatedSegments })
+          .where(conditions.length === 1 ? conditions[0] : and(...conditions));
+      }
+    }
+
+    return { added };
   },
   async listWaitingRunsByContact(input) {
     return await automationRunRepo.listWaitingByContact(input);
@@ -863,6 +918,65 @@ async function processContactDeleteStep(
   });
 }
 
+async function processAddToSegmentStep(
+  deps: AutomationRunnerDeps,
+  run: AutomationRun,
+  automation: Automation,
+  steps: AutomationStep[],
+  step: AutomationStep,
+  states: StepStates,
+  now: Date,
+) {
+  if (!run.contactId) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "add_to_segment requires a contact",
+    );
+  }
+
+  const contact = await deps.getContact(run.contactId);
+  if (!contact) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "add_to_segment contact not found",
+    );
+  }
+
+  const config = normalizeAddToSegmentConfig(step.config ?? {});
+  const userId = run.userId ?? automation.userId ?? null;
+  const segment = await deps.getSegment(config.segment_id, userId);
+  if (!segment) {
+    return await failRun(
+      deps,
+      run,
+      step.key,
+      states,
+      now,
+      "add_to_segment segment not found",
+    );
+  }
+
+  const { added } = await deps.addContactToSegmentMembership({
+    contactId: contact.id,
+    segmentId: segment.id,
+    segmentName: segment.name,
+    userId,
+  });
+
+  return await advanceRun(deps, run, automation, steps, step, states, now, {
+    segment_id: segment.id,
+    added,
+  });
+}
+
 async function processSendEmailStep(
   deps: AutomationRunnerDeps,
   run: AutomationRun,
@@ -1109,6 +1223,18 @@ export async function processAutomationRunStep(
 
     if (step.type === "contact_delete") {
       return await processContactDeleteStep(deps, run, step, states, now);
+    }
+
+    if (step.type === "add_to_segment") {
+      return await processAddToSegmentStep(
+        deps,
+        run,
+        automation,
+        steps,
+        step,
+        states,
+        now,
+      );
     }
 
     if (step.type === "send_email") {
