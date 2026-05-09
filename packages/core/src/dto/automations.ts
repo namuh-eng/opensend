@@ -9,6 +9,7 @@ export type AutomationStepType =
   | "condition"
   | "wait_for_event"
   | "contact_update"
+  | "contact_delete"
   | "add_to_segment";
 
 export type AutomationRunStatus =
@@ -95,6 +96,8 @@ export interface ContactUpdateStepConfig {
   properties?: Record<string, ContactUpdateValue>;
 }
 
+export type ContactDeleteStepConfig = Record<string, never>;
+
 export type AutomationStepConfig =
   | TriggerStepConfig
   | DelayStepConfig
@@ -102,7 +105,8 @@ export type AutomationStepConfig =
   | EndStepConfig
   | ConditionStepConfig
   | WaitForEventStepConfig
-  | ContactUpdateStepConfig;
+  | ContactUpdateStepConfig
+  | ContactDeleteStepConfig;
 
 export interface AutomationStepInput {
   key: string;
@@ -588,6 +592,18 @@ export function normalizeContactUpdateConfig(
   return config;
 }
 
+export function normalizeContactDeleteConfig(
+  raw: Record<string, unknown>,
+): ContactDeleteStepConfig {
+  if (raw && Object.keys(raw).length > 0) {
+    throw new AutomationValidationError(
+      "contact_delete config must be empty",
+      "contact_delete_config_invalid",
+    );
+  }
+  return {} as ContactDeleteStepConfig;
+}
+
 export function normalizeStepConfig(
   type: AutomationStepType,
   config: Record<string, unknown>,
@@ -617,6 +633,11 @@ export function normalizeStepConfig(
       >;
     case "contact_update":
       return normalizeContactUpdateConfig(config) as unknown as Record<
+        string,
+        unknown
+      >;
+    case "contact_delete":
+      return normalizeContactDeleteConfig(config) as unknown as Record<
         string,
         unknown
       >;

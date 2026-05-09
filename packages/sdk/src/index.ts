@@ -71,7 +71,8 @@ export interface AutomationStepPayload {
     | "end"
     | "condition"
     | "wait_for_event"
-    | "contact_update";
+    | "contact_update"
+    | "contact_delete";
   config?: Record<string, unknown>;
   position?: number;
 }
