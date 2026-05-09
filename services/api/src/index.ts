@@ -1,5 +1,7 @@
 import { handleMcpHttpRequest } from "@opensend/mcp";
 import { Hono } from "hono";
+import { handlePostEmailBatchRequest } from "../../../src/lib/api/emails/batch-send";
+import { handlePostEmailRequest } from "../../../src/lib/api/emails/send";
 
 export const CONTROL_PLANE_API_SERVICE = "control-plane-api";
 export const CONTROL_PLANE_API_VERSION = "0.1.0";
@@ -31,6 +33,13 @@ export function createApp(options: ControlPlaneAppOptions = {}) {
       service: CONTROL_PLANE_API_SERVICE,
       version: CONTROL_PLANE_API_VERSION,
     } satisfies HealthResponse),
+  );
+
+  app.post("/emails", async (c) => await handlePostEmailRequest(c.req.raw));
+
+  app.post(
+    "/emails/batch",
+    async (c) => await handlePostEmailBatchRequest(c.req.raw),
   );
 
   app.all(
