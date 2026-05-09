@@ -10,6 +10,8 @@ export const automationStepTypeSchema = z.enum([
   "condition",
   "wait_for_event",
   "contact_update",
+  "contact_delete",
+  "add_to_segment",
 ]);
 
 const conditionComparableValueSchema = z.union([
@@ -117,6 +119,14 @@ const contactUpdateStepConfigSchema = z
     }
   });
 
+const contactDeleteStepConfigSchema = z.object({}).strict();
+
+const addToSegmentStepConfigSchema = z
+  .object({
+    segment_id: z.string().trim().uuid("segment_id must be a UUID"),
+  })
+  .strict();
+
 const waitForEventStepConfigSchema = z.object({
   event_name: z
     .string()
@@ -174,6 +184,30 @@ export const automationStepSchema = z
 
     if (step.type === "contact_update") {
       const parsed = contactUpdateStepConfigSchema.safeParse(step.config);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          ctx.addIssue({
+            ...issue,
+            path: ["config", ...issue.path],
+          });
+        }
+      }
+    }
+
+    if (step.type === "contact_delete") {
+      const parsed = contactDeleteStepConfigSchema.safeParse(step.config ?? {});
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          ctx.addIssue({
+            ...issue,
+            path: ["config", ...issue.path],
+          });
+        }
+      }
+    }
+
+    if (step.type === "add_to_segment") {
+      const parsed = addToSegmentStepConfigSchema.safeParse(step.config);
       if (!parsed.success) {
         for (const issue of parsed.error.issues) {
           ctx.addIssue({

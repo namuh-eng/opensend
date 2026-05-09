@@ -418,6 +418,77 @@ describe("automation API routes", () => {
     );
   });
 
+  it("creates an automation with a valid contact_delete step", async () => {
+    mockAutomationCreate.mockResolvedValue({
+      automation,
+      steps: [
+        triggerStep,
+        {
+          ...triggerStep,
+          id: "step_delete",
+          key: "delete",
+          type: "contact_delete",
+          config: {},
+          position: 1,
+        },
+      ],
+    });
+    const { POST } = await import("@/app/api/automations/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/automations", {
+        name: "Delete contact",
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.deleted" },
+          },
+          { key: "delete", type: "contact_delete", config: {} },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mockAutomationCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        steps: expect.arrayContaining([
+          expect.objectContaining({
+            type: "contact_delete",
+            config: {},
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it("rejects contact_delete configs with extra keys", async () => {
+    const { POST } = await import("@/app/api/automations/route");
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/automations", {
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.deleted" },
+          },
+          {
+            key: "delete",
+            type: "contact_delete",
+            config: { reason: "spam" },
+          },
+        ],
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    const json = await response.json();
+    expect(json.details.fieldErrors.steps).toEqual(
+      expect.arrayContaining([expect.stringContaining("reason")]),
+    );
+  });
+
   it("rejects invalid contact_update config with field-level errors", async () => {
     const { POST } = await import("@/app/api/automations/route");
 

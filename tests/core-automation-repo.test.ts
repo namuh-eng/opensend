@@ -368,6 +368,157 @@ describe("automationRepo.create", () => {
     ).rejects.toMatchObject({ code: "contact_update_field_invalid" });
   });
 
+  it("accepts contact_delete steps with empty config and minimal connections", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.deleted" },
+          },
+          { key: "delete", type: "contact_delete", config: {} },
+        ],
+        connections: [{ from: "trigger", to: "delete" }],
+      }),
+    ).resolves.toMatchObject({ automation: { id: "auto_1" } });
+  });
+
+  it("rejects contact_delete configs with extra keys", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.deleted" },
+          },
+          {
+            key: "delete",
+            type: "contact_delete",
+            config: { reason: "spam" },
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "contact_delete_config_invalid" });
+  });
+
+  it("accepts add_to_segment steps with a UUID segment_id", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+            position: 0,
+          },
+          {
+            key: "add",
+            type: "add_to_segment",
+            config: { segment_id: "71111111-1111-1111-1111-111111111111" },
+            position: 1,
+          },
+          { key: "end", type: "end", config: {}, position: 2 },
+        ],
+        connections: [
+          { from: "trigger", to: "add" },
+          { from: "add", to: "end" },
+        ],
+      }),
+    ).resolves.toMatchObject({ automation: { id: "auto_1" } });
+  });
+
+  it("rejects add_to_segment configs missing segment_id", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+            position: 0,
+          },
+          {
+            key: "add",
+            type: "add_to_segment",
+            config: {},
+            position: 1,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "add_to_segment_segment_id_required" });
+  });
+
+  it("rejects add_to_segment configs with non-uuid segment_id", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+            position: 0,
+          },
+          {
+            key: "add",
+            type: "add_to_segment",
+            config: { segment_id: "not-a-uuid" },
+            position: 1,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "add_to_segment_segment_id_invalid" });
+  });
+
+  it("rejects add_to_segment configs with unsupported keys", async () => {
+    const { automationRepo } = await import(
+      "../packages/core/src/db/repositories/automationRepo"
+    );
+
+    await expect(
+      automationRepo.create({
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+            position: 0,
+          },
+          {
+            key: "add",
+            type: "add_to_segment",
+            config: {
+              segment_id: "71111111-1111-1111-1111-111111111111",
+              segment_name: "vip",
+            },
+            position: 1,
+          },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: "add_to_segment_config_invalid" });
+  });
+
   it("rejects condition branch labels from non-condition steps", async () => {
     const { automationRepo } = await import(
       "../packages/core/src/db/repositories/automationRepo"
