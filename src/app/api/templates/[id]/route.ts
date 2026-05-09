@@ -3,6 +3,11 @@ import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { db } from "@/lib/db";
 import { templates } from "@/lib/db/schema";
 import { extractTemplateVariables } from "@/lib/templates/parser";
+import {
+  normalizeStoredTemplateVariables,
+  normalizeTemplateVariablesInput,
+  templateVariableResponse,
+} from "@/lib/templates/variables";
 import { eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -42,18 +47,12 @@ export async function GET(
       preview_text: template.previewText,
       html: template.html,
       text: template.text,
-      variables:
-        (
-          template.variables as Array<{ name: string; required?: boolean }>
-        )?.map((v, index) => ({
-          id: `var-${index}`,
-          key: v.name,
-          type: "string",
-          required: v.required ?? false,
-          fallback_value: null,
-          created_at: template.createdAt,
-          updated_at: template.createdAt,
-        })) || [],
+      variables: normalizeStoredTemplateVariables(template.variables).map(
+        (variable, index) =>
+          templateVariableResponse(variable, index, {
+            createdAt: template.createdAt,
+          }),
+      ),
       created_at: template.createdAt,
       updated_at: template.createdAt,
     });
@@ -98,30 +97,37 @@ export async function PATCH(
       });
 
       if (existing) {
-        const fullContent = `${body.subject ?? existing.subject ?? ""} ${body.html ?? existing.html ?? ""}`;
+        const fullContent = `${body.subject ?? existing.subject ?? ""} ${body.html ?? existing.html ?? ""} ${body.text ?? existing.text ?? ""}`;
         const extracted = extractTemplateVariables(fullContent);
 
         // Merge with existing manual variable requirements if they exist
-        const currentVars =
-          (existing.variables as Array<{ name: string; required?: boolean }>) ??
-          [];
-        const varMap = new Map(currentVars.map((v) => [v.name, v]));
+        const currentVars = normalizeStoredTemplateVariables(
+          existing.variables,
+        );
+        const varMap = new Map(
+          currentVars.map((variable) => [variable.key, variable]),
+        );
 
         updateData.variables = extracted.map((name) => ({
           name,
+          key: name,
+          type: varMap.get(name)?.type ?? "string",
           required: varMap.get(name)?.required ?? false,
+          fallbackValue: varMap.get(name)?.fallbackValue ?? null,
         }));
       }
     }
 
     // Manual variable override
     if (body.variables !== undefined) {
-      updateData.variables = (
-        body.variables as Array<{ name: string; required?: boolean }>
-      ).map((v) => ({
-        name: v.name,
-        required: v.required ?? false,
-      }));
+      const variableResult = normalizeTemplateVariablesInput(body.variables);
+      if (!variableResult.ok) {
+        return NextResponse.json(
+          { error: variableResult.error },
+          { status: 422 },
+        );
+      }
+      updateData.variables = variableResult.variables;
     }
 
     const [updated] = await db
@@ -149,18 +155,12 @@ export async function PATCH(
       preview_text: updated.previewText,
       html: updated.html,
       text: updated.text,
-      variables:
-        (updated.variables as Array<{ name: string; required?: boolean }>)?.map(
-          (v, index) => ({
-            id: `var-${index}`,
-            key: v.name,
-            type: "string",
-            required: v.required ?? false,
-            fallback_value: null,
-            created_at: updated.createdAt,
-            updated_at: updated.createdAt,
+      variables: normalizeStoredTemplateVariables(updated.variables).map(
+        (variable, index) =>
+          templateVariableResponse(variable, index, {
+            createdAt: updated.createdAt,
           }),
-        ) || [],
+      ),
       created_at: updated.createdAt,
       updated_at: updated.createdAt,
     });

@@ -19,6 +19,10 @@ import {
   suppressedRecipientError,
 } from "@/lib/suppressions";
 import {
+  interpolateTemplateVariables,
+  normalizeStoredTemplateVariables,
+} from "@/lib/templates/variables";
+import {
   buildOneClickUnsubscribeHeaders,
   createUnsubscribeUrl,
   getPublicBaseUrl,
@@ -490,19 +494,23 @@ export async function handlePostEmailRequest(
         );
       }
 
-      // Validate required variables
-      const templateVars =
-        (template.variables as Array<{
-          name: string;
-          required: boolean;
-        }>) ?? [];
-      const requiredVars = templateVars
-        .filter((v) => v.required)
-        .map((v) => v.name);
+      const templateVars = normalizeStoredTemplateVariables(template.variables);
       const providedVars = validated.template.variables ?? {};
+      const renderVars: Record<string, unknown> = { ...providedVars };
 
-      for (const requiredVar of requiredVars) {
-        if (providedVars[requiredVar] === undefined) {
+      for (const templateVar of templateVars) {
+        if (
+          Object.prototype.hasOwnProperty.call(providedVars, templateVar.key)
+        ) {
+          continue;
+        }
+
+        if (templateVar.hasFallbackValue) {
+          renderVars[templateVar.key] = templateVar.fallbackValue;
+          continue;
+        }
+
+        if (templateVar.required) {
           recordAcceptMetric(telemetry, {
             durationMs: performance.now() - startedAt,
             outcome: "invalid",
@@ -511,12 +519,12 @@ export async function handlePostEmailRequest(
             jsonWithTelemetry(
               publicApiError(
                 "validation_error",
-                `Missing required template variable: ${requiredVar}`,
+                `Missing required template variable: ${templateVar.key}`,
                 422,
                 {
                   formErrors: [],
                   fieldErrors: {
-                    template: [`Missing required variable: ${requiredVar}`],
+                    template: [`Missing required variable: ${templateVar.key}`],
                   },
                 },
               ),
@@ -529,17 +537,11 @@ export async function handlePostEmailRequest(
 
       finalHtml = template.html || "";
       if (template.subject) finalSubject = template.subject;
+      if (template.text !== null) finalText = template.text ?? "";
 
-      // Simple variable replacement
-      if (validated.template.variables) {
-        for (const [key, value] of Object.entries(
-          validated.template.variables,
-        )) {
-          const regex = new RegExp(`{{\\s*${key}\\s*}}`, "g");
-          finalHtml = finalHtml.replace(regex, String(value));
-          finalSubject = finalSubject.replace(regex, String(value));
-        }
-      }
+      finalHtml = interpolateTemplateVariables(finalHtml, renderVars);
+      finalText = interpolateTemplateVariables(finalText, renderVars);
+      finalSubject = interpolateTemplateVariables(finalSubject, renderVars);
     }
 
     const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();

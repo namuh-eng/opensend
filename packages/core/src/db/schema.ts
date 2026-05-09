@@ -326,7 +326,16 @@ export const templates = pgTable("templates", {
   html: text("html"),
   text: text("text"),
   variables:
-    jsonb("variables").$type<Array<{ name: string; required: boolean }>>(),
+    jsonb("variables").$type<
+      Array<{
+        name: string;
+        key?: string;
+        type?: "string" | "number";
+        required: boolean;
+        fallbackValue?: string | number | null;
+        fallback_value?: string | number | null;
+      }>
+    >(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

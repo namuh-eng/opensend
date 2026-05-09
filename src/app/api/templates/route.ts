@@ -2,6 +2,7 @@ import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { db } from "@/lib/db";
 import { templates } from "@/lib/db/schema";
+import { normalizeTemplateVariablesInput } from "@/lib/templates/variables";
 import { type SQL, and, count, desc, eq, ilike } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -13,12 +14,6 @@ function generateAlias(name: string): string {
       .replace(/^-|-$/g, "") || "untitled-template"
   );
 }
-
-const RESERVED_VARIABLE_NAMES = [
-  "UNSUBSCRIBE_URL",
-  "RESEND_UNSUBSCRIBE_URL",
-  "INTERNAL_ID",
-];
 
 export async function GET(request: NextRequest) {
   const auth = await validateApiKey(request.headers.get("authorization"));
@@ -107,30 +102,12 @@ export async function POST(request: NextRequest) {
 
     const alias = body.alias?.trim() || generateAlias(name);
 
-    // Validate variables
-    const variablesArr = body.variables || [];
-    if (!Array.isArray(variablesArr)) {
+    const variableResult = normalizeTemplateVariablesInput(body.variables);
+    if (!variableResult.ok) {
       return NextResponse.json(
-        { error: "variables must be an array" },
+        { error: variableResult.error },
         { status: 422 },
       );
-    }
-
-    if (variablesArr.length > 50) {
-      return NextResponse.json(
-        { error: "Too many variables. Max allowed is 50." },
-        { status: 422 },
-      );
-    }
-
-    for (const v of variablesArr) {
-      if (!v.name) continue;
-      if (RESERVED_VARIABLE_NAMES.includes(v.name.toUpperCase())) {
-        return NextResponse.json(
-          { error: `Variable name ${v.name} is reserved.` },
-          { status: 422 },
-        );
-      }
     }
 
     const [template] = await db
@@ -144,12 +121,7 @@ export async function POST(request: NextRequest) {
         replyTo: body.reply_to || null,
         previewText: body.preview_text || null,
         text: body.text || null,
-        variables: (
-          variablesArr as Array<{ name: string; required?: boolean }>
-        ).map((v) => ({
-          name: v.name,
-          required: v.required ?? false,
-        })),
+        variables: variableResult.variables,
         status: "draft",
       })
       .returning();
