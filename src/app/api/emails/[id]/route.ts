@@ -7,7 +7,10 @@ import {
   parseScheduledAt,
   scheduledAtValidationMessage,
 } from "@/lib/validation/emails";
+import { EmailReadServiceError, createEmailReadService } from "@opensend/core";
 import { and, eq } from "drizzle-orm";
+
+const emailReadService = createEmailReadService();
 
 export async function GET(
   request: Request,
@@ -21,42 +24,13 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const email = await db.query.emails.findFirst({
-      where: and(eq(emails.id, id), eq(emails.userId, auth.userId)),
-    });
-
-    if (!email) {
+    const email = await emailReadService.getEmail(auth.userId, id);
+    return Response.json(email);
+  } catch (err) {
+    if (err instanceof EmailReadServiceError && err.code === "not_found") {
       return Response.json({ error: "Email not found" }, { status: 404 });
     }
 
-    return Response.json({
-      object: "email",
-      id: email.id,
-      from: email.from,
-      to: email.to,
-      subject: email.subject,
-      html: email.html,
-      text: email.text,
-      cc: email.cc,
-      bcc: email.bcc,
-      reply_to: email.replyTo,
-      last_event: email.status,
-      provider_retry_count: email.providerRetryCount,
-      provider_last_attempted_at: email.providerLastAttemptedAt,
-      provider_next_retry_at: email.providerNextRetryAt,
-      provider_last_error: email.providerLastErrorCode
-        ? {
-            code: email.providerLastErrorCode,
-            message: email.providerLastErrorMessage ?? "Provider send failed.",
-          }
-        : null,
-      provider_dead_lettered_at: email.providerDeadLetteredAt,
-      scheduled_at: email.scheduledAt,
-      sent_at: email.sentAt,
-      tags: email.tags,
-      created_at: email.createdAt,
-    });
-  } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to retrieve email";
     return Response.json({ error: message }, { status: 500 });
