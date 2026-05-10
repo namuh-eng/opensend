@@ -2,10 +2,10 @@ import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { zodValidationDetails } from "@/lib/api-errors";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { handlePostEmailRequest } from "@/lib/api/emails/send";
-import { db } from "@/lib/db";
-import { emails } from "@/lib/db/schema";
-import { type SQL, and, desc, eq, gt, lt } from "drizzle-orm";
+import { createEmailReadService } from "@opensend/core";
 import type { ZodError } from "zod";
+
+const emailReadService = createEmailReadService();
 
 // ── POST /api/emails ──────────────────────────────────────────────
 
@@ -20,10 +20,7 @@ export async function GET(request: Request): Promise<Response> {
   if (permissionError) return permissionError;
 
   const url = new URL(request.url);
-  const limit = Math.min(
-    Math.max(Number(url.searchParams.get("limit")) || 20, 1),
-    100,
-  );
+  const limit = Number(url.searchParams.get("limit")) || 20;
   const after = url.searchParams.get("after");
   const before = url.searchParams.get("before");
   const status = (
@@ -33,73 +30,14 @@ export async function GET(request: Request): Promise<Response> {
   ).trim();
 
   try {
-    let query = db
-      .select({
-        id: emails.id,
-        from: emails.from,
-        to: emails.to,
-        subject: emails.subject,
-        cc: emails.cc,
-        bcc: emails.bcc,
-        replyTo: emails.replyTo,
-        status: emails.status,
-        providerRetryCount: emails.providerRetryCount,
-        providerLastAttemptedAt: emails.providerLastAttemptedAt,
-        providerNextRetryAt: emails.providerNextRetryAt,
-        providerLastErrorCode: emails.providerLastErrorCode,
-        providerLastErrorMessage: emails.providerLastErrorMessage,
-        providerDeadLetteredAt: emails.providerDeadLetteredAt,
-        scheduledAt: emails.scheduledAt,
-        sentAt: emails.sentAt,
-        createdAt: emails.createdAt,
-      })
-      .from(emails);
-
-    const conditions: SQL[] = [eq(emails.userId, auth.userId)];
-    if (status && status !== "all") {
-      conditions.push(eq(emails.status, status));
-    }
-    if (after) {
-      conditions.push(gt(emails.id, after));
-    } else if (before) {
-      conditions.push(lt(emails.id, before));
-    }
-    query = query.where(and(...conditions)) as typeof query;
-
-    const results = await query
-      .orderBy(desc(emails.createdAt))
-      .limit(limit + 1);
-
-    const hasMore = results.length > limit;
-    const data = hasMore ? results.slice(0, limit) : results;
-
-    return Response.json({
-      object: "list",
-      has_more: hasMore,
-      data: data.map((e) => ({
-        id: e.id,
-        from: e.from,
-        to: e.to,
-        subject: e.subject,
-        cc: e.cc,
-        bcc: e.bcc,
-        reply_to: e.replyTo,
-        last_event: e.status,
-        provider_retry_count: e.providerRetryCount,
-        provider_last_attempted_at: e.providerLastAttemptedAt,
-        provider_next_retry_at: e.providerNextRetryAt,
-        provider_last_error: e.providerLastErrorCode
-          ? {
-              code: e.providerLastErrorCode,
-              message: e.providerLastErrorMessage ?? "Provider send failed.",
-            }
-          : null,
-        provider_dead_lettered_at: e.providerDeadLetteredAt,
-        scheduled_at: e.scheduledAt,
-        sent_at: e.sentAt,
-        created_at: e.createdAt,
-      })),
+    const result = await emailReadService.listEmails({
+      userId: auth.userId,
+      limit,
+      after: after ?? undefined,
+      before: before ?? undefined,
+      status,
     });
+    return Response.json(result);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to list emails";
@@ -123,10 +61,8 @@ export async function DELETE(request: Request): Promise<Response> {
   }
 
   try {
-    await db
-      .delete(emails)
-      .where(and(eq(emails.id, id), eq(emails.userId, auth.userId)));
-    return Response.json({ success: true });
+    const result = await emailReadService.deleteEmail(auth.userId, id);
+    return Response.json(result);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to delete email";
