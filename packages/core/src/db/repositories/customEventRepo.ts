@@ -27,6 +27,14 @@ export const customEventRepo = {
     });
   },
 
+  async findByIdForUser(id: string, userId?: string | null) {
+    const conditions = [eq(customEvents.id, id)];
+    if (userId) conditions.push(eq(customEvents.userId, userId));
+    return await db.query.customEvents.findFirst({
+      where: and(...conditions),
+    });
+  },
+
   async findByName(name: string, userId?: string | null) {
     const conditions = [eq(customEvents.name, name)];
     if (userId) conditions.push(eq(customEvents.userId, userId));
@@ -72,6 +80,15 @@ export const customEventRepo = {
     return await db
       .delete(customEvents)
       .where(eq(customEvents.id, id))
+      .returning({ id: customEvents.id });
+  },
+
+  async deleteForUser(id: string, userId?: string | null) {
+    const conditions = [eq(customEvents.id, id)];
+    if (userId) conditions.push(eq(customEvents.userId, userId));
+    return await db
+      .delete(customEvents)
+      .where(and(...conditions))
       .returning({ id: customEvents.id });
   },
 };
