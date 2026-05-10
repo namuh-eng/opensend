@@ -10,8 +10,10 @@
 #   - app        : Next.js dashboard + REST API on http://localhost:${PORT:-3015}.
 #   - ingester   : Production Bun/Hono service that handles SES/SNS, Stripe, and scheduled-email
 #                  webhooks on http://localhost:${INGESTER_PORT:-3016}.
-#                  Experimental Go shadow skeleton lives at services/ingester-go
-#                  and defaults to 3027, but is intentionally not wired into Compose.
+#   - scheduler  : Durable short-interval driver for ingester /jobs/* scans.
+#
+# The experimental Go shadow skeleton lives at services/ingester-go and defaults to 3027,
+# but is intentionally not wired into Compose.
 #
 # Optional overrides (all read from .env):
 #   - PORT                        : host port for the app (default 3015)
@@ -20,6 +22,8 @@
 #   - POSTGRES_PASSWORD           : Postgres password (default `opensend`; CHANGE in production)
 #   - AWS_*                       : SES + S3 credentials. If unset, email sending is disabled.
 #   - BACKGROUND_JOBS_*           : SQS/EventBridge wiring for async send pipeline.
+#   - INGESTER_JOB_TOKEN          : optional bearer token protecting ingester /jobs/* scans.
+#   - INGESTER_SCHEDULER_INTERVAL_SECONDS: scheduler cadence (default 60; minimum 10).
 #   - CLOUDFLARE_API_TOKEN/ZONE_ID: enables auto-DKIM/SPF/DMARC when adding a domain.
 #   - S3_BUCKET_NAME              : S3 bucket for email attachments.
 #
@@ -100,6 +104,7 @@ services:
   #   http://<host>:${INGESTER_PORT:-3016}/events/stripe
   # Set BACKGROUND_WORKER_POLL=true to enable the SQS long-poll loop in this container.
   ingester:
+    image: opensend-ingester:local
     build:
       context: .
       dockerfile: packages/ingester/Dockerfile
@@ -116,6 +121,7 @@ services:
       BACKGROUND_JOBS_EVENT_BUS_NAME: ${BACKGROUND_JOBS_EVENT_BUS_NAME:-}
       BACKGROUND_JOBS_REQUIRE_QUEUE: ${BACKGROUND_JOBS_REQUIRE_QUEUE:-false}
       BACKGROUND_WORKER_POLL: ${BACKGROUND_WORKER_POLL:-false}
+      INGESTER_JOB_TOKEN: ${INGESTER_JOB_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -133,6 +139,24 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # Durable local/self-host scheduler for ingester background scan endpoints.
+  # It posts every ${INGESTER_SCHEDULER_INTERVAL_SECONDS:-60}s to:
+  #   - /jobs/scheduled-emails
+  #   - /jobs/webhooks
+  #   - /jobs/domain-verify
+  # If INGESTER_JOB_TOKEN is set, the scheduler sends Authorization: Bearer <token>.
+  scheduler:
+    image: opensend-ingester:local
+    restart: unless-stopped
+    command: ["bun", "/app/job-scheduler.js"]
+    environment:
+      INGESTER_URL: http://ingester:3016
+      INGESTER_JOB_TOKEN: ${INGESTER_JOB_TOKEN:-}
+      INGESTER_SCHEDULER_INTERVAL_SECONDS: ${INGESTER_SCHEDULER_INTERVAL_SECONDS:-60}
+    depends_on:
+      ingester:
+        condition: service_healthy
 
 volumes:
   pgdata:

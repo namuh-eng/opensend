@@ -2,6 +2,8 @@ import { generateKeyPairSync, sign } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockCreateOrIgnoreDuplicate = vi.fn();
+const mockDomainReconcileAllPendingVerifications = vi.fn();
+const mockEnqueueDomainEvent = vi.fn();
 const mockWebhookList = vi.fn();
 const mockEnqueue = vi.fn();
 const mockDispatchDelivery = vi.fn();
@@ -51,10 +53,15 @@ vi.mock("@opensend/core", () => {
         getHeader(input.headers, "x-correlation-id") ??
         "corr-ingester-test",
     }),
+    domainService: {
+      reconcileAllPendingVerifications:
+        mockDomainReconcileAllPendingVerifications,
+    },
     emailEventRepo: {
       createOrIgnoreDuplicate: mockCreateOrIgnoreDuplicate,
     },
     emitCloudWatchMetric: mockEmitCloudWatchMetric,
+    enqueueDomainEvent: mockEnqueueDomainEvent,
     getTelemetryCarrier: (context: {
       traceparent: string;
       correlationId: string;
@@ -97,6 +104,7 @@ vi.mock("hono", () => {
       header: (name: string) => string | undefined;
       json: () => Promise<unknown>;
     };
+    json: (data: unknown, status?: number) => Response;
     text: (body: string, status?: number) => Response;
   }) => Response | Promise<Response>;
 
@@ -125,6 +133,7 @@ vi.mock("hono", () => {
           header: (name: string) => request.headers.get(name) ?? undefined,
           json: async () => await request.json(),
         },
+        json: (data: unknown, status = 200) => Response.json(data, { status }),
         text: (body: string, status = 200) => new Response(body, { status }),
       });
     }
@@ -229,7 +238,19 @@ describe("SES SNS ingestion route", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
 
+    mockDomainReconcileAllPendingVerifications.mockResolvedValue({
+      scanned: 0,
+      updated: 0,
+      unchanged: 0,
+      failed: 0,
+      changes: [],
+    });
+    mockEnqueueDomainEvent.mockResolvedValue({
+      eventId: "domain-event-1",
+      deliveryIds: [],
+    });
     mockEnqueue.mockResolvedValue({ id: "delivery-1" });
     mockDispatchDelivery.mockResolvedValue(undefined);
     mockPublishBackgroundJob.mockResolvedValue({
@@ -258,6 +279,67 @@ describe("SES SNS ingestion route", () => {
         text: async () => publicKeyPem,
       }),
     );
+  });
+
+  it("runs domain verification reconciliation through the authenticated job endpoint", async () => {
+    vi.stubEnv("INGESTER_JOB_TOKEN", "test-job-token");
+    mockDomainReconcileAllPendingVerifications.mockResolvedValue({
+      scanned: 1,
+      updated: 1,
+      unchanged: 0,
+      failed: 0,
+      changes: [
+        {
+          domainId: "domain-1",
+          domainName: "example.com",
+          userId: "user-1",
+          previousStatus: "pending",
+          nextStatus: "verified",
+          records: [],
+          capabilities: ["sending"],
+        },
+      ],
+    });
+
+    const app = (await import("../packages/ingester/src/index")).default;
+    const response = await app.request("http://localhost/jobs/domain-verify", {
+      method: "POST",
+      headers: { authorization: "Bearer test-job-token" },
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      scanned: 1,
+      updated: 1,
+      unchanged: 0,
+      failed: 0,
+    });
+    expect(mockDomainReconcileAllPendingVerifications).toHaveBeenCalledTimes(1);
+    expect(mockEnqueueDomainEvent).toHaveBeenCalledWith({
+      type: "domain.updated",
+      userId: "user-1",
+      payload: {
+        id: "domain-1",
+        name: "example.com",
+        status: "verified",
+        previous_status: "pending",
+        records: [],
+        capabilities: ["sending"],
+      },
+    });
+  });
+
+  it("rejects domain verification job calls without the configured bearer token", async () => {
+    vi.stubEnv("INGESTER_JOB_TOKEN", "test-job-token");
+
+    const app = (await import("../packages/ingester/src/index")).default;
+    const response = await app.request("http://localhost/jobs/domain-verify", {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe("Unauthorized");
+    expect(mockDomainReconcileAllPendingVerifications).not.toHaveBeenCalled();
   });
 
   it("verifies the SNS signature, persists a normalized event, and queues webhook delivery", async () => {
