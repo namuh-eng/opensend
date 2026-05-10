@@ -1,6 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
+
+const mockContactService = vi.hoisted(() => ({
+  listContacts: vi.fn(),
+}));
+
+vi.mock("@opensend/core", () => ({
+  ContactServiceError: class ContactServiceError extends Error {
+    constructor(
+      readonly code: "duplicate_email" | "not_found",
+      message: string,
+    ) {
+      super(message);
+      this.name = "ContactServiceError";
+    }
+  },
+  createContactService: () => mockContactService,
+}));
+
+// Mock next/navigation
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn() }),
   usePathname: () => "/audience",
@@ -74,10 +93,25 @@ describe("Contacts List — API route", () => {
 
   beforeEach(() => {
     vi.resetModules();
+    vi.clearAllMocks();
   });
 
   it("returns contacts with correct shape", async () => {
-    vi.doMock("@/lib/db", () => createChainMock(mockRows, 2));
+    mockContactService.listContacts.mockResolvedValueOnce({
+      data: mockRows.map((row) => ({
+        id: row.id,
+        email: row.email,
+        first_name: row.firstName,
+        last_name: row.lastName,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        unsubscribed: row.unsubscribed,
+        status: row.unsubscribed ? "unsubscribed" : "subscribed",
+        segments: row.segments ?? [],
+        created_at: row.createdAt,
+      })),
+      hasMore: false,
+    });
 
     handler = await import("@/app/api/contacts/route");
     const req = new Request("http://localhost:3015/api/contacts");
@@ -93,7 +127,10 @@ describe("Contacts List — API route", () => {
   });
 
   it("supports search query filtering", async () => {
-    vi.doMock("@/lib/db", () => createChainMock([], 0));
+    mockContactService.listContacts.mockResolvedValueOnce({
+      data: [],
+      hasMore: false,
+    });
 
     handler = await import("@/app/api/contacts/route");
     const req = new Request("http://localhost:3015/api/contacts?search=alice");
@@ -106,7 +143,10 @@ describe("Contacts List — API route", () => {
   });
 
   it("supports pagination with after and limit params", async () => {
-    vi.doMock("@/lib/db", () => createChainMock([], 100));
+    mockContactService.listContacts.mockResolvedValueOnce({
+      data: [],
+      hasMore: false,
+    });
 
     handler = await import("@/app/api/contacts/route");
     const req = new Request(

@@ -12,6 +12,16 @@ const mockCountFn = vi.hoisted(() => vi.fn());
 const mockCreateWebhookService = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
+const mockContactService = vi.hoisted(() => ({
+  createContact: vi.fn(),
+  listContacts: vi.fn(),
+  getContact: vi.fn(),
+  updateContact: vi.fn(),
+  deleteContact: vi.fn(),
+  listContactSegments: vi.fn(),
+  addContactToSegment: vi.fn(),
+  removeContactFromSegment: vi.fn(),
+}));
 
 function makeChain<T>(rows: T[]) {
   return {
@@ -203,10 +213,21 @@ describe("route smoke coverage", () => {
           this.name = "TemplateServiceError";
         }
       }
+      class ContactServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+        ) {
+          super(message);
+          this.name = "ContactServiceError";
+        }
+      }
 
       return {
         createWebhookService: mockCreateWebhookService,
         TemplateServiceError,
+        ContactServiceError,
+        createContactService: () => mockContactService,
         createTemplateService: () => ({
           async getTemplate(id: string) {
             const [template] = await mockSelect().from().where({ id }).limit(1);
@@ -299,6 +320,14 @@ describe("route smoke coverage", () => {
       updateWebhook: vi.fn(),
       deleteWebhook: vi.fn(),
     });
+    mockContactService.createContact.mockReset();
+    mockContactService.listContacts.mockReset();
+    mockContactService.getContact.mockReset();
+    mockContactService.updateContact.mockReset();
+    mockContactService.deleteContact.mockReset();
+    mockContactService.listContactSegments.mockReset();
+    mockContactService.addContactToSegment.mockReset();
+    mockContactService.removeContactFromSegment.mockReset();
     vi.doMock("@/lib/api-auth", async () => {
       const actual =
         await vi.importActual<typeof import("@/lib/api-auth")>(
@@ -415,19 +444,23 @@ describe("route smoke coverage", () => {
 
   it("allows dashboard-session auth for audience list routes", async () => {
     mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({ dashboard: true });
-    mockSelect.mockReturnValueOnce(
-      makeChain([
+    mockContactService.listContacts.mockResolvedValueOnce({
+      hasMore: false,
+      data: [
         {
           id: "c1",
           email: "alice@example.com",
           firstName: "Alice",
           lastName: "Example",
+          first_name: "Alice",
+          last_name: "Example",
           unsubscribed: false,
+          status: "subscribed",
           segments: ["VIP"],
-          createdAt: new Date("2026-04-27T00:00:00.000Z"),
+          created_at: new Date("2026-04-27T00:00:00.000Z"),
         },
-      ]),
-    );
+      ],
+    });
 
     const contactsRoute = await import("@/app/api/contacts/route");
     const response = await contactsRoute.GET(
@@ -1271,10 +1304,13 @@ describe("route smoke coverage", () => {
       "@/app/api/contacts/[id]/segments/[segment_id]/route"
     );
 
-    mockFindFirst.mockResolvedValueOnce({ id: "c1", segments: ["VIP"] }); // contact
-    mockSelect.mockImplementationOnce(() =>
-      makeChain([{ id: "s1", name: "VIP" }]),
-    ); // segment detail
+    mockContactService.listContactSegments.mockResolvedValueOnce([
+      {
+        id: "s1",
+        name: "VIP",
+        created_at: new Date("2026-04-27T00:00:00.000Z"),
+      },
+    ]);
     const contactSegmentsGet = await contactSegmentsRoute.GET(
       makeNextRequest("http://localhost/api/contacts/c1/segments", {
         headers: { authorization: "Bearer token" },
@@ -1283,10 +1319,10 @@ describe("route smoke coverage", () => {
     );
     expect(contactSegmentsGet.status).toBe(200);
 
-    mockFindFirst.mockResolvedValueOnce({ id: "c1", segments: [] }); // contact
-    mockFindFirst.mockResolvedValueOnce({ id: "s1", name: "VIP" }); // segment
-    mockInsert.mockImplementationOnce(() => makeChain([]));
-    mockUpdate.mockImplementationOnce(() => makeChain([{ id: "c1" }]));
+    mockContactService.addContactToSegment.mockResolvedValueOnce({
+      contactId: "c1",
+      segmentId: "s1",
+    });
     const contactSegmentPost = await contactSegmentRoute.POST(
       makeNextRequest("http://localhost/api/contacts/c1/segments/s1", {
         method: "POST",

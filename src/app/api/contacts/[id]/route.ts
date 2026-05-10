@@ -1,44 +1,41 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { contacts } from "@/lib/db/schema";
 import { queueEvent } from "@/lib/events";
-import { and, eq, or } from "drizzle-orm";
+import { ContactServiceError, createContactService } from "@opensend/core";
 
-type ContactWebhookRow = typeof contacts.$inferSelect;
+function contactService() {
+  return createContactService();
+}
 
-function toContactWebhookPayload(contact: ContactWebhookRow) {
+function mapContactServiceError(error: unknown, fallback: string): Response {
+  if (error instanceof ContactServiceError) {
+    return Response.json({ error: error.message }, { status: 404 });
+  }
+
+  const message = error instanceof Error ? error.message : fallback;
+  return Response.json({ error: message }, { status: 500 });
+}
+
+function toContactUpdateResponse(contact: {
+  object: "contact";
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  unsubscribed: boolean;
+  properties: Record<string, string> | null;
+  created_at: Date | string | null;
+}) {
   return {
+    object: contact.object,
     id: contact.id,
     email: contact.email,
-    first_name: contact.firstName,
-    last_name: contact.lastName,
+    first_name: contact.first_name,
+    last_name: contact.last_name,
     unsubscribed: contact.unsubscribed,
-    properties: contact.customProperties ?? {},
-    segments: contact.segments ?? [],
-    topics: contact.topicSubscriptions ?? [],
-    created_at: contact.createdAt?.toISOString?.() ?? contact.createdAt,
+    properties: contact.properties,
+    created_at: contact.created_at,
   };
-}
-
-function valuesEqual(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-}
-
-async function findContact(idOrEmail: string, userId: string) {
-  const isUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      idOrEmail,
-    );
-
-  return await db.query.contacts.findFirst({
-    where: and(
-      isUuid
-        ? or(eq(contacts.id, idOrEmail), eq(contacts.email, idOrEmail))
-        : eq(contacts.email, idOrEmail),
-      eq(contacts.userId, userId),
-    ),
-  });
 }
 
 export async function GET(
@@ -55,40 +52,10 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const contact = await findContact(id, userId);
-
-    if (!contact) {
-      return Response.json({ error: "Contact not found" }, { status: 404 });
-    }
-
-    // Map internal topic shape to documented opt_in/opt_out shape
-    const topics =
-      (
-        contact.topicSubscriptions as Array<{
-          topicId: string;
-          subscribed: boolean;
-        }> | null
-      )?.map((t) => ({
-        id: t.topicId,
-        subscription: t.subscribed ? "opt_in" : "opt_out",
-      })) ?? [];
-
-    return Response.json({
-      object: "contact",
-      id: contact.id,
-      email: contact.email,
-      first_name: contact.firstName,
-      last_name: contact.lastName,
-      unsubscribed: contact.unsubscribed,
-      properties: contact.customProperties,
-      segments: contact.segments ?? [],
-      topics,
-      created_at: contact.createdAt,
-    });
+    const contact = await contactService().getContact(id, userId);
+    return Response.json(contact);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to retrieve contact";
-    return Response.json({ error: message }, { status: 500 });
+    return mapContactServiceError(err, "Failed to retrieve contact");
   }
 }
 
@@ -107,96 +74,33 @@ export async function PATCH(
 
   let body: Record<string, unknown>;
   try {
-    body = await request.json();
+    body = (await request.json()) as Record<string, unknown>;
   } catch {
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
   try {
-    const contact = await findContact(id, userId);
-    if (!contact) {
-      return Response.json({ error: "Contact not found" }, { status: 404 });
-    }
+    const updated = await contactService().updateContact({
+      userId,
+      idOrEmail: id,
+      changes: body,
+    });
 
-    const updateData: Record<string, unknown> = {};
-    if (body.email !== undefined) updateData.email = body.email;
-    if (body.first_name !== undefined) updateData.firstName = body.first_name;
-    if (body.last_name !== undefined) updateData.lastName = body.last_name;
-    if (body.unsubscribed !== undefined)
-      updateData.unsubscribed = body.unsubscribed;
-    if (body.properties !== undefined)
-      updateData.customProperties = body.properties;
-
-    const changedFields = Object.entries({
-      email: updateData.email,
-      first_name: updateData.firstName,
-      last_name: updateData.lastName,
-      unsubscribed: updateData.unsubscribed,
-      properties: updateData.customProperties,
-    })
-      .filter(([, value]) => value !== undefined)
-      .filter(([field, value]) => {
-        const currentValue =
-          field === "first_name"
-            ? contact.firstName
-            : field === "last_name"
-              ? contact.lastName
-              : field === "properties"
-                ? contact.customProperties
-                : field === "unsubscribed"
-                  ? contact.unsubscribed
-                  : contact.email;
-        return !valuesEqual(currentValue, value);
-      })
-      .map(([field]) => field);
-
-    if (changedFields.length === 0) {
-      return Response.json({
-        object: "contact",
-        id: contact.id,
-        email: contact.email,
-        first_name: contact.firstName,
-        last_name: contact.lastName,
-        unsubscribed: contact.unsubscribed,
-        properties: contact.customProperties,
-        created_at: contact.createdAt,
+    if (updated.changedFields.length > 0) {
+      await queueEvent({
+        type: "contact.updated",
+        userId,
+        payload: {
+          id: updated.id,
+          changed_fields: updated.changedFields,
+          contact: updated.webhookPayload,
+        },
       });
     }
 
-    const [updated] = await db
-      .update(contacts)
-      .set(updateData)
-      .where(and(eq(contacts.id, contact.id), eq(contacts.userId, userId)))
-      .returning();
-
-    if (!updated) {
-      return Response.json({ error: "Contact not found" }, { status: 404 });
-    }
-
-    await queueEvent({
-      type: "contact.updated",
-      userId,
-      payload: {
-        id: updated.id,
-        changed_fields: changedFields,
-        contact: toContactWebhookPayload(updated),
-      },
-    });
-
-    return Response.json({
-      object: "contact",
-      id: updated.id,
-      email: updated.email,
-      first_name: updated.firstName,
-      last_name: updated.lastName,
-      unsubscribed: updated.unsubscribed,
-      properties: updated.customProperties,
-      created_at: updated.createdAt,
-    });
+    return Response.json(toContactUpdateResponse(updated));
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to update contact";
-    return Response.json({ error: message }, { status: 500 });
+    return mapContactServiceError(err, "Failed to update contact");
   }
 }
 
@@ -214,19 +118,7 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    const contact = await findContact(id, userId);
-    if (!contact) {
-      return Response.json({ error: "Contact not found" }, { status: 404 });
-    }
-
-    const [deleted] = await db
-      .delete(contacts)
-      .where(and(eq(contacts.id, contact.id), eq(contacts.userId, userId)))
-      .returning({ id: contacts.id, email: contacts.email });
-
-    if (!deleted) {
-      return Response.json({ error: "Contact not found" }, { status: 404 });
-    }
+    const deleted = await contactService().deleteContact(id, userId);
 
     await queueEvent({
       type: "contact.deleted",
@@ -243,8 +135,6 @@ export async function DELETE(
       deleted: true,
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to delete contact";
-    return Response.json({ error: message }, { status: 500 });
+    return mapContactServiceError(err, "Failed to delete contact");
   }
 }

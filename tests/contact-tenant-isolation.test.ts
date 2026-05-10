@@ -12,6 +12,25 @@ const mockInsert = vi.hoisted(() => vi.fn());
 const mockUpdate = vi.hoisted(() => vi.fn());
 const mockDelete = vi.hoisted(() => vi.fn());
 const mockQueueEvent = vi.hoisted(() => vi.fn());
+const mockContactService = vi.hoisted(() => ({
+  createContact: vi.fn(),
+  listContacts: vi.fn(),
+  getContact: vi.fn(),
+  updateContact: vi.fn(),
+  deleteContact: vi.fn(),
+}));
+const MockContactServiceError = vi.hoisted(
+  () =>
+    class ContactServiceError extends Error {
+      constructor(
+        readonly code: "duplicate_email" | "not_found",
+        message: string,
+      ) {
+        super(message);
+        this.name = "ContactServiceError";
+      }
+    },
+);
 
 function makeRequest(url: string, init?: RequestInit) {
   const request = new Request(url, init) as Request & { nextUrl: URL };
@@ -82,6 +101,11 @@ vi.mock("@/lib/events", () => ({
   queueEvent: mockQueueEvent,
 }));
 
+vi.mock("@opensend/core", () => ({
+  ContactServiceError: MockContactServiceError,
+  createContactService: () => mockContactService,
+}));
+
 vi.mock("@/lib/db", () => ({
   db: {
     query: {
@@ -102,7 +126,7 @@ vi.mock("@/lib/db", () => ({
 describe("contact API tenant isolation", () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockValidateApiKey.mockResolvedValue({
       apiKeyId: "key-b",
       permission: "full_access",
@@ -120,6 +144,11 @@ describe("contact API tenant isolation", () => {
       eventId: "event-1",
       deliveryIds: ["delivery-1"],
     });
+    mockContactService.createContact.mockReset();
+    mockContactService.listContacts.mockReset();
+    mockContactService.getContact.mockReset();
+    mockContactService.updateContact.mockReset();
+    mockContactService.deleteContact.mockReset();
   });
 
   it("enqueues contact.created for the caller tenant after creating a contact", async () => {
@@ -136,8 +165,22 @@ describe("contact API tenant isolation", () => {
       document: null,
       userId: "user-b",
     };
-    const insertChain = makeChain([insertedContact]);
-    mockInsert.mockReturnValueOnce(insertChain);
+    mockContactService.createContact.mockResolvedValueOnce({
+      object: "contact",
+      id: insertedContact.id,
+      email: insertedContact.email,
+      webhookPayload: {
+        id: insertedContact.id,
+        email: insertedContact.email,
+        first_name: insertedContact.firstName,
+        last_name: insertedContact.lastName,
+        unsubscribed: insertedContact.unsubscribed,
+        properties: insertedContact.customProperties,
+        segments: [],
+        topics: [],
+        created_at: insertedContact.createdAt.toISOString(),
+      },
+    });
 
     const route = await import("@/app/api/contacts/route");
     const response = await route.POST(
@@ -157,10 +200,12 @@ describe("contact API tenant isolation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(insertChain.values.mock.calls[0]?.[0]).toMatchObject({
-      email: "b@example.com",
-      userId: "user-b",
-    });
+    expect(mockContactService.createContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "B@Example.com",
+        userId: "user-b",
+      }),
+    );
     expect(mockQueueEvent).toHaveBeenCalledWith({
       type: "contact.created",
       userId: "user-b",
@@ -203,6 +248,28 @@ describe("contact API tenant isolation", () => {
       },
     ]);
     mockUpdate.mockReturnValueOnce(updateChain);
+    mockContactService.updateContact.mockResolvedValueOnce({
+      object: "contact",
+      id: "contact-b",
+      email: "b@example.com",
+      first_name: "After",
+      last_name: null,
+      unsubscribed: false,
+      properties: null,
+      created_at: new Date("2026-05-06T00:00:00.000Z"),
+      changedFields: ["first_name"],
+      webhookPayload: {
+        id: "contact-b",
+        email: "b@example.com",
+        first_name: "After",
+        last_name: null,
+        unsubscribed: false,
+        properties: {},
+        segments: [],
+        topics: [],
+        created_at: "2026-05-06T00:00:00.000Z",
+      },
+    });
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.PATCH(
@@ -225,7 +292,7 @@ describe("contact API tenant isolation", () => {
       }),
     });
 
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockValidateApiKey.mockResolvedValue({
       apiKeyId: "key-b",
       permission: "full_access",
@@ -244,6 +311,28 @@ describe("contact API tenant isolation", () => {
       createdAt: new Date("2026-05-06T00:00:00.000Z"),
       document: null,
       userId: "user-b",
+    });
+    mockContactService.updateContact.mockResolvedValueOnce({
+      object: "contact",
+      id: "contact-b",
+      email: "b@example.com",
+      first_name: "After",
+      last_name: null,
+      unsubscribed: false,
+      properties: null,
+      created_at: new Date("2026-05-06T00:00:00.000Z"),
+      changedFields: [],
+      webhookPayload: {
+        id: "contact-b",
+        email: "b@example.com",
+        first_name: "After",
+        last_name: null,
+        unsubscribed: false,
+        properties: {},
+        segments: [],
+        topics: [],
+        created_at: "2026-05-06T00:00:00.000Z",
+      },
     });
 
     const unchanged = await route.PATCH(
@@ -270,6 +359,10 @@ describe("contact API tenant isolation", () => {
       { id: "contact-b", email: "b@example.com" },
     ]);
     mockDelete.mockReturnValueOnce(deleteChain);
+    mockContactService.deleteContact.mockResolvedValueOnce({
+      id: "contact-b",
+      email: "b@example.com",
+    });
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.DELETE(
@@ -291,6 +384,10 @@ describe("contact API tenant isolation", () => {
   it("returns an empty contact list scoped to the caller user", async () => {
     const listChain = makeChain([]);
     mockSelect.mockReturnValueOnce(listChain);
+    mockContactService.listContacts.mockResolvedValueOnce({
+      data: [],
+      hasMore: false,
+    });
 
     const route = await import("@/app/api/contacts/route");
     const response = await route.GET(
@@ -305,16 +402,16 @@ describe("contact API tenant isolation", () => {
       has_more: false,
     });
     expect(response.status).toBe(200);
-    expect(
-      expressionContains(listChain.where.mock.calls[0]?.[0], "user_id"),
-    ).toBe(true);
-    expect(
-      expressionContains(listChain.where.mock.calls[0]?.[0], "user-b"),
-    ).toBe(true);
+    expect(mockContactService.listContacts).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-b" }),
+    );
   });
 
   it("returns 404 when user B requests user A's contact detail", async () => {
     mockContactFindFirst.mockResolvedValueOnce(null);
+    mockContactService.getContact.mockRejectedValueOnce(
+      new MockContactServiceError("not_found", "Contact not found"),
+    );
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.GET(
@@ -328,22 +425,17 @@ describe("contact API tenant isolation", () => {
       error: "Contact not found",
     });
     expect(response.status).toBe(404);
-    expect(
-      expressionContains(
-        mockContactFindFirst.mock.calls[0]?.[0]?.where,
-        "user_id",
-      ),
-    ).toBe(true);
-    expect(
-      expressionContains(
-        mockContactFindFirst.mock.calls[0]?.[0]?.where,
-        "user-b",
-      ),
-    ).toBe(true);
+    expect(mockContactService.getContact).toHaveBeenCalledWith(
+      "contact-a",
+      "user-b",
+    );
   });
 
   it("does not update user A's contact when called as user B", async () => {
     mockContactFindFirst.mockResolvedValueOnce(null);
+    mockContactService.updateContact.mockRejectedValueOnce(
+      new MockContactServiceError("not_found", "Contact not found"),
+    );
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.PATCH(
@@ -361,6 +453,9 @@ describe("contact API tenant isolation", () => {
 
   it("does not delete user A's contact when called as user B", async () => {
     mockContactFindFirst.mockResolvedValueOnce(null);
+    mockContactService.deleteContact.mockRejectedValueOnce(
+      new MockContactServiceError("not_found", "Contact not found"),
+    );
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.DELETE(
