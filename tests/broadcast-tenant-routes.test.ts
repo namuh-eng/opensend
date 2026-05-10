@@ -1,4 +1,3 @@
-import type { SQL } from "drizzle-orm";
 import type { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,12 +11,21 @@ const mockBroadcastService = vi.hoisted(() => ({
   getBroadcast: vi.fn(),
   updateBroadcast: vi.fn(),
   deleteBroadcast: vi.fn(),
+  sendBroadcast: vi.fn(),
+  getBroadcastMetrics: vi.fn(),
 }));
+const mockCreateBroadcastService = vi.hoisted(() =>
+  vi.fn(() => mockBroadcastService),
+);
 const MockBroadcastServiceError = vi.hoisted(
   () =>
     class BroadcastServiceError extends Error {
       constructor(
-        readonly code: "invalid_input" | "not_found" | "delete_forbidden",
+        readonly code:
+          | "invalid_input"
+          | "not_found"
+          | "delete_forbidden"
+          | "send_forbidden",
         message: string,
       ) {
         super(message);
@@ -25,13 +33,6 @@ const MockBroadcastServiceError = vi.hoisted(
       }
     },
 );
-const mockDb = vi.hoisted(() => ({
-  select: vi.fn(),
-  insert: vi.fn(),
-  update: vi.fn(),
-  delete: vi.fn(),
-}));
-
 vi.mock("@/lib/api-auth", () => ({
   authorizeDashboardOrApiKey: mockAuthorizeDashboardOrApiKey,
   getServerSession: mockGetServerSession,
@@ -50,38 +51,10 @@ vi.mock("@/lib/cache/dashboard-aggregates", async () => {
   };
 });
 
-vi.mock("@/lib/db", () => ({
-  db: mockDb,
-}));
-
 vi.mock("@opensend/core", () => ({
   BroadcastServiceError: MockBroadcastServiceError,
-  createBroadcastService: () => mockBroadcastService,
+  createBroadcastService: mockCreateBroadcastService,
 }));
-
-function deepValues(value: unknown, seen = new WeakSet<object>()): unknown[] {
-  if (value === null || typeof value !== "object") return [value];
-  if (seen.has(value)) return [];
-  seen.add(value);
-
-  if (Array.isArray(value)) {
-    return value.flatMap((item) => deepValues(item, seen));
-  }
-
-  return Object.values(value as Record<string, unknown>).flatMap((item) =>
-    deepValues(item, seen),
-  );
-}
-
-function expectTenantPredicate(
-  clause: SQL<unknown> | undefined,
-  userId = "user-b",
-) {
-  expect(clause).toBeDefined();
-  const values = deepValues(clause);
-  expect(values).toContain("user_id");
-  expect(values).toContain(userId);
-}
 
 function makeNextRequest(url: string, init?: RequestInit): NextRequest {
   const request = new Request(url, init) as Request & { nextUrl: URL };
@@ -98,32 +71,6 @@ function jsonRequest(url: string, body: Record<string, unknown>): NextRequest {
     },
     body: JSON.stringify(body),
   });
-}
-
-function selectRows<T>(rows: T[], whereClauses: SQL<unknown>[]) {
-  const chain = {
-    from: vi.fn(() => chain),
-    where: vi.fn((clause: SQL<unknown>) => {
-      whereClauses.push(clause);
-      return chain;
-    }),
-    orderBy: vi.fn(() => chain),
-    limit: vi.fn(() => chain),
-    // biome-ignore lint/suspicious/noThenProperty: mocks Drizzle's thenable query builder
-    then: (resolve: (value: T[]) => unknown) => Promise.resolve(resolve(rows)),
-  };
-  return chain;
-}
-
-function updateReturning<T>(rows: T[], whereClauses: SQL<unknown>[]) {
-  const returning = vi.fn().mockResolvedValue(rows);
-  const where = vi.fn((clause: SQL<unknown>) => {
-    whereClauses.push(clause);
-    return { returning };
-  });
-  const set = vi.fn(() => ({ where }));
-  mockDb.update.mockReturnValue({ set });
-  return { set, where, returning };
 }
 
 beforeEach(() => {
@@ -303,45 +250,90 @@ describe("broadcast tenant isolation", () => {
     );
   });
 
-  it("scopes broadcast send ownership checks and status updates", async () => {
-    const selectWheres: SQL<unknown>[] = [];
-    const updateWheres: SQL<unknown>[] = [];
-    mockDb.select.mockReturnValue(
-      selectRows([{ id: "broadcast-1", status: "draft" }], selectWheres),
-    );
-    updateReturning([{ id: "broadcast-1", status: "queued" }], updateWheres);
+  it("passes broadcast send requests through the service with tenant scope", async () => {
+    const scheduledAt = new Date("2026-06-01T00:00:00Z");
+    const body = { scheduled_at: scheduledAt.toISOString() };
+    mockBroadcastService.sendBroadcast.mockResolvedValueOnce({
+      id: "broadcast-1",
+      status: "scheduled",
+      scheduledAt,
+    });
 
     const { POST } = await import("@/app/api/broadcasts/[id]/send/route");
     const response = await POST(
-      jsonRequest("http://localhost:3015/api/broadcasts/broadcast-1/send", {}),
+      jsonRequest(
+        "http://localhost:3015/api/broadcasts/broadcast-1/send",
+        body,
+      ),
       { params: Promise.resolve({ id: "broadcast-1" }) },
     );
 
     expect(response.status).toBe(200);
-    expectTenantPredicate(selectWheres.at(-1));
-    expectTenantPredicate(updateWheres.at(-1));
+    await expect(response.json()).resolves.toEqual({
+      object: "broadcast",
+      id: "broadcast-1",
+      status: "scheduled",
+      scheduled_at: scheduledAt.toISOString(),
+    });
+    expect(mockBroadcastService.sendBroadcast).toHaveBeenCalledWith({
+      userId: "user-b",
+      id: "broadcast-1",
+      body,
+    });
   });
 
-  it("scopes broadcast metrics ownership, email aggregation, and cache key", async () => {
-    const broadcastWheres: SQL<unknown>[] = [];
-    const emailWheres: SQL<unknown>[] = [];
-    mockDb.select
-      .mockReturnValueOnce(selectRows([{ id: "broadcast-1" }], broadcastWheres))
-      .mockReturnValueOnce(
-        selectRows(
-          [
-            {
-              total: 2,
-              delivered: 2,
-              bounced: 0,
-              complained: 0,
-              opened: 1,
-              clicked: 1,
-            },
-          ],
-          emailWheres,
-        ),
-      );
+  it("maps broadcast send service errors to preserved HTTP responses", async () => {
+    mockBroadcastService.sendBroadcast.mockRejectedValueOnce(
+      new MockBroadcastServiceError(
+        "send_forbidden",
+        "Cannot send a broadcast in queued status",
+      ),
+    );
+
+    const { POST } = await import("@/app/api/broadcasts/[id]/send/route");
+    const forbiddenResponse = await POST(
+      jsonRequest("http://localhost:3015/api/broadcasts/broadcast-1/send", {}),
+      { params: Promise.resolve({ id: "broadcast-1" }) },
+    );
+
+    expect(forbiddenResponse.status).toBe(400);
+    await expect(forbiddenResponse.json()).resolves.toEqual({
+      error: "Cannot send a broadcast in queued status",
+    });
+
+    mockBroadcastService.sendBroadcast.mockRejectedValueOnce(
+      new MockBroadcastServiceError("not_found", "Broadcast not found"),
+    );
+
+    const missingResponse = await POST(
+      jsonRequest("http://localhost:3015/api/broadcasts/missing/send", {}),
+      { params: Promise.resolve({ id: "missing" }) },
+    );
+
+    expect(missingResponse.status).toBe(404);
+    await expect(missingResponse.json()).resolves.toEqual({
+      error: "Broadcast not found",
+    });
+  });
+
+  it("passes broadcast metrics requests through the service with cache headers", async () => {
+    mockBroadcastService.getBroadcastMetrics.mockResolvedValueOnce({
+      cacheStatus: "miss",
+      payload: {
+        object: "broadcast_metrics",
+        broadcast_id: "broadcast-1",
+        total: 2,
+        delivered: 2,
+        bounced: 0,
+        complained: 0,
+        opened: 1,
+        clicked: 1,
+        delivery_rate: 100,
+        open_rate: 50,
+        click_rate: 50,
+        bounce_rate: 0,
+      },
+    });
 
     const { GET } = await import("@/app/api/broadcasts/[id]/metrics/route");
     const response = await GET(
@@ -353,15 +345,18 @@ describe("broadcast tenant isolation", () => {
     );
 
     expect(response.status).toBe(200);
-    expectTenantPredicate(broadcastWheres.at(-1));
-    expectTenantPredicate(emailWheres.at(-1));
-    expect(mockReadDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:broadcast-metrics:user-b:broadcast-1",
-    );
-    expect(mockWriteDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:broadcast-metrics:user-b:broadcast-1",
-      expect.objectContaining({ object: "broadcast_metrics" }),
-      120,
-    );
+    expect(response.headers.get("x-opensend-cache")).toBe("miss");
+    expect(mockBroadcastService.getBroadcastMetrics).toHaveBeenCalledWith({
+      userId: "user-b",
+      id: "broadcast-1",
+    });
+    expect(mockCreateBroadcastService).toHaveBeenLastCalledWith({
+      metricsCache: expect.objectContaining({
+        ttlSeconds: 120,
+        getKey: expect.any(Function),
+        read: mockReadDashboardAggregateCache,
+        write: mockWriteDashboardAggregateCache,
+      }),
+    });
   });
 });
