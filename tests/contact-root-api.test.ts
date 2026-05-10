@@ -3,43 +3,31 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
-const mockContactFindFirst = vi.hoisted(() => vi.fn());
-const mockSelect = vi.hoisted(() => vi.fn());
-const mockInsert = vi.hoisted(() => vi.fn());
-const mockUpdate = vi.hoisted(() => vi.fn());
-const mockDelete = vi.hoisted(() => vi.fn());
 const mockQueueEvent = vi.hoisted(() => vi.fn());
+const mockContactService = vi.hoisted(() => ({
+  createContact: vi.fn(),
+  listContacts: vi.fn(),
+  getContact: vi.fn(),
+  updateContact: vi.fn(),
+  deleteContact: vi.fn(),
+}));
+const MockContactServiceError = vi.hoisted(
+  () =>
+    class ContactServiceError extends Error {
+      constructor(
+        readonly code: "duplicate_email" | "not_found",
+        message: string,
+      ) {
+        super(message);
+        this.name = "ContactServiceError";
+      }
+    },
+);
 
 function makeRequest(url: string, init?: RequestInit) {
   const request = new Request(url, init) as Request & { nextUrl: URL };
   request.nextUrl = new URL(url);
   return request;
-}
-
-type Chain<T> = {
-  from: ReturnType<typeof vi.fn>;
-  where: ReturnType<typeof vi.fn>;
-  orderBy: ReturnType<typeof vi.fn>;
-  limit: ReturnType<typeof vi.fn>;
-  set: ReturnType<typeof vi.fn>;
-  values: ReturnType<typeof vi.fn>;
-  returning: ReturnType<typeof vi.fn>;
-  then: (resolve: (value: T[]) => unknown) => Promise<unknown>;
-};
-
-function makeChain<T>(rows: T[]): Chain<T> {
-  const chain = {
-    from: vi.fn(() => chain),
-    where: vi.fn(() => chain),
-    orderBy: vi.fn(() => chain),
-    limit: vi.fn(() => chain),
-    set: vi.fn(() => chain),
-    values: vi.fn(() => chain),
-    returning: vi.fn(() => Promise.resolve(rows)),
-    // biome-ignore lint/suspicious/noThenProperty: mocks Drizzle's thenable query builder
-    then: (resolve: (value: T[]) => unknown) => Promise.resolve(resolve(rows)),
-  };
-  return chain;
 }
 
 vi.mock("@/lib/api-auth", () => ({
@@ -54,18 +42,9 @@ vi.mock("@/lib/events", () => ({
   queueEvent: mockQueueEvent,
 }));
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    query: {
-      contacts: { findFirst: mockContactFindFirst },
-      segments: { findFirst: vi.fn() },
-      topics: { findFirst: vi.fn() },
-    },
-    select: mockSelect,
-    insert: mockInsert,
-    update: mockUpdate,
-    delete: mockDelete,
-  },
+vi.mock("@opensend/core", () => ({
+  ContactServiceError: MockContactServiceError,
+  createContactService: () => mockContactService,
 }));
 
 describe("Resend-compatible root contacts API", () => {
@@ -86,34 +65,77 @@ describe("Resend-compatible root contacts API", () => {
 
   it("creates, lists, retrieves, updates, and deletes contacts at /contacts", async () => {
     const createdAt = new Date("2026-05-08T00:00:00.000Z");
-    const insertedContact = {
+    mockContactService.createContact.mockResolvedValueOnce({
+      object: "contact",
       id: "contact-1",
       email: "user@example.com",
-      firstName: "User",
-      lastName: "One",
+      webhookPayload: {
+        id: "contact-1",
+        email: "user@example.com",
+        first_name: "User",
+        last_name: "One",
+        unsubscribed: false,
+        properties: { plan: "pro" },
+        segments: [],
+        topics: [],
+        created_at: createdAt.toISOString(),
+      },
+    });
+    mockContactService.listContacts.mockResolvedValueOnce({
+      hasMore: false,
+      data: [
+        {
+          id: "contact-1",
+          email: "user@example.com",
+          first_name: "User",
+          last_name: "One",
+          firstName: "User",
+          lastName: "One",
+          unsubscribed: false,
+          status: "subscribed",
+          segments: [],
+          created_at: createdAt,
+        },
+      ],
+    });
+    mockContactService.getContact.mockResolvedValueOnce({
+      object: "contact",
+      id: "contact-1",
+      email: "user@example.com",
+      first_name: "User",
+      last_name: "One",
       unsubscribed: false,
-      customProperties: { plan: "pro" },
-      segments: null,
-      topicSubscriptions: null,
-      createdAt,
-      document: null,
-      userId: "user-1",
-    };
-    const updatedContact = {
-      ...insertedContact,
+      properties: { plan: "pro" },
+      segments: [],
+      topics: [],
+      created_at: createdAt,
+    });
+    mockContactService.updateContact.mockResolvedValueOnce({
+      object: "contact",
+      id: "contact-1",
+      email: "user@example.com",
+      first_name: "User",
+      last_name: "One",
       unsubscribed: true,
-    };
-
-    mockInsert.mockReturnValueOnce(makeChain([insertedContact]));
-    mockSelect.mockReturnValueOnce(makeChain([insertedContact]));
-    mockContactFindFirst
-      .mockResolvedValueOnce(insertedContact)
-      .mockResolvedValueOnce(insertedContact)
-      .mockResolvedValueOnce(updatedContact);
-    mockUpdate.mockReturnValueOnce(makeChain([updatedContact]));
-    mockDelete.mockReturnValueOnce(
-      makeChain([{ id: "contact-1", email: "user@example.com" }]),
-    );
+      properties: { plan: "pro" },
+      created_at: createdAt,
+      changedFields: ["unsubscribed"],
+      webhookPayload: {
+        id: "contact-1",
+        email: "user@example.com",
+        first_name: "User",
+        last_name: "One",
+        unsubscribed: true,
+        properties: { plan: "pro" },
+        segments: [],
+        topics: [],
+        created_at: createdAt.toISOString(),
+      },
+    });
+    mockContactService.deleteContact.mockResolvedValueOnce({
+      id: "contact-1",
+      email: "user@example.com",
+    });
 
     const collectionRoute = await import("@/app/contacts/route");
     const detailRoute = await import("@/app/contacts/[contact_id]/route");
@@ -138,6 +160,13 @@ describe("Resend-compatible root contacts API", () => {
       id: "contact-1",
     });
     expect(createResponse.status).toBe(201);
+    expect(mockContactService.createContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-1",
+        email: "USER@EXAMPLE.COM",
+        firstName: "User",
+      }),
+    );
 
     const listResponse = await collectionRoute.GET(
       makeRequest("http://localhost/contacts", {
@@ -207,12 +236,12 @@ describe("Resend-compatible root contacts API", () => {
     expect(mockQueueEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: "contact.deleted", userId: "user-1" }),
     );
-    expect(mockUpdate).toHaveBeenCalledTimes(1);
-    expect(mockDelete).toHaveBeenCalledTimes(1);
   });
 
   it("returns 404 for root email lookups outside the caller tenant", async () => {
-    mockContactFindFirst.mockResolvedValueOnce(null);
+    mockContactService.getContact.mockRejectedValueOnce(
+      new MockContactServiceError("not_found", "Contact not found"),
+    );
 
     const detailRoute = await import("@/app/contacts/[contact_id]/route");
     const response = await detailRoute.GET(
@@ -226,5 +255,9 @@ describe("Resend-compatible root contacts API", () => {
     await expect(response.json()).resolves.toEqual({
       error: "Contact not found",
     });
+    expect(mockContactService.getContact).toHaveBeenCalledWith(
+      "other@example.com",
+      "user-1",
+    );
   });
 });
