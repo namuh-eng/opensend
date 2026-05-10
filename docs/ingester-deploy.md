@@ -27,6 +27,7 @@ Endpoints:
 - App: `http://localhost:${PORT:-3015}`
 - Ingester health: `http://localhost:${INGESTER_PORT:-3016}/health`
 - SES SNS webhook target: `http://localhost:${INGESTER_PORT:-3016}/events/ses`
+- Stripe billing webhook target: `http://localhost:${INGESTER_PORT:-3016}/webhooks/stripe`
 - Experimental Go ingester health, when run separately: `http://localhost:3027/health`
 
 ```bash
@@ -109,6 +110,27 @@ Set these on the ingester service:
 BACKGROUND_WORKER_POLL=true
 INGESTER_JOB_TOKEN=<random-bearer-token>
 ```
+
+For hosted Stripe billing cutover, also set these on the ingester service from
+the deployment secret manager:
+
+```bash
+BILLING_BACKEND=stripe
+STRIPE_SECRET_KEY=<from-secret-manager>
+STRIPE_WEBHOOK_SECRET=<stripe-webhook-signing-secret>
+BILLING_NOTIFICATION_FROM_EMAIL=billing@yourdomain.com # optional
+```
+
+The Stripe webhook endpoint is:
+
+```text
+https://events.yourdomain.com/webhooks/stripe
+```
+
+Run `bun run billing:preflight -- --service ingester` in the release
+environment before sending Stripe traffic to the endpoint. See
+[`hosted-stripe-cutover.md`](hosted-stripe-cutover.md) for the full validation
+checklist.
 
 Set the same `INGESTER_JOB_TOKEN` on any scheduler that calls `/jobs/*`. Compose also accepts an optional scheduler cadence override:
 
@@ -213,6 +235,9 @@ Before pointing production SES SNS at a freshly stood-up ingester, verify:
   config, Redis URL, and `INGESTER_JOB_TOKEN` as the app.
 - The events host (`events.<your-domain>`) resolves and serves a 200 on
   `/health`.
+- If hosted billing is enabled, Stripe Dashboard points to
+  `https://events.<your-domain>/webhooks/stripe` and the ingester has
+  `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`.
 - The SQS queue exists with a redrive policy + DLQ.
 - Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when the token is configured.
 - Domain verification runbook passed: create/use a pending domain, confirm SES is verified, do not click **Verify DNS Records**, wait for the scheduler, and confirm the OpenSend DB/dashboard flips to `verified`.

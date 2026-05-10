@@ -13,6 +13,7 @@
     "start:ingester": "bun ./packages/ingester/src/server.ts",
     "check": "node scripts/check-changed-files.mjs",
     "check:full": "bun run typecheck && bun run lint",
+    "billing:preflight": "bun src/lib/billing/cutover-preflight.ts",
     "hooks:install": "node scripts/install-git-hooks.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
