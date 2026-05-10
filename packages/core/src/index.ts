@@ -39,6 +39,7 @@ export * from "./services/apiKeys";
 export * from "./services/contact";
 export * from "./services/contact-operations";
 export * from "./services/email";
+export * from "./services/emailLifecycle";
 export * from "./services/emailRead";
 export * from "./services/logs";
 export * from "./services/suppressions";

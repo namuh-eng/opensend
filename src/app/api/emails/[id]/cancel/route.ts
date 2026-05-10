@@ -1,9 +1,12 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { emails } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import {
+  EmailLifecycleServiceError,
+  createEmailLifecycleService,
+} from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
+
+const emailLifecycleService = createEmailLifecycleService();
 
 export async function POST(
   _request: NextRequest,
@@ -16,34 +19,23 @@ export async function POST(
 
   try {
     const { id } = await params;
-
-    const existing = await db.query.emails.findFirst({
-      where: and(eq(emails.id, id), eq(emails.userId, auth.userId)),
-    });
-
-    if (!existing) {
+    const result = await emailLifecycleService.cancelEmail(auth.userId, id);
+    return NextResponse.json(result);
+  } catch (error) {
+    if (
+      error instanceof EmailLifecycleServiceError &&
+      error.code === "email_not_found"
+    ) {
       return NextResponse.json({ error: "Email not found" }, { status: 404 });
     }
 
-    if (existing.status !== "scheduled") {
-      return NextResponse.json(
-        { error: `Cannot cancel a ${existing.status} email` },
-        { status: 400 },
-      );
+    if (
+      error instanceof EmailLifecycleServiceError &&
+      error.code === "invalid_state"
+    ) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    const [updated] = await db
-      .update(emails)
-      .set({ status: "canceled" })
-      .where(and(eq(emails.id, id), eq(emails.userId, auth.userId)))
-      .returning();
-
-    return NextResponse.json({
-      object: "email",
-      id: updated.id,
-      status: "canceled",
-    });
-  } catch (error) {
     console.error("Failed to cancel email:", error);
     return NextResponse.json(
       { error: "Failed to cancel email" },

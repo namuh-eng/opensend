@@ -8,6 +8,11 @@ const mockFindLog = vi.hoisted(() => vi.fn());
 const mockSelect = vi.hoisted(() => vi.fn());
 const mockUpdate = vi.hoisted(() => vi.fn());
 const mockGetPresignedUrl = vi.hoisted(() => vi.fn());
+const mockEmailLifecycleService = vi.hoisted(() => ({
+  listAttachments: vi.fn(),
+  getAttachment: vi.fn(),
+  cancelEmail: vi.fn(),
+}));
 const mockCreateLogReadService = vi.hoisted(() => vi.fn());
 const mockListLogs = vi.hoisted(() => vi.fn());
 const mockGetLog = vi.hoisted(() => vi.fn());
@@ -20,6 +25,18 @@ const MockLogReadServiceError = vi.hoisted(
       ) {
         super(message);
         this.name = "LogReadServiceError";
+      }
+    },
+);
+const MockEmailLifecycleServiceError = vi.hoisted(
+  () =>
+    class EmailLifecycleServiceError extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+      ) {
+        super(message);
+        this.name = "EmailLifecycleServiceError";
       }
     },
 );
@@ -73,6 +90,8 @@ vi.mock("@/lib/s3", () => ({
 }));
 
 vi.mock("@opensend/core", () => ({
+  createEmailLifecycleService: () => mockEmailLifecycleService,
+  EmailLifecycleServiceError: MockEmailLifecycleServiceError,
   createLogReadService: mockCreateLogReadService,
   LogReadServiceError: MockLogReadServiceError,
 }));
@@ -151,6 +170,18 @@ describe("issue #200 missed tenant isolation gaps", () => {
     mockFindEmail.mockResolvedValue(null);
     mockFindLog.mockResolvedValue(null);
     mockGetPresignedUrl.mockResolvedValue("https://download.example/att-1");
+    mockEmailLifecycleService.cancelEmail.mockReset();
+    mockEmailLifecycleService.getAttachment.mockReset();
+    mockEmailLifecycleService.listAttachments.mockReset();
+    mockEmailLifecycleService.cancelEmail.mockRejectedValue(
+      new MockEmailLifecycleServiceError("email_not_found", "Email not found"),
+    );
+    mockEmailLifecycleService.getAttachment.mockRejectedValue(
+      new MockEmailLifecycleServiceError("email_not_found", "Email not found"),
+    );
+    mockEmailLifecycleService.listAttachments.mockRejectedValue(
+      new MockEmailLifecycleServiceError("email_not_found", "Email not found"),
+    );
     mockCreateLogReadService.mockReturnValue({
       listLogs: mockListLogs,
       getLog: mockGetLog,
@@ -176,12 +207,13 @@ describe("issue #200 missed tenant isolation gaps", () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "Email not found" });
     expect(mockUpdate).not.toHaveBeenCalled();
-    expectConditionIncludes("email-a");
-    expectConditionIncludes(AUTH_RESULT.userId);
+    expect(mockEmailLifecycleService.cancelEmail).toHaveBeenCalledWith(
+      AUTH_RESULT.userId,
+      "email-a",
+    );
   });
 
   it("404s email attachment list for another tenant", async () => {
-    queueSelectRows([]);
     const { GET } = await import("@/app/api/emails/[id]/attachments/route");
 
     const response = await GET(
@@ -191,13 +223,13 @@ describe("issue #200 missed tenant isolation gaps", () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "Email not found" });
-    expect(recordedWhere).toHaveLength(1);
-    expectConditionIncludes("email-a");
-    expectConditionIncludes(AUTH_RESULT.userId);
+    expect(mockEmailLifecycleService.listAttachments).toHaveBeenCalledWith(
+      AUTH_RESULT.userId,
+      "email-a",
+    );
   });
 
   it("404s email attachment detail for another tenant without issuing a download URL", async () => {
-    queueSelectRows([]);
     const { GET } = await import(
       "@/app/api/emails/[id]/attachments/[attachmentId]/route"
     );
@@ -210,9 +242,11 @@ describe("issue #200 missed tenant isolation gaps", () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "Email not found" });
     expect(mockGetPresignedUrl).not.toHaveBeenCalled();
-    expect(recordedWhere).toHaveLength(1);
-    expectConditionIncludes("email-a");
-    expectConditionIncludes(AUTH_RESULT.userId);
+    expect(mockEmailLifecycleService.getAttachment).toHaveBeenCalledWith(
+      AUTH_RESULT.userId,
+      "email-a",
+      "att-1",
+    );
   });
 
   it("returns an empty public logs list when user-scoped predicates find no owned rows", async () => {
