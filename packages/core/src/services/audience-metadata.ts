@@ -1,7 +1,12 @@
 import { propertyRepo } from "../db/repositories/propertyRepo";
 import { segmentRepo } from "../db/repositories/segmentRepo";
 import { topicRepo } from "../db/repositories/topicRepo";
-import type { contactProperties, segments, topics } from "../db/schema";
+import type {
+  contactProperties,
+  contacts,
+  segments,
+  topics,
+} from "../db/schema";
 
 type SegmentRow = typeof segments.$inferSelect;
 type SegmentInsert = typeof segments.$inferInsert;
@@ -9,8 +14,13 @@ type TopicRow = typeof topics.$inferSelect;
 type TopicInsert = typeof topics.$inferInsert;
 type PropertyRow = typeof contactProperties.$inferSelect;
 type PropertyInsert = typeof contactProperties.$inferInsert;
+type ContactRow = typeof contacts.$inferSelect;
 
 type SegmentListRow = Pick<SegmentRow, "id" | "name" | "createdAt">;
+type SegmentContactListRow = Pick<
+  ContactRow,
+  "id" | "email" | "firstName" | "lastName" | "unsubscribed" | "createdAt"
+>;
 type TopicListRow = Pick<
   TopicRow,
   | "id"
@@ -38,6 +48,12 @@ export type AudienceMetadataRepository = {
     userId: string,
   ): Promise<SegmentRow | undefined>;
   deleteSegmentForUser(id: string, userId: string): Promise<SegmentRow[]>;
+  listSegmentContactsForApi(options: {
+    userId: string;
+    segmentId: string;
+    limit: number;
+    after?: string;
+  }): Promise<{ data: SegmentContactListRow[]; hasMore: boolean }>;
 
   listTopicsForApi(options: {
     userId: string;
@@ -100,6 +116,8 @@ function defaultRepository(): AudienceMetadataRepository {
     findSegmentByIdForUser: (id, userId) =>
       segmentRepo.findByIdForUser(id, userId),
     deleteSegmentForUser: (id, userId) => segmentRepo.deleteForUser(id, userId),
+    listSegmentContactsForApi: (options) =>
+      segmentRepo.listContactsForApi(options),
 
     listTopicsForApi: (options) => topicRepo.listForApi(options),
     createTopic: (data) => topicRepo.create(data),
@@ -174,6 +192,17 @@ function toSegmentDetail(row: SegmentRow) {
     object: "segment" as const,
     id: row.id,
     name: row.name,
+    created_at: row.createdAt,
+  };
+}
+
+function toSegmentContactListItem(row: SegmentContactListRow) {
+  return {
+    id: row.id,
+    email: row.email,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    status: row.unsubscribed ? "unsubscribed" : "subscribed",
     created_at: row.createdAt,
   };
 }
@@ -282,6 +311,32 @@ export function createAudienceMetadataService({
         input.userId,
       );
       if (!deleted) throw notFound("Segment not found");
+    },
+
+    async listSegmentContacts(input: {
+      userId: string;
+      segmentId: string;
+      limit?: number;
+      after?: string;
+    }) {
+      const segment = await repository.findSegmentByIdForUser(
+        input.segmentId,
+        input.userId,
+      );
+      if (!segment) throw notFound("Segment not found");
+
+      const result = await repository.listSegmentContactsForApi({
+        userId: input.userId,
+        segmentId: input.segmentId,
+        limit: normalizeLimit(input.limit, 20),
+        after: input.after || undefined,
+      });
+
+      return {
+        object: "list" as const,
+        data: result.data.map(toSegmentContactListItem),
+        has_more: result.hasMore,
+      };
     },
 
     async listTopics(input: {
