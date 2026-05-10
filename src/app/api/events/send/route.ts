@@ -1,45 +1,38 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import {
-  formatCustomEventDelivery,
-  formatRunListItem,
-} from "@/lib/automations";
-import { db } from "@/lib/db";
-import { contacts } from "@/lib/db/schema";
-import {
-  isRecord,
-  sendEventSchema,
-  validateEventPayloadAgainstSchema,
-} from "@/lib/validation/events";
+import { sendEventSchema } from "@/lib/validation/events";
 import { resumeWaitingRunsForEvent } from "@/lib/workers/automation-runner";
 import {
   AutomationValidationError,
-  automationRepo,
-  automationRunRepo,
-  customEventDeliveryRepo,
-  customEventRepo,
+  CustomEventServiceError,
+  createCustomEventService,
 } from "@opensend/core";
-import { eq } from "drizzle-orm";
 
-async function resolveContactId(input: {
-  contactId?: string;
-  email?: string;
-  userId: string | null;
-}): Promise<string | null> {
-  if (input.contactId) return input.contactId;
-  if (!input.email) return null;
+const customEventService = createCustomEventService({
+  resumeWaitingRunsForEvent,
+});
 
-  const normalizedEmail = input.email.toLowerCase().trim();
-  const existing = await db.query.contacts.findFirst({
-    where: eq(contacts.email, normalizedEmail),
-  });
-  if (existing) return existing.id;
+function mapSendEventError(err: unknown): Response {
+  if (err instanceof CustomEventServiceError) {
+    if (
+      err.code === "event_schema_invalid" ||
+      err.code === "event_payload_invalid"
+    ) {
+      return Response.json(
+        { error: err.message, code: err.code, details: err.details ?? [] },
+        { status: 422 },
+      );
+    }
+  }
 
-  const [created] = await db
-    .insert(contacts)
-    .values({ email: normalizedEmail, userId: input.userId })
-    .returning({ id: contacts.id });
-  return created.id;
+  if (err instanceof AutomationValidationError) {
+    return Response.json(
+      { error: err.message, code: err.code },
+      { status: 422 },
+    );
+  }
+  const message = err instanceof Error ? err.message : "Failed to send event";
+  return Response.json({ error: message }, { status: 500 });
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -63,97 +56,15 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  const event = parsed.data;
-  const contactId = event.contact_id ?? event.contactId;
-
   try {
-    const customEvent = await customEventRepo.findByName(
-      event.event,
-      auth.userId,
-    );
-    const payload = event.payload ?? {};
-    if (customEvent?.schema !== null && customEvent?.schema !== undefined) {
-      if (!isRecord(customEvent.schema)) {
-        return Response.json(
-          {
-            error: "Stored event schema is invalid",
-            code: "event_schema_invalid",
-            details: [{ path: "schema", message: "schema must be an object" }],
-          },
-          { status: 422 },
-        );
-      }
-
-      const details = validateEventPayloadAgainstSchema(
-        payload,
-        customEvent.schema,
-      );
-      if (details.length > 0) {
-        const code = details.some((detail) => detail.path.startsWith("schema"))
-          ? "event_schema_invalid"
-          : "event_payload_invalid";
-        return Response.json(
-          {
-            error:
-              code === "event_schema_invalid"
-                ? "Stored event schema is invalid"
-                : "Event payload does not match schema",
-            code,
-            details,
-          },
-          { status: 422 },
-        );
-      }
-    }
-
-    const resolvedContactId = await resolveContactId({
-      contactId,
-      email: event.email,
-      userId: auth.userId,
-    });
-    const delivery = await customEventDeliveryRepo.record({
-      eventName: event.event,
-      payload,
-      contactId: resolvedContactId,
-      email: event.email?.toLowerCase().trim() ?? null,
-      userId: auth.userId,
-    });
-    const resumedRuns = await resumeWaitingRunsForEvent(delivery);
-
-    const matching = await automationRepo.findEnabledByTriggerEventName(
-      event.event,
-      auth.userId,
-    );
-    const runs = [];
-    for (const automation of matching) {
-      runs.push(
-        await automationRunRepo.createFromTrigger({
-          automationId: automation.id,
-          triggerEventId: delivery.id,
-          contactId: resolvedContactId,
-          userId: auth.userId,
-          initialStepKey: "trigger",
-        }),
-      );
-    }
-
     return Response.json(
-      {
-        object: "event_delivery",
-        delivery: formatCustomEventDelivery(delivery),
-        resumed_runs: resumedRuns.map(formatRunListItem),
-        automation_runs: runs.map(formatRunListItem),
-      },
+      await customEventService.sendCustomEvent({
+        userId: auth.userId,
+        data: parsed.data,
+      }),
       { status: 202 },
     );
   } catch (err) {
-    if (err instanceof AutomationValidationError) {
-      return Response.json(
-        { error: err.message, code: err.code },
-        { status: 422 },
-      );
-    }
-    const message = err instanceof Error ? err.message : "Failed to send event";
-    return Response.json({ error: message }, { status: 500 });
+    return mapSendEventError(err);
   }
 }
