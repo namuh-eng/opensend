@@ -6,6 +6,25 @@ const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockReadDashboardAggregateCache = vi.hoisted(() => vi.fn());
 const mockWriteDashboardAggregateCache = vi.hoisted(() => vi.fn());
+const mockBroadcastService = vi.hoisted(() => ({
+  listBroadcasts: vi.fn(),
+  createBroadcast: vi.fn(),
+  getBroadcast: vi.fn(),
+  updateBroadcast: vi.fn(),
+  deleteBroadcast: vi.fn(),
+}));
+const MockBroadcastServiceError = vi.hoisted(
+  () =>
+    class BroadcastServiceError extends Error {
+      constructor(
+        readonly code: "invalid_input" | "not_found" | "delete_forbidden",
+        message: string,
+      ) {
+        super(message);
+        this.name = "BroadcastServiceError";
+      }
+    },
+);
 const mockDb = vi.hoisted(() => ({
   select: vi.fn(),
   insert: vi.fn(),
@@ -33,6 +52,11 @@ vi.mock("@/lib/cache/dashboard-aggregates", async () => {
 
 vi.mock("@/lib/db", () => ({
   db: mockDb,
+}));
+
+vi.mock("@opensend/core", () => ({
+  BroadcastServiceError: MockBroadcastServiceError,
+  createBroadcastService: () => mockBroadcastService,
 }));
 
 function deepValues(value: unknown, seen = new WeakSet<object>()): unknown[] {
@@ -91,13 +115,6 @@ function selectRows<T>(rows: T[], whereClauses: SQL<unknown>[]) {
   return chain;
 }
 
-function insertReturning<T>(rows: T[]) {
-  const returning = vi.fn().mockResolvedValue(rows);
-  const values = vi.fn(() => ({ returning }));
-  mockDb.insert.mockReturnValue({ values });
-  return { values, returning };
-}
-
 function updateReturning<T>(rows: T[], whereClauses: SQL<unknown>[]) {
   const returning = vi.fn().mockResolvedValue(rows);
   const where = vi.fn((clause: SQL<unknown>) => {
@@ -107,16 +124,6 @@ function updateReturning<T>(rows: T[], whereClauses: SQL<unknown>[]) {
   const set = vi.fn(() => ({ where }));
   mockDb.update.mockReturnValue({ set });
   return { set, where, returning };
-}
-
-function deleteReturning<T>(rows: T[], whereClauses: SQL<unknown>[]) {
-  const returning = vi.fn().mockResolvedValue(rows);
-  const where = vi.fn((clause: SQL<unknown>) => {
-    whereClauses.push(clause);
-    return { returning };
-  });
-  mockDb.delete.mockReturnValue({ where });
-  return { where, returning };
 }
 
 beforeEach(() => {
@@ -134,53 +141,97 @@ beforeEach(() => {
 });
 
 describe("broadcast tenant isolation", () => {
-  it("scopes broadcast list queries to the authenticated user", async () => {
-    const whereClauses: SQL<unknown>[] = [];
-    mockDb.select.mockReturnValue(selectRows([], whereClauses));
+  it("passes tenant and list filters to the broadcast service", async () => {
+    const createdAt = new Date("2026-01-01T00:00:00Z");
+    mockBroadcastService.listBroadcasts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "broadcast-1",
+          name: "Launch",
+          status: "draft",
+          audienceId: "segment-1",
+          topicId: "topic-1",
+          createdAt,
+          scheduledAt: null,
+        },
+      ],
+      hasMore: true,
+    });
 
     const { GET } = await import("@/app/api/broadcasts/route");
     const response = await GET(
-      makeNextRequest("http://localhost:3015/api/broadcasts"),
+      makeNextRequest(
+        "http://localhost:3015/api/broadcasts?limit=10&search=Launch&status=draft&segmentId=segment-1&after=b0",
+      ),
     );
     const data = await response.json();
 
     expect(response.status).toBe(200);
-    expect(data.data).toEqual([]);
-    expectTenantPredicate(whereClauses.at(-1));
+    expect(data).toEqual({
+      object: "list",
+      data: [
+        {
+          id: "broadcast-1",
+          name: "Launch",
+          status: "draft",
+          audience_id: "segment-1",
+          topic_id: "topic-1",
+          created_at: createdAt.toISOString(),
+          scheduled_at: null,
+        },
+      ],
+      has_more: true,
+    });
+    expect(mockBroadcastService.listBroadcasts).toHaveBeenCalledWith({
+      userId: "user-b",
+      limit: 10,
+      search: "Launch",
+      status: "draft",
+      segmentId: "segment-1",
+      after: "b0",
+    });
   });
 
-  it("stamps created broadcasts with the authenticated user id", async () => {
-    const insertChain = insertReturning([
-      {
-        id: "broadcast-1",
-        name: "Launch",
-        status: "draft",
-        createdAt: new Date("2026-01-01T00:00:00Z"),
-      },
-    ]);
+  it("passes created broadcast payloads with the authenticated user id", async () => {
+    const createdAt = new Date("2026-01-01T00:00:00Z");
+    mockBroadcastService.createBroadcast.mockResolvedValueOnce({
+      id: "broadcast-1",
+      name: "Launch",
+      status: "draft",
+      createdAt,
+    });
+
+    const body = {
+      name: "Launch",
+      from: "team@example.com",
+      subject: "Hello",
+      segment_id: "segment-1",
+    };
 
     const { POST } = await import("@/app/api/broadcasts/route");
     const response = await POST(
-      jsonRequest("http://localhost:3015/api/broadcasts", {
-        name: "Launch",
-        from: "team@example.com",
-        subject: "Hello",
-        segment_id: "segment-1",
-      }),
+      jsonRequest("http://localhost:3015/api/broadcasts", body),
     );
+    const data = await response.json();
 
     expect(response.status).toBe(201);
-    expect(insertChain.values).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: "Launch",
-        userId: "user-b",
-      }),
-    );
+    expect(data).toEqual({
+      object: "broadcast",
+      id: "broadcast-1",
+      name: "Launch",
+      status: "draft",
+      created_at: createdAt.toISOString(),
+    });
+    expect(mockBroadcastService.createBroadcast).toHaveBeenCalledWith({
+      userId: "user-b",
+      body,
+    });
   });
 
   it("returns 404 for broadcast detail reads outside the tenant", async () => {
-    const whereClauses: SQL<unknown>[] = [];
-    mockDb.select.mockReturnValue(selectRows([], whereClauses));
+    mockBroadcastService.getBroadcast.mockRejectedValueOnce(
+      new MockBroadcastServiceError("not_found", "Broadcast not found"),
+    );
 
     const { GET } = await import("@/app/api/broadcasts/[id]/route");
     const response = await GET(
@@ -191,39 +242,51 @@ describe("broadcast tenant isolation", () => {
     );
 
     expect(response.status).toBe(404);
-    expectTenantPredicate(whereClauses.at(-1));
+    await expect(response.json()).resolves.toEqual({
+      error: "Broadcast not found",
+    });
+    expect(mockBroadcastService.getBroadcast).toHaveBeenCalledWith(
+      "user-b",
+      "broadcast-a",
+    );
   });
 
-  it("scopes broadcast updates and deletes by id plus user id", async () => {
-    const updateWheres: SQL<unknown>[] = [];
-    updateReturning(
-      [
-        {
-          id: "broadcast-1",
-          name: "Renamed",
-          status: "draft",
-        },
-      ],
-      updateWheres,
-    );
+  it("passes broadcast updates and deletes by id plus user id", async () => {
+    mockBroadcastService.updateBroadcast.mockResolvedValueOnce({
+      id: "broadcast-1",
+      name: "Renamed",
+      status: "draft",
+      from: null,
+      subject: null,
+      html: null,
+      text: null,
+      replyTo: null,
+      previewText: null,
+      audienceId: null,
+      topicId: null,
+      scheduledAt: null,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+    });
+    mockBroadcastService.deleteBroadcast.mockResolvedValueOnce({
+      id: "broadcast-1",
+    });
 
     const { PATCH, DELETE } = await import("@/app/api/broadcasts/[id]/route");
+    const patchBody = { name: "Renamed" };
     const patchResponse = await PATCH(
-      jsonRequest("http://localhost:3015/api/broadcasts/broadcast-1", {
-        name: "Renamed",
-      }),
+      jsonRequest(
+        "http://localhost:3015/api/broadcasts/broadcast-1",
+        patchBody,
+      ),
       { params: Promise.resolve({ id: "broadcast-1" }) },
     );
 
     expect(patchResponse.status).toBe(200);
-    expectTenantPredicate(updateWheres.at(-1));
-
-    const selectWheres: SQL<unknown>[] = [];
-    const deleteWheres: SQL<unknown>[] = [];
-    mockDb.select.mockReturnValue(
-      selectRows([{ id: "broadcast-1", status: "draft" }], selectWheres),
-    );
-    deleteReturning([{ id: "broadcast-1" }], deleteWheres);
+    expect(mockBroadcastService.updateBroadcast).toHaveBeenCalledWith({
+      id: "broadcast-1",
+      userId: "user-b",
+      body: patchBody,
+    });
 
     const deleteResponse = await DELETE(
       makeNextRequest("http://localhost:3015/api/broadcasts/broadcast-1", {
@@ -234,8 +297,10 @@ describe("broadcast tenant isolation", () => {
     );
 
     expect(deleteResponse.status).toBe(200);
-    expectTenantPredicate(selectWheres.at(-1));
-    expectTenantPredicate(deleteWheres.at(-1));
+    expect(mockBroadcastService.deleteBroadcast).toHaveBeenCalledWith(
+      "user-b",
+      "broadcast-1",
+    );
   });
 
   it("scopes broadcast send ownership checks and status updates", async () => {
