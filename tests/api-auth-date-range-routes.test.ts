@@ -222,11 +222,205 @@ describe("route smoke coverage", () => {
           this.name = "ContactServiceError";
         }
       }
+      class AudienceMetadataServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+          readonly status: number,
+        ) {
+          super(message);
+          this.name = "AudienceMetadataServiceError";
+        }
+      }
+
+      const notFound = (message: string) =>
+        new AudienceMetadataServiceError("not_found", message, 404);
+      const invalidInput = (message: string, status = 400) =>
+        new AudienceMetadataServiceError("invalid_input", message, status);
 
       return {
         createWebhookService: mockCreateWebhookService,
         TemplateServiceError,
         ContactServiceError,
+        AudienceMetadataServiceError,
+        createAudienceMetadataService: () => ({
+          async listSegments() {
+            const rows = await mockSelect().from().where().orderBy().limit();
+            const total = await mockCountFn();
+            return {
+              object: "list",
+              data: rows.map((row: Record<string, unknown>) => ({
+                id: row.id,
+                name: row.name,
+                created_at: row.createdAt,
+              })),
+              has_more: false,
+              total: Number(total),
+            };
+          },
+          async createSegment(input: { body: Record<string, unknown> }) {
+            const name =
+              typeof input.body.name === "string" ? input.body.name.trim() : "";
+            if (!name) throw invalidInput("Name is required");
+            const [segment] = await mockInsert().values({ name }).returning();
+            return { object: "segment", id: segment.id, name: segment.name };
+          },
+          async getSegment() {
+            const [segment] = await mockSelect().from().where();
+            if (!segment) throw notFound("Segment not found");
+            return {
+              object: "segment",
+              id: segment.id,
+              name: segment.name,
+              created_at: segment.createdAt,
+            };
+          },
+          async deleteSegment() {
+            const [deleted] = await mockDelete().where().returning();
+            if (!deleted) throw notFound("Segment not found");
+          },
+          async listTopics() {
+            const rows = await mockSelect().from().where().orderBy().limit();
+            const total = await mockCountFn();
+            return {
+              object: "list",
+              data: rows.map((row: Record<string, unknown>) => ({
+                id: row.id,
+                name: row.name,
+                description: row.description,
+                default_subscription: row.defaultSubscription,
+                visibility: row.visibility,
+                created_at: row.createdAt,
+              })),
+              has_more: false,
+              total: Number(total),
+            };
+          },
+          async createTopic(input: { body: Record<string, unknown> }) {
+            const name =
+              typeof input.body.name === "string" ? input.body.name.trim() : "";
+            if (!name) throw invalidInput("Name is required");
+            const description =
+              typeof input.body.description === "string"
+                ? input.body.description.trim() || null
+                : null;
+            if (description && description.length > 200) {
+              throw invalidInput(
+                "Description must be 200 characters or less",
+                422,
+              );
+            }
+            const [topic] = await mockInsert()
+              .values({ name, description })
+              .returning();
+            return {
+              object: "topic",
+              id: topic.id,
+              name: topic.name,
+              description: topic.description,
+              defaultSubscription: topic.defaultSubscription,
+              visibility: topic.visibility,
+              createdAt: topic.createdAt,
+            };
+          },
+          async getTopic() {
+            const [topic] = await mockSelect().from().where().limit();
+            if (!topic) throw notFound("Topic not found");
+            return {
+              object: "topic",
+              id: topic.id,
+              name: topic.name,
+              description: topic.description,
+              default_subscription: topic.defaultSubscription,
+              visibility: topic.visibility,
+              created_at: topic.createdAt,
+            };
+          },
+          async updateTopic(input: { body: Record<string, unknown> }) {
+            if (Object.keys(input.body).length === 0) {
+              throw invalidInput("No fields to update");
+            }
+            const [topic] = await mockUpdate()
+              .set(input.body)
+              .where()
+              .returning();
+            if (!topic) throw notFound("Topic not found");
+            return topic;
+          },
+          async deleteTopic() {
+            const [deleted] = await mockDelete().where().returning();
+            if (!deleted) throw notFound("Topic not found");
+          },
+          async listProperties() {
+            const total = await mockCountFn();
+            const rows = await mockSelect().from().orderBy().limit().offset();
+            return {
+              data: rows.map((row: Record<string, unknown>) => ({
+                id: row.id,
+                key: row.key,
+                name: row.name,
+                type: row.type,
+                fallback_value: row.fallbackValue,
+                created_at: row.createdAt,
+                updated_at: row.updatedAt,
+              })),
+              total: Number(total),
+              page: 1,
+              limit: 20,
+            };
+          },
+          async createProperty(input: { body: Record<string, unknown> }) {
+            const name =
+              typeof input.body.name === "string" ? input.body.name.trim() : "";
+            if (!name) throw invalidInput("Name is required");
+            const [property] = await mockInsert()
+              .values(input.body)
+              .returning();
+            return {
+              object: "contact_property",
+              id: property.id,
+              key: property.key,
+              name: property.name,
+              type: property.type,
+              fallback_value: property.fallbackValue,
+              created_at: property.createdAt,
+              updated_at: property.updatedAt,
+            };
+          },
+          async getProperty() {
+            const [property] = await mockSelect().from().where();
+            if (!property) throw notFound("Contact property not found");
+            return {
+              id: property.id,
+              key: property.key,
+              name: property.name,
+              type: property.type,
+              fallback_value: property.fallbackValue,
+              created_at: property.createdAt,
+              updated_at: property.updatedAt,
+            };
+          },
+          async updateProperty(input: { body: Record<string, unknown> }) {
+            const [property] = await mockUpdate()
+              .set(input.body)
+              .where()
+              .returning();
+            if (!property) throw notFound("Contact property not found");
+            return {
+              id: property.id,
+              key: property.key,
+              name: property.name,
+              type: property.type,
+              fallback_value: property.fallbackValue,
+              created_at: property.createdAt,
+              updated_at: property.updatedAt,
+            };
+          },
+          async deleteProperty() {
+            const [deleted] = await mockDelete().where().returning();
+            if (!deleted) throw notFound("Contact property not found");
+          },
+        }),
         createContactService: () => mockContactService,
         createTemplateService: () => ({
           async getTemplate(id: string) {
