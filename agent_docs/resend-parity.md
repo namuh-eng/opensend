@@ -69,7 +69,7 @@ Rows are ordered roughly by priority within each area. The inspector's tie-break
 | Feature | Resend | OpenSend | Feature | DX | Reliability | Price | Priority | Issue # | Last reviewed |
 |---|---|---|---|---|---|---|---|---|---|
 | React Email integration | first-class | TBD | ? | ? | ? | ? | P1 | | |
-| Variable interpolation | yes | TBD | ? | ? | ? | ? | P1 | | |
+| Variable interpolation | Templates support up to 50 custom variables with `key`, `type` (`string`/`number`), optional `fallbackValue`, reserved names, triple-brace placeholders like `{{{PRODUCT}}}`, and send-time fallback rendering when variables are omitted ([docs](https://resend.com/docs/dashboard/templates/template-variables), [docs](https://resend.com/docs/api-reference/templates/create-template)); Ever observed the docs and code examples on 2026-05-09 | partial: OpenSend stores template variables only as `{ name, required }` (`src/lib/db/schema.ts:330`), create/update collapse input to that shape (`src/app/api/templates/route.ts:147`, `src/app/api/templates/[id]/route.ts:117`), detail responses force `type: "string"` and `fallback_value: null` (`src/app/api/templates/[id]/route.ts:45`, `src/app/api/templates/[id]/route.ts:152`), and send-time rendering replaces only double-brace placeholders from provided values (`src/lib/api/emails/send.ts:493`, `src/lib/api/emails/send.ts:533`); OpenSend prod `/templates` showed the dashboard empty state but the captured create click did not expose variable controls on 2026-05-09 | partial | behind | parity | n/a | P1 | #294 | 2026-05-09 |
 | Stored templates (server-side render) | yes | TBD | ? | ? | ? | ? | P2 | | |
 
 ## Analytics
