@@ -5,8 +5,6 @@ import {
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { deleteDNSRecord, listDNSRecords } from "@/lib/cloudflare";
-import { db } from "@/lib/db";
-import { domains } from "@/lib/db/schema";
 import {
   getCachedDomainById,
   invalidateDomainCaches,
@@ -17,42 +15,25 @@ import {
   domainRouteParamsSchema,
   updateDomainSchema,
 } from "@/lib/validation/domains";
-import { getEffectiveReturnPathLabel } from "@opensend/core";
-import { and, eq } from "drizzle-orm";
+import {
+  DomainDetailServiceError,
+  createDomainDetailService,
+} from "@opensend/core";
 import { NextResponse } from "next/server";
 
-type DomainWebhookRow = typeof domains.$inferSelect;
-
-const defaultCapabilities = [
-  { name: "sending", enabled: true },
-  { name: "receiving", enabled: false },
-];
-
-function toDomainWebhookPayload(domain: DomainWebhookRow) {
-  return {
-    id: domain.id,
-    name: domain.name,
-    status: domain.status,
-    region: domain.region,
-    records: domain.records ?? [],
-    capabilities: domain.capabilities ?? [],
-    created_at:
-      domain.createdAt instanceof Date
-        ? domain.createdAt.toISOString()
-        : domain.createdAt,
-  };
+function domainDetailService() {
+  return createDomainDetailService({
+    getDomainById: getCachedDomainById,
+    deleteDomainIdentity,
+    listDNSRecords,
+    deleteDNSRecord,
+    invalidateDomainCaches,
+  });
 }
 
-function valuesEqual(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-}
-
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> },
-) {
+async function resolveUserId(request: Request): Promise<string | Response> {
   const auth = await authorizeDashboardOrApiKey(
-    _req.headers.get("authorization"),
+    request.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
@@ -62,44 +43,57 @@ export async function GET(
   const userId = "userId" in auth ? auth.userId : session?.user?.id;
   if (!userId) return unauthorizedResponse();
 
+  return userId;
+}
+
+function isResponse(value: string | Response): value is Response {
+  return value instanceof Response;
+}
+
+function validationResponse(error: { flatten: () => unknown }) {
+  return NextResponse.json(
+    { error: "Validation failed", details: error.flatten() },
+    { status: 422 },
+  );
+}
+
+function notFoundResponse() {
+  return NextResponse.json({ error: "Not found" }, { status: 404 });
+}
+
+function internalErrorResponse() {
+  return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+}
+
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const userId = await resolveUserId(req);
+  if (isResponse(userId)) return userId;
+
   const parsedParams = domainRouteParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: parsedParams.error.flatten() },
-      { status: 422 },
-    );
+    return validationResponse(parsedParams.error);
   }
 
   try {
-    const { id } = parsedParams.data;
-    const domain = await getCachedDomainById(id);
+    const domain = await domainDetailService().getDomainDetail({
+      id: parsedParams.data.id,
+      userId,
+    });
 
-    if (!domain || domain.userId !== userId) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(domain);
+  } catch (error) {
+    if (
+      error instanceof DomainDetailServiceError &&
+      error.code === "not_found"
+    ) {
+      return notFoundResponse();
     }
 
-    return NextResponse.json({
-      object: "domain",
-      id: domain.id,
-      name: domain.name,
-      status: domain.status,
-      region: domain.region,
-      records: domain.records || [],
-      custom_return_path: domain.customReturnPath,
-      return_path: getEffectiveReturnPathLabel(domain.customReturnPath),
-      open_tracking: domain.trackOpens,
-      click_tracking: domain.trackClicks,
-      tracking_subdomain: domain.trackingSubdomain,
-      tls: domain.tls,
-      capabilities: domain.capabilities,
-      created_at: domain.createdAt,
-    });
-  } catch (error) {
     console.error("Failed to retrieve domain:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return internalErrorResponse();
   }
 }
 
@@ -107,16 +101,8 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeDashboardOrApiKey(
-    req.headers.get("authorization"),
-  );
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessForApiKeyCaller(auth);
-  if (permissionError) return permissionError;
-
-  const session = "dashboard" in auth ? await getServerSession() : null;
-  const userId = "userId" in auth ? auth.userId : session?.user?.id;
-  if (!userId) return unauthorizedResponse();
+  const userId = await resolveUserId(req);
+  if (isResponse(userId)) return userId;
 
   let body: unknown;
   try {
@@ -127,216 +113,77 @@ export async function PATCH(
 
   const result = updateDomainSchema.safeParse(body);
   if (!result.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: result.error.flatten() },
-      { status: 422 },
-    );
+    return validationResponse(result.error);
   }
 
   const parsedParams = domainRouteParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: parsedParams.error.flatten() },
-      { status: 422 },
-    );
+    return validationResponse(parsedParams.error);
   }
 
   try {
-    const { id } = parsedParams.data;
-    const validated = result.data;
-    const updates: Record<string, unknown> = {};
-    const existingDomain = await getCachedDomainById(id);
-
-    if (!existingDomain || existingDomain.userId !== userId) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    if (validated.click_tracking !== undefined) {
-      updates.trackClicks = validated.click_tracking;
-    }
-    if (validated.open_tracking !== undefined) {
-      updates.trackOpens = validated.open_tracking;
-    }
-    if (validated.tracking_subdomain !== undefined) {
-      updates.trackingSubdomain = validated.tracking_subdomain;
-    }
-
-    if (validated.capabilities !== undefined) {
-      updates.capabilities = validated.capabilities;
-    } else if (
-      validated.sending_enabled !== undefined ||
-      validated.receiving_enabled !== undefined
-    ) {
-      const currentCaps = existingDomain.capabilities || defaultCapabilities;
-      const newCaps = currentCaps.map((cap) => {
-        if (cap.name === "sending" && validated.sending_enabled !== undefined) {
-          return { ...cap, enabled: validated.sending_enabled };
-        }
-        if (
-          cap.name === "receiving" &&
-          validated.receiving_enabled !== undefined
-        ) {
-          return { ...cap, enabled: validated.receiving_enabled };
-        }
-        return cap;
-      });
-      updates.capabilities = newCaps;
-    }
-
-    if (validated.tls !== undefined) {
-      updates.tls = validated.tls;
-    }
-
-    const changedFields = Object.entries({
-      open_tracking: updates.trackOpens,
-      click_tracking: updates.trackClicks,
-      tracking_subdomain: updates.trackingSubdomain,
-      capabilities: updates.capabilities,
-      tls: updates.tls,
-    })
-      .filter(([, value]) => value !== undefined)
-      .filter(([field, value]) => {
-        const currentValue =
-          field === "open_tracking"
-            ? existingDomain.trackOpens
-            : field === "click_tracking"
-              ? existingDomain.trackClicks
-              : field === "tracking_subdomain"
-                ? existingDomain.trackingSubdomain
-                : field === "capabilities"
-                  ? existingDomain.capabilities
-                  : existingDomain.tls;
-        return !valuesEqual(currentValue, value);
-      })
-      .map(([field]) => field);
-
-    if (changedFields.length === 0) {
-      return NextResponse.json({
-        object: "domain",
-        id: existingDomain.id,
-      });
-    }
-
-    const [updated] = await db
-      .update(domains)
-      .set(updates)
-      .where(and(eq(domains.id, id), eq(domains.userId, userId)))
-      .returning();
-
-    if (!updated) {
-      await invalidateDomainCaches({ id, name: existingDomain.name });
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    await invalidateDomainCaches({ id: updated.id, name: updated.name });
-
-    await queueEvent({
-      type: "domain.updated",
+    const updated = await domainDetailService().updateDomainDetail({
+      id: parsedParams.data.id,
       userId,
-      payload: {
-        id: updated.id,
-        changed_fields: changedFields,
-        domain: toDomainWebhookPayload(updated),
-      },
+      updates: result.data,
     });
 
-    return NextResponse.json({
-      object: "domain",
-      id: updated.id,
-    });
+    if (updated.eventPayload) {
+      await queueEvent({
+        type: "domain.updated",
+        userId,
+        payload: updated.eventPayload,
+      });
+    }
+
+    return NextResponse.json(updated.response);
   } catch (error) {
+    if (
+      error instanceof DomainDetailServiceError &&
+      error.code === "not_found"
+    ) {
+      return notFoundResponse();
+    }
+
     console.error("Failed to update domain:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return internalErrorResponse();
   }
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeDashboardOrApiKey(
-    _req.headers.get("authorization"),
-  );
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessForApiKeyCaller(auth);
-  if (permissionError) return permissionError;
-
-  const session = "dashboard" in auth ? await getServerSession() : null;
-  const userId = "userId" in auth ? auth.userId : session?.user?.id;
-  if (!userId) return unauthorizedResponse();
+  const userId = await resolveUserId(req);
+  if (isResponse(userId)) return userId;
 
   const parsedParams = domainRouteParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
-    return NextResponse.json(
-      { error: "Validation failed", details: parsedParams.error.flatten() },
-      { status: 422 },
-    );
+    return validationResponse(parsedParams.error);
   }
 
   try {
-    const { id } = parsedParams.data;
-    const domain = await getCachedDomainById(id);
-
-    if (!domain || domain.userId !== userId) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    try {
-      await deleteDomainIdentity(domain.name);
-    } catch (sesErr) {
-      console.warn(`Failed to delete SES identity for ${domain.name}:`, sesErr);
-    }
-
-    try {
-      const records = await listDNSRecords({ name: domain.name });
-      const sesRecords = records.filter(
-        (record) =>
-          record.content.includes("amazonses.com") ||
-          record.name.includes("_domainkey") ||
-          record.content.startsWith("v=spf1"),
-      );
-
-      await Promise.all(sesRecords.map((record) => deleteDNSRecord(record.id)));
-    } catch (cfErr) {
-      console.warn(
-        `Failed to cleanup Cloudflare records for ${domain.name}:`,
-        cfErr,
-      );
-    }
-
-    const [deleted] = await db
-      .delete(domains)
-      .where(and(eq(domains.id, id), eq(domains.userId, userId)))
-      .returning({ id: domains.id, name: domains.name });
-
-    await invalidateDomainCaches({ id, name: domain.name });
-
-    if (!deleted) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
+    const deleted = await domainDetailService().deleteDomainDetail({
+      id: parsedParams.data.id,
+      userId,
+    });
 
     await queueEvent({
       type: "domain.deleted",
       userId,
-      payload: {
-        id: deleted.id,
-        name: deleted.name,
-      },
+      payload: deleted.eventPayload,
     });
 
-    return NextResponse.json({
-      object: "domain",
-      id: deleted.id,
-      deleted: true,
-    });
+    return NextResponse.json(deleted.response);
   } catch (error) {
+    if (
+      error instanceof DomainDetailServiceError &&
+      error.code === "not_found"
+    ) {
+      return notFoundResponse();
+    }
+
     console.error("Failed to delete domain:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 },
-    );
+    return internalErrorResponse();
   }
 }
