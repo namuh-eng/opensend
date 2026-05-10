@@ -319,6 +319,75 @@ describe("route smoke coverage", () => {
             }
             return broadcast;
           },
+          async sendBroadcast(input: {
+            id: string;
+            body: Record<string, unknown>;
+          }) {
+            const [existing] = await mockSelect()
+              .from()
+              .where({ id: input.id })
+              .limit(1);
+            if (!existing) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            if (existing.status !== "draft") {
+              throw new BroadcastServiceError(
+                "send_forbidden",
+                `Cannot send a broadcast in ${existing.status} status`,
+              );
+            }
+            const scheduledAt = input.body.scheduled_at
+              ? new Date(String(input.body.scheduled_at))
+              : null;
+            const [broadcast] = await mockUpdate()
+              .set({
+                status: scheduledAt ? "scheduled" : "queued",
+                scheduledAt,
+              })
+              .where({ id: input.id })
+              .returning();
+            return {
+              id: broadcast.id,
+              status: broadcast.status,
+              scheduledAt: broadcast.scheduledAt ?? null,
+            };
+          },
+          async getBroadcastMetrics(_input: { userId: string; id: string }) {
+            const [broadcast] = await mockSelect().from().where().limit(1);
+            if (!broadcast) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            const [stats] = await mockSelect().from().where();
+            const total = Number(stats?.total ?? 0);
+            const delivered = Number(stats?.delivered ?? 0);
+            const bounced = Number(stats?.bounced ?? 0);
+            const complained = Number(stats?.complained ?? 0);
+            const opened = Number(stats?.opened ?? 0);
+            const clicked = Number(stats?.clicked ?? 0);
+            return {
+              cacheStatus: "miss",
+              payload: {
+                object: "broadcast_metrics",
+                broadcast_id: _input.id,
+                total,
+                delivered,
+                bounced,
+                complained,
+                opened,
+                clicked,
+                delivery_rate: total > 0 ? (delivered / total) * 100 : 0,
+                open_rate: total > 0 ? (opened / total) * 100 : 0,
+                click_rate: total > 0 ? (clicked / total) * 100 : 0,
+                bounce_rate: total > 0 ? (bounced / total) * 100 : 0,
+              },
+            };
+          },
         }),
         createAudienceMetadataService: () => ({
           async listSegments() {
