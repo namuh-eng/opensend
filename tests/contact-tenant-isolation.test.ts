@@ -19,6 +19,12 @@ const mockContactService = vi.hoisted(() => ({
   updateContact: vi.fn(),
   deleteContact: vi.fn(),
 }));
+const mockContactOperationsService = vi.hoisted(() => ({
+  bulkAction: vi.fn(),
+  importContacts: vi.fn(),
+  listContactTopics: vi.fn(),
+  updateContactTopics: vi.fn(),
+}));
 const MockContactServiceError = vi.hoisted(
   () =>
     class ContactServiceError extends Error {
@@ -28,6 +34,19 @@ const MockContactServiceError = vi.hoisted(
       ) {
         super(message);
         this.name = "ContactServiceError";
+      }
+    },
+);
+const MockContactOperationsServiceError = vi.hoisted(
+  () =>
+    class ContactOperationsServiceError extends Error {
+      constructor(
+        readonly code: "invalid_input" | "not_found",
+        message: string,
+        readonly status: number,
+      ) {
+        super(message);
+        this.name = "ContactOperationsServiceError";
       }
     },
 );
@@ -68,27 +87,6 @@ function makeChain<T>(rows: T[]): Chain<T> {
   return chain;
 }
 
-function expressionContains(value: unknown, expected: string): boolean {
-  const seen = new Set<object>();
-
-  function visit(node: unknown): boolean {
-    if (node === expected) return true;
-    if (typeof node === "string") return node.includes(expected);
-    if (!node || typeof node !== "object") return false;
-    if (seen.has(node)) return false;
-    seen.add(node);
-
-    for (const key of Reflect.ownKeys(node)) {
-      const child = (node as Record<PropertyKey, unknown>)[key];
-      if (visit(child)) return true;
-    }
-
-    return false;
-  }
-
-  return visit(value);
-}
-
 vi.mock("@/lib/api-auth", () => ({
   authorizeDashboardOrApiKey: mockAuthorizeDashboardOrApiKey,
   getServerSession: mockGetServerSession,
@@ -103,7 +101,9 @@ vi.mock("@/lib/events", () => ({
 
 vi.mock("@opensend/core", () => ({
   ContactServiceError: MockContactServiceError,
+  ContactOperationsServiceError: MockContactOperationsServiceError,
   createContactService: () => mockContactService,
+  createContactOperationsService: () => mockContactOperationsService,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -149,6 +149,10 @@ describe("contact API tenant isolation", () => {
     mockContactService.getContact.mockReset();
     mockContactService.updateContact.mockReset();
     mockContactService.deleteContact.mockReset();
+    mockContactOperationsService.bulkAction.mockReset();
+    mockContactOperationsService.importContacts.mockReset();
+    mockContactOperationsService.listContactTopics.mockReset();
+    mockContactOperationsService.updateContactTopics.mockReset();
   });
 
   it("enqueues contact.created for the caller tenant after creating a contact", async () => {
@@ -471,8 +475,11 @@ describe("contact API tenant isolation", () => {
   });
 
   it("does not bulk-mutate contacts outside the caller tenant", async () => {
-    mockSegmentFindFirst.mockResolvedValueOnce({ id: "seg-b", name: "VIP" });
-    mockContactFindMany.mockResolvedValueOnce([]);
+    mockContactOperationsService.bulkAction.mockResolvedValueOnce({
+      object: "bulk_action",
+      success: true,
+      count: 0,
+    });
 
     const route = await import("@/app/api/contacts/bulk/route");
     const response = await route.POST(
@@ -492,25 +499,23 @@ describe("contact API tenant isolation", () => {
       success: true,
       count: 0,
     });
+    expect(mockContactOperationsService.bulkAction).toHaveBeenCalledWith({
+      userId: "user-b",
+      body: {
+        action: "add_to_segment",
+        segment_id: "seg-b",
+        contact_ids: ["contact-a"],
+      },
+    });
     expect(mockUpdate).not.toHaveBeenCalled();
-    expect(
-      expressionContains(
-        mockContactFindMany.mock.calls[0]?.[0]?.where,
-        "user_id",
-      ),
-    ).toBe(true);
-    expect(
-      expressionContains(
-        mockContactFindMany.mock.calls[0]?.[0]?.where,
-        "user-b",
-      ),
-    ).toBe(true);
   });
 
   it("stamps imported contacts with the caller user", async () => {
-    mockContactFindFirst.mockResolvedValueOnce(null);
-    const insertChain = makeChain([{ id: "contact-b" }]);
-    mockInsert.mockReturnValueOnce(insertChain);
+    mockContactOperationsService.importContacts.mockResolvedValueOnce({
+      object: "import",
+      created_count: 1,
+      ids: ["contact-b"],
+    });
 
     const formData = {
       get: (key: string) => {
@@ -528,9 +533,11 @@ describe("contact API tenant isolation", () => {
     } as never);
 
     expect(response.status).toBe(200);
-    expect(insertChain.values.mock.calls[0]?.[0]).toMatchObject({
-      email: "b@example.com",
+    expect(mockContactOperationsService.importContacts).toHaveBeenCalledWith({
       userId: "user-b",
+      rows: [{ Email: "b@example.com" }],
+      mapping: { Email: "email" },
+      segmentId: null,
     });
   });
 

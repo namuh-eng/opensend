@@ -36,6 +36,7 @@ export * from "./services/domain-events";
 export * from "./services/webhook";
 export * from "./services/apiKeys";
 export * from "./services/contact";
+export * from "./services/contact-operations";
 export * from "./services/email";
 export * from "./services/emailRead";
 export * from "./services/logs";
