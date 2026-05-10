@@ -24,6 +24,7 @@ there. This document is for production deployments.
 - [Shared rate limiting (Redis)](#shared-rate-limiting-redis)
 - [Splitting the ingester service](#splitting-the-ingester-service)
 - [Observability](#observability)
+- [Hosted Stripe billing](#hosted-stripe-billing)
 - [Upgrades & migrations](#upgrades--migrations)
 - [Troubleshooting](#troubleshooting)
 
@@ -125,6 +126,27 @@ contributor-facing set; the table below adds the production-only entries.
 | `RATE_LIMIT_BACKEND` | `disabled` (single-process dev), or `redis` (production). |
 | `REDIS_URL` | TLS Redis endpoint, e.g. `rediss://default:<password>@<endpoint>:6379`. Used for rate limiting AND auth/domain metadata cache. |
 | `CLOUDWATCH_METRICS_NAMESPACE` | Override the default `Opensend` EMF metrics namespace. |
+
+### Hosted Stripe billing
+
+Billing is disabled by default for self-host/local OSS deploys. Leave
+`BILLING_BACKEND` unset or set it to `disabled` to keep sends unmetered by
+OpenSend plan quotas. The hosted namuh.co deployment sets billing env from its
+secret manager instead of committing secrets.
+
+| Variable | Service | Purpose |
+| --- | --- | --- |
+| `BILLING_BACKEND=stripe` | App + ingester | Enables hosted Stripe/paywall behavior. Any other value is treated as disabled. |
+| `STRIPE_SECRET_KEY` | App + ingester | Stripe API key for hosted billing. Required before the app exposes Checkout/Portal behavior. |
+| `STRIPE_WEBHOOK_SECRET` | Ingester | Signing secret for the Stripe webhook endpoint at `/webhooks/stripe`. |
+| `BILLING_NOTIFICATION_FROM_EMAIL` | Ingester, optional | Sender used for payment-failed notifications. |
+
+Before enabling hosted billing, read the full cutover checklist in
+[`hosted-stripe-cutover.md`](hosted-stripe-cutover.md) and run:
+
+```bash
+bun run billing:preflight -- --service all --check-db --strict
+```
 
 ## Database
 

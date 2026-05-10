@@ -227,6 +227,7 @@ and the split app/ingester service shape — read the dedicated guides:
 - **[`docs/self-hosting.md`](docs/self-hosting.md)** — full self-hosting deep dive (environment variables, database, SES, DNS, auth, reverse proxy, background jobs, Redis, upgrades, troubleshooting)
 - **[`docs/ingester-deploy.md`](docs/ingester-deploy.md)** — running the ingester as a separate service with SNS cutover and replay runbook
 - **[`docs/observability.md`](docs/observability.md)** — log/metric/trace catalog and the API-to-provider tracing runbook
+- **[`docs/hosted-stripe-cutover.md`](docs/hosted-stripe-cutover.md)** — hosted Stripe/paywall env, Price ID mapping, preflight, and live validation checklist
 
 The included multi-stage `Dockerfile` builds the app, the migrator, and (via
 `packages/ingester/Dockerfile`) the ingester. Images run on any container
