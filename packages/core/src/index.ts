@@ -46,6 +46,7 @@ export * from "./services/storage";
 export * from "./services/template";
 export * from "./services/broadcast";
 export * from "./services/audience-metadata";
+export * from "./services/automations";
 export * from "./services/automationRuns";
 export * from "./jobs/background-jobs";
 export * from "./observability/telemetry";
