@@ -33,6 +33,40 @@ vi.mock("@opensend/core", () => ({
     getApiKey: vi.fn(),
     listApiKeys: vi.fn(),
   }),
+  parseCreateApiKeyBody: (body: unknown) => {
+    const record =
+      body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    return {
+      name: typeof record.name === "string" ? record.name : "",
+      permission:
+        record.permission === "full_access" ||
+        record.permission === "sending_access"
+          ? record.permission
+          : undefined,
+      domainId:
+        typeof record.domain_id === "string" ? record.domain_id : undefined,
+    };
+  },
+  toApiKeyCreateResponse: (created: { id: string; token: string }) => ({
+    id: created.id,
+    token: created.token,
+  }),
+  toApiKeyDetailResponse: (key: {
+    id: string;
+    name: string;
+    createdAt: Date | string;
+    lastUsedAt: Date | string | null;
+    permission: string;
+    domain: string | null;
+  }) => ({
+    object: "api_key",
+    id: key.id,
+    name: key.name,
+    created_at: key.createdAt,
+    last_used_at: key.lastUsedAt,
+    permission: key.permission,
+    domain: key.domain,
+  }),
   createDomainService: () => ({
     createDomain: mockCreateDomain,
   }),

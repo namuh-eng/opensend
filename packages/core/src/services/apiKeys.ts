@@ -22,6 +22,36 @@ export type ApiKeyListResult = {
   hasMore: boolean;
 };
 
+export type ApiKeyPublicListResponseItem = {
+  id: string;
+  name: string;
+  created_at: ApiKeyServiceListItem["createdAt"];
+  last_used_at: ApiKeyServiceListItem["lastUsedAt"];
+  permission: ApiKeyServiceListItem["permission"];
+  domain: string | null;
+};
+
+export type ApiKeyPublicListResponse = {
+  object: "list";
+  data: ApiKeyPublicListResponseItem[];
+  has_more: boolean;
+};
+
+export type ApiKeyPublicDetailResponse = {
+  object: "api_key";
+  id: string;
+  name: string;
+  created_at: ApiKeyDetail["createdAt"];
+  last_used_at: ApiKeyDetail["lastUsedAt"];
+  permission: ApiKeyDetail["permission"];
+  domain: string | null;
+};
+
+export type ApiKeyPublicCreateResponse = {
+  id: string;
+  token: string;
+};
+
 export type CreateApiKeyInput = {
   name: string;
   permission?: ApiKeyPermission;
@@ -85,6 +115,67 @@ function previewApiKey(rawKey: string): string {
 
 function normalizeLimit(limit: number | undefined): number {
   return Math.min(Math.max(limit || 20, 1), 100);
+}
+
+export function parseCreateApiKeyBody(body: unknown): {
+  name: string;
+  permission?: ApiKeyPermission;
+  domainId?: string;
+} {
+  const data =
+    body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const record = data as Record<string, unknown>;
+  const permission = record.permission;
+  const domainId = record.domain_id;
+
+  return {
+    name: typeof record.name === "string" ? record.name : "",
+    permission:
+      permission === "full_access" || permission === "sending_access"
+        ? permission
+        : undefined,
+    domainId: typeof domainId === "string" ? domainId : undefined,
+  };
+}
+
+export function toApiKeyListResponse(
+  result: ApiKeyListResult,
+): ApiKeyPublicListResponse {
+  return {
+    object: "list",
+    data: result.data.map((key) => ({
+      id: key.id,
+      name: key.name,
+      created_at: key.createdAt,
+      last_used_at: key.lastUsedAt,
+      permission: key.permission,
+      domain: key.domain,
+    })),
+    has_more: result.hasMore,
+  };
+}
+
+export function toApiKeyDetailResponse(
+  key: ApiKeyDetail,
+): ApiKeyPublicDetailResponse {
+  return {
+    object: "api_key",
+    id: key.id,
+    name: key.name,
+    created_at: key.createdAt,
+    last_used_at: key.lastUsedAt,
+    permission: key.permission,
+    domain: key.domain,
+  };
+}
+
+export function toApiKeyCreateResponse(
+  created: CreateApiKeyResult,
+): ApiKeyPublicCreateResponse {
+  return {
+    id: created.id,
+    token: created.token,
+  };
 }
 
 export function createApiKeyService({
