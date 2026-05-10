@@ -193,9 +193,105 @@ describe("route smoke coverage", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    vi.doMock("@opensend/core", () => ({
-      createWebhookService: mockCreateWebhookService,
-    }));
+    vi.doMock("@opensend/core", () => {
+      class TemplateServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+        ) {
+          super(message);
+          this.name = "TemplateServiceError";
+        }
+      }
+
+      return {
+        createWebhookService: mockCreateWebhookService,
+        TemplateServiceError,
+        createTemplateService: () => ({
+          async getTemplate(id: string) {
+            const [template] = await mockSelect().from().where({ id }).limit(1);
+            if (!template) {
+              throw new TemplateServiceError("not_found", "Template not found");
+            }
+            return {
+              ...template,
+              replyTo: template.replyTo,
+              previewText: template.previewText,
+              variables: [],
+              updatedAt: template.createdAt,
+            };
+          },
+          async updateTemplate(id: string, data: Record<string, unknown>) {
+            const [template] = await mockUpdate()
+              .set(data)
+              .where({ id })
+              .returning();
+            if (!template) {
+              throw new TemplateServiceError("not_found", "Template not found");
+            }
+            return {
+              ...template,
+              replyTo: template.replyTo,
+              previewText: template.previewText,
+              variables: [],
+              updatedAt: template.createdAt,
+            };
+          },
+          async deleteTemplate(id: string) {
+            const [template] = await mockDelete().where({ id }).returning();
+            if (!template) {
+              throw new TemplateServiceError("not_found", "Template not found");
+            }
+          },
+          async publishTemplate(id: string) {
+            const [existing] = await mockSelect().from().where({ id }).limit(1);
+            if (!existing) {
+              throw new TemplateServiceError("not_found", "Template not found");
+            }
+            if (existing.status !== "draft") {
+              throw new TemplateServiceError(
+                "not_draft",
+                "Only draft templates can be published",
+              );
+            }
+            const [template] = await mockUpdate()
+              .set({
+                status: "published",
+                publishedAt: expect.any(Date),
+                hasUnpublishedVersions: false,
+              })
+              .where({ id })
+              .returning();
+            return {
+              ...template,
+              publishedAt: template.publishedAt,
+              hasUnpublishedVersions: template.hasUnpublishedVersions,
+            };
+          },
+          async duplicateTemplate(id: string) {
+            const [existing] = await mockSelect().from().where({ id }).limit(1);
+            if (!existing) {
+              throw new TemplateServiceError("not_found", "Template not found");
+            }
+            const [template] = await mockInsert()
+              .values({
+                name: `${existing.name} (Copy)`,
+                alias: existing.alias ? `${existing.alias}-copy` : null,
+                status: "draft",
+                subject: existing.subject,
+                from: existing.from,
+                replyTo: existing.replyTo,
+                previewText: existing.previewText,
+                html: existing.html,
+                text: existing.text,
+                variables: existing.variables,
+              })
+              .returning();
+            return template;
+          },
+        }),
+      };
+    });
     mockCreateWebhookService.mockReturnValue({
       listWebhooks: vi.fn().mockResolvedValue({ data: [], hasMore: false }),
       createWebhook: vi.fn(),

@@ -336,6 +336,11 @@ export const templates = pgTable("templates", {
         fallback_value?: string | number | null;
       }>
     >(),
+  currentVersionId: uuid("current_version_id"),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  hasUnpublishedVersions: boolean("has_unpublished_versions")
+    .notNull()
+    .default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
