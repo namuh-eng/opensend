@@ -4,8 +4,10 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
-import { listSuppressions, serializeSuppression } from "@/lib/suppressions";
+import { createSuppressionService } from "@opensend/core";
 import { NextResponse } from "next/server";
+
+const suppressionService = createSuppressionService();
 
 export async function GET(request: Request) {
   const auth = await authorizeDashboardOrApiKey(
@@ -19,18 +21,14 @@ export async function GET(request: Request) {
   if (!userId) return unauthorizedResponse();
 
   const url = new URL(request.url);
-  const limit = Math.min(
-    100,
-    Math.max(1, Number(url.searchParams.get("limit")) || 50),
-  );
+  const limit = Number(url.searchParams.get("limit"));
   const after = url.searchParams.get("after") || undefined;
 
-  const result = await listSuppressions({ userId, limit, after });
-
-  return NextResponse.json({
-    object: "list",
-    scope: "user",
-    data: result.data.map(serializeSuppression),
-    has_more: result.hasMore,
+  const result = await suppressionService.listSuppressions({
+    userId,
+    limit,
+    after,
   });
+
+  return NextResponse.json(result);
 }
