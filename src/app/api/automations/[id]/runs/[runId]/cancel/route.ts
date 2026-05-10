@@ -1,12 +1,9 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { formatRunDetail } from "@/lib/automations";
-import { db } from "@/lib/db";
-import { automationRuns, automations } from "@/lib/db/schema";
 import { cancelAutomationRunSchema } from "@/lib/validation/automations";
-import { and, eq, inArray } from "drizzle-orm";
-
-const CANCELLABLE_RUN_STATUSES = ["queued", "waiting"] as const;
+import {
+  authorizeAutomationRunRoute,
+  automationRunService,
+  mapAutomationRunServiceError,
+} from "../../route-helpers";
 
 async function readJsonBody(request: Request): Promise<unknown> {
   const body = await request.text();
@@ -18,10 +15,8 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string; runId: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeAutomationRunRoute(request);
+  if ("response" in auth) return auth.response;
 
   let body: unknown;
   try {
@@ -40,83 +35,15 @@ export async function POST(
 
   const { id, runId } = await params;
   try {
-    const ownerConditions = [eq(automations.id, id)];
-    if (auth.userId) ownerConditions.push(eq(automations.userId, auth.userId));
-    const automation = await db.query.automations.findFirst({
-      where: and(...ownerConditions),
+    const run = await automationRunService.cancelRun({
+      automationId: id,
+      runId,
+      userId: auth.userId,
+      reason: parsed.data.reason,
     });
-    if (!automation) {
-      return Response.json({ error: "Automation not found" }, { status: 404 });
-    }
 
-    const run = await db.query.automationRuns.findFirst({
-      where: and(
-        eq(automationRuns.id, runId),
-        eq(automationRuns.automationId, automation.id),
-      ),
-    });
-    if (!run) return Response.json({ error: "Run not found" }, { status: 404 });
-
-    if (
-      !CANCELLABLE_RUN_STATUSES.includes(run.status as "queued" | "waiting")
-    ) {
-      return Response.json(
-        {
-          error: "Run is not cancellable",
-          code: "run_not_cancellable",
-        },
-        { status: 409 },
-      );
-    }
-
-    const now = new Date();
-    const reason = parsed.data.reason ?? "cancelled_by_api";
-    const stepStates = { ...(run.stepStates ?? {}) };
-    if (run.currentStepKey) {
-      stepStates[run.currentStepKey] = {
-        ...(stepStates[run.currentStepKey] ?? { status: "pending" }),
-        status: "cancelled",
-        completedAt: now.toISOString(),
-        output: {
-          ...(stepStates[run.currentStepKey]?.output ?? {}),
-          cancellation_reason: reason,
-        },
-      };
-    }
-
-    const [updated] = await db
-      .update(automationRuns)
-      .set({
-        status: "cancelled",
-        stepStates,
-        completedAt: now,
-        nextStepAt: null,
-        failureReason: reason,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(automationRuns.id, run.id),
-          eq(automationRuns.automationId, automation.id),
-          inArray(automationRuns.status, [...CANCELLABLE_RUN_STATUSES]),
-        ),
-      )
-      .returning();
-
-    if (!updated) {
-      return Response.json(
-        {
-          error: "Run is not cancellable",
-          code: "run_not_cancellable",
-        },
-        { status: 409 },
-      );
-    }
-
-    return Response.json(formatRunDetail(updated));
+    return Response.json(run);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to cancel automation run";
-    return Response.json({ error: message }, { status: 500 });
+    return mapAutomationRunServiceError(err, "Failed to cancel automation run");
   }
 }
