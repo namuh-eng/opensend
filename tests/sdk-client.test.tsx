@@ -371,6 +371,13 @@ describe("Opensend SDK", () => {
       ],
     });
     await client.automations.listRuns("auto_1", { status: "queued", limit: 5 });
+    await client.automations.cancelRun("auto_1", "run_1", {
+      reason: "operator stop",
+    });
+    await client.automations.getRunMetrics("auto_1", {
+      from: "2026-05-02T00:00:00.000Z",
+      to: "2026-05-03T00:00:00.000Z",
+    });
     await client.events.send({
       event: "user.signed_up",
       email: "user@example.com",
@@ -388,6 +395,16 @@ describe("Opensend SDK", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
+      "https://api.example.com/api/automations/auto_1/runs/run_1/cancel",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "https://api.example.com/api/automations/auto_1/runs/metrics?from=2026-05-02T00%3A00%3A00.000Z&to=2026-05-03T00%3A00%3A00.000Z",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
       "https://api.example.com/api/events/send",
       expect.objectContaining({ method: "POST" }),
     );
