@@ -83,7 +83,8 @@ export function AutomationBuilder({ mode }: Props) {
             New automation
           </h1>
           <p className="mt-1 text-[13px] text-[#A1A4A5]">
-            MVP path: trigger → optional delay → send_email → end.
+            Build a trigger path with optional delay, one advanced step, email,
+            and end.
           </p>
         </div>
         <button
