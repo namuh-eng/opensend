@@ -41,6 +41,7 @@ export * from "./services/contact-operations";
 export * from "./services/email";
 export * from "./services/emailLifecycle";
 export * from "./services/emailRead";
+export * from "./services/emailDetail";
 export * from "./services/logs";
 export * from "./services/suppressions";
 export * from "./services/emailProvider";
