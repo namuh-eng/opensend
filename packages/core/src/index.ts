@@ -57,5 +57,6 @@ export * from "./services/automationRuns";
 export * from "./services/customEvents";
 export * from "./services/dashboardAggregates";
 export * from "./services/health";
+export * from "./services/invites";
 export * from "./jobs/background-jobs";
 export * from "./observability/telemetry";
