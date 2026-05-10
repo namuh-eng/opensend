@@ -222,6 +222,15 @@ describe("route smoke coverage", () => {
           this.name = "ContactServiceError";
         }
       }
+      class BroadcastServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+        ) {
+          super(message);
+          this.name = "BroadcastServiceError";
+        }
+      }
       class AudienceMetadataServiceError extends Error {
         constructor(
           readonly code: string,
@@ -242,7 +251,75 @@ describe("route smoke coverage", () => {
         createWebhookService: mockCreateWebhookService,
         TemplateServiceError,
         ContactServiceError,
+        BroadcastServiceError,
         AudienceMetadataServiceError,
+        createBroadcastService: () => ({
+          async listBroadcasts() {
+            const rows = await mockSelect().from().where().orderBy().limit();
+            return { data: rows, hasMore: false };
+          },
+          async createBroadcast(input: { body: Record<string, unknown> }) {
+            const [broadcast] = await mockInsert()
+              .values(input.body)
+              .returning();
+            return broadcast;
+          },
+          async getBroadcast(_userId: string, id: string) {
+            const [broadcast] = await mockSelect()
+              .from()
+              .where({ id })
+              .limit(1);
+            if (!broadcast) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            return broadcast;
+          },
+          async updateBroadcast(input: {
+            id: string;
+            body: Record<string, unknown>;
+          }) {
+            const [broadcast] = await mockUpdate()
+              .set(input.body)
+              .where({ id: input.id })
+              .returning();
+            if (!broadcast) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            return broadcast;
+          },
+          async deleteBroadcast(_userId: string, id: string) {
+            const [existing] = await mockSelect().from().where({ id }).limit(1);
+            if (!existing) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            if (
+              existing.status !== "draft" &&
+              existing.status !== "scheduled"
+            ) {
+              throw new BroadcastServiceError(
+                "delete_forbidden",
+                "Cannot delete a broadcast that is already sent or queued",
+              );
+            }
+            const [broadcast] = await mockDelete().where({ id }).returning();
+            if (!broadcast) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            return broadcast;
+          },
+        }),
         createAudienceMetadataService: () => ({
           async listSegments() {
             const rows = await mockSelect().from().where().orderBy().limit();
