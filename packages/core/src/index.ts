@@ -38,6 +38,7 @@ export * from "./services/apiKeys";
 export * from "./services/contact";
 export * from "./services/email";
 export * from "./services/emailRead";
+export * from "./services/logs";
 export * from "./services/emailProvider";
 export * from "./services/sandboxTestRecipients";
 export * from "./services/storage";

@@ -8,6 +8,21 @@ const mockFindLog = vi.hoisted(() => vi.fn());
 const mockSelect = vi.hoisted(() => vi.fn());
 const mockUpdate = vi.hoisted(() => vi.fn());
 const mockGetPresignedUrl = vi.hoisted(() => vi.fn());
+const mockCreateLogReadService = vi.hoisted(() => vi.fn());
+const mockListLogs = vi.hoisted(() => vi.fn());
+const mockGetLog = vi.hoisted(() => vi.fn());
+const MockLogReadServiceError = vi.hoisted(
+  () =>
+    class LogReadServiceError extends Error {
+      constructor(
+        readonly code: "not_found",
+        message: string,
+      ) {
+        super(message);
+        this.name = "LogReadServiceError";
+      }
+    },
+);
 const mockRedirect = vi.hoisted(() =>
   vi.fn(() => {
     throw new Error("NEXT_REDIRECT");
@@ -55,6 +70,11 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/lib/s3", () => ({
   getPresignedUrl: mockGetPresignedUrl,
+}));
+
+vi.mock("@opensend/core", () => ({
+  createLogReadService: mockCreateLogReadService,
+  LogReadServiceError: MockLogReadServiceError,
 }));
 
 vi.mock("next/navigation", () => ({
@@ -131,6 +151,18 @@ describe("issue #200 missed tenant isolation gaps", () => {
     mockFindEmail.mockResolvedValue(null);
     mockFindLog.mockResolvedValue(null);
     mockGetPresignedUrl.mockResolvedValue("https://download.example/att-1");
+    mockCreateLogReadService.mockReturnValue({
+      listLogs: mockListLogs,
+      getLog: mockGetLog,
+    });
+    mockListLogs.mockResolvedValue({
+      object: "list",
+      data: [],
+      has_more: false,
+    });
+    mockGetLog.mockRejectedValue(
+      new MockLogReadServiceError("not_found", "Log not found"),
+    );
   });
 
   it("404s email cancel for another tenant and does not update", async () => {
@@ -184,7 +216,6 @@ describe("issue #200 missed tenant isolation gaps", () => {
   });
 
   it("returns an empty public logs list when user-scoped predicates find no owned rows", async () => {
-    queueSelectRows([]);
     const { GET } = await import("@/app/api/logs/route");
 
     const response = await GET(
@@ -197,9 +228,12 @@ describe("issue #200 missed tenant isolation gaps", () => {
       data: [],
       has_more: false,
     });
-    expect(recordedWhere).toHaveLength(1);
-    expectConditionIncludes(AUTH_RESULT.userId);
-    expectConditionIncludes("key-a");
+    expect(mockListLogs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: AUTH_RESULT.userId,
+        apiKeyId: "key-a",
+      }),
+    );
   });
 
   it("404s public log detail for another tenant", async () => {
@@ -212,8 +246,7 @@ describe("issue #200 missed tenant isolation gaps", () => {
 
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "Log not found" });
-    expectConditionIncludes("log-a");
-    expectConditionIncludes(AUTH_RESULT.userId);
+    expect(mockGetLog).toHaveBeenCalledWith(AUTH_RESULT.userId, "log-a");
   });
 
   it("redirects unauthenticated contact detail dashboard access before querying", async () => {
