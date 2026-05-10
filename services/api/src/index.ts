@@ -1,16 +1,8 @@
 import { handleMcpHttpRequest } from "@opensend/mcp";
 import { Hono } from "hono";
-import {
-  DELETE as deleteWebhook,
-  GET as getWebhook,
-  PATCH as patchWebhook,
-} from "../../../src/app/api/webhooks/[id]/route";
-import {
-  GET as listWebhooks,
-  POST as postWebhook,
-} from "../../../src/app/api/webhooks/route";
 import { handlePostEmailBatchRequest } from "../../../src/lib/api/emails/batch-send";
 import { handlePostEmailRequest } from "../../../src/lib/api/emails/send";
+import { registerWebhookRoutes } from "./routes/webhooks";
 
 export const CONTROL_PLANE_API_SERVICE = "control-plane-api";
 export const CONTROL_PLANE_API_VERSION = "0.1.0";
@@ -51,33 +43,7 @@ export function createApp(options: ControlPlaneAppOptions = {}) {
     async (c) => await handlePostEmailBatchRequest(c.req.raw),
   );
 
-  app.get("/webhooks", async (c) => await listWebhooks(c.req.raw));
-
-  app.post("/webhooks", async (c) => await postWebhook(c.req.raw));
-
-  app.get(
-    "/webhooks/:id",
-    async (c) =>
-      await getWebhook(c.req.raw, {
-        params: Promise.resolve({ id: c.req.param("id") }),
-      }),
-  );
-
-  app.patch(
-    "/webhooks/:id",
-    async (c) =>
-      await patchWebhook(c.req.raw, {
-        params: Promise.resolve({ id: c.req.param("id") }),
-      }),
-  );
-
-  app.delete(
-    "/webhooks/:id",
-    async (c) =>
-      await deleteWebhook(c.req.raw, {
-        params: Promise.resolve({ id: c.req.param("id") }),
-      }),
-  );
+  registerWebhookRoutes(app);
 
   app.all(
     "/mcp",
