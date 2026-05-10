@@ -51,6 +51,22 @@ function insertRows<T>(rows: T[]) {
   };
 }
 
+function updateRows<T>(
+  rows: T[],
+  setCalls: Array<Record<string, unknown>> = [],
+) {
+  return {
+    set: vi.fn((data: Record<string, unknown>) => {
+      setCalls.push(data);
+      return {
+        where: vi.fn().mockReturnValue({
+          returning: vi.fn().mockResolvedValue(rows),
+        }),
+      };
+    }),
+  };
+}
+
 vi.mock("@/lib/api-auth", () => ({
   validateApiKey: mockValidateApiKey,
   unauthorizedResponse: () =>
@@ -108,6 +124,8 @@ vi.mock("drizzle-orm", async () => {
     asc: vi.fn((col: unknown) => ({ op: "asc", col })),
     desc: vi.fn((col: unknown) => ({ op: "desc", col })),
     lt: vi.fn((...args: unknown[]) => ({ op: "lt", args })),
+    gte: vi.fn((...args: unknown[]) => ({ op: "gte", args })),
+    lte: vi.fn((...args: unknown[]) => ({ op: "lte", args })),
     inArray: vi.fn((...args: unknown[]) => ({ op: "inArray", args })),
   };
 });
@@ -142,6 +160,26 @@ const customEvent = {
   id: "evt_1",
   name: "user.signed_up",
   schema: null,
+  createdAt: now,
+  updatedAt: now,
+};
+const queuedRun = {
+  id: "run_1",
+  automationId: "auto_1",
+  triggerEventId: "delivery_1",
+  contactId: "contact_1",
+  status: "queued",
+  currentStepKey: "wait",
+  stepStates: {
+    wait: {
+      status: "waiting",
+      output: { waiting_for_event: "invoice.paid" },
+    },
+  },
+  startedAt: now,
+  completedAt: null,
+  nextStepAt: now,
+  failureReason: null,
   createdAt: now,
   updatedAt: now,
 };
@@ -599,6 +637,141 @@ describe("automation API routes", () => {
     await expect(detail.json()).resolves.toMatchObject({
       id: "auto_1",
       trigger_event_name: "user.signed_up",
+    });
+  });
+
+  it("cancels a queued run with reason metadata and no history loss", async () => {
+    const setCalls: Array<Record<string, unknown>> = [];
+    mockAutomationFindFirst.mockResolvedValue(automation);
+    mockRunFindFirst.mockResolvedValue(queuedRun);
+    mockDbUpdate.mockReturnValue(
+      updateRows([{ ...queuedRun, status: "cancelled" }], setCalls),
+    );
+    const { POST } = await import(
+      "@/app/api/automations/[id]/runs/[runId]/cancel/route"
+    );
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/automations/auto_1/runs/run_1/cancel", {
+        reason: "customer requested stop",
+      }),
+      { params: Promise.resolve({ id: "auto_1", runId: "run_1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(setCalls[0]).toMatchObject({
+      status: "cancelled",
+      nextStepAt: null,
+      failureReason: "customer requested stop",
+    });
+    expect(setCalls[0]?.stepStates).toMatchObject({
+      wait: {
+        status: "cancelled",
+        output: {
+          waiting_for_event: "invoice.paid",
+          cancellation_reason: "customer requested stop",
+        },
+      },
+    });
+    await expect(response.json()).resolves.toMatchObject({
+      object: "automation_run",
+      id: "run_1",
+      status: "cancelled",
+    });
+  });
+
+  it("rejects cancellation for terminal runs deterministically", async () => {
+    mockAutomationFindFirst.mockResolvedValue(automation);
+    mockRunFindFirst.mockResolvedValue({
+      ...queuedRun,
+      status: "completed",
+      completedAt: now,
+      nextStepAt: null,
+    });
+    const { POST } = await import(
+      "@/app/api/automations/[id]/runs/[runId]/cancel/route"
+    );
+
+    const response = await POST(
+      jsonRequest("http://localhost/api/automations/auto_1/runs/run_1/cancel", {
+        reason: "too late",
+      }),
+      { params: Promise.resolve({ id: "auto_1", runId: "run_1" }) },
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "run_not_cancellable",
+    });
+    expect(mockDbUpdate).not.toHaveBeenCalled();
+  });
+
+  it("aggregates tenant-scoped automation run metrics", async () => {
+    mockAutomationFindFirst.mockResolvedValue(automation);
+    mockDbSelect.mockReturnValue(
+      queryRows([
+        {
+          ...queuedRun,
+          id: "run_completed",
+          status: "completed",
+          currentStepKey: null,
+          completedAt: new Date("2026-05-02T00:00:10.000Z"),
+        },
+        {
+          ...queuedRun,
+          id: "run_failed",
+          status: "failed",
+          currentStepKey: "send",
+          completedAt: new Date("2026-05-02T00:00:30.000Z"),
+          failureReason: "send_email template is missing or unpublished",
+          stepStates: {
+            send: {
+              status: "failed",
+              error: "send_email template is missing or unpublished",
+            },
+          },
+        },
+        {
+          ...queuedRun,
+          id: "run_waiting",
+          status: "waiting",
+          currentStepKey: "wait",
+          startedAt: null,
+          completedAt: null,
+        },
+      ]),
+    );
+    const { GET } = await import(
+      "@/app/api/automations/[id]/runs/metrics/route"
+    );
+
+    const response = await GET(
+      new Request(
+        "http://localhost/api/automations/auto_1/runs/metrics?from=2026-05-02T00%3A00%3A00.000Z&to=2026-05-03T00%3A00%3A00.000Z",
+        { headers: { Authorization: "Bearer re_test" } },
+      ),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      object: "automation_run_metrics",
+      automation_id: "auto_1",
+      total_runs: 3,
+      by_status: {
+        completed: 1,
+        failed: 1,
+        waiting: 1,
+      },
+      completion_rate: 1 / 3,
+      failure_rate: 1 / 3,
+      average_duration_ms: 20000,
+      waiting_count: 1,
+      failed_steps: [{ step_key: "send", count: 1 }],
+      range: {
+        from: "2026-05-02T00:00:00.000Z",
+        to: "2026-05-03T00:00:00.000Z",
+      },
     });
   });
 });

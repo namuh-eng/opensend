@@ -13,6 +13,24 @@ export type CustomEventRow = typeof customEvents.$inferSelect;
 export type CustomEventDeliveryRow = typeof customEventDeliveries.$inferSelect;
 
 type StepState = NonNullable<AutomationRunRow["stepStates"]>[string];
+type RunMetricsStatus =
+  | "queued"
+  | "running"
+  | "waiting"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "skipped";
+
+const RUN_METRIC_STATUSES: RunMetricsStatus[] = [
+  "queued",
+  "running",
+  "waiting",
+  "completed",
+  "failed",
+  "cancelled",
+  "skipped",
+];
 
 export function formatStep(step: AutomationStepRow) {
   return {
@@ -116,6 +134,63 @@ export function parseRunStatusFilter(value: string | null): string[] {
     .split(",")
     .map((token) => token.trim())
     .filter(Boolean);
+}
+
+function emptyStatusCounts(): Record<RunMetricsStatus, number> {
+  return Object.fromEntries(
+    RUN_METRIC_STATUSES.map((status) => [status, 0]),
+  ) as Record<RunMetricsStatus, number>;
+}
+
+export function formatRunMetrics(
+  automationId: string,
+  runs: AutomationRunRow[],
+  range: { from?: Date; to?: Date } = {},
+) {
+  const byStatus = emptyStatusCounts();
+  const failedSteps = new Map<string, number>();
+  let durationTotal = 0;
+  let durationCount = 0;
+
+  for (const run of runs) {
+    if (RUN_METRIC_STATUSES.includes(run.status as RunMetricsStatus)) {
+      byStatus[run.status as RunMetricsStatus] += 1;
+    }
+
+    const duration = durationMs(run);
+    if (duration !== null) {
+      durationTotal += duration;
+      durationCount += 1;
+    }
+
+    const failedStepKey = findFailedStepKey(run.stepStates);
+    if (failedStepKey) {
+      failedSteps.set(failedStepKey, (failedSteps.get(failedStepKey) ?? 0) + 1);
+    }
+  }
+
+  const totalRuns = runs.length;
+  const failedStepSummary = [...failedSteps.entries()]
+    .map(([stepKey, count]) => ({ step_key: stepKey, count }))
+    .sort((a, b) => b.count - a.count || a.step_key.localeCompare(b.step_key))
+    .slice(0, 10);
+
+  return {
+    object: "automation_run_metrics" as const,
+    automation_id: automationId,
+    total_runs: totalRuns,
+    by_status: byStatus,
+    completion_rate: totalRuns > 0 ? byStatus.completed / totalRuns : 0,
+    failure_rate: totalRuns > 0 ? byStatus.failed / totalRuns : 0,
+    average_duration_ms:
+      durationCount > 0 ? Math.round(durationTotal / durationCount) : null,
+    waiting_count: byStatus.waiting,
+    failed_steps: failedStepSummary,
+    range: {
+      from: range.from?.toISOString() ?? null,
+      to: range.to?.toISOString() ?? null,
+    },
+  };
 }
 
 export function formatCustomEvent(event: CustomEventRow) {

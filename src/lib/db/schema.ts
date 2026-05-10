@@ -494,6 +494,7 @@ export type AutomationStepStateEntry = {
     | "waiting"
     | "completed"
     | "failed"
+    | "cancelled"
     | "skipped";
   startedAt?: string;
   completedAt?: string;
