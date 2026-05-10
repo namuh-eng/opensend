@@ -11,6 +11,10 @@ const mockCustomEventFindByName = vi.hoisted(() => vi.fn());
 const mockCustomEventList = vi.hoisted(() => vi.fn());
 const mockDeliveryRecord = vi.hoisted(() => vi.fn());
 const mockRunCreateFromTrigger = vi.hoisted(() => vi.fn());
+const mockListRuns = vi.hoisted(() => vi.fn());
+const mockGetRun = vi.hoisted(() => vi.fn());
+const mockCancelRun = vi.hoisted(() => vi.fn());
+const mockGetMetrics = vi.hoisted(() => vi.fn());
 const mockResumeWaitingRunsForEvent = vi.hoisted(() => vi.fn());
 const mockDbSelect = vi.hoisted(() => vi.fn());
 const mockDbInsert = vi.hoisted(() => vi.fn());
@@ -31,6 +35,16 @@ class TestAutomationValidationError extends Error {
   }
 }
 
+class TestAutomationRunServiceError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "AutomationRunServiceError";
+    this.code = code;
+  }
+}
+
 function queryRows<T>(rows: T[]) {
   return {
     from: vi.fn().mockReturnThis(),
@@ -47,22 +61,6 @@ function insertRows<T>(rows: T[]) {
   return {
     values: vi.fn().mockReturnValue({
       returning: vi.fn().mockResolvedValue(rows),
-    }),
-  };
-}
-
-function updateRows<T>(
-  rows: T[],
-  setCalls: Array<Record<string, unknown>> = [],
-) {
-  return {
-    set: vi.fn((data: Record<string, unknown>) => {
-      setCalls.push(data);
-      return {
-        where: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue(rows),
-        }),
-      };
     }),
   };
 }
@@ -94,6 +92,13 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@opensend/core", () => ({
   AutomationValidationError: TestAutomationValidationError,
+  AutomationRunServiceError: TestAutomationRunServiceError,
+  createAutomationRunService: () => ({
+    listRuns: mockListRuns,
+    getRun: mockGetRun,
+    cancelRun: mockCancelRun,
+    getMetrics: mockGetMetrics,
+  }),
   automationRepo: {
     create: mockAutomationCreate,
     list: mockAutomationList,
@@ -640,13 +645,69 @@ describe("automation API routes", () => {
     });
   });
 
-  it("cancels a queued run with reason metadata and no history loss", async () => {
-    const setCalls: Array<Record<string, unknown>> = [];
-    mockAutomationFindFirst.mockResolvedValue(automation);
-    mockRunFindFirst.mockResolvedValue(queuedRun);
-    mockDbUpdate.mockReturnValue(
-      updateRows([{ ...queuedRun, status: "cancelled" }], setCalls),
+  it("lists automation runs through the service boundary", async () => {
+    mockListRuns.mockResolvedValue({
+      object: "list",
+      data: [{ object: "automation_run", id: "run_1", status: "queued" }],
+      has_more: false,
+    });
+    const { GET } = await import("@/app/api/automations/[id]/runs/route");
+
+    const response = await GET(
+      new Request(
+        "http://localhost/api/automations/auto_1/runs?status=queued,waiting&limit=10",
+        { headers: { Authorization: "Bearer re_test" } },
+      ),
+      { params: Promise.resolve({ id: "auto_1" }) },
     );
+
+    expect(response.status).toBe(200);
+    expect(mockListRuns).toHaveBeenCalledWith({
+      automationId: "auto_1",
+      userId: "user_1",
+      status: "queued,waiting",
+      limit: 10,
+    });
+    await expect(response.json()).resolves.toMatchObject({
+      object: "list",
+      data: [{ id: "run_1" }],
+    });
+  });
+
+  it("retrieves an automation run through the service boundary", async () => {
+    mockGetRun.mockResolvedValue({
+      object: "automation_run",
+      id: "run_1",
+      automation_id: "auto_1",
+      status: "queued",
+    });
+    const { GET } = await import(
+      "@/app/api/automations/[id]/runs/[runId]/route"
+    );
+
+    const response = await GET(
+      new Request("http://localhost/api/automations/auto_1/runs/run_1", {
+        headers: { Authorization: "Bearer re_test" },
+      }),
+      { params: Promise.resolve({ id: "auto_1", runId: "run_1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockGetRun).toHaveBeenCalledWith({
+      automationId: "auto_1",
+      runId: "run_1",
+      userId: "user_1",
+    });
+    await expect(response.json()).resolves.toMatchObject({ id: "run_1" });
+  });
+
+  it("cancels a queued run through the service boundary", async () => {
+    mockCancelRun.mockResolvedValue({
+      object: "automation_run",
+      id: "run_1",
+      automation_id: "auto_1",
+      status: "cancelled",
+    });
     const { POST } = await import(
       "@/app/api/automations/[id]/runs/[runId]/cancel/route"
     );
@@ -659,19 +720,11 @@ describe("automation API routes", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(setCalls[0]).toMatchObject({
-      status: "cancelled",
-      nextStepAt: null,
-      failureReason: "customer requested stop",
-    });
-    expect(setCalls[0]?.stepStates).toMatchObject({
-      wait: {
-        status: "cancelled",
-        output: {
-          waiting_for_event: "invoice.paid",
-          cancellation_reason: "customer requested stop",
-        },
-      },
+    expect(mockCancelRun).toHaveBeenCalledWith({
+      automationId: "auto_1",
+      runId: "run_1",
+      userId: "user_1",
+      reason: "customer requested stop",
     });
     await expect(response.json()).resolves.toMatchObject({
       object: "automation_run",
@@ -681,13 +734,12 @@ describe("automation API routes", () => {
   });
 
   it("rejects cancellation for terminal runs deterministically", async () => {
-    mockAutomationFindFirst.mockResolvedValue(automation);
-    mockRunFindFirst.mockResolvedValue({
-      ...queuedRun,
-      status: "completed",
-      completedAt: now,
-      nextStepAt: null,
-    });
+    mockCancelRun.mockRejectedValue(
+      new TestAutomationRunServiceError(
+        "run_not_cancellable",
+        "Run is not cancellable",
+      ),
+    );
     const { POST } = await import(
       "@/app/api/automations/[id]/runs/[runId]/cancel/route"
     );
@@ -703,44 +755,38 @@ describe("automation API routes", () => {
     await expect(response.json()).resolves.toMatchObject({
       code: "run_not_cancellable",
     });
-    expect(mockDbUpdate).not.toHaveBeenCalled();
+    expect(mockCancelRun).toHaveBeenCalledWith({
+      automationId: "auto_1",
+      runId: "run_1",
+      userId: "user_1",
+      reason: "too late",
+    });
   });
 
   it("aggregates tenant-scoped automation run metrics", async () => {
-    mockAutomationFindFirst.mockResolvedValue(automation);
-    mockDbSelect.mockReturnValue(
-      queryRows([
-        {
-          ...queuedRun,
-          id: "run_completed",
-          status: "completed",
-          currentStepKey: null,
-          completedAt: new Date("2026-05-02T00:00:10.000Z"),
-        },
-        {
-          ...queuedRun,
-          id: "run_failed",
-          status: "failed",
-          currentStepKey: "send",
-          completedAt: new Date("2026-05-02T00:00:30.000Z"),
-          failureReason: "send_email template is missing or unpublished",
-          stepStates: {
-            send: {
-              status: "failed",
-              error: "send_email template is missing or unpublished",
-            },
-          },
-        },
-        {
-          ...queuedRun,
-          id: "run_waiting",
-          status: "waiting",
-          currentStepKey: "wait",
-          startedAt: null,
-          completedAt: null,
-        },
-      ]),
-    );
+    mockGetMetrics.mockResolvedValue({
+      object: "automation_run_metrics",
+      automation_id: "auto_1",
+      total_runs: 3,
+      by_status: {
+        queued: 0,
+        running: 0,
+        waiting: 1,
+        completed: 1,
+        failed: 1,
+        cancelled: 0,
+        skipped: 0,
+      },
+      completion_rate: 1 / 3,
+      failure_rate: 1 / 3,
+      average_duration_ms: 20000,
+      waiting_count: 1,
+      failed_steps: [{ step_key: "send", count: 1 }],
+      range: {
+        from: "2026-05-02T00:00:00.000Z",
+        to: "2026-05-03T00:00:00.000Z",
+      },
+    });
     const { GET } = await import(
       "@/app/api/automations/[id]/runs/metrics/route"
     );
@@ -754,6 +800,12 @@ describe("automation API routes", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(mockGetMetrics).toHaveBeenCalledWith({
+      automationId: "auto_1",
+      userId: "user_1",
+      from: new Date("2026-05-02T00:00:00.000Z"),
+      to: new Date("2026-05-03T00:00:00.000Z"),
+    });
     await expect(response.json()).resolves.toMatchObject({
       object: "automation_run_metrics",
       automation_id: "auto_1",
@@ -773,6 +825,25 @@ describe("automation API routes", () => {
         to: "2026-05-03T00:00:00.000Z",
       },
     });
+  });
+
+  it("maps missing automation run service errors to 404", async () => {
+    mockGetRun.mockRejectedValue(
+      new TestAutomationRunServiceError("run_not_found", "Run not found"),
+    );
+    const { GET } = await import(
+      "@/app/api/automations/[id]/runs/[runId]/route"
+    );
+
+    const response = await GET(
+      new Request("http://localhost/api/automations/auto_1/runs/missing", {
+        headers: { Authorization: "Bearer re_test" },
+      }),
+      { params: Promise.resolve({ id: "auto_1", runId: "missing" }) },
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({ error: "Run not found" });
   });
 });
 

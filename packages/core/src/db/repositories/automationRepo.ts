@@ -193,6 +193,15 @@ export const automationRepo = {
     });
   },
 
+  async findByIdForUser(id: string, userId?: string | null) {
+    const conditions = [eq(automations.id, id)];
+    if (userId) conditions.push(eq(automations.userId, userId));
+
+    return await db.query.automations.findFirst({
+      where: and(...conditions),
+    });
+  },
+
   async findEnabledByTriggerEventName(
     triggerEventName: string,
     userId?: string | null,
