@@ -356,6 +356,28 @@ describe("route smoke coverage", () => {
             const [deleted] = await mockDelete().where().returning();
             if (!deleted) throw notFound("Segment not found");
           },
+          async listSegmentContacts() {
+            const [segment] = await mockSelect().from().where();
+            if (!segment) throw notFound("Segment not found");
+            const rows = await mockSelect()
+              .from()
+              .innerJoin()
+              .where()
+              .orderBy()
+              .limit();
+            return {
+              object: "list",
+              data: rows.map((row: Record<string, unknown>) => ({
+                id: row.id,
+                email: row.email,
+                firstName: row.firstName,
+                lastName: row.lastName,
+                status: row.unsubscribed ? "unsubscribed" : "subscribed",
+                created_at: row.createdAt,
+              })),
+              has_more: false,
+            };
+          },
           async listTopics() {
             const rows = await mockSelect().from().where().orderBy().limit();
             const total = await mockCountFn();

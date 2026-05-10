@@ -14,16 +14,21 @@ type TopicRow = NonNullable<
 type PropertyRow = NonNullable<
   Awaited<ReturnType<AudienceMetadataRepository["findPropertyByIdForUser"]>>
 >;
+type SegmentContactRow = Awaited<
+  ReturnType<AudienceMetadataRepository["listSegmentContactsForApi"]>
+>["data"][number] & { segmentId: string; userId: string };
 
 const baseDate = new Date("2026-05-10T00:00:00.000Z");
 const updatedDate = new Date("2026-05-10T01:00:00.000Z");
 
 function makeRepository(seed?: {
   segments?: SegmentRow[];
+  segmentContacts?: SegmentContactRow[];
   topics?: TopicRow[];
   properties?: PropertyRow[];
 }): AudienceMetadataRepository {
   const segments = [...(seed?.segments ?? [])];
+  const segmentContacts = [...(seed?.segmentContacts ?? [])];
   const topics = [...(seed?.topics ?? [])];
   const properties = [...(seed?.properties ?? [])];
 
@@ -70,6 +75,22 @@ function makeRepository(seed?: {
       );
       if (index === -1) return [];
       return segments.splice(index, 1);
+    },
+    async listSegmentContactsForApi(options) {
+      const filtered = segmentContacts
+        .filter(
+          (contact) =>
+            contact.userId === options.userId &&
+            contact.segmentId === options.segmentId,
+        )
+        .filter((contact) =>
+          options.after ? contact.id < options.after : true,
+        )
+        .sort((a, b) => b.id.localeCompare(a.id));
+      return {
+        data: filtered.slice(0, options.limit),
+        hasMore: filtered.length > options.limit,
+      };
     },
 
     async listTopicsForApi(options) {
@@ -208,6 +229,25 @@ function property(id: string, key: string, userId: string): PropertyRow {
   };
 }
 
+function segmentContact(
+  id: string,
+  email: string,
+  userId: string,
+  segmentId: string,
+  unsubscribed = false,
+): SegmentContactRow {
+  return {
+    id,
+    email,
+    firstName: "First",
+    lastName: "Last",
+    unsubscribed,
+    createdAt: baseDate,
+    segmentId,
+    userId,
+  };
+}
+
 describe("audience metadata service", () => {
   it("lists segments with tenant isolation, search, pagination, and response shape", async () => {
     const service = createAudienceMetadataService({
@@ -286,6 +326,49 @@ describe("audience metadata service", () => {
     await expect(
       service.deleteTopic({ userId: "user-2", id: "topic-1" }),
     ).rejects.toMatchObject({ message: "Topic not found", status: 404 });
+  });
+
+  it("lists segment contacts with segment tenant check, cursor pagination, and response shape", async () => {
+    const service = createAudienceMetadataService({
+      repository: makeRepository({
+        segments: [segment("seg-1", "VIP", "user-1")],
+        segmentContacts: [
+          segmentContact("contact-c", "c@example.com", "user-1", "seg-1"),
+          segmentContact("contact-b", "b@example.com", "user-1", "seg-1", true),
+          segmentContact("contact-a", "a@example.com", "user-1", "seg-1"),
+          segmentContact("contact-z", "z@example.com", "user-2", "seg-1"),
+        ],
+      }),
+    });
+
+    await expect(
+      service.listSegmentContacts({
+        userId: "user-1",
+        segmentId: "seg-1",
+        after: "contact-c",
+        limit: 1,
+      }),
+    ).resolves.toEqual({
+      object: "list",
+      data: [
+        {
+          id: "contact-b",
+          email: "b@example.com",
+          firstName: "First",
+          lastName: "Last",
+          status: "unsubscribed",
+          created_at: baseDate,
+        },
+      ],
+      has_more: true,
+    });
+
+    await expect(
+      service.listSegmentContacts({
+        userId: "user-2",
+        segmentId: "seg-1",
+      }),
+    ).rejects.toMatchObject({ message: "Segment not found", status: 404 });
   });
 
   it("lists and creates properties with tenant isolation, key generation, and page metadata", async () => {

@@ -4,6 +4,7 @@ const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockListSegments = vi.hoisted(() => vi.fn());
+const mockListSegmentContacts = vi.hoisted(() => vi.fn());
 const mockCreateTopic = vi.hoisted(() => vi.fn());
 const mockGetProperty = vi.hoisted(() => vi.fn());
 const mockUpdateTopic = vi.hoisted(() => vi.fn());
@@ -31,6 +32,7 @@ vi.mock("@opensend/core", () => ({
   AudienceMetadataServiceError: TestAudienceMetadataServiceError,
   createAudienceMetadataService: () => ({
     listSegments: mockListSegments,
+    listSegmentContacts: mockListSegmentContacts,
     createTopic: mockCreateTopic,
     getProperty: mockGetProperty,
     updateTopic: mockUpdateTopic,
@@ -141,6 +143,43 @@ describe("audience metadata route adapters", () => {
     expect(mockGetProperty).toHaveBeenCalledWith({
       userId: "user-1",
       id: "prop-1",
+    });
+    expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+  });
+
+  it("keeps segment contacts as an API-key-only thin service adapter", async () => {
+    mockListSegmentContacts.mockResolvedValueOnce({
+      object: "list",
+      data: [
+        {
+          id: "contact-1",
+          email: "user@example.com",
+          firstName: "User",
+          lastName: "One",
+          status: "subscribed",
+          created_at: "2026-05-10T00:00:00.000Z",
+        },
+      ],
+      has_more: false,
+    });
+    const { GET } = await import("@/app/api/segments/[id]/contacts/route");
+
+    const response = await GET(
+      makeNextRequest(
+        "http://localhost/api/segments/seg-1/contacts?limit=10&after=contact-9",
+        {
+          headers: { authorization: "Bearer re_test" },
+        },
+      ) as never,
+      { params: Promise.resolve({ id: "seg-1" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockListSegmentContacts).toHaveBeenCalledWith({
+      userId: "user-1",
+      segmentId: "seg-1",
+      limit: 10,
+      after: "contact-9",
     });
     expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
   });

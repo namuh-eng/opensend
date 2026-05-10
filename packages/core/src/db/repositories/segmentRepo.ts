@@ -1,6 +1,6 @@
 import { type SQL, and, count, desc, eq, ilike, lt } from "drizzle-orm";
 import { db } from "../client";
-import { segments } from "../schema";
+import { contacts, contactsToSegments, segments } from "../schema";
 
 export const segmentRepo = {
   async findById(id: string) {
@@ -92,5 +92,42 @@ export const segmentRepo = {
       .delete(segments)
       .where(and(eq(segments.id, id), eq(segments.userId, userId)))
       .returning();
+  },
+
+  async listContactsForApi(options: {
+    userId: string;
+    segmentId: string;
+    limit: number;
+    after?: string;
+  }) {
+    const conditions: SQL[] = [
+      eq(contactsToSegments.segmentId, options.segmentId),
+      eq(contacts.userId, options.userId),
+    ];
+
+    if (options.after) conditions.push(lt(contacts.id, options.after));
+
+    const rows = await db
+      .select({
+        id: contacts.id,
+        email: contacts.email,
+        firstName: contacts.firstName,
+        lastName: contacts.lastName,
+        unsubscribed: contacts.unsubscribed,
+        createdAt: contacts.createdAt,
+      })
+      .from(contacts)
+      .innerJoin(
+        contactsToSegments,
+        eq(contacts.id, contactsToSegments.contactId),
+      )
+      .where(and(...conditions))
+      .orderBy(desc(contacts.id))
+      .limit(options.limit + 1);
+
+    const hasMore = rows.length > options.limit;
+    const data = hasMore ? rows.slice(0, options.limit) : rows;
+
+    return { data, hasMore };
   },
 };
