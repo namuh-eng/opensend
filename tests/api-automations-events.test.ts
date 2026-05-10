@@ -1,8 +1,17 @@
+import type {
+  CreateAutomationServiceInput,
+  ListAutomationsServiceInput,
+} from "@opensend/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockAutomationCreate = vi.hoisted(() => vi.fn());
 const mockAutomationList = vi.hoisted(() => vi.fn());
+const mockServiceCreateAutomation = vi.hoisted(() => vi.fn());
+const mockServiceListAutomations = vi.hoisted(() => vi.fn());
+const mockServiceGetAutomation = vi.hoisted(() => vi.fn());
+const mockServiceUpdateAutomation = vi.hoisted(() => vi.fn());
+const mockServiceDeleteAutomation = vi.hoisted(() => vi.fn());
 const mockAutomationValidate = vi.hoisted(() => vi.fn());
 const mockAutomationDelete = vi.hoisted(() => vi.fn());
 const mockFindEnabledByTriggerEventName = vi.hoisted(() => vi.fn());
@@ -41,6 +50,16 @@ class TestAutomationRunServiceError extends Error {
   constructor(code: string, message: string) {
     super(message);
     this.name = "AutomationRunServiceError";
+    this.code = code;
+  }
+}
+
+class TestAutomationServiceError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "AutomationServiceError";
     this.code = code;
   }
 }
@@ -93,6 +112,14 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@opensend/core", () => ({
   AutomationValidationError: TestAutomationValidationError,
   AutomationRunServiceError: TestAutomationRunServiceError,
+  AutomationServiceError: TestAutomationServiceError,
+  createAutomationService: () => ({
+    createAutomation: mockServiceCreateAutomation,
+    listAutomations: mockServiceListAutomations,
+    getAutomation: mockServiceGetAutomation,
+    updateAutomation: mockServiceUpdateAutomation,
+    deleteAutomation: mockServiceDeleteAutomation,
+  }),
   createAutomationRunService: () => ({
     listRuns: mockListRuns,
     getRun: mockGetRun,
@@ -168,6 +195,16 @@ const customEvent = {
   createdAt: now,
   updatedAt: now,
 };
+type TestCreatedAutomation = {
+  automation: typeof automation;
+  steps: Array<typeof triggerStep>;
+};
+
+type TestAutomationListResult = {
+  data: Array<typeof automation>;
+  hasMore: boolean;
+};
+
 const queuedRun = {
   id: "run_1",
   automationId: "auto_1",
@@ -207,6 +244,95 @@ describe("automation API routes", () => {
     mockValidateApiKey.mockResolvedValue(auth);
     mockResumeWaitingRunsForEvent.mockResolvedValue([]);
     mockDbSelect.mockReturnValue(queryRows([triggerStep]));
+    mockServiceCreateAutomation.mockImplementation(
+      async (input: CreateAutomationServiceInput) => {
+        const created = (await mockAutomationCreate({
+          name: input.data.name,
+          status: input.data.status,
+          triggerEventName:
+            input.data.trigger_event_name ?? input.data.triggerEventName,
+          steps: input.data.steps.map((step) => ({
+            key: step.key,
+            type: step.type,
+            config: step.config ?? {},
+            position: step.position,
+          })),
+          connections: input.data.connections,
+          userId: input.userId,
+        })) as TestCreatedAutomation;
+        return {
+          object: "automation",
+          id: created.automation.id,
+          name: created.automation.name,
+          status: created.automation.status,
+          trigger_event_name: created.automation.triggerEventName,
+          connections: created.automation.connections ?? [],
+          steps: created.steps.map((step) => ({
+            id: step.id,
+            key: step.key,
+            type: step.type,
+            config: step.config ?? {},
+            position: step.position,
+          })),
+          created_at: created.automation.createdAt,
+          updated_at: created.automation.updatedAt,
+        };
+      },
+    );
+    mockServiceListAutomations.mockImplementation(
+      async (input: ListAutomationsServiceInput) => {
+        const listed = (await mockAutomationList({
+          userId: input.userId,
+          limit: input.limit ?? 25,
+          after: input.after,
+          status: input.status,
+          search: input.search,
+        })) as TestAutomationListResult;
+        return {
+          object: "list",
+          data: listed.data.map((item) => ({
+            object: "automation",
+            id: item.id,
+            name: item.name,
+            status: item.status,
+            trigger_event_name: item.triggerEventName,
+            created_at: item.createdAt,
+            updated_at: item.updatedAt,
+            step_count: 1,
+            last_run: null,
+          })),
+          has_more: listed.hasMore,
+        };
+      },
+    );
+    mockServiceGetAutomation.mockImplementation(async (_userId, id) => {
+      const found = await mockAutomationFindFirst({ id });
+      if (!found) {
+        throw new TestAutomationServiceError(
+          "not_found",
+          "Automation not found",
+        );
+      }
+      return {
+        object: "automation",
+        id: found.id,
+        name: found.name,
+        status: found.status,
+        trigger_event_name: found.triggerEventName,
+        connections: found.connections ?? [],
+        steps: [
+          {
+            id: triggerStep.id,
+            key: triggerStep.key,
+            type: triggerStep.type,
+            config: triggerStep.config,
+            position: triggerStep.position,
+          },
+        ],
+        created_at: found.createdAt,
+        updated_at: found.updatedAt,
+      };
+    });
   });
 
   it("returns 401 for missing API auth", async () => {
