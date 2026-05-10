@@ -1,10 +1,12 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { emails } from "@/lib/db/schema";
-import { getPresignedUrl } from "@/lib/s3";
-import { and, eq } from "drizzle-orm";
+import {
+  EmailLifecycleServiceError,
+  createEmailLifecycleService,
+} from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
+
+const emailLifecycleService = createEmailLifecycleService();
 
 export async function GET(
   _request: NextRequest,
@@ -17,51 +19,30 @@ export async function GET(
 
   try {
     const { id, attachmentId } = await params;
-    const [email] = await db
-      .select({ attachments: emails.attachments })
-      .from(emails)
-      .where(and(eq(emails.id, id), eq(emails.userId, auth.userId)))
-      .limit(1);
-
-    if (!email) {
+    const result = await emailLifecycleService.getAttachment(
+      auth.userId,
+      id,
+      attachmentId,
+    );
+    return NextResponse.json(result);
+  } catch (error) {
+    if (
+      error instanceof EmailLifecycleServiceError &&
+      error.code === "email_not_found"
+    ) {
       return NextResponse.json({ error: "Email not found" }, { status: 404 });
     }
 
-    const attachments =
-      (email.attachments as Array<{
-        id?: string;
-        filename: string;
-        contentType?: string;
-        s3Key?: string;
-        path?: string;
-      }>) ?? [];
-    const attachment = attachments.find(
-      (a, index) => (a.id || `att-${index}`) === attachmentId,
-    );
-
-    if (!attachment) {
+    if (
+      error instanceof EmailLifecycleServiceError &&
+      error.code === "attachment_not_found"
+    ) {
       return NextResponse.json(
         { error: "Attachment not found" },
         { status: 404 },
       );
     }
 
-    // Resolve S3 key - if stored as raw content, we might need a placeholder or real upload path
-    const s3Key =
-      attachment.s3Key ||
-      attachment.path ||
-      `sent-emails/${id}/${attachment.filename}`;
-    const downloadUrl = await getPresignedUrl(s3Key);
-
-    return NextResponse.json({
-      object: "attachment",
-      id: attachment.id || attachmentId,
-      filename: attachment.filename,
-      content_type: attachment.contentType || "application/octet-stream",
-      download_url: downloadUrl,
-      expires_at: new Date(Date.now() + 3600 * 1000).toISOString(),
-    });
-  } catch (error) {
     console.error("Failed to fetch email attachment:", error);
     return NextResponse.json(
       { error: "Failed to fetch email attachment" },
