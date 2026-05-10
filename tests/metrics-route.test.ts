@@ -1,47 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockSelect = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockReadDashboardAggregateCache = vi.hoisted(() => vi.fn());
 const mockWriteDashboardAggregateCache = vi.hoisted(() => vi.fn());
-const mockGte = vi.hoisted(() =>
-  vi.fn((left, right) => ({ kind: "gte", left, right })),
-);
-const mockLte = vi.hoisted(() =>
-  vi.fn((left, right) => ({ kind: "lte", left, right })),
-);
-const mockEq = vi.hoisted(() =>
-  vi.fn((left, right) => ({ kind: "eq", left, right })),
-);
-const mockLike = vi.hoisted(() =>
-  vi.fn((left, right) => ({ kind: "like", left, right })),
-);
-const mockAnd = vi.hoisted(() => vi.fn((...conds) => ({ kind: "and", conds })));
-const mockInArray = vi.hoisted(() =>
-  vi.fn((left, right) => ({ kind: "inArray", left, right })),
-);
-
-function makeQueryChain<T>(rows: T[], whereArgs: unknown[]) {
-  const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn((arg: unknown) => {
-      whereArgs.push(arg);
-      return chain;
-    }),
-    groupBy: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    // biome-ignore lint/suspicious/noThenProperty: mocks Drizzle's thenable query builder
-    then: (resolve: (value: T[]) => unknown) => Promise.resolve(resolve(rows)),
-  };
-
-  return chain;
-}
-
-vi.mock("@/lib/db", () => ({
-  db: {
-    select: mockSelect,
-  },
-}));
+const mockGetMetrics = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api-auth", () => ({
   getServerSession: mockGetServerSession,
@@ -70,66 +32,16 @@ vi.mock("@/lib/cache/dashboard-aggregates", () => ({
   writeDashboardAggregateCache: mockWriteDashboardAggregateCache,
 }));
 
-vi.mock("drizzle-orm", async () => {
-  const actual =
-    await vi.importActual<typeof import("drizzle-orm")>("drizzle-orm");
-
-  return {
-    ...actual,
-    and: mockAnd,
-    eq: mockEq,
-    gte: mockGte,
-    inArray: mockInArray,
-    like: mockLike,
-    lte: mockLte,
-  };
-});
+vi.mock("@opensend/core", () => ({
+  createDashboardAggregateService: () => ({
+    getMetrics: mockGetMetrics,
+  }),
+}));
 
 function makeNextRequest(url: string, init?: RequestInit) {
   const request = new Request(url, init) as Request & { nextUrl: URL };
   request.nextUrl = new URL(url);
   return request;
-}
-
-function queueMetricsQueries(whereArgs: unknown[]) {
-  mockSelect
-    .mockReturnValueOnce(
-      makeQueryChain(
-        [
-          {
-            total: 10,
-            delivered: 7,
-            bounced: 2,
-            hard_bounced: 1,
-            soft_bounced: 1,
-            undetermined_bounced: 0,
-            complained: 1,
-          },
-        ],
-        whereArgs,
-      ),
-    )
-    .mockReturnValueOnce(
-      makeQueryChain([{ date: "2026-04-23", count: 7 }], whereArgs),
-    )
-    .mockReturnValueOnce(
-      makeQueryChain(
-        [{ date: "2026-04-23", total: 10, bounced: 2 }],
-        whereArgs,
-      ),
-    )
-    .mockReturnValueOnce(
-      makeQueryChain(
-        [{ date: "2026-04-23", total: 10, complained: 1 }],
-        whereArgs,
-      ),
-    )
-    .mockReturnValueOnce(
-      makeQueryChain(
-        [{ domain: "example.com", total: 10, delivered: 7 }],
-        whereArgs,
-      ),
-    );
 }
 
 function expectLocalDateParts(
@@ -153,12 +65,31 @@ function expectLocalDateParts(
   expect(date.getMilliseconds()).toBe(expected.millisecond);
 }
 
-function requireCondition<T>(value: T | undefined): T {
-  expect(value).toBeDefined();
-  return value as T;
+function requireDate(value: unknown): Date {
+  expect(value).toBeInstanceOf(Date);
+  return value as Date;
 }
 
-describe("metrics route filters", () => {
+const freshPayload = {
+  totalEmails: 10,
+  deliverabilityRate: 70,
+  bounceRate: 20,
+  complainRate: 10,
+  complained: 1,
+  domains: ["example.com"],
+  dailyData: [{ date: "2026-04-23", count: 7 }],
+  domainBreakdown: [{ domain: "example.com", count: 10, rate: 70 }],
+  bounceBreakdown: {
+    permanent: 1,
+    transient: 1,
+    undetermined: 0,
+  },
+  dailyBounceData: [{ date: "2026-04-23", rate: 20 }],
+  dailyComplainData: [{ date: "2026-04-23", rate: 10 }],
+  lastUpdated: "2026-04-23T06:45:30.000Z",
+};
+
+describe("metrics route adapter", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
@@ -170,168 +101,17 @@ describe("metrics route filters", () => {
     });
     mockReadDashboardAggregateCache.mockResolvedValue(null);
     mockWriteDashboardAggregateCache.mockResolvedValue(undefined);
+    mockGetMetrics.mockResolvedValue(freshPayload);
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  it("scopes every aggregate query and cache key to the dashboard user", async () => {
-    const whereArgs: unknown[] = [];
-    queueMetricsQueries(whereArgs);
-
-    const metricsRoute = await import("@/app/api/metrics/route");
-    const response = await metricsRoute.GET(
-      makeNextRequest(
-        "http://localhost/api/metrics?range=last_7_days",
-      ) as never,
-    );
-
-    expect(response.status).toBe(200);
-    expect(mockReadDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:metrics:user-1:last_7_days:all:all",
-    );
-    expect(mockEq.mock.calls.some(([, right]) => right === "user-1")).toBe(
-      true,
-    );
-    expect(whereArgs).toHaveLength(5);
-    for (const whereArg of whereArgs) {
-      const condition = whereArg as {
-        kind: string;
-        conds: Array<{ kind: string; right: unknown }>;
-      };
-      expect(condition.conds.some((cond) => cond.right === "user-1")).toBe(
-        true,
-      );
-    }
-  });
-
-  it("matches Yesterday exactly instead of leaking into today", async () => {
-    const whereArgs: unknown[] = [];
-    queueMetricsQueries(whereArgs);
-
-    const metricsRoute = await import("@/app/api/metrics/route");
-    const response = await metricsRoute.GET(
-      makeNextRequest("http://localhost/api/metrics?range=yesterday") as never,
-    );
-
-    expect(response.status).toBe(200);
-    expect(response.headers.get("x-opensend-cache")).toBe("miss");
-
-    const firstWhere = whereArgs[0] as {
-      kind: string;
-      conds: Array<{ kind: string; right: Date }>;
-    };
-
-    const lowerBound = firstWhere.conds.find((cond) => cond.kind === "gte");
-    const upperBound = firstWhere.conds.find((cond) => cond.kind === "lte");
-
-    expectLocalDateParts(requireCondition(lowerBound).right, {
-      year: 2026,
-      month: 3,
-      day: 22,
-      hour: 0,
-      minute: 0,
-      second: 0,
-      millisecond: 0,
-    });
-    expectLocalDateParts(requireCondition(upperBound).right, {
-      year: 2026,
-      month: 3,
-      day: 22,
-      hour: 23,
-      minute: 59,
-      second: 59,
-      millisecond: 999,
-    });
-  });
-
-  it("uses inclusive rolling preset bounds that match date-range.ts", async () => {
-    const whereArgs: unknown[] = [];
-    queueMetricsQueries(whereArgs);
-
-    const metricsRoute = await import("@/app/api/metrics/route");
-    const response = await metricsRoute.GET(
-      makeNextRequest(
-        "http://localhost/api/metrics?range=last_7_days",
-      ) as never,
-    );
-
-    expect(response.status).toBe(200);
-
-    const firstWhere = whereArgs[0] as {
-      kind: string;
-      conds: Array<{ kind: string; right: Date }>;
-    };
-
-    const lowerBound = firstWhere.conds.find((cond) => cond.kind === "gte");
-    const upperBound = firstWhere.conds.find((cond) => cond.kind === "lte");
-
-    expectLocalDateParts(requireCondition(lowerBound).right, {
-      year: 2026,
-      month: 3,
-      day: 17,
-      hour: 0,
-      minute: 0,
-      second: 0,
-      millisecond: 0,
-    });
-    expectLocalDateParts(requireCondition(upperBound).right, {
-      year: 2026,
-      month: 3,
-      day: 23,
-      hour: 23,
-      minute: 59,
-      second: 59,
-      millisecond: 999,
-    });
-  });
-
-  it("filters by exact sender domain instead of raw from substring matches", async () => {
-    const whereArgs: unknown[] = [];
-    queueMetricsQueries(whereArgs);
-
-    const metricsRoute = await import("@/app/api/metrics/route");
-    const response = await metricsRoute.GET(
-      makeNextRequest(
-        "http://localhost/api/metrics?range=last_7_days&domain=example.com",
-      ) as never,
-    );
-
-    expect(response.status).toBe(200);
-    expect(mockEq.mock.calls.some(([, right]) => right === "user-1")).toBe(
-      true,
-    );
-    expect(mockEq.mock.calls.some(([, right]) => right === "example.com")).toBe(
-      true,
-    );
-    expect(mockLike).not.toHaveBeenCalled();
-
-    const firstWhere = whereArgs[0] as {
-      kind: string;
-      conds: Array<{ kind: string }>;
-    };
-    expect(firstWhere.conds.some((cond) => cond.kind === "eq")).toBe(true);
-  });
-
-  it("returns cached metrics payloads without hitting the database", async () => {
+  it("returns cached metrics payloads without calling the service", async () => {
     mockReadDashboardAggregateCache.mockResolvedValue({
+      ...freshPayload,
       totalEmails: 99,
-      deliverabilityRate: 98,
-      bounceRate: 1,
-      complainRate: 0,
-      complained: 0,
-      domains: ["example.com"],
-      dailyData: [],
-      domainBreakdown: [],
-      bounceBreakdown: {
-        permanent: 0,
-        transient: 0,
-        undetermined: 0,
-      },
-      dailyBounceData: [],
-      dailyComplainData: [],
-      lastUpdated: "2026-04-23T06:45:30.000Z",
     });
 
     const metricsRoute = await import("@/app/api/metrics/route");
@@ -343,32 +123,103 @@ describe("metrics route filters", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-opensend-cache")).toBe("hit");
-    expect(mockSelect).not.toHaveBeenCalled();
+    expect(mockGetMetrics).not.toHaveBeenCalled();
     expect(mockWriteDashboardAggregateCache).not.toHaveBeenCalled();
-
-    const json = await response.json();
-    expect(json.totalEmails).toBe(99);
+    await expect(response.json()).resolves.toMatchObject({ totalEmails: 99 });
     expect(mockReadDashboardAggregateCache).toHaveBeenCalledWith(
       "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:delivered",
     );
   });
 
-  it("writes a fresh aggregate response to cache with a short ttl", async () => {
-    const whereArgs: unknown[] = [];
-    queueMetricsQueries(whereArgs);
-
+  it("passes user, query filters, and inclusive rolling bounds to the core service", async () => {
     const metricsRoute = await import("@/app/api/metrics/route");
     const response = await metricsRoute.GET(
       makeNextRequest(
-        "http://localhost/api/metrics?range=last_7_days&event_type=opened",
+        "http://localhost/api/metrics?range=last_7_days&domain=example.com&event_type=opened",
       ) as never,
     );
 
     expect(response.status).toBe(200);
-    expect(mockWriteDashboardAggregateCache).toHaveBeenCalledOnce();
-    expect(mockWriteDashboardAggregateCache.mock.calls[0]?.[0]).toBe(
-      "dashboard-aggregate:v1:metrics:user-1:last_7_days:all:opened",
+    expect(response.headers.get("x-opensend-cache")).toBe("miss");
+    expect(mockGetMetrics).toHaveBeenCalledOnce();
+    const input = mockGetMetrics.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(input.userId).toBe("user-1");
+    expect(input.domain).toBe("example.com");
+    expect(input.eventType).toBe("opened");
+    expectLocalDateParts(requireDate(input.start), {
+      year: 2026,
+      month: 3,
+      day: 17,
+      hour: 0,
+      minute: 0,
+      second: 0,
+      millisecond: 0,
+    });
+    expectLocalDateParts(requireDate(input.end), {
+      year: 2026,
+      month: 3,
+      day: 23,
+      hour: 23,
+      minute: 59,
+      second: 59,
+      millisecond: 999,
+    });
+    expect(mockWriteDashboardAggregateCache).toHaveBeenCalledWith(
+      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:opened",
+      freshPayload,
+      60,
     );
-    expect(mockWriteDashboardAggregateCache.mock.calls[0]?.[2]).toBe(60);
+    await expect(response.json()).resolves.toEqual(freshPayload);
+  });
+
+  it("matches Yesterday exactly instead of leaking into today", async () => {
+    const metricsRoute = await import("@/app/api/metrics/route");
+    const response = await metricsRoute.GET(
+      makeNextRequest("http://localhost/api/metrics?range=yesterday") as never,
+    );
+
+    expect(response.status).toBe(200);
+    const input = mockGetMetrics.mock.calls[0]?.[0] as Record<string, unknown>;
+    expectLocalDateParts(requireDate(input.start), {
+      year: 2026,
+      month: 3,
+      day: 22,
+      hour: 0,
+      minute: 0,
+      second: 0,
+      millisecond: 0,
+    });
+    expectLocalDateParts(requireDate(input.end), {
+      year: 2026,
+      month: 3,
+      day: 22,
+      hour: 23,
+      minute: 59,
+      second: 59,
+      millisecond: 999,
+    });
+  });
+
+  it("keeps dashboard auth and error mapping in the adapter", async () => {
+    mockGetServerSession.mockResolvedValueOnce(null);
+    const metricsRoute = await import("@/app/api/metrics/route");
+
+    const unauthorized = await metricsRoute.GET(
+      makeNextRequest("http://localhost/api/metrics") as never,
+    );
+    expect(unauthorized.status).toBe(401);
+
+    mockGetServerSession.mockResolvedValueOnce({
+      session: { id: "session-1" },
+      user: { id: "user-1" },
+    });
+    mockGetMetrics.mockRejectedValueOnce(new Error("db down"));
+    const failed = await metricsRoute.GET(
+      makeNextRequest("http://localhost/api/metrics") as never,
+    );
+    expect(failed.status).toBe(500);
+    await expect(failed.json()).resolves.toEqual({
+      error: "Failed to fetch metrics data",
+    });
   });
 });

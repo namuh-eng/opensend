@@ -270,6 +270,68 @@ describe("route smoke coverage", () => {
         ContactOperationsServiceError,
         BroadcastServiceError,
         AudienceMetadataServiceError,
+        createDashboardAggregateService: () => ({
+          async getMetrics() {
+            await mockSelect().from().where();
+            await mockSelect().from().where().groupBy().orderBy();
+            await mockSelect().from().where().groupBy().orderBy();
+            await mockSelect().from().where().groupBy().orderBy();
+            await mockSelect().from().where().groupBy().orderBy();
+            return {
+              totalEmails: 10,
+              deliverabilityRate: 70,
+              bounceRate: 20,
+              complainRate: 10,
+              domains: ["example.com"],
+              dailyData: [{ date: "2026-04-23", count: 7 }],
+              domainBreakdown: [{ domain: "example.com", count: 10, rate: 70 }],
+              bounceBreakdown: {
+                permanent: 1,
+                transient: 1,
+                undetermined: 0,
+              },
+              dailyBounceData: [{ date: "2026-04-23", rate: 20 }],
+              complained: 1,
+              dailyComplainData: [{ date: "2026-04-23", rate: 10 }],
+              lastUpdated: new Date().toISOString(),
+            };
+          },
+          async getUsage() {
+            const [
+              monthlyEmails,
+              dailyEmails,
+              contactCount,
+              segmentCount,
+              domainCount,
+            ] = await Promise.all([
+              mockCountFn(),
+              mockCountFn(),
+              mockCountFn(),
+              mockCountFn(),
+              mockCountFn(),
+            ]);
+            return {
+              transactional: {
+                monthlyUsed: Number(monthlyEmails),
+                monthlyLimit: 3000,
+                dailyUsed: Number(dailyEmails),
+                dailyLimit: 100,
+              },
+              marketing: {
+                contactsUsed: Number(contactCount),
+                contactsLimit: 1000,
+                segmentsUsed: Number(segmentCount),
+                segmentsLimit: 3,
+                broadcastsLimit: "Unlimited",
+              },
+              team: {
+                domainsUsed: Number(domainCount),
+                domainsLimit: 3,
+                rateLimit: 2,
+              },
+            };
+          },
+        }),
         createBroadcastService: () => ({
           async listBroadcasts() {
             const rows = await mockSelect().from().where().orderBy().limit();

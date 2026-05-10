@@ -55,5 +55,6 @@ export * from "./services/audience-metadata";
 export * from "./services/automations";
 export * from "./services/automationRuns";
 export * from "./services/customEvents";
+export * from "./services/dashboardAggregates";
 export * from "./jobs/background-jobs";
 export * from "./observability/telemetry";
