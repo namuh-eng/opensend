@@ -22,6 +22,12 @@ const mockContactService = vi.hoisted(() => ({
   addContactToSegment: vi.fn(),
   removeContactFromSegment: vi.fn(),
 }));
+const mockContactOperationsService = vi.hoisted(() => ({
+  bulkAction: vi.fn(),
+  importContacts: vi.fn(),
+  listContactTopics: vi.fn(),
+  updateContactTopics: vi.fn(),
+}));
 
 function makeChain<T>(rows: T[]) {
   return {
@@ -222,6 +228,16 @@ describe("route smoke coverage", () => {
           this.name = "ContactServiceError";
         }
       }
+      class ContactOperationsServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+          readonly status: number,
+        ) {
+          super(message);
+          this.name = "ContactOperationsServiceError";
+        }
+      }
       class BroadcastServiceError extends Error {
         constructor(
           readonly code: string,
@@ -251,6 +267,7 @@ describe("route smoke coverage", () => {
         createWebhookService: mockCreateWebhookService,
         TemplateServiceError,
         ContactServiceError,
+        ContactOperationsServiceError,
         BroadcastServiceError,
         AudienceMetadataServiceError,
         createBroadcastService: () => ({
@@ -590,6 +607,7 @@ describe("route smoke coverage", () => {
           },
         }),
         createContactService: () => mockContactService,
+        createContactOperationsService: () => mockContactOperationsService,
         createTemplateService: () => ({
           async getTemplate(id: string) {
             const [template] = await mockSelect().from().where({ id }).limit(1);
@@ -690,6 +708,29 @@ describe("route smoke coverage", () => {
     mockContactService.listContactSegments.mockReset();
     mockContactService.addContactToSegment.mockReset();
     mockContactService.removeContactFromSegment.mockReset();
+    mockContactOperationsService.bulkAction.mockReset();
+    mockContactOperationsService.importContacts.mockReset();
+    mockContactOperationsService.listContactTopics.mockReset();
+    mockContactOperationsService.updateContactTopics.mockReset();
+    mockContactOperationsService.bulkAction.mockResolvedValue({
+      object: "bulk_action",
+      success: true,
+      count: 1,
+    });
+    mockContactOperationsService.importContacts.mockResolvedValue({
+      object: "import",
+      created_count: 0,
+      ids: [],
+    });
+    mockContactOperationsService.listContactTopics.mockResolvedValue({
+      object: "list",
+      data: [{ id: "t1", name: "News", subscription: "opt_in" }],
+    });
+    mockContactOperationsService.updateContactTopics.mockResolvedValue({
+      object: "contact_topics",
+      contact_id: "c1",
+      updated: true,
+    });
     vi.doMock("@/lib/api-auth", async () => {
       const actual =
         await vi.importActual<typeof import("@/lib/api-auth")>(
