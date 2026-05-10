@@ -3,6 +3,10 @@ import {
   type ApiKeyRepository,
   type ApiKeyServiceError,
   createApiKeyService,
+  parseCreateApiKeyBody,
+  toApiKeyCreateResponse,
+  toApiKeyDetailResponse,
+  toApiKeyListResponse,
 } from "../packages/core/src/services/apiKeys";
 
 type ApiKeyRow = Awaited<ReturnType<ApiKeyRepository["findById"]>> & {};
@@ -144,6 +148,77 @@ describe("api key service", () => {
         },
       ],
       hasMore: true,
+    });
+  });
+
+  it("parses create payloads without broadening permission or domain inputs", () => {
+    expect(
+      parseCreateApiKeyBody({
+        name: "Primary",
+        permission: "sending_access",
+        domain_id: "domain-1",
+      }),
+    ).toEqual({
+      name: "Primary",
+      permission: "sending_access",
+      domainId: "domain-1",
+    });
+
+    expect(
+      parseCreateApiKeyBody({
+        name: 123,
+        permission: "admin",
+        domain_id: 456,
+      }),
+    ).toEqual({
+      name: "",
+      permission: undefined,
+      domainId: undefined,
+    });
+  });
+
+  it("formats public API-key payloads with token visible only on create", () => {
+    const created = {
+      id: "created-key",
+      token: "re_created",
+      tokenHash: "hash-created",
+    };
+    const list = toApiKeyListResponse({
+      data: [apiKeyRow({ id: "key-list", name: "List key" })],
+      hasMore: false,
+    });
+    const detail = toApiKeyDetailResponse(
+      apiKeyRow({ id: "key-detail", name: "Detail key" }),
+    );
+
+    expect(toApiKeyCreateResponse(created)).toEqual({
+      id: "created-key",
+      token: "re_created",
+    });
+    expect(JSON.stringify(list)).not.toContain("token");
+    expect(JSON.stringify(detail)).not.toContain("token");
+    expect(list).toEqual({
+      object: "list",
+      data: [
+        {
+          id: "key-list",
+          name: "List key",
+          created_at: new Date("2026-05-02T00:00:00.000Z"),
+          last_used_at: null,
+          permission: "full_access",
+          domain: null,
+        },
+      ],
+      has_more: false,
+    });
+    expect(detail).toEqual({
+      object: "api_key",
+      id: "key-detail",
+      name: "Detail key",
+      created_at: new Date("2026-05-02T00:00:00.000Z"),
+      last_used_at: null,
+      permission: "full_access",
+      domain: null,
     });
   });
 
