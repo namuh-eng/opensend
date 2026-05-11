@@ -81,7 +81,7 @@ describe("lib/api-auth", () => {
   });
 
   it("validates a bearer API key by sha256 token hash", async () => {
-    const rawKey = "re_test_123";
+    const rawKey = "os_test_123";
     const tokenHash = createHash("sha256").update(rawKey).digest("hex");
     mockFindFirst.mockResolvedValue({
       id: "key-1",

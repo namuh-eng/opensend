@@ -191,7 +191,7 @@ describe("cache invalidation routes", () => {
   it("delegates api-key create through the thin adapter", async () => {
     mockCreateApiKey.mockResolvedValue({
       id: "created-key",
-      token: "re_created",
+      token: "os_created",
       tokenHash: "hash-123",
     });
 
@@ -210,7 +210,7 @@ describe("cache invalidation routes", () => {
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toEqual({
       id: "created-key",
-      token: "re_created",
+      token: "os_created",
     });
     expect(mockCreateApiKey).toHaveBeenCalledWith({
       name: "Primary",

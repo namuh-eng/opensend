@@ -84,7 +84,7 @@ function jsonRequest(url: string, body: unknown): Request {
   return new Request(url, {
     method: "POST",
     headers: {
-      Authorization: "Bearer re_test",
+      Authorization: "Bearer os_test",
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),

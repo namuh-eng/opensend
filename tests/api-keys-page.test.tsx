@@ -24,7 +24,7 @@ const mockKeys: ApiKeyRow[] = [
   {
     id: "key-1",
     name: "Production Key",
-    tokenPreview: "re_abc...123",
+    tokenPreview: "os_abc...123",
     permission: "full_access",
     lastUsedAt: "2026-03-28T10:00:00Z",
     createdAt: "2026-03-01T10:00:00Z",
@@ -32,7 +32,7 @@ const mockKeys: ApiKeyRow[] = [
   {
     id: "key-2",
     name: "Staging Key",
-    tokenPreview: "re_def...456",
+    tokenPreview: "os_def...456",
     permission: "sending_access",
     lastUsedAt: null,
     createdAt: "2026-03-15T10:00:00Z",
@@ -40,7 +40,7 @@ const mockKeys: ApiKeyRow[] = [
   {
     id: "key-3",
     name: "Dev Key",
-    tokenPreview: "re_ghi...789",
+    tokenPreview: "os_ghi...789",
     permission: "full_access",
     lastUsedAt: "2026-03-27T10:00:00Z",
     createdAt: "2026-03-20T10:00:00Z",
@@ -69,8 +69,8 @@ describe("API Keys List Page", () => {
     expect(screen.getByText("Staging Key")).toBeTruthy();
     expect(screen.getByText("Dev Key")).toBeTruthy();
     // Token prefix displayed
-    expect(screen.getByText("re_abc...123")).toBeTruthy();
-    expect(screen.getByText("re_def...456")).toBeTruthy();
+    expect(screen.getByText("os_abc...123")).toBeTruthy();
+    expect(screen.getByText("os_def...456")).toBeTruthy();
   });
 
   it("renders permission labels correctly", () => {

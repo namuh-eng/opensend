@@ -240,7 +240,7 @@ test("empty automations dashboard uses session auth without a client API key", a
   await signIn(context);
   const mocks = await mockEmptyAutomationApis(page);
   await page.addInitScript(() => {
-    window.localStorage.setItem("api_key", "re_should_not_be_sent");
+    window.localStorage.setItem("api_key", "os_should_not_be_sent");
   });
 
   await page.goto("/automations");

@@ -245,22 +245,22 @@ describe("CopyToClipboard", () => {
   });
 
   it("renders the value text", () => {
-    render(<CopyToClipboard value="re_abc123" />);
-    expect(screen.getByText("re_abc123")).toBeTruthy();
+    render(<CopyToClipboard value="os_abc123" />);
+    expect(screen.getByText("os_abc123")).toBeTruthy();
   });
 
   it("copies value to clipboard on click", async () => {
-    render(<CopyToClipboard value="re_abc123" />);
+    render(<CopyToClipboard value="os_abc123" />);
     const button = screen.getByRole("button");
     await act(async () => {
       fireEvent.click(button);
     });
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("re_abc123");
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("os_abc123");
   });
 
   it("shows confirmation state after copy", async () => {
     vi.useFakeTimers();
-    render(<CopyToClipboard value="re_abc123" />);
+    render(<CopyToClipboard value="os_abc123" />);
     const button = screen.getByRole("button");
     await act(async () => {
       fireEvent.click(button);

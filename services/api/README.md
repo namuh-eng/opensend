@@ -2,6 +2,8 @@
 
 `services/api` is the Bun + Hono control-plane API runtime for route families that have been moved out of Next.js ownership.
 
+Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+
 Local development convention:
 
 ```bash

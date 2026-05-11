@@ -78,7 +78,7 @@ class OpenSendPythonSdkTests(unittest.TestCase):
         opensend.base_url = opensend.DEFAULT_BASE_URL
 
     def test_module_level_send_serializes_payload_and_auth_header(self) -> None:
-        opensend.api_key = "re_test"
+        opensend.api_key = "os_test"
         opensend.base_url = self.base_url
 
         response = opensend.Emails.send(
@@ -95,7 +95,7 @@ class OpenSendPythonSdkTests(unittest.TestCase):
         self.assertEqual(len(self.state.requests), 1)
         request = self.state.requests[0]
         self.assertEqual(request.path, "/emails")
-        self.assertEqual(request.headers["Authorization"], "Bearer re_test")
+        self.assertEqual(request.headers["Authorization"], "Bearer os_test")
         self.assertEqual(request.headers["Content-Type"], "application/json")
         self.assertEqual(
             request.body,
@@ -109,7 +109,7 @@ class OpenSendPythonSdkTests(unittest.TestCase):
         )
 
     def test_instance_client_normalizes_base_url_and_sends_idempotency_key(self) -> None:
-        client = opensend.OpenSend("re_instance", base_url=self.base_url)
+        client = opensend.OpenSend("os_instance", base_url=self.base_url)
 
         response = client.emails.send(
             {
@@ -124,14 +124,14 @@ class OpenSendPythonSdkTests(unittest.TestCase):
         self.assertEqual(response["id"], "email_123")
         request = self.state.requests[0]
         self.assertEqual(request.path, "/emails")
-        self.assertEqual(request.headers["Authorization"], "Bearer re_instance")
+        self.assertEqual(request.headers["Authorization"], "Bearer os_instance")
         self.assertEqual(request.headers["Idempotency-Key"], "send-key-1")
         self.assertEqual(request.body["from"], "hello@example.com")
         self.assertNotIn("from_", request.body)
 
     def test_send_batch_posts_to_root_batch_endpoint(self) -> None:
         self.state.response_body = {"data": [{"id": "email_a"}, {"id": "email_b"}]}
-        client = opensend.Resend("re_batch", base_url=self.base_url)
+        client = opensend.Resend("os_batch", base_url=self.base_url)
 
         response = client.emails.send_batch(
             [
@@ -154,7 +154,7 @@ class OpenSendPythonSdkTests(unittest.TestCase):
         self.assertEqual(response, {"data": [{"id": "email_a"}, {"id": "email_b"}]})
         request = self.state.requests[0]
         self.assertEqual(request.path, "/emails/batch")
-        self.assertEqual(request.headers["Authorization"], "Bearer re_batch")
+        self.assertEqual(request.headers["Authorization"], "Bearer os_batch")
         self.assertEqual(request.headers["Idempotency-Key"], "batch-key-1")
         self.assertEqual(request.body[1]["from"], "hello@example.com")
         self.assertNotIn("from_email", request.body[1])
@@ -168,7 +168,7 @@ class OpenSendPythonSdkTests(unittest.TestCase):
             "statusCode": 422,
             "details": {"fieldErrors": {"to": ["Required"]}, "formErrors": []},
         }
-        client = opensend.OpenSend("re_error", base_url=self.base_url)
+        client = opensend.OpenSend("os_error", base_url=self.base_url)
 
         with self.assertRaises(opensend.OpenSendError) as context:
             client.emails.send(
@@ -195,7 +195,7 @@ class OpenSendPythonSdkTests(unittest.TestCase):
             opensend.OpenSend("", base_url=self.base_url)
 
         with self.assertRaisesRegex(ValueError, "valid absolute http or https URL"):
-            opensend.OpenSend("re_test", base_url="ftp://example.com")
+            opensend.OpenSend("os_test", base_url="ftp://example.com")
 
         with self.assertRaisesRegex(ValueError, "set opensend.api_key"):
             opensend.Emails.send(

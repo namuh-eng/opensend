@@ -67,7 +67,7 @@ const lastUsedAt = new Date("2026-05-10T01:00:00.000Z");
 function request(url: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   if (!headers.has("authorization")) {
-    headers.set("authorization", "Bearer re_test");
+    headers.set("authorization", "Bearer os_test");
   }
 
   return new Request(url, {
@@ -126,7 +126,7 @@ describe("API key route boundary", () => {
           lastUsedAt,
           permission: "full_access",
           domain: null,
-          token: "re_should_not_leak",
+          token: "os_should_not_leak",
           tokenHash: "hash-should-not-leak",
         },
       ],
@@ -163,7 +163,7 @@ describe("API key route boundary", () => {
   it("creates API keys after quota check and returns the token only in the create response", async () => {
     mockCreateApiKey.mockResolvedValue({
       id: "created-key",
-      token: "re_created",
+      token: "os_created",
       tokenHash: "hash-created",
     });
 
@@ -179,7 +179,7 @@ describe("API key route boundary", () => {
     expect(response.status).toBe(201);
     await expect(response.json()).resolves.toEqual({
       id: "created-key",
-      token: "re_created",
+      token: "os_created",
     });
     expect(mockCheckApiKeyQuota).toHaveBeenCalledWith("user-1");
     expect(mockCreateApiKey).toHaveBeenCalledWith({
@@ -208,7 +208,7 @@ describe("API key route boundary", () => {
       },
     });
     expect(JSON.stringify(mockRecordAuditEvent.mock.calls)).not.toContain(
-      "re_created",
+      "os_created",
     );
   });
 

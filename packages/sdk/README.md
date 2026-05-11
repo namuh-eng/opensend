@@ -2,6 +2,8 @@
 
 TypeScript SDK for the OpenSend email API with a Resend-compatible client surface.
 
+Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+
 ## Installation
 
 ```bash

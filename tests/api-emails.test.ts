@@ -385,7 +385,7 @@ describe("POST /api/emails", () => {
     const req = makeRequest(
       "POST",
       { from: "test@domain.com" },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
     const res = await POST(req);
     expect(res.status).toBe(422);
@@ -410,7 +410,7 @@ describe("POST /api/emails", () => {
     const req = new Request("http://localhost:3015/api/emails", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
       },
       body: "{",
@@ -432,7 +432,7 @@ describe("POST /api/emails", () => {
     const req = makeRequest(
       "POST",
       { to: ["user@test.com"], subject: "Test", html: "<p>Hi</p>" },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
     const res = await POST(req);
     expect(res.status).toBe(422);
@@ -459,7 +459,7 @@ describe("POST /api/emails", () => {
         html: "<p>Hello</p>",
       },
       {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "x-correlation-id": "corr-email-test",
         traceparent,
       },
@@ -558,7 +558,7 @@ describe("POST /api/emails", () => {
             variables: {},
           },
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -619,7 +619,7 @@ describe("POST /api/emails", () => {
             variables: { PRODUCT: "Widget" },
           },
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -668,7 +668,7 @@ describe("POST /api/emails", () => {
             variables: {},
           },
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -712,7 +712,7 @@ describe("POST /api/emails", () => {
           subject: "Test Email",
           html: "<p>Hello</p>",
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -760,7 +760,7 @@ describe("POST /api/emails", () => {
           html: "<p>Hello</p>",
         },
         {
-          Authorization: "Bearer re_test123",
+          Authorization: "Bearer os_test123",
           "Idempotency-Key": "send-key-1",
         },
       ),
@@ -814,7 +814,7 @@ describe("POST /api/emails", () => {
           subject: "Fast queue",
           html: "<p>Hello</p>",
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       );
 
       const startedAt = performance.now();
@@ -855,7 +855,7 @@ describe("POST /api/emails", () => {
         subject: "Test",
         html: "<p>Hi</p>",
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
     const res = await POST(req);
     expect(res.status).toBe(200);
@@ -882,7 +882,7 @@ describe("POST /api/emails", () => {
           subject: "Recipient forms",
           html: "<p>Hi</p>",
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -921,7 +921,7 @@ describe("POST /api/emails", () => {
         html: "<p>Hi</p>",
         tags,
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -945,7 +945,7 @@ describe("POST /api/emails", () => {
         html: "<p>Hi</p>",
         tags: [{ name: "campaign.id", value: "spring 2026" }],
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -987,7 +987,7 @@ describe("POST /api/emails", () => {
           "POST",
           { ...basePayload, tags },
           {
-            Authorization: "Bearer re_test123",
+            Authorization: "Bearer os_test123",
           },
         ),
       );
@@ -1024,7 +1024,7 @@ describe("POST /api/emails", () => {
           value: "ok",
         })),
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1069,7 +1069,7 @@ describe("POST /api/emails", () => {
         html: '<p><a href="{{{RESEND_UNSUBSCRIBE_URL}}}">Unsubscribe</a></p>',
         headers: { "X-Custom": "ok" },
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1104,7 +1104,7 @@ describe("POST /api/emails", () => {
         subject: "Sandbox delivered",
         html: "<p>Sandbox</p>",
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1141,7 +1141,7 @@ describe("POST /api/emails", () => {
         subject: "Suppressed sandbox",
         html: "<p>No send</p>",
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1184,7 +1184,7 @@ describe("POST /api/emails", () => {
         subject: "Suppressed",
         html: "<p>No send</p>",
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1230,7 +1230,7 @@ describe("POST /api/emails", () => {
           },
         ],
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1270,7 +1270,7 @@ describe("POST /api/emails", () => {
           html: "<p>Hi</p>",
           attachments: [{ filename: "missing.txt" }],
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -1305,7 +1305,7 @@ describe("POST /api/emails", () => {
             },
           ],
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -1346,7 +1346,7 @@ describe("POST /api/emails", () => {
           html: "<p>ISO</p>",
           scheduled_at: "2026-05-08T00:00:00.000Z",
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
     const naturalRes = await POST(
@@ -1359,7 +1359,7 @@ describe("POST /api/emails", () => {
           html: "<p>Natural</p>",
           scheduled_at: "in 1 min",
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -1397,7 +1397,7 @@ describe("POST /api/emails", () => {
         makeRequest(
           "POST",
           { ...payload, scheduled_at },
-          { Authorization: "Bearer re_test123" },
+          { Authorization: "Bearer os_test123" },
         ),
       );
       expect(res.status).toBe(422);
@@ -1467,7 +1467,7 @@ describe("POST /api/emails/batch", () => {
       html: `<p>${i}</p>`,
     }));
     const req = makeRequest("POST", emailsArr, {
-      Authorization: "Bearer re_test123",
+      Authorization: "Bearer os_test123",
     });
     const res = await POST(req);
     expect(res.status).toBe(422);
@@ -1486,7 +1486,7 @@ describe("POST /api/emails/batch", () => {
     const req = new Request("http://localhost:3015/api/emails/batch", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
       },
       body: "[",
@@ -1521,7 +1521,7 @@ describe("POST /api/emails/batch", () => {
           },
         ],
         {
-          Authorization: "Bearer re_test123",
+          Authorization: "Bearer os_test123",
           "Idempotency-Key": "x".repeat(256),
         },
       ),
@@ -1551,7 +1551,7 @@ describe("POST /api/emails/batch", () => {
         },
       ],
       {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Idempotency-Key": "x".repeat(257),
       },
     );
@@ -1610,13 +1610,13 @@ describe("POST /api/emails/batch", () => {
 
     const first = await POST(
       makeRequest("POST", emailsArr, {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Idempotency-Key": "batch-key-1",
       }),
     );
     const retry = await POST(
       makeRequest("POST", emailsArr, {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Idempotency-Key": "batch-key-1",
       }),
     );
@@ -1700,7 +1700,7 @@ describe("POST /api/emails/batch", () => {
           text: "Leave: {{{RESEND_UNSUBSCRIBE_URL}}}",
         },
       ],
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1752,7 +1752,7 @@ describe("POST /api/emails/batch", () => {
           html: "<p>Suppressed</p>",
         },
       ],
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1820,7 +1820,7 @@ describe("POST /api/emails/batch", () => {
           html: "<p>Blocked</p>",
         },
       ],
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1881,7 +1881,7 @@ describe("POST /api/emails/batch", () => {
       },
     ];
     const req = makeRequest("POST", emailsArr, {
-      Authorization: "Bearer re_test123",
+      Authorization: "Bearer os_test123",
     });
     const res = await POST(req);
     expect(res.status).toBe(200);
@@ -1914,7 +1914,7 @@ describe("POST /api/emails/batch", () => {
             tags: [{ name: "bad.name", value: "bad value" }],
           },
         ],
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -1954,7 +1954,7 @@ describe("POST /api/emails/batch", () => {
             })),
           },
         ],
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -2002,7 +2002,7 @@ describe("POST /api/emails/batch", () => {
             scheduled_at: "in 2 hours",
           },
         ],
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -2037,7 +2037,7 @@ describe("POST /api/emails/batch", () => {
     ]) {
       const res = await POST(
         makeRequest("POST", [{ ...base, scheduled_at }], {
-          Authorization: "Bearer re_test123",
+          Authorization: "Bearer os_test123",
         }),
       );
       expect(res.status).toBe(422);
@@ -2105,7 +2105,7 @@ describe("services/api transactional email routes", () => {
     const res = await createApp().request("/emails", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -2157,7 +2157,7 @@ describe("services/api transactional email routes", () => {
     const invalid = await app.request("/emails", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ from: "sender@domain.com" }),
@@ -2191,7 +2191,7 @@ describe("services/api transactional email routes", () => {
     const res = await createApp().request("/emails", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
         "Idempotency-Key": "svc-idempotency-1",
       },
@@ -2223,7 +2223,7 @@ describe("services/api transactional email routes", () => {
     const res = await createApp().request("/emails/batch", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
         "Idempotency-Key": "svc-batch-key-1",
       },
@@ -2309,7 +2309,7 @@ describe("GET /api/emails", () => {
 
     const { GET } = await import("@/app/api/emails/route");
     const req = new Request("http://localhost:3015/api/emails?limit=20", {
-      headers: { Authorization: "Bearer re_test123" },
+      headers: { Authorization: "Bearer os_test123" },
     });
     const res = await GET(req);
     expect(res.status).toBe(200);
@@ -2355,7 +2355,7 @@ describe("GET /api/emails", () => {
 
     const { GET } = await import("@/app/api/emails/route");
     const req = new Request("http://localhost:3015/api/emails?status=queued", {
-      headers: { Authorization: "Bearer re_test123" },
+      headers: { Authorization: "Bearer os_test123" },
     });
 
     const res = await GET(req);
@@ -2409,7 +2409,7 @@ describe("GET /api/emails/:id", () => {
 
     const { GET } = await import("@/app/api/emails/[id]/route");
     const req = new Request("http://localhost:3015/api/emails/email-uuid", {
-      headers: { Authorization: "Bearer re_test123" },
+      headers: { Authorization: "Bearer os_test123" },
     });
     const res = await GET(req, {
       params: Promise.resolve({ id: "email-uuid" }),
@@ -2433,7 +2433,7 @@ describe("GET /api/emails/:id", () => {
 
     const { GET } = await import("@/app/api/emails/[id]/route");
     const req = new Request("http://localhost:3015/api/emails/nonexistent", {
-      headers: { Authorization: "Bearer re_test123" },
+      headers: { Authorization: "Bearer os_test123" },
     });
     const res = await GET(req, {
       params: Promise.resolve({ id: "nonexistent" }),
@@ -2464,7 +2464,7 @@ describe("PATCH /api/emails/:id", () => {
     const res = await PATCH(
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
         body: JSON.stringify({ scheduled_at: "2026-05-08T00:00:00.000Z" }),
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
@@ -2487,7 +2487,7 @@ describe("PATCH /api/emails/:id", () => {
     const res = await PATCH(
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
         body: "{invalid",
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
@@ -2525,7 +2525,7 @@ describe("PATCH /api/emails/:id", () => {
       const res = await PATCH(
         new Request("http://localhost:3015/api/emails/email-uuid", {
           method: "PATCH",
-          headers: { Authorization: "Bearer re_test123" },
+          headers: { Authorization: "Bearer os_test123" },
           body: JSON.stringify({ scheduled_at: null }),
         }),
         { params: Promise.resolve({ id: "email-uuid" }) },
@@ -2547,7 +2547,7 @@ describe("PATCH /api/emails/:id", () => {
     const res = await PATCH(
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
         body: JSON.stringify([]),
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
@@ -2579,7 +2579,7 @@ describe("DELETE /api/emails", () => {
     const res = await DELETE(
       new Request("http://localhost:3015/api/emails?id=email-uuid", {
         method: "DELETE",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }),
     );
 
@@ -2615,7 +2615,7 @@ describe("GET /api/emails/:id/attachments", () => {
     const { GET } = await import("@/app/api/emails/[id]/attachments/route");
     const res = await GET(
       new Request("http://localhost:3015/api/emails/email-uuid/attachments", {
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2645,7 +2645,7 @@ describe("GET /api/emails/:id/attachments", () => {
     const { GET } = await import("@/app/api/emails/[id]/attachments/route");
     const res = await GET(
       new Request("http://localhost:3015/api/emails/email-uuid/attachments", {
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2669,7 +2669,7 @@ describe("GET /api/emails/:id/attachments", () => {
       new Request(
         "http://localhost:3015/api/emails/email-uuid/attachments/missing",
         {
-          headers: { Authorization: "Bearer re_test123" },
+          headers: { Authorization: "Bearer os_test123" },
         },
       ) as never,
       {
@@ -2710,7 +2710,7 @@ describe("POST /api/emails/:id/cancel", () => {
     const res = await POST(
       new Request("http://localhost:3015/api/emails/email-uuid/cancel", {
         method: "POST",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2739,7 +2739,7 @@ describe("POST /api/emails/:id/cancel", () => {
     const res = await POST(
       new Request("http://localhost:3015/api/emails/email-uuid/cancel", {
         method: "POST",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2766,7 +2766,7 @@ describe("GET /api/emails/:id/events", () => {
     const { GET } = await import("@/app/api/emails/[id]/events/route");
     const res = await GET(
       new Request("http://localhost:3015/api/emails/email-uuid/events", {
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2796,7 +2796,7 @@ describe("GET /api/emails/:id/events", () => {
     const { GET } = await import("@/app/api/emails/[id]/events/route");
     const res = await GET(
       new Request("http://localhost:3015/api/emails/email-uuid/events", {
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2866,7 +2866,7 @@ describe("API key sending permissions", () => {
           subject: "Allowed",
           html: "<p>Hello</p>",
         },
-        { Authorization: "Bearer re_sending" },
+        { Authorization: "Bearer os_sending" },
       ),
     );
 
@@ -2895,7 +2895,7 @@ describe("API key sending permissions", () => {
           subject: "Blocked",
           html: "<p>Hello</p>",
         },
-        { Authorization: "Bearer re_sending" },
+        { Authorization: "Bearer os_sending" },
       ),
     );
 
