@@ -6,6 +6,12 @@ import {
   publishBackgroundJob,
 } from "../jobs/background-jobs";
 
+const IDEMPOTENCY_KEY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+function getIdempotencyWindowStart(now = new Date()): Date {
+  return new Date(now.getTime() - IDEMPOTENCY_KEY_WINDOW_MS);
+}
+
 function summarizeQueuePublishError(error: unknown): {
   code: string;
   message: string;
@@ -71,11 +77,14 @@ export class EmailService {
     idempotencyKey?: string | null;
     userId?: string | null;
   }) {
+    const idempotencyWindowStart = getIdempotencyWindowStart();
+
     // Check idempotency if key provided
     if (params.idempotencyKey) {
       const existing = await emailRepo.findByIdempotencyKey(
         params.idempotencyKey,
         params.userId,
+        { createdAtOrAfter: idempotencyWindowStart },
       );
       if (existing) return { id: existing.id, duplicate: true };
     }
@@ -95,6 +104,14 @@ export class EmailService {
 
     const shouldQueueNow =
       !params.scheduledAt || params.scheduledAt <= new Date();
+
+    if (params.idempotencyKey) {
+      await emailRepo.expireIdempotencyKeyBefore(
+        params.idempotencyKey,
+        idempotencyWindowStart,
+        params.userId,
+      );
+    }
 
     const [record] = await emailRepo.create({
       from: params.from,

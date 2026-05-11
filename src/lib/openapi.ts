@@ -384,7 +384,7 @@ export const openApiDocument = {
         name: "Idempotency-Key",
         in: "header",
         description:
-          "Optional idempotency key, up to 256 characters. Duplicate send keys return the original accepted response without creating duplicate emails.",
+          "Optional idempotency key, up to 256 characters. Duplicate single and batch send keys within 24 hours return the original accepted response without creating duplicate emails; after 24 hours the same key is accepted as a new request.",
         schema: { type: "string", minLength: 1, maxLength: 256 },
       },
     },

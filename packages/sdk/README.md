@@ -158,7 +158,8 @@ acceptance when retrying sends. Keys must match the API contract: 1-256
 characters. OpenSend replays duplicate single-send keys with the original
 accepted `{ id }` response and duplicate batch keys with the original
 accepted `{ data: [{ id }] }` response before reserving quota, creating
-additional rows, or publishing more queue jobs.
+additional rows, or publishing more queue jobs. Idempotency keys expire after
+24 hours; reusing the same key after that window is accepted as a new request.
 
 ```typescript
 await resend.emails.send(

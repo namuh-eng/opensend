@@ -211,6 +211,7 @@ vi.mock("drizzle-orm", async () => {
     desc: vi.fn((col: unknown) => ({ op: "desc", col })),
     lt: vi.fn((...args: unknown[]) => ({ op: "lt", args })),
     gt: vi.fn((...args: unknown[]) => ({ op: "gt", args })),
+    gte: vi.fn((...args: unknown[]) => ({ op: "gte", args })),
     and: vi.fn((...args: unknown[]) => ({ op: "and", args })),
   };
 });
@@ -363,6 +364,11 @@ describe("POST /api/emails", () => {
     mockDb.select = vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([]),
+      }),
+    });
+    mockDb.update = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
       }),
     });
     mockDb.transaction.mockImplementation(
@@ -780,11 +786,103 @@ describe("POST /api/emails", () => {
             op: "eq",
             args: expect.arrayContaining([AUTH_RESULT.userId]),
           }),
+          expect.objectContaining({
+            op: "gte",
+            args: expect.arrayContaining([expect.any(Date)]),
+          }),
         ]),
       }),
     });
     expect(mockReserveEmailQuota).not.toHaveBeenCalled();
     expect(nonLogInsertCalls()).toHaveLength(0);
+  });
+
+  it("accepts the same Idempotency-Key as a new send after the 24-hour window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T12:00:00.000Z"));
+
+    const findFirst = vi.fn().mockResolvedValue(null);
+    Object.assign(mockDb.query, {
+      emails: { findFirst },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-new" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    const updateWhere = vi.fn().mockResolvedValue(undefined);
+    const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+    mockDb.update = vi.fn().mockReturnValue({ set: updateSet });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Fresh after expiry",
+          html: "<p>Hello</p>",
+        },
+        {
+          Authorization: "Bearer os_test123",
+          "Idempotency-Key": "send-expired-key",
+        },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ id: "email-new" });
+    expect(findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["send-expired-key"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+          expect.objectContaining({
+            op: "gte",
+            args: expect.arrayContaining([
+              new Date("2026-05-11T12:00:00.000Z"),
+            ]),
+          }),
+        ]),
+      }),
+    });
+    expect(updateSet).toHaveBeenCalledWith({ idempotencyKey: null });
+    expect(updateWhere).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["send-expired-key"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+          expect.objectContaining({
+            op: "lt",
+            args: expect.arrayContaining([
+              new Date("2026-05-11T12:00:00.000Z"),
+            ]),
+          }),
+        ]),
+      }),
+    );
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: "send-expired-key" }),
+    );
+    expect(mockReserveEmailQuota).toHaveBeenCalledTimes(1);
+    expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(1);
   });
 
   it("returns p95 under 50ms when the SES mock takes 500ms", async () => {
@@ -1444,14 +1542,14 @@ describe("POST /api/emails/batch", () => {
         where: vi.fn().mockResolvedValue([]),
       }),
     });
-    mockDb.transaction.mockImplementation(
-      async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
-    );
     mockDb.update = vi.fn().mockReturnValue({
       set: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue(undefined),
       }),
     });
+    mockDb.transaction.mockImplementation(
+      async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
+    );
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
       reason: "queue_url_missing",
@@ -1660,6 +1758,10 @@ describe("POST /api/emails/batch", () => {
             op: "eq",
             args: expect.arrayContaining([AUTH_RESULT.userId]),
           }),
+          expect.objectContaining({
+            op: "gte",
+            args: expect.arrayContaining([expect.any(Date)]),
+          }),
         ]),
       }),
     });
@@ -1674,6 +1776,10 @@ describe("POST /api/emails/batch", () => {
           expect.objectContaining({
             op: "eq",
             args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+          expect.objectContaining({
+            op: "gte",
+            args: expect.arrayContaining([expect.any(Date)]),
           }),
         ]),
       }),
@@ -1706,6 +1812,108 @@ describe("POST /api/emails/batch", () => {
         ]),
       }),
     );
+  });
+
+  it("accepts the same batch Idempotency-Key as a new batch after the 24-hour window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T12:00:00.000Z"));
+
+    const findFirst = vi.fn().mockResolvedValue(null);
+    Object.assign(mockDb.query, {
+      emails: { findFirst },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+
+    let callCount = 0;
+    const valuesMock = vi.fn().mockImplementation(() => ({
+      returning: vi
+        .fn()
+        .mockResolvedValue([{ id: `batch-new-${++callCount}` }]),
+    }));
+    const updateWhere = vi.fn().mockResolvedValue(undefined);
+    const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    mockDb.update = vi.fn().mockReturnValue({ set: updateSet });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        [
+          {
+            from: "sender@domain.com",
+            to: ["user1@test.com"],
+            subject: "Fresh batch after expiry 1",
+            html: "<p>1</p>",
+          },
+          {
+            from: "sender@domain.com",
+            to: ["user2@test.com"],
+            subject: "Fresh batch after expiry 2",
+            html: "<p>2</p>",
+          },
+        ],
+        {
+          Authorization: "Bearer os_test123",
+          "Idempotency-Key": "batch-expired-key",
+        },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      data: [{ id: "batch-new-1" }, { id: "batch-new-2" }],
+    });
+    expect(findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["batch-expired-key"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+          expect.objectContaining({
+            op: "gte",
+            args: expect.arrayContaining([
+              new Date("2026-05-11T12:00:00.000Z"),
+            ]),
+          }),
+        ]),
+      }),
+    });
+    expect(updateSet).toHaveBeenCalledWith({ idempotencyKey: null });
+    expect(updateWhere).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["batch-expired-key"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+          expect.objectContaining({
+            op: "lt",
+            args: expect.arrayContaining([
+              new Date("2026-05-11T12:00:00.000Z"),
+            ]),
+          }),
+        ]),
+      }),
+    );
+    expect(
+      valuesMock.mock.calls
+        .map(([value]) => value.idempotencyKey)
+        .filter((value) => value !== undefined),
+    ).toEqual(["batch-expired-key", null]);
+    expect(mockReserveEmailQuota).toHaveBeenCalledTimes(1);
+    expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(2);
   });
 
   it("injects managed unsubscribe headers for batch items with known contact placeholders", async () => {
@@ -2118,6 +2326,11 @@ describe("services/api transactional email routes", () => {
     mockDb.select = vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
         where: vi.fn().mockResolvedValue([]),
+      }),
+    });
+    mockDb.update = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
       }),
     });
     mockDb.transaction.mockImplementation(
