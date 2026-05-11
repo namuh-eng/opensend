@@ -140,6 +140,68 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("location")).toBe("https://example.com/auth");
   });
 
+  it("preserves browser/RSC dashboard GET /broadcasts instead of rewriting the API alias", async () => {
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/broadcasts", {
+        method: "GET",
+        headers: {
+          accept: "*/*",
+          rsc: "1",
+          "next-router-state-tree": encodeURIComponent("[]"),
+          "next-url": "/broadcasts",
+        },
+      }),
+    );
+
+    expect(mockGetSessionCookie).toHaveBeenCalled();
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("redirects unauthenticated browser/RSC GET /broadcasts to auth instead of the API alias", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/broadcasts", {
+        method: "GET",
+        headers: {
+          accept: "*/*",
+          rsc: "1",
+          "next-router-state-tree": encodeURIComponent("[]"),
+          "next-url": "/broadcasts",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://example.com/auth");
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+  });
+
+  it("rewrites explicit API GET /broadcasts clients to the Resend-compatible alias", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/broadcasts", {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/broadcasts",
+    );
+    expect(response.headers.get("x-ratelimit-backend")).toBe("disabled");
+  });
+
   it("allows root contacts API aliases without requiring a dashboard session", async () => {
     mockGetSessionCookie.mockReturnValue(null);
     const { middleware } = await import("@/middleware");
