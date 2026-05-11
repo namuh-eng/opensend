@@ -1,6 +1,11 @@
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { emailEvents, emails } from "../db/schema";
+import {
+  type EmailEventTraceDetails,
+  type EmailEventTraceItem,
+  toEmailEventTraceItem,
+} from "./emailEventTrace";
 import { storageService } from "./storage";
 
 type EmailRow = typeof emails.$inferSelect;
@@ -45,11 +50,9 @@ export type EmailLifecycleCancelResponse = {
   status: "canceled";
 };
 
-export type EmailLifecycleEventListItem = {
-  object: "email_event";
-  id: string;
-  type: string;
+export type EmailLifecycleEventListItem = EmailEventTraceItem & {
   payload: unknown;
+  details: EmailEventTraceDetails;
   created_at: EmailEventRow["receivedAt"];
 };
 
@@ -149,11 +152,8 @@ function toEmailEventListItem(
   event: EmailEventRow,
 ): EmailLifecycleEventListItem {
   return {
-    object: "email_event",
-    id: event.id,
-    type: event.type,
+    ...toEmailEventTraceItem(event),
     payload: event.payload,
-    created_at: event.receivedAt,
   };
 }
 

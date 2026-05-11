@@ -109,7 +109,13 @@ export interface EmailDetailData {
     reason: "bounced" | "complained";
     suppressedAt: string;
   } | null;
-  events: Array<{ type: string; timestamp: string }>;
+  events: Array<{
+    id: string;
+    type: string;
+    timestamp: string;
+    summary: string;
+    details: Record<string, string | number | boolean | string[]>;
+  }>;
   logs?: Array<{
     id: string;
     method: string;
@@ -176,6 +182,21 @@ function formatEventTimestamp(dateStr: string): string {
   const ampm = hours >= 12 ? "PM" : "AM";
   const h = hours % 12 || 12;
   return `${month} ${day}, ${h}:${minutes} ${ampm}`;
+}
+
+function formatDetailLabel(key: string): string {
+  return key
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatDetailValue(
+  value: string | number | boolean | string[],
+): string {
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
 }
 
 /**
@@ -419,36 +440,70 @@ export function EmailDetail({ email }: EmailDetailProps) {
       {/* Email Events */}
       <div className="mb-8">
         <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-4">
-          EMAIL EVENTS
+          EMAIL EVENT TRACE
         </p>
         <div className="space-y-3" data-testid="event-timeline">
           {email.events.length > 0 ? (
-            email.events.map((event) => (
-              <div
-                key={`${event.timestamp}-${event.type}`}
-                className="flex items-center gap-3 text-[13px] group"
-              >
+            email.events.map((event) => {
+              const details = Object.entries(event.details);
+              return (
                 <div
-                  className={clsx(
-                    "w-2 h-2 rounded-full",
-                    event.type === "delivered" || event.type === "sent"
-                      ? "bg-emerald-500"
-                      : event.type === "bounced" || event.type === "failed"
-                        ? "bg-red-500"
-                        : "bg-blue-500",
-                  )}
-                />
-                <span
-                  className="text-[#F0F0F0] min-w-[100px]"
-                  data-testid="event-badge"
+                  key={event.id}
+                  className="rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] px-4 py-3 text-[13px] group"
+                  data-testid="event-trace-row"
                 >
-                  {formatStatusLabel(event.type)}
-                </span>
-                <span className="text-[#666]">
-                  {formatEventTimestamp(event.timestamp)}
-                </span>
-              </div>
-            ))
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={clsx(
+                        "w-2 h-2 rounded-full mt-1.5 shrink-0",
+                        event.type === "delivered" || event.type === "sent"
+                          ? "bg-emerald-500"
+                          : event.type === "bounced" || event.type === "failed"
+                            ? "bg-red-500"
+                            : "bg-blue-500",
+                      )}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span
+                          className="text-[#F0F0F0] font-medium"
+                          data-testid="event-badge"
+                        >
+                          {formatStatusLabel(event.type)}
+                        </span>
+                        <span className="text-[#666]">
+                          {formatEventTimestamp(event.timestamp)}
+                        </span>
+                        <span
+                          className="font-mono text-[11px] text-[#A1A4A5]"
+                          data-testid="event-id"
+                        >
+                          event_id: {event.id}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[#D6D6D6]">{event.summary}</p>
+                      {details.length > 0 && (
+                        <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-2">
+                          {details.map(([key, value]) => (
+                            <div
+                              key={key}
+                              className="min-w-0 font-mono text-[11px]"
+                            >
+                              <dt className="inline text-[#666]">
+                                {formatDetailLabel(key)}:
+                              </dt>{" "}
+                              <dd className="inline break-words text-[#A1A4A5]">
+                                {formatDetailValue(value)}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           ) : (
             <div className="py-4 px-4 rounded-lg bg-[rgba(24,25,28,0.5)] border border-dashed border-[rgba(176,199,217,0.145)] text-center text-[13px] text-[#666]">
               No events recorded yet
@@ -470,6 +525,9 @@ export function EmailDetail({ email }: EmailDetailProps) {
             View all logs
           </Link>
         </div>
+        <p className="mb-3 text-[12px] text-[#666]">
+          Showing request logs linked to this message by the same email_id.
+        </p>
         <div className="space-y-3" data-testid="associated-logs">
           {email.logs && email.logs.length > 0 ? (
             email.logs.map((log) => (
@@ -481,6 +539,12 @@ export function EmailDetail({ email }: EmailDetailProps) {
                 <StatusBadge status={log.method.toUpperCase()} variant="info" />
                 <span className="font-mono text-[#F0F0F0] truncate flex-1">
                   {log.endpoint || "-"}
+                </span>
+                <span className="font-mono text-[11px] text-[#A1A4A5]">
+                  same email_id
+                </span>
+                <span className="font-mono text-[11px] text-[#666]">
+                  log_id: {log.id}
                 </span>
                 <StatusBadge
                   status={String(log.statusCode)}

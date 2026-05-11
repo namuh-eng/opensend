@@ -30,7 +30,7 @@ test.describe("Email Detail Page", () => {
       await expect(page.getByText("ID")).toBeVisible();
 
       // Verify Email Events section
-      await expect(page.getByText("EMAIL EVENTS")).toBeVisible();
+      await expect(page.getByText("EMAIL EVENT TRACE")).toBeVisible();
 
       // Verify content tabs
       await expect(page.getByText("Preview")).toBeVisible();
