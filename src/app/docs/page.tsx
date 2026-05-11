@@ -22,7 +22,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/emails",
         description:
-          "Send an email. Reusing the same Idempotency-Key returns the original accepted { id } response instead of accepting a duplicate.",
+          "Send an email. Reusing the same Idempotency-Key within 24 hours returns the original accepted { id } response instead of accepting a duplicate; after 24 hours the same key is accepted as a new request.",
         curl: `curl -X POST https://api.opensend.com/api/emails \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -52,7 +52,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/emails/batch",
         description:
-          "Send a batch of emails with one Idempotency-Key for the whole batch. Reusing the same key returns the original accepted { data: [{ id }] } envelope without reserving quota, creating rows, or publishing queue jobs again.",
+          "Send a batch of emails with one Idempotency-Key for the whole batch. Reusing the same key within 24 hours returns the original accepted { data: [{ id }] } envelope without reserving quota, creating rows, or publishing queue jobs again; after 24 hours the same key is accepted as a new batch.",
         curl: `curl -X POST https://api.opensend.com/api/emails/batch \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\

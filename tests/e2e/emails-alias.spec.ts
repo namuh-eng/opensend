@@ -183,6 +183,124 @@ test.describe("Resend-compatible /emails alias", () => {
     expect(otherRows.rows[0]).toEqual({ total: "2", keyed: "1" });
   });
 
+  test("POST /emails and /emails/batch accept reused Idempotency-Key values after 24 hours", async ({
+    e2eApiRequest,
+    e2eDb,
+    e2eRunId,
+    e2eTenant,
+  }) => {
+    const singleKey = `single-expired-${e2eRunId}`;
+    const firstSingle = await e2eApiRequest.post("/emails", {
+      headers: { "Idempotency-Key": singleKey },
+      data: {
+        from: "sender@example.com",
+        to: `single-expired-a@${e2eRunId}.e2e.opensend.test`,
+        subject: "Single expired original",
+        html: "<p>Original</p>",
+      },
+    });
+    expect(firstSingle.status()).toBe(200);
+    const firstSingleBody = (await firstSingle.json()) as { id: string };
+
+    await e2eDb.query(
+      `update emails
+          set created_at = now() - interval '25 hours'
+        where id = $1 and user_id = $2`,
+      [firstSingleBody.id, e2eTenant.user.id],
+    );
+
+    const secondSingle = await e2eApiRequest.post("/emails", {
+      headers: { "Idempotency-Key": singleKey },
+      data: {
+        from: "sender@example.com",
+        to: `single-expired-b@${e2eRunId}.e2e.opensend.test`,
+        subject: "Single expired fresh",
+        html: "<p>Fresh</p>",
+      },
+    });
+    expect(secondSingle.status()).toBe(200);
+    const secondSingleBody = (await secondSingle.json()) as { id: string };
+    expect(secondSingleBody.id).not.toBe(firstSingleBody.id);
+
+    const singleRows = await e2eDb.query<{ total: string; keyed: string }>(
+      `select count(*)::text as total,
+              count(*) filter (where idempotency_key = $2)::text as keyed
+         from emails
+        where user_id = $1
+          and subject in ('Single expired original', 'Single expired fresh')`,
+      [e2eTenant.user.id, singleKey],
+    );
+    expect(singleRows.rows[0]).toEqual({ total: "2", keyed: "1" });
+
+    const batchKey = `batch-expired-${e2eRunId}`;
+    const firstBatch = await e2eApiRequest.post("/emails/batch", {
+      headers: { "Idempotency-Key": batchKey },
+      data: [
+        {
+          from: "sender@example.com",
+          to: `batch-expired-a@${e2eRunId}.e2e.opensend.test`,
+          subject: "Batch expired original A",
+          html: "<p>A</p>",
+        },
+        {
+          from: "sender@example.com",
+          to: `batch-expired-b@${e2eRunId}.e2e.opensend.test`,
+          subject: "Batch expired original B",
+          html: "<p>B</p>",
+        },
+      ],
+    });
+    expect(firstBatch.status()).toBe(200);
+    const firstBatchBody = (await firstBatch.json()) as {
+      data: Array<{ id: string }>;
+    };
+
+    await e2eDb.query(
+      `update emails
+          set created_at = now() - interval '25 hours'
+        where id = $1 and user_id = $2`,
+      [firstBatchBody.data[0]?.id, e2eTenant.user.id],
+    );
+
+    const secondBatch = await e2eApiRequest.post("/emails/batch", {
+      headers: { "Idempotency-Key": batchKey },
+      data: [
+        {
+          from: "sender@example.com",
+          to: `batch-expired-c@${e2eRunId}.e2e.opensend.test`,
+          subject: "Batch expired fresh A",
+          html: "<p>C</p>",
+        },
+        {
+          from: "sender@example.com",
+          to: `batch-expired-d@${e2eRunId}.e2e.opensend.test`,
+          subject: "Batch expired fresh B",
+          html: "<p>D</p>",
+        },
+      ],
+    });
+    expect(secondBatch.status()).toBe(200);
+    const secondBatchBody = (await secondBatch.json()) as {
+      data: Array<{ id: string }>;
+    };
+    expect(secondBatchBody).not.toEqual(firstBatchBody);
+
+    const batchRows = await e2eDb.query<{ total: string; keyed: string }>(
+      `select count(*)::text as total,
+              count(*) filter (where idempotency_key = $2)::text as keyed
+         from emails
+        where user_id = $1
+          and subject in (
+            'Batch expired original A',
+            'Batch expired original B',
+            'Batch expired fresh A',
+            'Batch expired fresh B'
+          )`,
+      [e2eTenant.user.id, batchKey],
+    );
+    expect(batchRows.rows[0]).toEqual({ total: "4", keyed: "1" });
+  });
+
   test("GET /emails keeps the dashboard sign-in flow", async ({ page }) => {
     await page.goto("/emails");
 

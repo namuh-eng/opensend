@@ -10,6 +10,7 @@ import {
 } from "@/lib/api-errors";
 import { requireAllowedBatchSendingDomains } from "@/lib/api-key-permissions";
 import { captureApiResponseLog } from "@/lib/api-logging";
+import { getIdempotencyWindowStart } from "@/lib/api/emails/idempotency";
 import {
   quotaExceededResponse,
   releaseEmailQuota,
@@ -44,7 +45,7 @@ import {
   publishBackgroundJob,
   recordTelemetryError,
 } from "@opensend/core";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, lt } from "drizzle-orm";
 
 type BatchSendResultItem = { id: string } | { error: PublicApiErrorEnvelope };
 type BatchSendResponseBody = { data: BatchSendResultItem[] };
@@ -374,11 +375,14 @@ export async function handlePostEmailBatchRequest(
     );
   }
 
+  const idempotencyWindowStart = getIdempotencyWindowStart();
+
   if (idempotencyKey) {
     const existing = await db.query.emails.findFirst({
       where: and(
         eq(emails.idempotencyKey, idempotencyKey),
         eq(emails.userId, userId),
+        gte(emails.createdAt, idempotencyWindowStart),
       ),
     });
     if (existing) {
@@ -514,6 +518,19 @@ export async function handlePostEmailBatchRequest(
 
   try {
     const reservation = await db.transaction(async (tx) => {
+      if (idempotencyKey) {
+        await tx
+          .update(emails)
+          .set({ idempotencyKey: null })
+          .where(
+            and(
+              eq(emails.idempotencyKey, idempotencyKey),
+              eq(emails.userId, userId),
+              lt(emails.createdAt, idempotencyWindowStart),
+            ),
+          );
+      }
+
       // Quota gate: reserve the entire batch atomically in the same transaction
       // that persists all accepted rows. If the batch would overrun, no rows are
       // inserted and the whole request returns 402.

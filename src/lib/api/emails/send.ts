@@ -6,6 +6,7 @@ import {
 import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
 import { requireAllowedSendingDomain } from "@/lib/api-key-permissions";
 import { captureApiResponseLog } from "@/lib/api-logging";
+import { getIdempotencyWindowStart } from "@/lib/api/emails/idempotency";
 import {
   quotaExceededResponse,
   releaseEmailQuota,
@@ -41,7 +42,7 @@ import {
   publishBackgroundJob,
   recordTelemetryError,
 } from "@opensend/core";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, lt } from "drizzle-orm";
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -277,6 +278,7 @@ export async function handlePostEmailRequest(
     );
   }
 
+  const userId = auth.userId;
   let requestBodyForLog: unknown = null;
   const logResponse = (
     response: Response,
@@ -357,6 +359,7 @@ export async function handlePostEmailRequest(
   }
 
   const validated = result.data;
+  const idempotencyWindowStart = getIdempotencyWindowStart();
 
   const domainRestrictionError = await requireAllowedSendingDomain(
     auth,
@@ -381,7 +384,8 @@ export async function handlePostEmailRequest(
     const existing = await db.query.emails.findFirst({
       where: and(
         eq(emails.idempotencyKey, idempotencyKey),
-        eq(emails.userId, auth.userId),
+        eq(emails.userId, userId),
+        gte(emails.createdAt, idempotencyWindowStart),
       ),
     });
     if (existing) {
@@ -540,6 +544,19 @@ export async function handlePostEmailRequest(
     // Quota gate: post-validation and committed in the same transaction as the
     // durable email row. SQS publish remains after commit so workers can read it.
     const email = await db.transaction(async (tx) => {
+      if (idempotencyKey) {
+        await tx
+          .update(emails)
+          .set({ idempotencyKey: null })
+          .where(
+            and(
+              eq(emails.idempotencyKey, idempotencyKey),
+              eq(emails.userId, userId),
+              lt(emails.createdAt, idempotencyWindowStart),
+            ),
+          );
+      }
+
       const quota = await reserveEmailQuota(
         auth.userId,
         1,
