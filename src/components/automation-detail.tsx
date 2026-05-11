@@ -22,15 +22,6 @@ interface Props {
 
 type Tab = "steps" | "runs";
 
-function getApiKey(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage?.getItem?.("api_key") ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function capitalize(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
@@ -50,20 +41,13 @@ export function AutomationDetail({ automationId }: Props) {
     setError(null);
     setNotFound(false);
     try {
-      const apiKey = getApiKey();
-      const headers: Record<string, string> = {};
-      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-      const res = await fetch(`/api/automations/${automationId}`, { headers });
+      const res = await fetch(`/api/automations/${automationId}`);
       if (res.status === 404) {
         setNotFound(true);
         return;
       }
       if (!res.ok) {
-        setError(
-          res.status === 401
-            ? "Set an API key to view this automation."
-            : "Failed to load automation.",
-        );
+        setError("Failed to load automation.");
         return;
       }
       const data: ApiAutomation = await res.json();
@@ -88,11 +72,9 @@ export function AutomationDetail({ automationId }: Props) {
     setSaving(true);
     setError(null);
     try {
-      const apiKey = getApiKey();
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
-      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
       const res = await fetch(`/api/automations/${automationId}`, {
         method: "PATCH",
         headers,
@@ -122,12 +104,8 @@ export function AutomationDetail({ automationId }: Props) {
   const handleDelete = async () => {
     setError(null);
     try {
-      const apiKey = getApiKey();
-      const headers: Record<string, string> = {};
-      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
       const res = await fetch(`/api/automations/${automationId}`, {
         method: "DELETE",
-        headers,
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

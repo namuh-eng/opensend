@@ -102,7 +102,7 @@ external credentials or optional provider state must either:
 
 | Spec | Classification | Notes |
 | --- | --- | --- |
-| `tenant-isolation.spec.ts` | Real Playwright API E2E | Canonical issue #229 proof: real app routes, API keys, Postgres users/contacts, cross-tenant list/detail/mutation/delete denial. |
+| `tenant-isolation.spec.ts`, `audiences-api.spec.ts` | Real Playwright API E2E | Canonical issue #229 proof for contacts plus issue #360 proof for Resend-compatible `/audiences` CRUD backed by Postgres segment rows. |
 | `domain-create-auth.spec.ts` | Real browser E2E | Uses `authenticatedPage`, real Better Auth rows, dashboard UI, and Postgres domain assertion. |
 | `domains-page.spec.ts` | Real browser E2E | Uses `authenticatedPage`; mostly page rendering/navigation over current DB state. |
 | `landing-page.spec.ts` | Real browser E2E | Public landing page plus signed-in redirect through real auth fixture. |

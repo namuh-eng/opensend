@@ -5,6 +5,8 @@ import type {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
+const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
+const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockAutomationCreate = vi.hoisted(() => vi.fn());
 const mockAutomationList = vi.hoisted(() => vi.fn());
 const mockServiceCreateAutomation = vi.hoisted(() => vi.fn());
@@ -106,6 +108,8 @@ function insertRows<T>(rows: T[]) {
 
 vi.mock("@/lib/api-auth", () => ({
   validateApiKey: mockValidateApiKey,
+  authorizeDashboardOrApiKey: mockAuthorizeDashboardOrApiKey,
+  getServerSession: mockGetServerSession,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
@@ -299,11 +303,26 @@ function jsonRequest(url: string, body: unknown, method = "POST") {
   });
 }
 
+function dashboardJsonRequest(url: string, body: unknown, method = "POST") {
+  return new Request(url, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+}
+
 describe("automation API routes", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
     mockValidateApiKey.mockResolvedValue(auth);
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue(auth);
+    mockGetServerSession.mockResolvedValue({
+      session: { id: "session_1" },
+      user: { id: "user_1" },
+    });
     mockResumeWaitingRunsForEvent.mockResolvedValue([]);
     mockDbSelect.mockReturnValue(queryRows([triggerStep]));
     mockServiceCreateAutomation.mockImplementation(
@@ -398,12 +417,199 @@ describe("automation API routes", () => {
   });
 
   it("returns 401 for missing API auth", async () => {
-    mockValidateApiKey.mockResolvedValue(null);
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue(null);
     const { GET } = await import("@/app/api/automations/route");
 
     const response = await GET(new Request("http://localhost/api/automations"));
 
     expect(response.status).toBe(401);
+  });
+
+  it("preserves full-access enforcement for bearer API-key callers", async () => {
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({
+      ...auth,
+      permission: "sending_access",
+    });
+    const { GET } = await import("@/app/api/automations/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/automations", {
+        headers: { Authorization: "Bearer re_sending" },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockAutomationList).not.toHaveBeenCalled();
+  });
+
+  it("allows dashboard-session auth for automation CRUD and run routes without a bearer key", async () => {
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({ dashboard: true });
+    mockAutomationCreate.mockResolvedValue({
+      automation,
+      steps: [triggerStep],
+    });
+    mockAutomationList.mockResolvedValue({
+      data: [automation],
+      hasMore: false,
+    });
+    mockAutomationFindFirst.mockResolvedValue(automation);
+    mockServiceUpdateAutomation.mockResolvedValue({
+      object: "automation",
+      id: "auto_1",
+      name: "Welcome",
+      status: "disabled",
+      trigger_event_name: "user.signed_up",
+      connections: [],
+      steps: [{ id: "step_1", key: "trigger", type: "trigger", position: 0 }],
+      created_at: now,
+      updated_at: now,
+    });
+    mockServiceDeleteAutomation.mockResolvedValue({
+      object: "automation",
+      id: "auto_1",
+      deleted: true,
+    });
+    mockListRuns.mockResolvedValue({
+      object: "list",
+      data: [{ object: "automation_run", id: "run_1", status: "queued" }],
+      has_more: false,
+    });
+    mockGetRun.mockResolvedValue({
+      object: "automation_run",
+      id: "run_1",
+      automation_id: "auto_1",
+      status: "queued",
+    });
+    mockCancelRun.mockResolvedValue({
+      object: "automation_run",
+      id: "run_1",
+      automation_id: "auto_1",
+      status: "cancelled",
+    });
+    mockGetMetrics.mockResolvedValue({
+      object: "automation_run_metrics",
+      automation_id: "auto_1",
+      total_runs: 1,
+      by_status: { queued: 1 },
+      completion_rate: 0,
+      failure_rate: 0,
+      average_duration_ms: null,
+      waiting_count: 0,
+      failed_steps: [],
+      range: { from: null, to: null },
+    });
+
+    const listRoute = await import("@/app/api/automations/route");
+    const detailRoute = await import("@/app/api/automations/[id]/route");
+    const runsRoute = await import("@/app/api/automations/[id]/runs/route");
+    const runDetailRoute = await import(
+      "@/app/api/automations/[id]/runs/[runId]/route"
+    );
+    const runCancelRoute = await import(
+      "@/app/api/automations/[id]/runs/[runId]/cancel/route"
+    );
+    const metricsRoute = await import(
+      "@/app/api/automations/[id]/runs/metrics/route"
+    );
+
+    const create = await listRoute.POST(
+      dashboardJsonRequest("http://localhost/api/automations", {
+        name: "Welcome",
+        status: "enabled",
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { eventName: "user.signed_up" },
+          },
+        ],
+      }),
+    );
+    const list = await listRoute.GET(
+      new Request("http://localhost/api/automations?status=enabled"),
+    );
+    const detail = await detailRoute.GET(
+      new Request("http://localhost/api/automations/auto_1"),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+    const update = await detailRoute.PATCH(
+      dashboardJsonRequest(
+        "http://localhost/api/automations/auto_1",
+        { status: "disabled" },
+        "PATCH",
+      ),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+    const runList = await runsRoute.GET(
+      new Request("http://localhost/api/automations/auto_1/runs"),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+    const runDetail = await runDetailRoute.GET(
+      new Request("http://localhost/api/automations/auto_1/runs/run_1"),
+      { params: Promise.resolve({ id: "auto_1", runId: "run_1" }) },
+    );
+    const runCancel = await runCancelRoute.POST(
+      dashboardJsonRequest(
+        "http://localhost/api/automations/auto_1/runs/run_1/cancel",
+        { reason: "cancelled_from_dashboard" },
+      ),
+      { params: Promise.resolve({ id: "auto_1", runId: "run_1" }) },
+    );
+    const metrics = await metricsRoute.GET(
+      new Request("http://localhost/api/automations/auto_1/runs/metrics"),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+    const deleted = await detailRoute.DELETE(
+      new Request("http://localhost/api/automations/auto_1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+
+    expect([
+      create.status,
+      list.status,
+      detail.status,
+      update.status,
+      runList.status,
+      runDetail.status,
+      runCancel.status,
+      metrics.status,
+      deleted.status,
+    ]).toEqual([201, 200, 200, 200, 200, 200, 200, 200, 200]);
+    expect(mockAutomationCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user_1" }),
+    );
+    expect(mockAutomationList).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user_1" }),
+    );
+    expect(mockServiceUpdateAutomation).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user_1", id: "auto_1" }),
+    );
+    expect(mockServiceDeleteAutomation).toHaveBeenCalledWith(
+      "user_1",
+      "auto_1",
+    );
+    expect(mockListRuns).toHaveBeenCalledWith(
+      expect.objectContaining({ automationId: "auto_1", userId: "user_1" }),
+    );
+    expect(mockGetRun).toHaveBeenCalledWith({
+      automationId: "auto_1",
+      runId: "run_1",
+      userId: "user_1",
+    });
+    expect(mockCancelRun).toHaveBeenCalledWith({
+      automationId: "auto_1",
+      runId: "run_1",
+      userId: "user_1",
+      reason: "cancelled_from_dashboard",
+    });
+    expect(mockGetMetrics).toHaveBeenCalledWith(
+      expect.objectContaining({
+        automationId: "auto_1",
+        userId: "user_1",
+      }),
+    );
   });
 
   it("creates an automation through zod validation and repository validation", async () => {

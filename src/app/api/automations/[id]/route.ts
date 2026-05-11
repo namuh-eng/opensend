@@ -1,11 +1,10 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { updateAutomationSchema } from "@/lib/validation/automations";
 import {
   AutomationServiceError,
   AutomationValidationError,
   createAutomationService,
 } from "@opensend/core";
+import { authorizeAutomationRoute } from "../route-helpers";
 
 const automationService = createAutomationService();
 
@@ -31,10 +30,8 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeAutomationRoute(request);
+  if ("response" in auth) return auth.response;
 
   const { id } = await params;
   try {
@@ -54,10 +51,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeAutomationRoute(request);
+  if ("response" in auth) return auth.response;
 
   let body: unknown;
   try {
@@ -102,10 +97,8 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeAutomationRoute(request);
+  if ("response" in auth) return auth.response;
 
   const { id } = await params;
   try {

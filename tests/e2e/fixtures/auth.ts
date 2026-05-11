@@ -109,6 +109,14 @@ export async function cleanupE2ERun(
     [`${userPrefix}%`, emailPattern, runId],
   );
   await client.query(
+    "delete from contacts_to_segments where segment_id in (select id from segments where user_id like $1 or document->>'test_run_id' = $2)",
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
+    "delete from segments where user_id like $1 or document->>'test_run_id' = $2",
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
     "delete from api_keys where user_id like $1 or name like $2 or document->>'test_run_id' = $3",
     [`${userPrefix}%`, `${apiKeyPrefix}%`, runId],
   );
