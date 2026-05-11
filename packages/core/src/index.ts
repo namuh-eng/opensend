@@ -53,6 +53,7 @@ export * from "./services/auditEvents";
 export * from "./services/suppressions";
 export * from "./services/emailProvider";
 export * from "./services/tracking";
+export * from "./services/trackingRoute";
 export * from "./services/sandboxTestRecipients";
 export * from "./services/storage";
 export * from "./services/template";
