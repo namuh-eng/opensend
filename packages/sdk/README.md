@@ -65,6 +65,49 @@ returns after the API persists the row and queues background delivery work. Poll
 
 ### With React components
 
+Install React and ReactDOM alongside the SDK when you use the `react` payload.
+They are optional peer dependencies so plain `html`/`text` sends do not pull
+React into non-React applications.
+
+```bash
+bun add opensend react react-dom @react-email/components
+```
+
+```tsx
+import { Html, Text } from "@react-email/components";
+import { Resend } from "opensend";
+
+function EmailTemplate({ name }: { name: string }) {
+  return (
+    <Html>
+      <Text>Hello {name}, welcome to OpenSend.</Text>
+    </Html>
+  );
+}
+
+const resend = new Resend(process.env.OPENSEND_API_KEY);
+
+export async function POST() {
+  const { data, error } = await resend.emails.send({
+    from: "hello@updates.example.com",
+    to: "user@example.com",
+    subject: "Welcome!",
+    react: <EmailTemplate name="Ada" />,
+  });
+
+  if (error) {
+    return Response.json({ error: error.message }, { status: error.statusCode });
+  }
+
+  return Response.json(data);
+}
+```
+
+The SDK renders the React element to HTML locally with `react-dom/server` and
+sends only JSON/HTML to the OpenSend REST API. If ReactDOM is missing or the
+component throws while rendering, `emails.send()` returns a
+`react_render_error` SDK error and does not call the API.
+
 ```tsx
 const { data } = await resend.emails.send({
   from: "hello@updates.example.com",
