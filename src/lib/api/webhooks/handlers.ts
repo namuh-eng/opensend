@@ -3,13 +3,14 @@ import {
   authorizeDashboardOrApiKey,
   getServerSession,
   unauthorizedResponse,
-  validateApiKey,
 } from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import {
-  requireFullAccessApiKey,
-  requireFullAccessForApiKeyCaller,
-} from "@/lib/api-key-permissions";
-import { auditContextForApiKey, recordAuditEvent } from "@/lib/audit-events";
+  type AuditContext,
+  auditContextForApiKey,
+  auditContextForDashboardSession,
+  recordAuditEvent,
+} from "@/lib/audit-events";
 import {
   createWebhookSchema,
   updateWebhookSchema,
@@ -71,7 +72,10 @@ function mapWebhookDetail(webhook: WebhookServiceDetail) {
   };
 }
 
-type WebhookAuth = AuthResult & { userId: string };
+type WebhookAuth = {
+  userId: string;
+  auditContext: AuditContext;
+};
 
 type WebhookAuthResult =
   | { ok: true; auth: WebhookAuth }
@@ -84,13 +88,40 @@ type DashboardOrApiKeyAuth = NonNullable<
 async function requireWebhookAuth(
   request: Request,
 ): Promise<WebhookAuthResult> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth?.userId) return { ok: false, response: unauthorizedResponse() };
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
+  if (!auth) return { ok: false, response: unauthorizedResponse() };
 
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return { ok: false, response: permissionError };
 
-  return { ok: true, auth: { ...auth, userId: auth.userId } };
+  if ("userId" in auth) {
+    if (!auth.userId) return { ok: false, response: unauthorizedResponse() };
+
+    return {
+      ok: true,
+      auth: {
+        userId: auth.userId,
+        auditContext: auditContextForApiKey({
+          userId: auth.userId,
+          apiKeyId: auth.apiKeyId,
+        }),
+      },
+    };
+  }
+
+  const session = await getServerSession();
+  const auditContext = auditContextForDashboardSession(session);
+  if (!auditContext) return { ok: false, response: unauthorizedResponse() };
+
+  return {
+    ok: true,
+    auth: {
+      userId: auditContext.userId,
+      auditContext,
+    },
+  };
 }
 
 async function resolveDashboardOrApiKeyUserId(
@@ -203,10 +234,7 @@ export async function handleCreateWebhookRequest(
     });
 
     await recordAuditEvent({
-      context: auditContextForApiKey({
-        userId: authResult.auth.userId,
-        apiKeyId: authResult.auth.apiKeyId,
-      }),
+      context: authResult.auth.auditContext,
       action: "webhook.created",
       targetType: "webhook",
       targetId: webhook.id,
@@ -286,10 +314,7 @@ export async function handleUpdateWebhookRequest(
     }
 
     await recordAuditEvent({
-      context: auditContextForApiKey({
-        userId: authResult.auth.userId,
-        apiKeyId: authResult.auth.apiKeyId,
-      }),
+      context: authResult.auth.auditContext,
       action: "webhook.updated",
       targetType: "webhook",
       targetId: updated.id,
@@ -328,10 +353,7 @@ export async function handleDeleteWebhookRequest(
     }
 
     await recordAuditEvent({
-      context: auditContextForApiKey({
-        userId: authResult.auth.userId,
-        apiKeyId: authResult.auth.apiKeyId,
-      }),
+      context: authResult.auth.auditContext,
       action: "webhook.deleted",
       targetType: "webhook",
       targetId: deleted.id,
