@@ -6,8 +6,10 @@ export const DASHBOARD_METRICS_CACHE_TTL_SECONDS = 60;
 export const BROADCAST_METRICS_CACHE_TTL_SECONDS = 120;
 
 function normalizeCacheSegment(value: string | null | undefined): string {
-  if (!value || value.trim() === "") return "all";
-  return encodeURIComponent(value.trim());
+  if (value === null || value === undefined) return "all";
+  const trimmed = value.trim();
+  if (trimmed === "") return "empty";
+  return encodeURIComponent(trimmed);
 }
 
 export function getMetricsAggregateCacheKey(params: {
@@ -15,6 +17,8 @@ export function getMetricsAggregateCacheKey(params: {
   range: string;
   domain: string | null;
   eventType: string | null;
+  tagName: string | null;
+  tagValue: string | null;
 }): string {
   return [
     DASHBOARD_AGGREGATE_CACHE_PREFIX,
@@ -23,6 +27,8 @@ export function getMetricsAggregateCacheKey(params: {
     normalizeCacheSegment(params.range),
     normalizeCacheSegment(params.domain),
     normalizeCacheSegment(params.eventType),
+    normalizeCacheSegment(params.tagName),
+    normalizeCacheSegment(params.tagValue),
   ].join(":");
 }
 
