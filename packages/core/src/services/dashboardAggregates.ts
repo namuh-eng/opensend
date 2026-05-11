@@ -1,10 +1,14 @@
 import { type SQL, and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import { contacts, domains, emails, segments } from "../db/schema";
+import { FREE_PLAN_DEFAULTS } from "../dto";
 
+// Fallback display limits for installations without an active billing summary.
+// Keep plan-backed values tied to FREE_PLAN_DEFAULTS so the fallback cannot
+// drift from the Free plan rows created by quota enforcement and planRepo.
 export const DASHBOARD_USAGE_LIMITS = {
   transactional: {
-    monthlyLimit: 3000,
+    monthlyLimit: FREE_PLAN_DEFAULTS.monthlyEmailQuota,
     dailyLimit: 100,
   },
   marketing: {
@@ -13,7 +17,7 @@ export const DASHBOARD_USAGE_LIMITS = {
     broadcastsLimit: "Unlimited",
   },
   team: {
-    domainsLimit: 3,
+    domainsLimit: FREE_PLAN_DEFAULTS.maxDomains,
     rateLimit: 2,
   },
 } as const;
@@ -148,23 +152,27 @@ export type DashboardMetricsPayload = {
 };
 
 export type DashboardUsagePayload = {
+  plan: {
+    name: string;
+    slug: string;
+  };
   transactional: {
     monthlyUsed: number;
-    monthlyLimit: typeof DASHBOARD_USAGE_LIMITS.transactional.monthlyLimit;
+    monthlyLimit: number;
     dailyUsed: number;
-    dailyLimit: typeof DASHBOARD_USAGE_LIMITS.transactional.dailyLimit;
+    dailyLimit: number;
   };
   marketing: {
     contactsUsed: number;
-    contactsLimit: typeof DASHBOARD_USAGE_LIMITS.marketing.contactsLimit;
+    contactsLimit: number;
     segmentsUsed: number;
-    segmentsLimit: typeof DASHBOARD_USAGE_LIMITS.marketing.segmentsLimit;
+    segmentsLimit: number;
     broadcastsLimit: typeof DASHBOARD_USAGE_LIMITS.marketing.broadcastsLimit;
   };
   team: {
     domainsUsed: number;
-    domainsLimit: typeof DASHBOARD_USAGE_LIMITS.team.domainsLimit;
-    rateLimit: typeof DASHBOARD_USAGE_LIMITS.team.rateLimit;
+    domainsLimit: number;
+    rateLimit: number;
   };
 };
 
@@ -379,6 +387,10 @@ export function createDashboardAggregateService({
       const counts = await repository.countUsage(getUsageBounds(now));
 
       return {
+        plan: {
+          name: FREE_PLAN_DEFAULTS.name,
+          slug: FREE_PLAN_DEFAULTS.slug,
+        },
         transactional: {
           monthlyUsed: counts.monthlyEmails,
           monthlyLimit: DASHBOARD_USAGE_LIMITS.transactional.monthlyLimit,

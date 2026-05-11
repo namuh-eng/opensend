@@ -17,6 +17,7 @@ describe("SettingsPage", () => {
       ok: true,
       json: () =>
         Promise.resolve({
+          plan: { name: "Free", slug: "free" },
           transactional: {
             monthlyUsed: 12,
             monthlyLimit: 3000,

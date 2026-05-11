@@ -311,6 +311,7 @@ describe("route smoke coverage", () => {
               mockCountFn(),
             ]);
             return {
+              plan: { name: "Free", slug: "free" },
               transactional: {
                 monthlyUsed: Number(monthlyEmails),
                 monthlyLimit: 3000,
@@ -326,7 +327,7 @@ describe("route smoke coverage", () => {
               },
               team: {
                 domainsUsed: Number(domainCount),
-                domainsLimit: 3,
+                domainsLimit: 1,
                 rateLimit: 2,
               },
             };

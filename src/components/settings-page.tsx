@@ -13,6 +13,10 @@ function isUsageData(value: unknown): value is UsageData {
   const candidate = value as Partial<UsageData> & Record<string, unknown>;
 
   return (
+    typeof candidate.plan === "object" &&
+    candidate.plan !== null &&
+    typeof candidate.plan.name === "string" &&
+    typeof candidate.plan.slug === "string" &&
     typeof candidate.transactional === "object" &&
     candidate.transactional !== null &&
     typeof candidate.transactional.monthlyUsed === "number" &&
@@ -42,6 +46,7 @@ const SMTP_CREDENTIALS = [
 ];
 
 const DEFAULT_USAGE: UsageData = {
+  plan: { name: "Free", slug: "free" },
   transactional: {
     monthlyUsed: 0,
     monthlyLimit: 3000,
@@ -55,7 +60,7 @@ const DEFAULT_USAGE: UsageData = {
     segmentsLimit: 3,
     broadcastsLimit: "Unlimited",
   },
-  team: { domainsUsed: 0, domainsLimit: 3, rateLimit: 2 },
+  team: { domainsUsed: 0, domainsLimit: 1, rateLimit: 2 },
 };
 
 interface SettingsPageProps {
@@ -121,7 +126,9 @@ export function SettingsPage({
       </div>
 
       {/* Usage Tab */}
-      {activeTab === "usage" && <UsageTab usage={usage} />}
+      {activeTab === "usage" && (
+        <UsageTab usage={usage} billingEnabled={billingEnabled} />
+      )}
 
       {/* SMTP Tab */}
       {activeTab === "smtp" && (
