@@ -49,9 +49,14 @@ test.describe("Topics page", () => {
     // The unsubscribe preview should always be present
     await expect(page.locator("text=Unsubscribe Page Preview")).toBeVisible();
 
-    // Edit Unsubscribe Page link should be present
+    // Unsubscribe Page editor CTA should be disabled with honest copy.
     await expect(
-      page.getByRole("link", { name: "Customize page" }),
+      page.getByRole("button", { name: "Customize page" }),
+    ).toBeDisabled();
+    await expect(
+      page.getByText(
+        "Editor unavailable; the default unsubscribe page remains active.",
+      ),
     ).toBeVisible();
   });
 
