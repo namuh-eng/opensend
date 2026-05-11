@@ -1,12 +1,20 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const routerMock = vi.hoisted(() => ({
+  push: vi.fn(),
+  refresh: vi.fn(),
+}));
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-    refresh: vi.fn(),
-  }),
+  useRouter: () => routerMock,
 }));
 
 // Mock next/link
@@ -113,6 +121,39 @@ describe("TemplatesList", () => {
     await screen.findByText("Welcome Email");
 
     expect(screen.getByText("Create template")).toBeTruthy();
+  });
+
+  it("creates a draft template and navigates to its editor from the CTA", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: mockTemplates, total: 3 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "new-template" }),
+      });
+
+    render(<TemplatesList />);
+
+    await screen.findByText("Welcome Email");
+    fireEvent.click(screen.getByRole("button", { name: "Create template" }));
+
+    await waitFor(() => {
+      expect(routerMock.push).toHaveBeenCalledWith(
+        "/templates/new-template/editor",
+      );
+    });
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      "/api/templates",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "Untitled Template",
+          html: "<p>Start writing your email template.</p>",
+        }),
+      }),
+    );
   });
 
   it("shows card action menu with options", async () => {
