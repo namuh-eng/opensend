@@ -127,7 +127,7 @@ function UpgradeAffordance({ billingEnabled }: { billingEnabled: boolean }) {
   if (billingEnabled) {
     return (
       <Link
-        href="/pricing"
+        href="/settings/billing/plans"
         className="inline-flex rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] hover:bg-[rgba(24,25,28,1)]"
       >
         Upgrade
