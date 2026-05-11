@@ -1,6 +1,8 @@
 import { isBillingEnabled } from "@/lib/billing";
-import { listPublicPlans } from "@/lib/billing/summary";
+import { createDefaultBillingSummaryService } from "@/lib/billing/summary";
 import { NextResponse } from "next/server";
+
+const billingSummaryService = createDefaultBillingSummaryService();
 
 export async function GET() {
   if (!isBillingEnabled()) {
@@ -11,20 +13,7 @@ export async function GET() {
   }
 
   try {
-    const plans = await listPublicPlans();
-    return NextResponse.json({
-      object: "list",
-      data: plans.map((plan) => ({
-        object: "plan",
-        id: plan.id,
-        slug: plan.slug,
-        name: plan.name,
-        monthly_price_cents: plan.monthlyPriceCents,
-        monthly_email_quota: plan.monthlyEmailQuota,
-        max_domains: plan.maxDomains,
-        max_api_keys: plan.maxApiKeys,
-      })),
-    });
+    return NextResponse.json(await billingSummaryService.listPlans());
   } catch (error) {
     console.error("Failed to list public plans:", error);
     return NextResponse.json(
