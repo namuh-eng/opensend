@@ -22,7 +22,7 @@ python -m pip install opensend
 Use an environment variable instead of hardcoding API keys:
 
 ```bash
-export OPENSEND_API_KEY="re_your_api_key"
+export OPENSEND_API_KEY="os_your_api_key"
 ```
 
 For self-hosted OpenSend, point the SDK at your deployment origin. The default

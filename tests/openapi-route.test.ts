@@ -26,6 +26,7 @@ describe("GET /openapi.json", () => {
       components?: {
         securitySchemes?: Record<string, unknown>;
         schemas?: Record<string, unknown>;
+        parameters?: Record<string, { schema?: Record<string, unknown> }>;
       };
       paths?: Record<string, unknown>;
     };
@@ -41,6 +42,12 @@ describe("GET /openapi.json", () => {
     expect(document.components?.schemas?.ErrorEnvelope).toMatchObject({
       type: "object",
       required: ["name", "code", "message", "statusCode"],
+    });
+    expect(
+      document.components?.parameters?.IdempotencyKey?.schema,
+    ).toMatchObject({
+      minLength: 1,
+      maxLength: 256,
     });
     expect(document.paths).toHaveProperty("/emails");
     expect(document.paths).toHaveProperty("/emails/batch");

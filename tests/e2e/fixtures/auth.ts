@@ -195,7 +195,7 @@ export async function createE2EApiKey(
   userId: string,
   suffix = "primary",
 ): Promise<E2EApiKey> {
-  const rawKey = `re_e2e_${hashApiKey(`${runId}:${suffix}:${userId}`).slice(0, 32)}`;
+  const rawKey = `os_e2e_${hashApiKey(`${runId}:${suffix}:${userId}`).slice(0, 32)}`;
   const tokenHash = hashApiKey(rawKey);
   const { rows } = await client.query<{ id: string }>(
     `insert into api_keys (name, token_hash, token_preview, permission, user_id, document)
