@@ -1,9 +1,14 @@
 import {
   type AuthResult,
+  authorizeDashboardOrApiKey,
+  getServerSession,
   unauthorizedResponse,
   validateApiKey,
 } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
+import {
+  requireFullAccessApiKey,
+  requireFullAccessForApiKeyCaller,
+} from "@/lib/api-key-permissions";
 import {
   createWebhookSchema,
   updateWebhookSchema,
@@ -12,6 +17,7 @@ import {
   type WebhookDeliveryListItem,
   type WebhookServiceCreateResult,
   type WebhookServiceDetail,
+  WebhookServiceError,
   type WebhookServiceListItem,
   createWebhookService,
 } from "@opensend/core";
@@ -70,6 +76,10 @@ type WebhookAuthResult =
   | { ok: true; auth: WebhookAuth }
   | { ok: false; response: Response };
 
+type DashboardOrApiKeyAuth = NonNullable<
+  Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
+>;
+
 async function requireWebhookAuth(
   request: Request,
 ): Promise<WebhookAuthResult> {
@@ -80,6 +90,49 @@ async function requireWebhookAuth(
   if (permissionError) return { ok: false, response: permissionError };
 
   return { ok: true, auth: { ...auth, userId: auth.userId } };
+}
+
+async function resolveDashboardOrApiKeyUserId(
+  auth: DashboardOrApiKeyAuth,
+): Promise<string | null> {
+  if ("userId" in auth) return auth.userId;
+
+  const session = await getServerSession();
+  return session?.user?.id ?? null;
+}
+
+async function requireWebhookReplayAuth(
+  request: Request,
+): Promise<{ ok: true; userId: string } | { ok: false; response: Response }> {
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
+  if (!auth) return { ok: false, response: unauthorizedResponse() };
+
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
+  if (permissionError) return { ok: false, response: permissionError };
+
+  const userId = await resolveDashboardOrApiKeyUserId(auth);
+  if (!userId) return { ok: false, response: unauthorizedResponse() };
+
+  return { ok: true, userId };
+}
+
+function mapWebhookServiceError(error: unknown, fallback: string): Response {
+  if (error instanceof WebhookServiceError) {
+    const status =
+      error.code === "not_found" ? 404 : error.code === "disabled" ? 409 : 500;
+    return Response.json({ error: error.message }, { status });
+  }
+
+  return mapWebhookError(error, fallback);
+}
+
+async function dispatchWebhookDelivery(deliveryId: string) {
+  const { webhookDispatcher } = await import(
+    "@opensend/ingester/src/dispatcher"
+  );
+  return await webhookDispatcher.dispatchDelivery(deliveryId);
 }
 
 export async function handleListWebhooksRequest(
@@ -249,5 +302,35 @@ export async function handleDeleteWebhookRequest(
     });
   } catch (error) {
     return mapWebhookError(error, "Failed to delete webhook");
+  }
+}
+
+export async function handleReplayWebhookDeliveryRequest(
+  request: Request,
+  id: string,
+  deliveryId: string,
+): Promise<Response> {
+  const authResult = await requireWebhookReplayAuth(request);
+  if (!authResult.ok) return authResult.response;
+
+  try {
+    const result = await createWebhookService({
+      dispatchDelivery: dispatchWebhookDelivery,
+    }).replayWebhookDelivery({
+      webhookId: id,
+      deliveryId,
+      userId: authResult.userId,
+    });
+
+    return Response.json(
+      {
+        object: "webhook_delivery_replay",
+        original_delivery: mapDelivery(result.originalDelivery),
+        replay_delivery: mapDelivery(result.replayDelivery),
+      },
+      { status: 202 },
+    );
+  } catch (error) {
+    return mapWebhookServiceError(error, "Failed to replay webhook delivery");
   }
 }

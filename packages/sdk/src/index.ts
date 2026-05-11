@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type {
   ApiKeyListItem,
   ApiKeyListResponse,
@@ -63,7 +64,7 @@ interface ApiResponse<T> {
 }
 
 export type SendEmailPayload = EmailOptions & {
-  react?: unknown;
+  react?: ReactNode;
 };
 export type CreateDomainPayload = DomainOptions;
 
@@ -135,6 +136,88 @@ export interface AutomationRunMetricsOptions {
   to?: string;
 }
 
+type BroadcastStatus = "draft" | "scheduled" | "queued" | "sent" | "failed";
+
+interface BroadcastPayloadAliases {
+  segment_id?: string;
+  segmentId?: string;
+  topic_id?: string;
+  topicId?: string;
+  reply_to?: string;
+  replyTo?: string;
+  preview_text?: string;
+  previewText?: string;
+  scheduled_at?: string;
+  scheduledAt?: string;
+}
+
+interface CreateBroadcastPayload extends BroadcastPayloadAliases {
+  name?: string;
+  from: string;
+  subject: string;
+  html?: string;
+  text?: string;
+  send?: boolean;
+}
+
+type UpdateBroadcastPayload = Partial<
+  Omit<CreateBroadcastPayload, "from" | "subject">
+> &
+  Partial<Pick<CreateBroadcastPayload, "from" | "subject">>;
+
+type SendBroadcastPayload = Pick<
+  BroadcastPayloadAliases,
+  "scheduled_at" | "scheduledAt"
+>;
+
+interface BroadcastListOptions extends ListOptions {
+  search?: string;
+  status?: BroadcastStatus;
+  segmentId?: string;
+}
+
+interface BroadcastListItem {
+  id: string;
+  name: string;
+  status: BroadcastStatus;
+  audience_id: string | null;
+  topic_id: string | null;
+  created_at: string;
+  scheduled_at: string | null;
+}
+
+interface BroadcastListResponse {
+  object: "list";
+  data: BroadcastListItem[];
+  has_more: boolean;
+}
+
+interface BroadcastResponse extends BroadcastListItem {
+  object: "broadcast";
+  from?: string | null;
+  subject?: string | null;
+  html?: string | null;
+  text?: string | null;
+  reply_to?: string | null;
+  preview_text?: string | null;
+}
+
+type CreateBroadcastResponse = Pick<
+  BroadcastResponse,
+  "object" | "id" | "name" | "status" | "created_at"
+>;
+
+interface DeleteBroadcastResponse {
+  object: "broadcast";
+  id: string;
+  deleted: true;
+}
+
+type SendBroadcastResponse = Pick<
+  BroadcastResponse,
+  "object" | "id" | "status" | "scheduled_at"
+>;
+
 function normalizeBaseUrl(baseUrl: string = DEFAULT_BASE_URL): string {
   if (!baseUrl.trim()) {
     throw new Error("baseUrl must be a non-empty string when provided");
@@ -203,14 +286,78 @@ function parseApiErrorBody(parsedBody: unknown, response: Response): ApiError {
   };
 }
 
-async function renderReactToHtml(element: unknown): Promise<string | null> {
+function toBroadcastPayload<T extends BroadcastPayloadAliases>(
+  payload: T,
+): Omit<
+  T,
+  "segmentId" | "topicId" | "replyTo" | "previewText" | "scheduledAt"
+> {
+  const { segmentId, topicId, replyTo, previewText, scheduledAt, ...rest } =
+    payload;
+  const normalized = { ...rest };
+
+  if (normalized.segment_id === undefined && segmentId !== undefined) {
+    normalized.segment_id = segmentId;
+  }
+  if (normalized.topic_id === undefined && topicId !== undefined) {
+    normalized.topic_id = topicId;
+  }
+  if (normalized.reply_to === undefined && replyTo !== undefined) {
+    normalized.reply_to = replyTo;
+  }
+  if (normalized.preview_text === undefined && previewText !== undefined) {
+    normalized.preview_text = previewText;
+  }
+  if (normalized.scheduled_at === undefined && scheduledAt !== undefined) {
+    normalized.scheduled_at = scheduledAt;
+  }
+
+  return normalized;
+}
+
+interface ReactRenderSuccess {
+  html: string;
+  error: null;
+}
+
+interface ReactRenderFailure {
+  html: null;
+  error: ApiError;
+}
+
+type ReactRenderResult = ReactRenderSuccess | ReactRenderFailure;
+
+function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function createReactRenderError(error: unknown): ApiError {
+  const cause = formatUnknownError(error);
+
+  return {
+    message:
+      "Unable to render React email in the OpenSend SDK. Install react and react-dom in your application, then pass a renderable React element to emails.send({ react }).",
+    statusCode: 500,
+    name: "react_render_error",
+    code: "react_render_error",
+    details: { cause },
+  };
+}
+
+async function renderReactToHtml(
+  element: ReactNode,
+): Promise<ReactRenderResult> {
   try {
-    const { renderToStaticMarkup } = await import("react-dom/server");
-    return renderToStaticMarkup(
-      element as Parameters<typeof renderToStaticMarkup>[0],
-    );
-  } catch {
-    return null;
+    const renderer = await import("react-dom/server");
+    if (typeof renderer.renderToStaticMarkup !== "function") {
+      throw new Error(
+        "react-dom/server is unavailable: renderToStaticMarkup export was not found.",
+      );
+    }
+
+    return { html: renderer.renderToStaticMarkup(element), error: null };
+  } catch (error) {
+    return { html: null, error: createReactRenderError(error) };
   }
 }
 
@@ -277,9 +424,10 @@ class Emails {
 
     if (react != null) {
       const rendered = await renderReactToHtml(react);
-      if (rendered) {
-        rest.html = rendered;
+      if (rendered.error) {
+        return { data: null, error: rendered.error };
       }
+      rest.html = rendered.html;
     }
 
     return this.http.request<EmailResponse>("POST", "/emails", rest, options);
@@ -454,6 +602,74 @@ class Audiences {
   }
 }
 
+class Broadcasts {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(
+    payload: CreateBroadcastPayload,
+    options: RequestOptions = {},
+  ): Promise<ApiResponse<CreateBroadcastResponse>> {
+    return this.http.request<CreateBroadcastResponse>(
+      "POST",
+      "/broadcasts",
+      toBroadcastPayload(payload),
+      options,
+    );
+  }
+
+  async list(
+    options: BroadcastListOptions = {},
+  ): Promise<ApiResponse<BroadcastListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.search) params.set("search", options.search);
+    if (options.status) params.set("status", options.status);
+    if (options.segmentId) params.set("segmentId", options.segmentId);
+
+    const query = params.toString();
+    return this.http.request<BroadcastListResponse>(
+      "GET",
+      query ? `/broadcasts?${query}` : "/broadcasts",
+    );
+  }
+
+  async get(id: string): Promise<ApiResponse<BroadcastResponse>> {
+    return this.http.request<BroadcastResponse>("GET", `/broadcasts/${id}`);
+  }
+
+  async update(
+    id: string,
+    payload: UpdateBroadcastPayload,
+  ): Promise<ApiResponse<BroadcastResponse>> {
+    return this.http.request<BroadcastResponse>(
+      "PATCH",
+      `/broadcasts/${id}`,
+      toBroadcastPayload(payload),
+    );
+  }
+
+  async delete(id: string): Promise<ApiResponse<DeleteBroadcastResponse>> {
+    return this.http.request<DeleteBroadcastResponse>(
+      "DELETE",
+      `/broadcasts/${id}`,
+    );
+  }
+
+  async send(
+    id: string,
+    payload: SendBroadcastPayload = {},
+    options: RequestOptions = {},
+  ): Promise<ApiResponse<SendBroadcastResponse>> {
+    return this.http.request<SendBroadcastResponse>(
+      "POST",
+      `/broadcasts/${id}/send`,
+      toBroadcastPayload(payload),
+      options,
+    );
+  }
+}
+
 class Automations {
   constructor(private readonly http: HttpClient) {}
 
@@ -578,6 +794,7 @@ class Opensend {
   public readonly apiKeys: ApiKeys;
   public readonly contacts: Contacts;
   public readonly audiences: Audiences;
+  public readonly broadcasts: Broadcasts;
   public readonly automations: Automations;
   public readonly events: Events;
 
@@ -593,6 +810,7 @@ class Opensend {
     this.apiKeys = new ApiKeys(http);
     this.contacts = new Contacts(http);
     this.audiences = new Audiences(http);
+    this.broadcasts = new Broadcasts(http);
     this.automations = new Automations(http);
     this.events = new Events(http);
   }
@@ -635,6 +853,17 @@ export type {
   AudienceListItem,
   AudienceListResponse,
   DeleteAudienceResponse,
+  BroadcastStatus,
+  CreateBroadcastPayload,
+  UpdateBroadcastPayload,
+  SendBroadcastPayload,
+  BroadcastListOptions,
+  BroadcastListItem,
+  BroadcastListResponse,
+  BroadcastResponse,
+  CreateBroadcastResponse,
+  DeleteBroadcastResponse,
+  SendBroadcastResponse,
   CreateContactPayload,
   CreateContactResponse,
   UpdateContactPayload,

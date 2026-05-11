@@ -1,5 +1,5 @@
 import { asc, eq } from "drizzle-orm";
-import { FREE_PLAN_SLUG } from "../../dto";
+import { FREE_PLAN_DEFAULTS, FREE_PLAN_SLUG } from "../../dto";
 import { db } from "../client";
 import { plans } from "../schema";
 
@@ -33,13 +33,13 @@ export const planRepo = {
     const [row] = await db
       .insert(plans)
       .values({
-        slug: FREE_PLAN_SLUG,
-        name: "Free",
-        monthlyPriceCents: 0,
-        monthlyEmailQuota: 3000,
-        maxDomains: 1,
-        maxApiKeys: 3,
-        isPublic: true,
+        slug: FREE_PLAN_DEFAULTS.slug,
+        name: FREE_PLAN_DEFAULTS.name,
+        monthlyPriceCents: FREE_PLAN_DEFAULTS.monthlyPriceCents,
+        monthlyEmailQuota: FREE_PLAN_DEFAULTS.monthlyEmailQuota,
+        maxDomains: FREE_PLAN_DEFAULTS.maxDomains,
+        maxApiKeys: FREE_PLAN_DEFAULTS.maxApiKeys,
+        isPublic: FREE_PLAN_DEFAULTS.isPublic,
       })
       .onConflictDoNothing({ target: plans.slug })
       .returning();

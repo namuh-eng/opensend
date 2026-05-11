@@ -2,6 +2,7 @@
 
 import { StatusBadge } from "@/components/status-badge";
 import type { SupportedWebhookEventType } from "@opensend/core/src/webhook-events";
+import Link from "next/link";
 
 interface Webhook {
   id: string;
@@ -69,7 +70,12 @@ export function WebhooksList({
             {webhooks.map((webhook) => (
               <tr key={webhook.id} className="hover:bg-white/[0.02]">
                 <td className="whitespace-nowrap px-6 py-4 text-sm text-[#F0F0F0]">
-                  {webhook.url}
+                  <Link
+                    href={`/webhooks/${webhook.id}`}
+                    className="hover:underline"
+                  >
+                    {webhook.url}
+                  </Link>
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm">
                   <StatusBadge

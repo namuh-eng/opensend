@@ -7,7 +7,7 @@ import {
   subscriptions,
   usagePeriods,
 } from "@/lib/db/schema";
-import { FREE_PLAN_SLUG } from "@opensend/core";
+import { FREE_PLAN_DEFAULTS, FREE_PLAN_SLUG } from "@opensend/core";
 import { and, count, eq, sql } from "drizzle-orm";
 import { getBillingBackend } from "./index";
 
@@ -76,13 +76,13 @@ async function ensureFreePlan(database: BillingDb): Promise<PlanLike> {
   const [created] = await database
     .insert(plans)
     .values({
-      slug: FREE_PLAN_SLUG,
-      name: "Free",
-      monthlyPriceCents: 0,
-      monthlyEmailQuota: 3000,
-      maxDomains: 1,
-      maxApiKeys: 3,
-      isPublic: true,
+      slug: FREE_PLAN_DEFAULTS.slug,
+      name: FREE_PLAN_DEFAULTS.name,
+      monthlyPriceCents: FREE_PLAN_DEFAULTS.monthlyPriceCents,
+      monthlyEmailQuota: FREE_PLAN_DEFAULTS.monthlyEmailQuota,
+      maxDomains: FREE_PLAN_DEFAULTS.maxDomains,
+      maxApiKeys: FREE_PLAN_DEFAULTS.maxApiKeys,
+      isPublic: FREE_PLAN_DEFAULTS.isPublic,
     })
     .onConflictDoNothing({ target: plans.slug })
     .returning();

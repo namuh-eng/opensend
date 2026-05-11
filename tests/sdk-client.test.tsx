@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { DEFAULT_BASE_URL, Opensend, Resend } from "../packages/sdk/src";
 import type {
@@ -6,20 +7,28 @@ import type {
   AudienceListResponse,
   AudienceResponse,
   BatchEmailResponse,
+  BroadcastListResponse,
+  BroadcastResponse,
   ContactListResponse,
   ContactResponse,
+  CreateBroadcastPayload,
   DeleteAudienceResponse,
+  DeleteBroadcastResponse,
   DeleteContactResponse,
   EmailOptions,
   EmailResponse,
   RequestOptions,
   SDKOptions,
+  SendBroadcastPayload,
   SendEmailPayload,
+  UpdateBroadcastPayload,
 } from "../packages/sdk/src";
 
 describe("Opensend SDK", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.doUnmock("react-dom/server");
   });
 
   it("constructs Resend and Opensend clients with the hosted default baseUrl", async () => {
@@ -145,7 +154,7 @@ describe("Opensend SDK", () => {
     expectTypeOf<SDKOptions>().toMatchTypeOf<{ baseUrl?: string }>();
     expectTypeOf<RequestOptions>().toMatchTypeOf<{ idempotencyKey?: string }>();
     expectTypeOf<SendEmailPayload>().toMatchTypeOf<
-      EmailOptions & { react?: unknown }
+      EmailOptions & { react?: ReactNode }
     >();
     expectTypeOf<ApiResponse<EmailResponse>>().toEqualTypeOf<{
       data: EmailResponse | null;
@@ -168,6 +177,33 @@ describe("Opensend SDK", () => {
     }>();
     expectTypeOf<DeleteAudienceResponse>().toMatchTypeOf<{
       object: "audience";
+      deleted: true;
+    }>();
+    expectTypeOf<CreateBroadcastPayload>().toMatchTypeOf<{
+      from: string;
+      subject: string;
+      segmentId?: string;
+      scheduledAt?: string;
+    }>();
+    expectTypeOf<UpdateBroadcastPayload>().toMatchTypeOf<{
+      previewText?: string;
+      replyTo?: string;
+    }>();
+    expectTypeOf<SendBroadcastPayload>().toMatchTypeOf<{
+      scheduledAt?: string;
+    }>();
+    expectTypeOf<BroadcastListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ id: string; scheduled_at: string | null }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<BroadcastResponse>().toMatchTypeOf<{
+      object: "broadcast";
+      id: string;
+      reply_to?: string | null;
+    }>();
+    expectTypeOf<DeleteBroadcastResponse>().toMatchTypeOf<{
+      object: "broadcast";
       deleted: true;
     }>();
     expectTypeOf<ContactListResponse>().toMatchTypeOf<{
@@ -209,7 +245,88 @@ describe("Opensend SDK", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, options] = fetchMock.mock.calls[0] ?? [];
-    expect(options?.body).toContain("<strong>Hello</strong>");
+    const outgoingBody = JSON.parse(String(options?.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(outgoingBody).toMatchObject({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<strong>Hello</strong>",
+    });
+    expect(outgoingBody).not.toHaveProperty("react");
+  });
+
+  it("returns a clear SDK error when the React renderer cannot load", async () => {
+    vi.resetModules();
+    vi.doMock("react-dom/server", () => ({
+      renderToStaticMarkup: "missing renderer",
+    }));
+
+    const { Opensend: MockedOpensend } = await import("../packages/sdk/src");
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new MockedOpensend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    const response = await client.emails.send({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      react: <strong>Hello</strong>,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      data: null,
+      error: {
+        name: "react_render_error",
+        code: "react_render_error",
+        statusCode: 500,
+        message:
+          "Unable to render React email in the OpenSend SDK. Install react and react-dom in your application, then pass a renderable React element to emails.send({ react }).",
+        details: {
+          cause:
+            "react-dom/server is unavailable: renderToStaticMarkup export was not found.",
+        },
+      },
+    });
+
+    vi.doUnmock("react-dom/server");
+    vi.resetModules();
+  });
+
+  it("returns a clear SDK error when React rendering throws", async () => {
+    function BrokenEmail(): ReactNode {
+      throw new Error("template exploded");
+    }
+
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    const response = await client.emails.send({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      react: <BrokenEmail />,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.error).toMatchObject({
+      name: "react_render_error",
+      code: "react_render_error",
+      statusCode: 500,
+      message:
+        "Unable to render React email in the OpenSend SDK. Install react and react-dom in your application, then pass a renderable React element to emails.send({ react }).",
+      details: { cause: "template exploded" },
+    });
   });
 
   it("passes email lifecycle status filters when listing emails", async () => {
@@ -379,6 +496,125 @@ describe("Opensend SDK", () => {
       4,
       "https://api.example.com/audiences/aud_123",
       expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("uses Resend-compatible root broadcasts endpoints and maps camelCase payload aliases", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({ object: "broadcast", id: "broadcast_123" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+    const resend = new Resend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.broadcasts.create(
+      {
+        name: "Newsletter",
+        from: "Acme <news@example.com>",
+        subject: "Updates",
+        html: "<p>Hello</p>",
+        segmentId: "seg_123",
+        topicId: "topic_123",
+        replyTo: "reply@example.com",
+        previewText: "Preview",
+        scheduledAt: "in 1 min",
+        send: true,
+      },
+      { idempotencyKey: "broadcast-create-key" },
+    );
+    await client.broadcasts.list({
+      limit: 10,
+      after: "broadcast_100",
+      search: "news",
+      status: "draft",
+      segmentId: "seg_123",
+    });
+    await resend.broadcasts.get("broadcast_123");
+    await resend.broadcasts.update("broadcast_123", {
+      previewText: "Updated preview",
+      replyTo: "support@example.com",
+      scheduledAt: "2026-06-01T00:00:00.000Z",
+    });
+    await resend.broadcasts.delete("broadcast_123");
+    await resend.broadcasts.send(
+      "broadcast_123",
+      { scheduledAt: "in 1 min" },
+      { idempotencyKey: "broadcast-send-key" },
+    );
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/broadcasts",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Idempotency-Key": "broadcast-create-key",
+        }),
+      }),
+    );
+    const createCallOptions = fetchMock.mock.calls[0]?.[1];
+    expect(JSON.parse(String(createCallOptions?.body))).toEqual({
+      name: "Newsletter",
+      from: "Acme <news@example.com>",
+      subject: "Updates",
+      html: "<p>Hello</p>",
+      send: true,
+      segment_id: "seg_123",
+      topic_id: "topic_123",
+      reply_to: "reply@example.com",
+      preview_text: "Preview",
+      scheduled_at: "in 1 min",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/broadcasts?limit=10&after=broadcast_100&search=news&status=draft&segmentId=seg_123",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/broadcasts/broadcast_123",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "https://api.example.com/broadcasts/broadcast_123",
+      expect.objectContaining({
+        method: "PATCH",
+      }),
+    );
+    const updateCallOptions = fetchMock.mock.calls[3]?.[1];
+    expect(JSON.parse(String(updateCallOptions?.body))).toEqual({
+      preview_text: "Updated preview",
+      reply_to: "support@example.com",
+      scheduled_at: "2026-06-01T00:00:00.000Z",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "https://api.example.com/broadcasts/broadcast_123",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "https://api.example.com/broadcasts/broadcast_123/send",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "Idempotency-Key": "broadcast-send-key",
+        }),
+        body: JSON.stringify({ scheduled_at: "in 1 min" }),
+      }),
     );
   });
 

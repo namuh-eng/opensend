@@ -73,9 +73,21 @@
     "packages/sdk": {
       "name": "opensend",
       "version": "1.0.0",
+      "dependencies": {
+        "@types/react": "^19.2.14",
+      },
       "devDependencies": {
+        "@types/react-dom": "^19.2.3",
         "typescript": "^5.0.0",
       },
+      "peerDependencies": {
+        "react": ">=18",
+        "react-dom": ">=18",
+      },
+      "optionalPeers": [
+        "react",
+        "react-dom",
+      ],
     },
     "services/api": {
       "name": "@opensend/api",

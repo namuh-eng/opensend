@@ -6,10 +6,12 @@ const mockCreateWebhook = vi.hoisted(() => vi.fn());
 const mockGetWebhook = vi.hoisted(() => vi.fn());
 const mockUpdateWebhook = vi.hoisted(() => vi.fn());
 const mockDeleteWebhook = vi.hoisted(() => vi.fn());
+const mockReplayWebhookDelivery = vi.hoisted(() => vi.fn());
 const mockListApiKeys = vi.hoisted(() => vi.fn());
 const mockCreateApiKey = vi.hoisted(() => vi.fn());
 const mockGetApiKey = vi.hoisted(() => vi.fn());
 const mockDeleteApiKey = vi.hoisted(() => vi.fn());
+const mockGetServerSession = vi.hoisted(() => vi.fn());
 const MockApiKeyServiceError = vi.hoisted(
   () =>
     class ApiKeyServiceError extends Error {
@@ -22,6 +24,18 @@ const MockApiKeyServiceError = vi.hoisted(
       }
     },
 );
+const MockWebhookServiceError = vi.hoisted(
+  () =>
+    class WebhookServiceError extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+      ) {
+        super(message);
+        this.name = "WebhookServiceError";
+      }
+    },
+);
 
 vi.mock("@/lib/api-auth", () => ({
   invalidateApiKeyAuthCache: vi.fn(),
@@ -29,7 +43,7 @@ vi.mock("@/lib/api-auth", () => ({
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
   validateApiKey: mockValidateApiKey,
   authorizeDashboardOrApiKey: mockValidateApiKey,
-  getServerSession: vi.fn(),
+  getServerSession: mockGetServerSession,
 }));
 
 vi.mock("@/lib/billing/quota", () => ({
@@ -39,6 +53,7 @@ vi.mock("@/lib/billing/quota", () => ({
 
 vi.mock("@opensend/core", () => ({
   ApiKeyServiceError: MockApiKeyServiceError,
+  WebhookServiceError: MockWebhookServiceError,
   createApiKeyService: () => ({
     listApiKeys: mockListApiKeys,
     createApiKey: mockCreateApiKey,
@@ -107,6 +122,7 @@ vi.mock("@opensend/core", () => ({
     getWebhook: mockGetWebhook,
     updateWebhook: mockUpdateWebhook,
     deleteWebhook: mockDeleteWebhook,
+    replayWebhookDelivery: mockReplayWebhookDelivery,
   }),
 }));
 
@@ -129,6 +145,9 @@ beforeEach(() => {
     permission: "full_access",
     domain: null,
     userId: "user-b",
+  });
+  mockGetServerSession.mockResolvedValue({
+    user: { id: "dashboard-user-b" },
   });
 });
 
@@ -235,6 +254,91 @@ describe("webhook API tenant isolation", () => {
 
     expect(response.status).toBe(401);
     expect(mockListWebhooks).not.toHaveBeenCalled();
+  });
+
+  it("lets a signed-in dashboard user replay an owned webhook delivery", async () => {
+    mockValidateApiKey.mockResolvedValueOnce({ dashboard: true });
+    mockGetServerSession.mockResolvedValueOnce({
+      user: { id: "dashboard-user-b" },
+    });
+    mockReplayWebhookDelivery.mockResolvedValue({
+      originalDelivery: {
+        id: "delivery-original",
+        status: "success",
+        attempt: 1,
+        statusCode: 200,
+        responseBody: "accepted",
+        attemptedAt: "2026-05-11T00:00:00.000Z",
+        nextRetryAt: null,
+        createdAt: "2026-05-11T00:00:00.000Z",
+      },
+      replayDelivery: {
+        id: "delivery-replay",
+        status: "success",
+        attempt: 1,
+        statusCode: 200,
+        responseBody: "accepted",
+        attemptedAt: "2026-05-11T00:01:00.000Z",
+        nextRetryAt: null,
+        createdAt: "2026-05-11T00:01:00.000Z",
+      },
+    });
+
+    const route = await import(
+      "@/app/api/webhooks/[id]/deliveries/[deliveryId]/replay/route"
+    );
+    const response = await route.POST(
+      request("http://localhost/api/webhooks/wh-b/deliveries/delivery/replay", {
+        method: "POST",
+      }),
+      {
+        params: Promise.resolve({
+          id: "wh-b",
+          deliveryId: "delivery-original",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      object: "webhook_delivery_replay",
+      original_delivery: { id: "delivery-original", status: "success" },
+      replay_delivery: { id: "delivery-replay", status: "success" },
+    });
+    expect(mockReplayWebhookDelivery).toHaveBeenCalledWith({
+      webhookId: "wh-b",
+      deliveryId: "delivery-original",
+      userId: "dashboard-user-b",
+    });
+  });
+
+  it("maps disabled webhook replay rejection to a clear conflict response", async () => {
+    mockReplayWebhookDelivery.mockRejectedValue(
+      new MockWebhookServiceError(
+        "disabled",
+        "Webhook endpoint is disabled and cannot replay deliveries",
+      ),
+    );
+
+    const route = await import(
+      "@/app/api/webhooks/[id]/deliveries/[deliveryId]/replay/route"
+    );
+    const response = await route.POST(
+      request("http://localhost/api/webhooks/wh-b/deliveries/delivery/replay", {
+        method: "POST",
+      }),
+      {
+        params: Promise.resolve({
+          id: "wh-b",
+          deliveryId: "delivery-original",
+        }),
+      },
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({
+      error: "Webhook endpoint is disabled and cannot replay deliveries",
+    });
   });
 });
 
