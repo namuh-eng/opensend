@@ -20,21 +20,22 @@ describe("DocumentsTab", () => {
     expect(
       screen.getByText(/Penetration testing is performed at least annually/),
     ).toBeDefined();
-    expect(screen.getByText(/SOC 2 Type II compliant/)).toBeDefined();
+    expect(screen.getByText(/SOC 2 is a compliance framework/)).toBeDefined();
     expect(screen.getByText(/Data Processing Agreement/)).toBeDefined();
     expect(screen.getByText(/Form W-9 is a tax document/)).toBeDefined();
   });
 
-  it("renders a Download link for each document", () => {
+  it("renders Download links only for available documents", () => {
     render(<DocumentsTab />);
     const downloadLinks = screen.getAllByText("Download");
-    expect(downloadLinks.length).toBe(4);
+    expect(downloadLinks.length).toBe(2);
+    expect(screen.getAllByText("Unavailable").length).toBe(2);
   });
 
-  it("download links point to /static/documents/ PDF paths", () => {
+  it("available download links point to /static/documents/ PDF paths", () => {
     const { container } = render(<DocumentsTab />);
     const links = container.querySelectorAll('a[href*="/static/documents/"]');
-    expect(links.length).toBe(4);
+    expect(links.length).toBe(2);
     for (const link of links) {
       expect(link.getAttribute("href")).toMatch(/\.pdf$/);
     }
@@ -43,6 +44,13 @@ describe("DocumentsTab", () => {
   it("renders secondary description text for documents", () => {
     render(<DocumentsTab />);
     expect(screen.getByText(/Letter of Attestation/)).toBeDefined();
-    expect(screen.getByText(/Vanta & Advantage Partners/)).toBeDefined();
+    expect(screen.getByText(/OpenSend-specific report/)).toBeDefined();
+  });
+
+  it("does not render Resend-branded placeholder copy", () => {
+    const { container } = render(<DocumentsTab />);
+
+    expect(container.textContent).not.toContain("Resend");
+    expect(container.textContent).not.toContain("signup to");
   });
 });

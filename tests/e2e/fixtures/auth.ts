@@ -109,6 +109,23 @@ export async function cleanupE2ERun(
     `${userPrefix}%`,
   ]);
   await client.query(
+    "delete from email_suppressions where user_id like $1 or email like $2",
+    [`${userPrefix}%`, emailPattern],
+  );
+  await client.query("delete from emails where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query("delete from audit_events where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query(
+    "delete from logs where user_id like $1 or document->>'test_run_id' = $2",
+    [`${userPrefix}%`, runId],
+  );
+  await client.query("delete from templates where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query(
     "delete from webhooks where user_id like $1 or document->>'test_run_id' = $2",
     [`${userPrefix}%`, runId],
   );
@@ -181,7 +198,7 @@ export async function createE2EApiKey(
   userId: string,
   suffix = "primary",
 ): Promise<E2EApiKey> {
-  const rawKey = `re_e2e_${hashApiKey(`${runId}:${suffix}:${userId}`).slice(0, 32)}`;
+  const rawKey = `os_e2e_${hashApiKey(`${runId}:${suffix}:${userId}`).slice(0, 32)}`;
   const tokenHash = hashApiKey(rawKey);
   const { rows } = await client.query<{ id: string }>(
     `insert into api_keys (name, token_hash, token_preview, permission, user_id, document)

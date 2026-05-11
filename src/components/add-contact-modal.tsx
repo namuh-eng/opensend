@@ -7,6 +7,28 @@ interface Segment {
   name: string;
 }
 
+function isSegment(value: unknown): value is Segment {
+  if (typeof value !== "object" || value === null) return false;
+
+  const maybeSegment = value as Record<string, unknown>;
+  return (
+    typeof maybeSegment.id === "string" && typeof maybeSegment.name === "string"
+  );
+}
+
+function extractSegments(payload: unknown): Segment[] {
+  if (Array.isArray(payload)) {
+    return payload.filter(isSegment);
+  }
+
+  if (typeof payload !== "object" || payload === null) {
+    return [];
+  }
+
+  const maybeList = payload as Record<string, unknown>;
+  return Array.isArray(maybeList.data) ? maybeList.data.filter(isSegment) : [];
+}
+
 interface AddContactModalProps {
   open: boolean;
   onClose: () => void;
@@ -24,6 +46,7 @@ export function AddContactModal({
   const [segmentSearch, setSegmentSearch] = useState("");
   const [segmentDropdownOpen, setSegmentDropdownOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const segmentRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -38,7 +61,7 @@ export function AddContactModal({
       const res = await fetch("/api/segments", { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
-        setSegments(data);
+        setSegments(extractSegments(data));
       }
     } catch {
       // ignore
@@ -51,6 +74,7 @@ export function AddContactModal({
       setEmailText("");
       setSelectedSegments([]);
       setSegmentSearch("");
+      setSubmitError(null);
     }
   }, [open, fetchSegments]);
 
@@ -109,6 +133,7 @@ export function AddContactModal({
     if (emails.length === 0) return;
 
     setSubmitting(true);
+    setSubmitError(null);
     try {
       const apiKey =
         typeof window !== "undefined"
@@ -118,21 +143,28 @@ export function AddContactModal({
         "Content-Type": "application/json",
       };
       if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-      const res = await fetch("/api/contacts", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          emails,
-          segment_ids: selectedSegments.map((s) => s.id),
-        }),
-      });
 
-      if (res.ok) {
-        onSuccess();
-        onClose();
+      for (const email of emails) {
+        const res = await fetch("/api/contacts", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            email,
+            segments: selectedSegments.map((s) => s.id),
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to add contact");
+        }
       }
+
+      onSuccess();
+      onClose();
     } catch {
-      // ignore
+      setSubmitError(
+        "Could not add contacts. Check the email address and try again.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -199,6 +231,11 @@ export function AddContactModal({
             <p className="mt-1 text-[12px] text-[#A1A4A5]">
               Use commas or line breaks to separate multiple email addresses.
             </p>
+            {submitError && (
+              <p className="mt-2 text-[12px] text-red-400" role="alert">
+                {submitError}
+              </p>
+            )}
           </div>
 
           {/* Segments autocomplete */}

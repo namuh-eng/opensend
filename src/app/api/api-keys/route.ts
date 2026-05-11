@@ -1,4 +1,5 @@
 import { invalidateApiKeyAuthCache } from "@/lib/api-auth";
+import { recordAuditEvent } from "@/lib/audit-events";
 import { checkApiKeyQuota, quotaExceededResponse } from "@/lib/billing/quota";
 import {
   createApiKeyService,
@@ -52,9 +53,22 @@ export async function POST(request: Request): Promise<Response> {
       return quotaExceededResponse(quota.info);
     }
 
+    const parsed = parseCreateApiKeyBody(body);
     const created = await apiKeyService().createApiKey({
-      ...parseCreateApiKeyBody(body),
+      ...parsed,
       userId: auth.userId,
+    });
+
+    await recordAuditEvent({
+      context: auth.auditContext,
+      action: "api_key.created",
+      targetType: "api_key",
+      targetId: created.id,
+      metadata: {
+        name: parsed.name,
+        permission: parsed.permission ?? "full_access",
+        domain_id: parsed.domainId ?? null,
+      },
     });
 
     return Response.json(toApiKeyCreateResponse(created), { status: 201 });

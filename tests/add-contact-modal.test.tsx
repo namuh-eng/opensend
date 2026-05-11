@@ -108,11 +108,11 @@ describe("AddContactModal", () => {
       );
       expect(postCall).toBeDefined();
       const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
-      expect(body.emails).toEqual(["new@example.com"]);
+      expect(body.email).toBe("new@example.com");
     });
   });
 
-  it("parses comma-separated emails", async () => {
+  it("parses comma-separated emails and submits one API-compatible request per contact", async () => {
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
@@ -120,7 +120,11 @@ describe("AddContactModal", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ created: 2 }),
+        json: () => Promise.resolve({ id: "contact-1" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: "contact-2" }),
       });
 
     render(<AddContactModal {...defaultProps} />);
@@ -133,14 +137,20 @@ describe("AddContactModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
     await waitFor(() => {
-      const postCall = mockFetch.mock.calls.find(
+      const postCalls = mockFetch.mock.calls.filter(
         (call: unknown[]) =>
           call[0] === "/api/contacts" &&
           (call[1] as RequestInit)?.method === "POST",
       );
-      expect(postCall).toBeDefined();
-      const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
-      expect(body.emails).toEqual(["a@b.com", "c@d.com"]);
+      expect(postCalls).toHaveLength(2);
+      expect(
+        postCalls.map((call) =>
+          JSON.parse((call[1] as RequestInit).body as string),
+        ),
+      ).toEqual([
+        { email: "a@b.com", segments: [] },
+        { email: "c@d.com", segments: [] },
+      ]);
     });
   });
 
@@ -152,7 +162,11 @@ describe("AddContactModal", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ created: 2 }),
+        json: () => Promise.resolve({ id: "contact-1" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ id: "contact-2" }),
       });
 
     render(<AddContactModal {...defaultProps} />);
@@ -165,13 +179,16 @@ describe("AddContactModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
 
     await waitFor(() => {
-      const postCall = mockFetch.mock.calls.find(
+      const postCalls = mockFetch.mock.calls.filter(
         (call: unknown[]) =>
           call[0] === "/api/contacts" &&
           (call[1] as RequestInit)?.method === "POST",
       );
-      const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
-      expect(body.emails).toEqual(["a@b.com", "c@d.com"]);
+      expect(
+        postCalls.map(
+          (call) => JSON.parse((call[1] as RequestInit).body as string).email,
+        ),
+      ).toEqual(["a@b.com", "c@d.com"]);
     });
   });
 
@@ -235,7 +252,29 @@ describe("AddContactModal", () => {
     });
   });
 
-  it("sends segment_ids in request body when segments selected", async () => {
+  it("normalizes list-envelope segment responses on open", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          object: "list",
+          data: [{ id: "s1", name: "VIP" }],
+          has_more: false,
+        }),
+    });
+
+    render(<AddContactModal {...defaultProps} />);
+
+    const segmentInput = screen.getByPlaceholderText("Search segments...");
+    fireEvent.focus(segmentInput);
+    fireEvent.change(segmentInput, { target: { value: "VIP" } });
+
+    await waitFor(() => {
+      expect(screen.getByText("VIP")).toBeDefined();
+    });
+  });
+
+  it("sends segments in request body when segments selected", async () => {
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
@@ -278,7 +317,7 @@ describe("AddContactModal", () => {
       );
       expect(postCall).toBeDefined();
       const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
-      expect(body.segment_ids).toEqual(["s1"]);
+      expect(body.segments).toEqual(["s1"]);
     });
   });
 });

@@ -58,9 +58,14 @@ describe("TopicsList", () => {
     // Should have create topic buttons (one in filter bar, one in empty state)
     const createButtons = screen.getAllByText("Create topic");
     expect(createButtons.length).toBe(2);
-    // Should have unsubscribe page customize links
-    const customizeLinks = screen.getAllByText("Customize page");
-    expect(customizeLinks.length).toBeGreaterThanOrEqual(1);
+    // The unsubscribe page editor is intentionally disabled until implemented.
+    const customizeControls = screen.getAllByText("Customize page");
+    expect(customizeControls.length).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByText(
+        "Editor unavailable; the default unsubscribe page remains active.",
+      ).length,
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it("renders topics list with data", async () => {
@@ -259,7 +264,7 @@ describe("TopicsList", () => {
     });
   });
 
-  it("has Edit Unsubscribe Page link", async () => {
+  it("disables the unavailable unsubscribe page editor CTA", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ data: [], total: 0, page: 1, limit: 20 }),
@@ -271,11 +276,16 @@ describe("TopicsList", () => {
       expect(screen.getByText("No topics yet")).toBeTruthy();
     });
 
-    const link = screen.getByText("Edit Unsubscribe Page");
-    expect(link).toBeTruthy();
-    expect(link.closest("a")?.getAttribute("href")).toBe(
-      "/audience/topics/unsubscribe-page/edit",
-    );
+    const control = screen.getByText("Edit Unsubscribe Page");
+    const button = control.closest("button");
+    expect(button).toBeTruthy();
+    expect(button?.hasAttribute("disabled")).toBe(true);
+    expect(control.closest("a")).toBeNull();
+    expect(
+      screen.getAllByText(
+        "Editor unavailable; the default unsubscribe page remains active.",
+      ).length,
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it("shows unsubscribe page preview section", async () => {

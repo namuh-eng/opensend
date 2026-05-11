@@ -63,15 +63,17 @@ export const templateRepo = {
     options: {
       search?: string;
       status?: string;
+      userId?: string;
     } = {},
   ) {
-    const { search, status } = options;
+    const { search, status, userId } = options;
     const conditions: SQL[] = [];
 
     if (search) conditions.push(ilike(templates.name, `%${search}%`));
     if (status === "published" || status === "draft") {
       conditions.push(eq(templates.status, status));
     }
+    if (userId) conditions.push(eq(templates.userId, userId));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     const [totalRow] = await db

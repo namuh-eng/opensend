@@ -12,9 +12,35 @@ interface Broadcast {
   createdAt: string;
 }
 
+type ApiBroadcast = {
+  id?: unknown;
+  name?: unknown;
+  status?: unknown;
+  createdAt?: unknown;
+  created_at?: unknown;
+};
+
+type ApiListResponse = {
+  data?: unknown;
+  total?: unknown;
+  has_more?: unknown;
+  error?: unknown;
+};
+
 interface SegmentOption {
   id: string;
   name: string;
+}
+
+export interface BroadcastsListProps {
+  initialBroadcasts?: Broadcast[];
+  initialTotal?: number;
+  initialPage?: number;
+  initialLimit?: number;
+  initialSearch?: string;
+  initialStatusFilter?: string;
+  initialAudienceFilter?: string;
+  initialError?: string | null;
 }
 
 const BROADCAST_STATUSES = [
@@ -29,34 +55,119 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-export function BroadcastsList() {
+function getApiKey(): string | null {
+  try {
+    return typeof window !== "undefined"
+      ? (window.localStorage.getItem("api_key") ?? null)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+async function parseJsonResponse(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function toApiListResponse(value: unknown): ApiListResponse {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return {};
+  }
+  return value as ApiListResponse;
+}
+
+function normalizeBroadcast(value: unknown): Broadcast | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as ApiBroadcast;
+  const id = typeof record.id === "string" ? record.id : "";
+  const name = typeof record.name === "string" ? record.name : "";
+  const status = typeof record.status === "string" ? record.status : "";
+  const createdAt =
+    typeof record.createdAt === "string"
+      ? record.createdAt
+      : typeof record.created_at === "string"
+        ? record.created_at
+        : "";
+
+  if (!id || !name || !status || !createdAt) return null;
+
+  return { id, name, status, createdAt };
+}
+
+function normalizeBroadcasts(data: unknown): Broadcast[] {
+  if (!Array.isArray(data)) return [];
+  return data.flatMap((item) => {
+    const broadcast = normalizeBroadcast(item);
+    return broadcast ? [broadcast] : [];
+  });
+}
+
+function responseErrorMessage(response: ApiListResponse): string {
+  return typeof response.error === "string"
+    ? response.error
+    : "Failed to load broadcasts.";
+}
+
+export function BroadcastsList({
+  initialBroadcasts,
+  initialTotal,
+  initialPage,
+  initialLimit,
+  initialSearch,
+  initialStatusFilter,
+  initialAudienceFilter,
+  initialError = null,
+}: BroadcastsListProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [broadcasts, setBroadcasts] = useState<Broadcast[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(40);
-  const [search, setSearch] = useState(searchParams.get("search") || "");
+  const hasInitialBroadcasts = initialBroadcasts !== undefined;
+  const [broadcasts, setBroadcasts] = useState<Broadcast[]>(
+    initialBroadcasts ?? [],
+  );
+  const [total, setTotal] = useState(
+    initialTotal ?? initialBroadcasts?.length ?? 0,
+  );
+  const [page, setPage] = useState(initialPage ?? 1);
+  const [limit, setLimit] = useState(initialLimit ?? 40);
+  const [search, setSearch] = useState(
+    initialSearch ?? searchParams.get("search") ?? "",
+  );
   const [statusFilter, setStatusFilter] = useState(
-    searchParams.get("status") || "",
+    initialStatusFilter ?? searchParams.get("status") ?? "",
   );
   const [audienceFilter, setAudienceFilter] = useState(
-    searchParams.get("segmentId") || "",
+    initialAudienceFilter ?? searchParams.get("segmentId") ?? "",
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    !hasInitialBroadcasts && !initialError,
+  );
+  const [error, setError] = useState<string | null>(initialError);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [segments, setSegments] = useState<SegmentOption[]>([]);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const [audienceDropdownOpen, setAudienceDropdownOpen] = useState(false);
   const [actionMenuId, setActionMenuId] = useState<string | null>(null);
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>(null);
+  const skipInitialFetch = useRef(
+    hasInitialBroadcasts || Boolean(initialError),
+  );
   const statusDropdownRef = useRef<HTMLDivElement>(null);
   const audienceDropdownRef = useRef<HTMLDivElement>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
 
   const fetchBroadcasts = useCallback(async () => {
     setLoading(true);
+    setError(null);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 7000);
     try {
       const params = new URLSearchParams();
       params.set("page", String(page));
@@ -65,32 +176,45 @@ export function BroadcastsList() {
       if (statusFilter) params.set("status", statusFilter);
       if (audienceFilter) params.set("segmentId", audienceFilter);
 
-      const apiKey =
-        typeof window !== "undefined"
-          ? (localStorage?.getItem?.("api_key") ?? null)
-          : null;
+      const apiKey = getApiKey();
       const authHeaders: Record<string, string> = {};
       if (apiKey) authHeaders.Authorization = `Bearer ${apiKey}`;
       const res = await fetch(`/api/broadcasts?${params.toString()}`, {
         headers: authHeaders,
+        signal: controller.signal,
       });
-      const data = await res.json();
-      setBroadcasts(data.data || []);
-      setTotal(data.total || 0);
-    } catch {
+      const data = toApiListResponse(await parseJsonResponse(res));
+      if (!res.ok) {
+        throw new Error(responseErrorMessage(data));
+      }
+      const nextBroadcasts = normalizeBroadcasts(data.data);
+      setBroadcasts(nextBroadcasts);
+      setTotal(
+        typeof data.total === "number"
+          ? data.total
+          : data.has_more === true
+            ? nextBroadcasts.length + 1
+            : nextBroadcasts.length,
+      );
+    } catch (fetchError) {
       setBroadcasts([]);
       setTotal(0);
+      setError(
+        fetchError instanceof Error && fetchError.name === "AbortError"
+          ? "Loading broadcasts timed out. Please retry."
+          : fetchError instanceof Error
+            ? fetchError.message
+            : "Failed to load broadcasts.",
+      );
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
     }
   }, [page, limit, search, statusFilter, audienceFilter]);
 
   const fetchSegments = useCallback(async () => {
     try {
-      const apiKey =
-        typeof window !== "undefined"
-          ? (localStorage?.getItem?.("api_key") ?? null)
-          : null;
+      const apiKey = getApiKey();
       const authHeaders: Record<string, string> = {};
       if (apiKey) authHeaders.Authorization = `Bearer ${apiKey}`;
       const res = await fetch("/api/segments?limit=100", {
@@ -104,6 +228,10 @@ export function BroadcastsList() {
   }, []);
 
   useEffect(() => {
+    if (skipInitialFetch.current) {
+      skipInitialFetch.current = false;
+      return;
+    }
     fetchBroadcasts();
   }, [fetchBroadcasts]);
 
@@ -460,6 +588,22 @@ export function BroadcastsList() {
       {loading ? (
         <div className="flex items-center justify-center py-16 text-[14px] text-[#A1A4A5]">
           Loading broadcasts...
+        </div>
+      ) : error ? (
+        <div className="flex flex-col items-center justify-center py-16 px-6">
+          <h3 className="text-[16px] font-semibold text-[#F0F0F0] mb-2">
+            Unable to load broadcasts
+          </h3>
+          <p className="text-[14px] text-[#A1A4A5] text-center max-w-[420px] mb-6">
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={fetchBroadcasts}
+            className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 transition-colors"
+          >
+            Retry
+          </button>
         </div>
       ) : broadcasts.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-6">

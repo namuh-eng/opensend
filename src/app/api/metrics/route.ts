@@ -24,6 +24,12 @@ function getMetricsDateRange(range: string): { start: Date; end: Date } {
   return getDateRangeBounds(RANGE_TO_PRESET[range] || "Last 15 days");
 }
 
+function normalizeOptionalQueryParam(value: string | null): string | null {
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
 const dashboardAggregateService = createDashboardAggregateService();
 
 // Dashboard-only internal endpoint
@@ -36,12 +42,18 @@ export async function GET(request: NextRequest) {
     const range = searchParams.get("range") || "last_15_days";
     const domain = searchParams.get("domain");
     const eventType = searchParams.get("event_type");
+    const tagName = normalizeOptionalQueryParam(searchParams.get("tag_name"));
+    const rawTagValue = searchParams.get("tag_value");
+    const tagValue =
+      tagName && rawTagValue !== null ? rawTagValue.trim() : null;
     const userId = session.user.id;
     const cacheKey = getMetricsAggregateCacheKey({
       userId,
       range,
       domain,
       eventType,
+      tagName,
+      tagValue,
     });
 
     const cached = await readDashboardAggregateCache<unknown>(cacheKey);
@@ -58,6 +70,8 @@ export async function GET(request: NextRequest) {
       end,
       domain,
       eventType,
+      tagName,
+      tagValue,
     });
 
     await writeDashboardAggregateCache(

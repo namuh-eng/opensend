@@ -1,6 +1,6 @@
 import { domainRepo } from "../db/repositories/domainRepo";
 import type { domains } from "../db/schema";
-import { emailProvider } from "./emailProvider";
+import { domainIdentityProvider } from "./domain-providers";
 
 type DomainRow = typeof domains.$inferSelect;
 type DomainInsert = typeof domains.$inferInsert;
@@ -234,15 +234,12 @@ function toDomainServiceListItem(row: DomainRow): DomainServiceListItem {
 
 export function createDomainService({
   repository = domainRepo,
-  createDomainIdentity = (domain: string) =>
-    emailProvider.createDomainIdentity(domain).then((result) => ({
-      dkimOrigin: "AWS_SES" as const,
-      dkimTokens: result.dkimTokens ?? [],
-    })),
+  createDomainIdentity = (domain: string, options?: { userId?: string }) =>
+    domainIdentityProvider.createDomainIdentity(domain, options),
   getDomainIdentity = (domain: string) =>
-    emailProvider.getDomainIdentity(domain),
+    domainIdentityProvider.getDomainIdentity(domain),
   deleteDomainIdentity = (domain: string) =>
-    emailProvider.deleteDomainIdentity(domain),
+    domainIdentityProvider.deleteDomainIdentity(domain),
   invalidateDomainCaches = async () => {},
 }: DomainServiceDependencies = {}) {
   return {

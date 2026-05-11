@@ -91,7 +91,7 @@ export function EmailsHeader({ activeTab, apiKeys = [] }: EmailsHeaderProps) {
                     setMenuOpen(false);
                   }}
                 >
-                  Export emails
+                  Export delivery failures
                 </button>
                 <a
                   href="/docs"

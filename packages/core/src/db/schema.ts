@@ -172,7 +172,7 @@ export const emails = pgTable(
     document: jsonb("document"),
     userId: text("user_id"),
     topicId: uuid("topic_id"),
-    idempotencyKey: varchar("idempotency_key", { length: 255 }),
+    idempotencyKey: varchar("idempotency_key", { length: 256 }),
   },
   (table) => [
     index("emails_status_idx").on(table.status),
@@ -363,6 +363,31 @@ export const logs = pgTable("logs", {
   userId: text("user_id"),
   apiKeyId: uuid("api_key_id"),
 });
+
+export const auditEvents = pgTable(
+  "audit_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    actorType: varchar("actor_type", { length: 32 }).notNull(),
+    actorId: text("actor_id").notNull(),
+    actorEmail: text("actor_email"),
+    action: varchar("action", { length: 100 }).notNull(),
+    targetType: varchar("target_type", { length: 64 }).notNull(),
+    targetId: text("target_id").notNull(),
+    source: varchar("source", { length: 32 }).notNull(),
+    sourceApiKeyId: uuid("source_api_key_id"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("audit_events_user_created_at_idx").on(table.userId, table.createdAt),
+    index("audit_events_user_action_idx").on(table.userId, table.action),
+    index("audit_events_source_api_key_idx").on(table.sourceApiKeyId),
+  ],
+);
 
 export const contactProperties = pgTable(
   "contact_properties",

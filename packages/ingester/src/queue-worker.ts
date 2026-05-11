@@ -9,13 +9,18 @@ import {
   type BackgroundJob,
   type SandboxTestOutcome,
   type TelemetryContext,
+  applyEmailTracking,
   createBackgroundJob,
+  createEmailTrackingToken,
   createTelemetryContext,
+  domainRepo,
   emailEventRepo,
   emailProvider,
   emailRepo,
   emitCloudWatchMetric,
   finishTelemetrySpan,
+  getEmailAddressDomain,
+  getEmailTrackingBaseUrl,
   getSandboxTestOutcomeForRecipients,
   getTelemetryCarrier,
   logTelemetry,
@@ -426,11 +431,17 @@ export class QueueWorker {
       attributes: { email_id: email.id },
     });
     try {
+      // Tracking is intentionally rendered at worker-time: validation, template,
+      // and managed-unsubscribe rendering already happened when the email row was
+      // accepted, while stored bodies remain unchanged for disabled parity and
+      // auditability. The provider payload is the only mutated boundary.
+      const trackedHtml = await renderTrackedHtmlForDelivery(email);
+
       await emailProvider.sendEmail({
         from: email.from,
         to: email.to,
         subject: email.subject,
-        html: email.html ?? undefined,
+        html: trackedHtml ?? undefined,
         text: email.text ?? undefined,
         cc: email.cc ?? undefined,
         bcc: email.bcc ?? undefined,
@@ -506,6 +517,50 @@ export class QueueWorker {
       throw error;
     }
   }
+}
+
+async function renderTrackedHtmlForDelivery(
+  email: SandboxEmailRecord,
+): Promise<string | null | undefined> {
+  if (!email.html || !email.userId) return email.html;
+
+  const userId = email.userId;
+  const fromDomain = getEmailAddressDomain(email.from);
+  if (!fromDomain) return email.html;
+
+  const domain = await domainRepo.findByNameForUser(fromDomain, userId);
+  if (!domain || (!domain.trackClicks && !domain.trackOpens)) {
+    return email.html;
+  }
+
+  const recipient = email.to.length === 1 ? email.to[0] : undefined;
+  const trackingBaseUrl = getEmailTrackingBaseUrl({
+    trackingSubdomain: domain.trackingSubdomain,
+  });
+
+  return applyEmailTracking({
+    html: email.html,
+    clickTracking: domain.trackClicks,
+    openTracking: domain.trackOpens,
+    trackingBaseUrl,
+    createClickToken: (targetUrl) =>
+      createEmailTrackingToken({
+        kind: "click",
+        userId,
+        emailId: email.id,
+        domainId: domain.id,
+        recipient,
+        targetUrl,
+      }),
+    createOpenToken: () =>
+      createEmailTrackingToken({
+        kind: "open",
+        userId,
+        emailId: email.id,
+        domainId: domain.id,
+        recipient,
+      }),
+  }).html;
 }
 
 function getTerminalEmailSkipReason(status: string): string | null {

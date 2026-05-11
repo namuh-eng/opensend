@@ -4,13 +4,17 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
-import { deleteDNSRecord, listDNSRecords } from "@/lib/cloudflare";
+import {
+  type AuditContext,
+  auditContextForApiKey,
+  auditContextForDashboardSession,
+  recordAuditEvent,
+} from "@/lib/audit-events";
 import {
   getCachedDomainById,
   invalidateDomainCaches,
 } from "@/lib/domain-cache";
 import { queueEvent } from "@/lib/events";
-import { deleteDomainIdentity } from "@/lib/ses";
 import {
   domainRouteParamsSchema,
   updateDomainSchema,
@@ -24,14 +28,13 @@ import { NextResponse } from "next/server";
 function domainDetailService() {
   return createDomainDetailService({
     getDomainById: getCachedDomainById,
-    deleteDomainIdentity,
-    listDNSRecords,
-    deleteDNSRecord,
     invalidateDomainCaches,
   });
 }
 
-async function resolveUserId(request: Request): Promise<string | Response> {
+async function resolveAuditContext(
+  request: Request,
+): Promise<AuditContext | Response> {
   const auth = await authorizeDashboardOrApiKey(
     request.headers.get("authorization"),
   );
@@ -40,13 +43,21 @@ async function resolveUserId(request: Request): Promise<string | Response> {
   if (permissionError) return permissionError;
 
   const session = "dashboard" in auth ? await getServerSession() : null;
-  const userId = "userId" in auth ? auth.userId : session?.user?.id;
-  if (!userId) return unauthorizedResponse();
+  const auditContext =
+    "userId" in auth
+      ? auth.userId
+        ? auditContextForApiKey({
+            userId: auth.userId,
+            apiKeyId: auth.apiKeyId,
+          })
+        : null
+      : auditContextForDashboardSession(session);
+  if (!auditContext) return unauthorizedResponse();
 
-  return userId;
+  return auditContext;
 }
 
-function isResponse(value: string | Response): value is Response {
+function isResponse(value: AuditContext | Response): value is Response {
   return value instanceof Response;
 }
 
@@ -69,8 +80,9 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await resolveUserId(req);
-  if (isResponse(userId)) return userId;
+  const auditContext = await resolveAuditContext(req);
+  if (isResponse(auditContext)) return auditContext;
+  const userId = auditContext.userId;
 
   const parsedParams = domainRouteParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
@@ -101,8 +113,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await resolveUserId(req);
-  if (isResponse(userId)) return userId;
+  const auditContext = await resolveAuditContext(req);
+  if (isResponse(auditContext)) return auditContext;
+  const userId = auditContext.userId;
 
   let body: unknown;
   try {
@@ -134,6 +147,17 @@ export async function PATCH(
         userId,
         payload: updated.eventPayload,
       });
+
+      await recordAuditEvent({
+        context: auditContext,
+        action: "domain.updated",
+        targetType: "domain",
+        targetId: updated.response.id,
+        metadata: {
+          changed_fields: updated.changedFields,
+          updates: result.data,
+        },
+      });
     }
 
     return NextResponse.json(updated.response);
@@ -154,8 +178,9 @@ export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await resolveUserId(req);
-  if (isResponse(userId)) return userId;
+  const auditContext = await resolveAuditContext(req);
+  if (isResponse(auditContext)) return auditContext;
+  const userId = auditContext.userId;
 
   const parsedParams = domainRouteParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
@@ -172,6 +197,16 @@ export async function DELETE(
       type: "domain.deleted",
       userId,
       payload: deleted.eventPayload,
+    });
+
+    await recordAuditEvent({
+      context: auditContext,
+      action: "domain.deleted",
+      targetType: "domain",
+      targetId: deleted.response.id,
+      metadata: {
+        name: deleted.eventPayload.name,
+      },
     });
 
     return NextResponse.json(deleted.response);

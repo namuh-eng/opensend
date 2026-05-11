@@ -15,7 +15,7 @@ Use the Resend-compatible export for the easiest migration path:
 ```typescript
 import { Resend } from "opensend";
 
-const resend = new Resend("re_your_api_key");
+const resend = new Resend("os_your_api_key");
 ```
 
 By default the SDK targets OpenSend's hosted API origin, `https://api.opensend.com`.
@@ -24,7 +24,7 @@ Self-hosted deployments can override the origin with `baseUrl`:
 ```typescript
 import { Resend } from "opensend";
 
-const resend = new Resend("re_your_api_key", {
+const resend = new Resend("os_your_api_key", {
   baseUrl: "https://api.your-deployment.example.com",
 });
 ```
@@ -34,7 +34,7 @@ The existing `Opensend` export is still supported for backwards compatibility:
 ```typescript
 import { Opensend } from "opensend";
 
-const client = new Opensend("re_your_api_key", {
+const client = new Opensend("os_your_api_key", {
   baseUrl: "https://api.your-deployment.example.com",
 });
 ```
@@ -152,11 +152,12 @@ within 30 days; unparseable, past, or out-of-policy values return
 ## Idempotency Keys
 
 Pass a per-request `idempotencyKey` option to prevent accidental duplicate
-acceptance when retrying sends. Keys must match the API contract: 1-255
-characters. OpenSend preserves the existing send contract for duplicate keys: the
-API returns `409 idempotency_conflict` with the originally accepted email id in
-`details.id`; batch duplicates are rejected before reserving quota, creating
-additional rows, or publishing more queue jobs.
+acceptance when retrying sends. Keys must match the API contract: 1-256
+characters. OpenSend replays duplicate single-send keys with the original
+accepted `{ id }` response. Batch duplicate keys currently return
+`409 idempotency_conflict` with the originally accepted first email id in
+`details.id` before reserving quota, creating additional rows, or publishing
+more queue jobs.
 
 ```typescript
 await resend.emails.send(
@@ -292,7 +293,7 @@ console.log(data.id);
 self-hosted OpenSend deployments:
 
 ```typescript
-const resend = new Resend("re_your_api_key", {
+const resend = new Resend("os_your_api_key", {
   baseUrl: "https://api.your-deployment.example.com",
 });
 ```

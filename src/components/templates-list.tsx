@@ -15,10 +15,43 @@ interface Template {
 
 type StatusFilter = "" | "draft" | "published";
 
+async function readCreateTemplateError(res: Response): Promise<string> {
+  const fallback = "Could not create template.";
+  const payload: unknown = await res.json().catch(() => null);
+
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "error" in payload &&
+    typeof payload.error === "string" &&
+    payload.error.trim()
+  ) {
+    return payload.error;
+  }
+
+  return fallback;
+}
+
+function getCreatedTemplateId(payload: unknown): string | null {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "id" in payload &&
+    typeof payload.id === "string" &&
+    payload.id
+  ) {
+    return payload.id;
+  }
+
+  return null;
+}
+
 export function TemplatesList() {
   const router = useRouter();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -82,6 +115,8 @@ export function TemplatesList() {
   };
 
   const handleCreate = async () => {
+    setCreating(true);
+    setCreateError(null);
     try {
       const apiKey =
         typeof window !== "undefined"
@@ -94,14 +129,29 @@ export function TemplatesList() {
       const res = await fetch("/api/templates", {
         method: "POST",
         headers,
-        body: JSON.stringify({ name: "Untitled Template" }),
+        body: JSON.stringify({
+          name: "Untitled Template",
+          html: "<p>Start writing your email template.</p>",
+        }),
       });
-      if (res.ok) {
-        const template = await res.json();
-        router.push(`/templates/${template.id}/editor`);
+      if (!res.ok) {
+        setCreateError(await readCreateTemplateError(res));
+        return;
       }
+
+      const templateId = getCreatedTemplateId(await res.json());
+      if (!templateId) {
+        setCreateError(
+          "Template was created but no editor route was returned.",
+        );
+        return;
+      }
+
+      router.push(`/templates/${templateId}/editor`);
     } catch {
-      // ignore
+      setCreateError("Could not create template.");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -278,7 +328,8 @@ export function TemplatesList() {
         <button
           type="button"
           onClick={handleCreate}
-          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 transition-colors flex items-center gap-1.5"
+          disabled={creating}
+          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-70 transition-colors flex items-center gap-1.5"
         >
           <svg
             aria-hidden="true"
@@ -292,9 +343,18 @@ export function TemplatesList() {
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
-          Create template
+          {creating ? "Creating..." : "Create template"}
         </button>
       </div>
+
+      {createError ? (
+        <div
+          role="alert"
+          className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-300"
+        >
+          {createError}
+        </div>
+      ) : null}
 
       {/* Content */}
       {loading ? (

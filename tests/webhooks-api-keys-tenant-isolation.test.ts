@@ -203,6 +203,45 @@ describe("webhook API tenant isolation", () => {
     });
   });
 
+  it("lets a signed-in dashboard user create an owned webhook", async () => {
+    mockValidateApiKey.mockResolvedValueOnce({ dashboard: true });
+    mockGetServerSession.mockResolvedValueOnce({
+      user: { id: "dashboard-user-b", email: "dashboard@example.com" },
+    });
+    mockCreateWebhook.mockResolvedValue({
+      id: "wh-dashboard",
+      endpoint: "https://example.com/dashboard",
+      events: ["email.sent"],
+      status: "enabled",
+      signingSecret: "whsec_dashboard",
+      createdAt: "2026-05-12T00:00:00.000Z",
+    });
+
+    const route = await import("@/app/api/webhooks/route");
+    const response = await route.POST(
+      new Request("http://localhost/api/webhooks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          endpoint: "https://example.com/dashboard",
+          events: ["email.sent"],
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({
+      object: "webhook",
+      id: "wh-dashboard",
+      signing_secret: "whsec_dashboard",
+    });
+    expect(mockCreateWebhook).toHaveBeenCalledWith({
+      userId: "dashboard-user-b",
+      endpoint: "https://example.com/dashboard",
+      events: ["email.sent"],
+    });
+  });
+
   it("returns 404 and cannot mutate user A's webhook as user B", async () => {
     mockGetWebhook.mockResolvedValue(undefined);
     mockUpdateWebhook.mockResolvedValue(undefined);

@@ -5,6 +5,11 @@ import {
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import {
+  auditContextForApiKey,
+  auditContextForDashboardSession,
+  recordAuditEvent,
+} from "@/lib/audit-events";
+import {
   getCachedDomainById,
   invalidateDomainCaches,
 } from "@/lib/domain-cache";
@@ -24,8 +29,17 @@ export async function POST(
   if (permissionError) return permissionError;
 
   const session = "dashboard" in auth ? await getServerSession() : null;
-  const userId = "userId" in auth ? auth.userId : session?.user?.id;
-  if (!userId) return unauthorizedResponse();
+  const auditContext =
+    "userId" in auth
+      ? auth.userId
+        ? auditContextForApiKey({
+            userId: auth.userId,
+            apiKeyId: auth.apiKeyId,
+          })
+        : null
+      : auditContextForDashboardSession(session);
+  if (!auditContext) return unauthorizedResponse();
+  const userId = auditContext.userId;
 
   const parsedParams = verifyDomainParamsSchema.safeParse(await params);
   if (!parsedParams.success) {
@@ -68,6 +82,22 @@ export async function POST(
         },
       });
     }
+
+    await recordAuditEvent({
+      context: auditContext,
+      action: "domain.verified",
+      targetType: "domain",
+      targetId: reconciled.id,
+      metadata: {
+        name: reconciled.name,
+        previous_status:
+          result.status === "updated"
+            ? result.previousStatus
+            : reconciled.status,
+        status: reconciled.status,
+        result: result.status,
+      },
+    });
 
     return Response.json({
       object: "domain",
