@@ -56,9 +56,11 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/components/emails-sending-page", () => ({
-  EmailsSendingPage: (props: { emails: unknown[]; apiKeys: unknown[] }) => (
-    <div data-testid="emails-page" data-props={JSON.stringify(props)} />
-  ),
+  EmailsSendingPage: (props: {
+    emails: unknown[];
+    apiKeys: unknown[];
+    hasAnyEmails: boolean;
+  }) => <div data-testid="emails-page" data-props={JSON.stringify(props)} />,
 }));
 
 vi.mock("@/components/email-detail", () => ({
@@ -208,15 +210,18 @@ describe("dashboard pages tenant scoping", () => {
   });
 
   it("renders empty list data for user B when scoped page queries return no owned rows", async () => {
-    queueRows([], []);
+    queueRows([], [], []);
     const EmailsPage = (await import("@/app/(dashboard)/emails/page")).default;
     const emailsResult = await EmailsPage({
       searchParams: Promise.resolve({}),
     });
-    expect(
-      parsedProps<{ emails: unknown[]; apiKeys: unknown[] }>(emailsResult)
-        .emails,
-    ).toEqual([]);
+    const emailsProps = parsedProps<{
+      emails: unknown[];
+      apiKeys: unknown[];
+      hasAnyEmails: boolean;
+    }>(emailsResult);
+    expect(emailsProps.emails).toEqual([]);
+    expect(emailsProps.hasAnyEmails).toBe(false);
 
     queueRows([], []);
     const ApiKeysPage = (await import("@/app/(dashboard)/api-keys/page"))

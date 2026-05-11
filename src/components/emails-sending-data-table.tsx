@@ -14,6 +14,7 @@ export interface EmailListItem {
 
 interface EmailsSendingDataTableProps {
   emails: EmailListItem[];
+  emptyState?: "first-run" | "filtered";
 }
 
 export function getStatusVariant(
@@ -77,11 +78,21 @@ function getAvatarColor(email: string): string {
 
 export function EmailsSendingDataTable({
   emails,
+  emptyState = "filtered",
 }: EmailsSendingDataTableProps) {
   if (emails.length === 0) {
+    if (emptyState === "first-run") {
+      return <EmailsFirstRunEmptyState />;
+    }
+
     return (
-      <div className="flex items-center justify-center py-16 text-[14px] text-[#A1A4A5]">
-        No emails found
+      <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+        <p className="text-[14px] font-medium text-[#F0F0F0]">
+          No emails match your filters
+        </p>
+        <p className="max-w-[360px] text-[13px] leading-5 text-[#A1A4A5]">
+          Adjust your search, status, or date filters to find sent emails.
+        </p>
       </div>
     );
   }
@@ -114,6 +125,27 @@ export function EmailsSendingDataTable({
         })}
       </tbody>
     </table>
+  );
+}
+
+function EmailsFirstRunEmptyState() {
+  return (
+    <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
+      <div className="space-y-2">
+        <h2 className="text-[18px] font-semibold text-[#F0F0F0]">
+          No sent emails yet
+        </h2>
+        <p className="max-w-[420px] text-[14px] leading-6 text-[#A1A4A5]">
+          Start sending emails to see insights and previews for every message.
+        </p>
+      </div>
+      <Link
+        href="/docs"
+        className="inline-flex h-9 items-center justify-center rounded-[8px] border border-[rgba(176,199,217,0.18)] px-4 text-[13px] font-medium text-[#F0F0F0] transition-colors hover:bg-[rgba(176,199,217,0.1)]"
+      >
+        Go to docs
+      </Link>
+    </div>
   );
 }
 
