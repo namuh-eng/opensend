@@ -28,7 +28,7 @@ const mockKeys: ApiKeyRow[] = [
   {
     id: "key-1",
     name: "Production Key",
-    tokenPreview: "re_abc...123",
+    tokenPreview: "os_abc...123",
     permission: "full_access",
     lastUsedAt: null,
     createdAt: "2026-03-01T10:00:00Z",
@@ -108,8 +108,8 @@ describe("Create API Key Modal — feature-031", () => {
       json: async () => ({
         id: "new-key",
         name: "My Key",
-        token: "re_abc123def456ghi789",
-        key_prefix: "re_abc123de...",
+        token: "os_abc123def456ghi789",
+        key_prefix: "os_abc123de...",
         permission: "full_access",
       }),
     });
@@ -118,7 +118,7 @@ describe("Create API Key Modal — feature-031", () => {
     const addBtn = screen.getByRole("button", { name: "Add" });
     fireEvent.click(addBtn);
     // Wait for the token to appear
-    const tokenEl = await screen.findByText("re_abc123def456ghi789");
+    const tokenEl = await screen.findByText("os_abc123def456ghi789");
     expect(tokenEl).toBeTruthy();
   });
 
@@ -129,8 +129,8 @@ describe("Create API Key Modal — feature-031", () => {
       json: async () => ({
         id: "new-key",
         name: "My Key",
-        token: "re_abc123def456ghi789",
-        key_prefix: "re_abc123de...",
+        token: "os_abc123def456ghi789",
+        key_prefix: "os_abc123de...",
         permission: "full_access",
       }),
     });

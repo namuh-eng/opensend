@@ -130,7 +130,7 @@ const AUTH_RESULT = {
 function makeRequest(url: string, method = "GET"): NextRequest {
   return new Request(url, {
     method,
-    headers: { Authorization: "Bearer re_user_b" },
+    headers: { Authorization: "Bearer os_user_b" },
   }) as unknown as NextRequest;
 }
 

@@ -40,7 +40,8 @@ test("audit log shows same-tenant dashboard mutations and hides other tenants", 
   }, primaryKeyName);
 
   expect(createResponse.status).toBe(201);
-  expect(JSON.stringify(createResponse.body)).toContain("token");
+  const createdBody = createResponse.body as { token?: unknown };
+  expect(typeof createdBody.token).toBe("string");
 
   const auditRows = await e2eDb.query<{
     action: string;
@@ -61,10 +62,11 @@ test("audit log shows same-tenant dashboard mutations and hides other tenants", 
     actor_type: "user",
   });
   expect(auditRows.rows[0]?.metadata?.name).toBe(primaryKeyName);
-  expect(JSON.stringify(auditRows.rows[0]?.metadata)).not.toContain("re_");
-  expect(JSON.stringify(auditRows.rows[0]?.metadata)).not.toContain(
-    "tokenHash",
-  );
+  const serializedMetadata = JSON.stringify(auditRows.rows[0]?.metadata);
+  if (typeof createdBody.token === "string") {
+    expect(serializedMetadata).not.toContain(createdBody.token);
+  }
+  expect(serializedMetadata).not.toContain("tokenHash");
 
   await page.goto(`/audit-log?q=${encodeURIComponent(primaryKeyName)}`);
   await expect(page.getByRole("heading", { name: "Audit Log" })).toBeVisible();

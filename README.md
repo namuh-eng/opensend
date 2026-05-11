@@ -30,6 +30,8 @@
 
 Opensend is a self-hostable email platform with the developer experience of Resend: REST APIs, SDKs, React email templates, domain verification, webhooks, broadcasts, automations, analytics, and an admin dashboard.
 
+Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+
 Use Opensend when you want:
 
 - **Control** — run email infrastructure on your own cloud and AWS SES quota.

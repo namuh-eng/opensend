@@ -185,7 +185,7 @@ describe("suppression management routes", () => {
       new Request(
         "http://localhost:3015/api/suppressions?limit=10&after=supp-0",
         {
-          headers: { Authorization: "Bearer re_test" },
+          headers: { Authorization: "Bearer os_test" },
         },
       ),
     );
@@ -258,7 +258,7 @@ describe("suppression management routes", () => {
 
     const forbidden = await GET(
       new Request("http://localhost:3015/api/suppressions", {
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
     );
 
@@ -280,7 +280,7 @@ describe("suppression management routes", () => {
     const res = await DELETE(
       new Request("http://localhost:3015/api/suppressions/blocked%40test.com", {
         method: "DELETE",
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
       { params: Promise.resolve({ email: "blocked%40test.com" }) },
     );
@@ -305,7 +305,7 @@ describe("suppression management routes", () => {
     const res = await DELETE(
       new Request("http://localhost:3015/api/suppressions/absent%40test.com", {
         method: "DELETE",
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
       { params: Promise.resolve({ email: "absent%40test.com" }) },
     );

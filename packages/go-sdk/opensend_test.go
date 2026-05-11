@@ -33,7 +33,7 @@ func jsonResponse(status int, body string) *http.Response {
 func TestSendConstructsRequestWithAuthAndConfiguredBaseURL(t *testing.T) {
 	var called bool
 	client, err := NewClient(
-		"re_test",
+		"os_test",
 		WithBaseURL("https://api.example.test/base/"),
 		WithHTTPClient(testHTTPClient(t, func(req *http.Request) (*http.Response, error) {
 			called = true
@@ -43,7 +43,7 @@ func TestSendConstructsRequestWithAuthAndConfiguredBaseURL(t *testing.T) {
 			if got := req.URL.String(); got != "https://api.example.test/base/emails" {
 				t.Fatalf("url = %s, want https://api.example.test/base/emails", got)
 			}
-			if got := req.Header.Get("Authorization"); got != "Bearer re_test" {
+			if got := req.Header.Get("Authorization"); got != "Bearer os_test" {
 				t.Fatalf("authorization = %q", got)
 			}
 			if got := req.Header.Get("Content-Type"); got != "application/json" {
@@ -107,7 +107,7 @@ func TestSendConstructsRequestWithAuthAndConfiguredBaseURL(t *testing.T) {
 
 func TestNewClientDefaultsToHostedBaseURL(t *testing.T) {
 	client, err := NewClient(
-		"re_default",
+		"os_default",
 		WithHTTPClient(testHTTPClient(t, func(req *http.Request) (*http.Response, error) {
 			if got := req.URL.String(); got != "https://api.opensend.com/emails" {
 				t.Fatalf("url = %s, want https://api.opensend.com/emails", got)
@@ -135,7 +135,7 @@ func TestNewClientDefaultsToHostedBaseURL(t *testing.T) {
 
 func TestSendParsesAcceptedEmailID(t *testing.T) {
 	client, err := NewClient(
-		"re_parse",
+		"os_parse",
 		WithHTTPClient(testHTTPClient(t, func(req *http.Request) (*http.Response, error) {
 			return jsonResponse(http.StatusAccepted, `{"id":"email_accepted"}`), nil
 		})),
@@ -161,7 +161,7 @@ func TestSendParsesAcceptedEmailID(t *testing.T) {
 func TestSendNon2xxReturnsAPIErrorWithStatusBodyAndEnvelope(t *testing.T) {
 	body := `{"name":"validation_error","code":"validation_error","message":"Validation failed.","details":{"fieldErrors":{"to":["Required"]},"formErrors":[]}}`
 	client, err := NewClient(
-		"re_error",
+		"os_error",
 		WithHTTPClient(testHTTPClient(t, func(req *http.Request) (*http.Response, error) {
 			return jsonResponse(http.StatusUnprocessableEntity, body), nil
 		})),
@@ -198,10 +198,10 @@ func TestClientValidation(t *testing.T) {
 	if _, err := NewClient(""); err == nil || !strings.Contains(err.Error(), "API key") {
 		t.Fatalf("NewClient blank key error = %v", err)
 	}
-	if _, err := NewClient("re_test", WithBaseURL("ftp://example.com")); err == nil || !strings.Contains(err.Error(), "http or https") {
+	if _, err := NewClient("os_test", WithBaseURL("ftp://example.com")); err == nil || !strings.Contains(err.Error(), "http or https") {
 		t.Fatalf("NewClient ftp base url error = %v", err)
 	}
-	if _, err := NewClient("re_test", WithHTTPClient(nil)); err == nil || !strings.Contains(err.Error(), "http client") {
+	if _, err := NewClient("os_test", WithHTTPClient(nil)); err == nil || !strings.Contains(err.Error(), "http client") {
 		t.Fatalf("NewClient nil http client error = %v", err)
 	}
 }

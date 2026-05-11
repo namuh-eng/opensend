@@ -393,6 +393,10 @@ export default function DocsPage() {
             <code className="px-1.5 py-0.5 bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded text-[13px] text-[#F0F0F0] font-mono">
               https://api.opensend.com
             </code>
+            .{" "}
+            {
+              "Use your OpenSend API key (`os_...`) with the Resend-compatible API surface."
+            }
           </p>
           <div className="mt-5 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] p-4">
             <p className="text-[13px] text-[#A1A4A5]">

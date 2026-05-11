@@ -30,9 +30,9 @@ describe("audit event service", () => {
   it("redacts API keys, tokens, secrets, cookies, auth headers, and body fields", () => {
     const sanitized = sanitizeAuditMetadata({
       name: "Primary",
-      apiKey: "re_plaintext",
+      apiKey: "os_plaintext",
       token: "tok_plaintext",
-      authorization: "Bearer re_plaintext",
+      authorization: "Bearer os_plaintext",
       cookie: "better-auth.session_token=value",
       signingSecret: "whsec_plaintext",
       nested: {
@@ -81,7 +81,7 @@ describe("audit event service", () => {
       sourceApiKeyId: "caller-key",
       metadata: {
         name: "Created key",
-        token: "re_plaintext",
+        token: "os_plaintext",
         tokenHash: "hash_plaintext",
       },
     });
@@ -111,7 +111,7 @@ describe("audit event service", () => {
         tokenHash: "[REDACTED]",
       },
     });
-    expect(JSON.stringify(inserted)).not.toContain("re_plaintext");
+    expect(JSON.stringify(inserted)).not.toContain("os_plaintext");
     expect(JSON.stringify(inserted)).not.toContain("hash_plaintext");
   });
 

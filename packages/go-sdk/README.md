@@ -3,6 +3,8 @@
 Minimal first-party Go SDK for OpenSend transactional email sends with a
 Resend-shaped first send surface.
 
+Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+
 ## Installation
 
 From a Go module, install the package from this repository:
