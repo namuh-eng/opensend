@@ -1,22 +1,15 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import {
   AutomationRunServiceError,
   createAutomationRunService,
 } from "@opensend/core";
+import { authorizeAutomationRoute } from "../../route-helpers";
 
 export const automationRunService = createAutomationRunService();
 
 export async function authorizeAutomationRunRoute(
   request: Request,
-): Promise<{ userId?: string | null } | { response: Response }> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return { response: unauthorizedResponse() };
-
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return { response: permissionError };
-
-  return { userId: auth.userId };
+): Promise<{ userId: string } | { response: Response }> {
+  return authorizeAutomationRoute(request);
 }
 
 export function mapAutomationRunServiceError(

@@ -39,20 +39,9 @@ const RUN_STATUSES = [
 ] as const;
 const CANCELLABLE_RUN_STATUSES = new Set(["queued", "waiting"]);
 
-function getApiKey(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage?.getItem?.("api_key") ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function apiHeaders(contentType = false): Record<string, string> {
   const headers: Record<string, string> = {};
   if (contentType) headers["Content-Type"] = "application/json";
-  const apiKey = getApiKey();
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   return headers;
 }
 
@@ -113,11 +102,7 @@ export function AutomationRunsList({ automationId }: Props) {
       });
       if (!res.ok) {
         setMetrics(null);
-        setMetricsError(
-          res.status === 401
-            ? "Set an API key to view run metrics."
-            : "Failed to load run metrics.",
-        );
+        setMetricsError("Failed to load run metrics.");
         return;
       }
       setMetrics((await res.json()) as AutomationRunMetrics);
@@ -142,11 +127,7 @@ export function AutomationRunsList({ automationId }: Props) {
       );
       if (!res.ok) {
         setRuns([]);
-        setError(
-          res.status === 401
-            ? "Set an API key to view runs."
-            : "Failed to load runs.",
-        );
+        setError("Failed to load runs.");
         return;
       }
       const data = await res.json();
