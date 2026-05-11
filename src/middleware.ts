@@ -240,6 +240,7 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith("/landing/") ||
       pathname === "/pricing" ||
       pathname.startsWith("/pricing/") ||
+      pathname === "/status" ||
       pathname.startsWith("/_next/") ||
       pathname.startsWith("/favicon")
     ) {
