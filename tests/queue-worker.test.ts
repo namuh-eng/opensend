@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockFindById = vi.hoisted(() => vi.fn());
 const mockFindDueScheduled = vi.hoisted(() => vi.fn());
+const mockFindDomainByNameForUser = vi.hoisted(() => vi.fn());
 const mockUpdateEmail = vi.hoisted(() => vi.fn());
 const mockCreateEmailEvent = vi.hoisted(() => vi.fn());
 const mockSendEmail = vi.hoisted(() => vi.fn());
@@ -14,12 +15,15 @@ const mockDispatchPendingDeliveries = vi.hoisted(() => vi.fn());
 const mockEmitCloudWatchMetric = vi.hoisted(() => vi.fn());
 const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
+const mockApplyEmailTracking = vi.hoisted(() => vi.fn());
+const mockCreateEmailTrackingToken = vi.hoisted(() => vi.fn());
 
 vi.mock("@opensend/core", () => ({
   createBackgroundJob: (job: Record<string, unknown>) => ({
     ...job,
     requestedAt: "2026-04-28T00:00:00.000Z",
   }),
+  createEmailTrackingToken: mockCreateEmailTrackingToken,
   createTelemetryContext: (input: {
     service: string;
     operation: string;
@@ -36,6 +40,9 @@ vi.mock("@opensend/core", () => ({
       "00-11111111111111111111111111111111-2222222222222222-01",
     correlationId: input.carrier?.correlationId ?? "corr-worker-test",
   }),
+  domainRepo: {
+    findByNameForUser: mockFindDomainByNameForUser,
+  },
   emailEventRepo: {
     create: mockCreateEmailEvent,
   },
@@ -47,6 +54,12 @@ vi.mock("@opensend/core", () => ({
     findDueScheduled: mockFindDueScheduled,
     update: mockUpdateEmail,
   },
+  getEmailAddressDomain: (address: string) =>
+    address.split("@").pop()?.replace(">", "").trim().toLowerCase() ?? "",
+  getEmailTrackingBaseUrl: (input: { trackingSubdomain?: string | null }) =>
+    input.trackingSubdomain
+      ? `https://${input.trackingSubdomain}`
+      : "http://localhost:3015",
   getSandboxTestOutcomeForRecipients: (recipients: string[]) => {
     const outcomes = recipients.map((recipient) => {
       const [local, domain] = recipient.trim().toLowerCase().split("@");
@@ -74,6 +87,7 @@ vi.mock("@opensend/core", () => ({
   }),
   logTelemetry: mockLogTelemetry,
   parseBackgroundJob: (raw: string) => JSON.parse(raw),
+  applyEmailTracking: mockApplyEmailTracking,
   publishBackgroundJob: mockPublishBackgroundJob,
   recordTelemetryError: mockRecordTelemetryError,
   suppressionRepo: {
@@ -109,6 +123,18 @@ describe("QueueWorker", () => {
     vi.clearAllMocks();
     mockListWebhooksForDispatch.mockResolvedValue({ data: [] });
     mockEnqueueWebhookDelivery.mockResolvedValue({ id: "delivery-1" });
+    mockFindDomainByNameForUser.mockResolvedValue(null);
+    mockApplyEmailTracking.mockImplementation((input: { html: string }) => ({
+      html: input.html,
+      rewroteLinks: 0,
+      insertedOpenPixel: false,
+    }));
+    mockCreateEmailTrackingToken.mockImplementation(
+      (payload: { kind: string; targetUrl?: string }) =>
+        payload.targetUrl
+          ? `${payload.kind}:${payload.targetUrl}`
+          : payload.kind,
+    );
   });
 
   afterEach(() => {
@@ -163,6 +189,123 @@ describe("QueueWorker", () => {
       providerNextRetryAt: null,
       providerDeadLetteredAt: null,
     });
+  });
+
+  it("applies domain tracking only to the provider payload", async () => {
+    mockFindById.mockResolvedValue({
+      id: "email-track",
+      from: "sender@example.com",
+      to: ["user@example.com"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: '<p><a href="https://example.com">Hello</a></p>',
+      text: "",
+      headers: {},
+      attachments: [],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+    mockFindDomainByNameForUser.mockResolvedValue({
+      id: "domain-1",
+      name: "example.com",
+      userId: "user-1",
+      trackClicks: true,
+      trackOpens: true,
+      trackingSubdomain: "track.example.com",
+    });
+    mockApplyEmailTracking.mockReturnValue({
+      html: '<p><a href="https://track.example.com/api/track/click/token">Hello</a></p><img data-opensend-open-tracking="true" />',
+      rewroteLinks: 1,
+      insertedOpenPixel: true,
+    });
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({ queueUrl: null });
+
+    await expect(
+      worker.processJob({
+        id: "email.send:email-track",
+        type: "email.send",
+        source: "api",
+        requestedAt: "2026-04-28T00:00:00.000Z",
+        emailId: "email-track",
+      }),
+    ).resolves.toEqual({ status: "sent" });
+
+    expect(mockFindDomainByNameForUser).toHaveBeenCalledWith(
+      "example.com",
+      "user-1",
+    );
+    expect(mockApplyEmailTracking).toHaveBeenCalledWith(
+      expect.objectContaining({
+        html: '<p><a href="https://example.com">Hello</a></p>',
+        clickTracking: true,
+        openTracking: true,
+        trackingBaseUrl: "https://track.example.com",
+      }),
+    );
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        html: expect.stringContaining("data-opensend-open-tracking"),
+      }),
+    );
+    expect(mockUpdateEmail).not.toHaveBeenCalledWith(
+      "email-track",
+      expect.objectContaining({ html: expect.any(String) }),
+    );
+  });
+
+  it("preserves provider HTML when domain tracking is disabled", async () => {
+    const html = '<p><a href="https://example.com">Hello</a></p>';
+    mockFindById.mockResolvedValue({
+      id: "email-no-track",
+      from: "sender@example.com",
+      to: ["user@example.com"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html,
+      text: "",
+      headers: {},
+      attachments: [],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+    mockFindDomainByNameForUser.mockResolvedValue({
+      id: "domain-1",
+      name: "example.com",
+      userId: "user-1",
+      trackClicks: false,
+      trackOpens: false,
+      trackingSubdomain: "track.example.com",
+    });
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({ queueUrl: null });
+
+    await expect(
+      worker.processJob({
+        id: "email.send:email-no-track",
+        type: "email.send",
+        source: "api",
+        requestedAt: "2026-04-28T00:00:00.000Z",
+        emailId: "email-no-track",
+      }),
+    ).resolves.toEqual({ status: "sent" });
+
+    expect(mockApplyEmailTracking).not.toHaveBeenCalled();
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ html }),
+    );
   });
 
   it("simulates delivered resend.dev recipients without calling the provider", async () => {
