@@ -204,26 +204,49 @@ const API_GROUPS: EndpointGroup[] = [
     endpoints: [
       {
         method: "POST",
-        path: "/api/broadcasts",
+        path: "/broadcasts",
         description: "Create a new broadcast",
-        curl: `curl -X POST https://api.opensend.com/api/broadcasts \\
+        curl: `curl -X POST https://api.opensend.com/broadcasts \\
   -H "Authorization: Bearer re_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{ "name": "March Newsletter" }'`,
+  -d '{ "name": "March Newsletter", "from": "Acme <news@example.com>", "subject": "March updates", "segment_id": "SEGMENT_ID" }'
+
+// SDK
+await client.broadcasts.create({
+  name: "March Newsletter",
+  from: "Acme <news@example.com>",
+  subject: "March updates",
+  segmentId: "SEGMENT_ID",
+  previewText: "A quick monthly update"
+});`,
       },
       {
         method: "GET",
-        path: "/api/broadcasts",
+        path: "/broadcasts",
         description: "List all broadcasts",
-        curl: `curl https://api.opensend.com/api/broadcasts \\
+        curl: `curl https://api.opensend.com/broadcasts \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
       },
       {
         method: "GET",
-        path: "/api/broadcasts/:id",
+        path: "/broadcasts/:id",
         description: "Retrieve a broadcast by ID",
-        curl: `curl https://api.opensend.com/api/broadcasts/BROADCAST_ID \\
+        curl: `curl https://api.opensend.com/broadcasts/BROADCAST_ID \\
   -H "Authorization: Bearer re_YOUR_API_KEY"`,
+      },
+      {
+        method: "POST",
+        path: "/broadcasts/:id/send",
+        description: "Send or schedule a broadcast",
+        curl: `curl -X POST https://api.opensend.com/broadcasts/BROADCAST_ID/send \\
+  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "scheduled_at": "in 1 min" }'
+
+// SDK
+await client.broadcasts.send("BROADCAST_ID", {
+  scheduledAt: "in 1 min"
+});`,
       },
     ],
   },
