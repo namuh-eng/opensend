@@ -31,7 +31,7 @@ describe("api key auth cache", () => {
   });
 
   it("returns cached auth results without hitting the database", async () => {
-    const rawKey = "re_cached";
+    const rawKey = "os_cached";
     const tokenHash = createHash("sha256").update(rawKey).digest("hex");
     mockReadCache.mockResolvedValue({
       status: "hit",
@@ -57,7 +57,7 @@ describe("api key auth cache", () => {
   });
 
   it("falls back to the database on cache miss and writes the result back", async () => {
-    const rawKey = "re_miss";
+    const rawKey = "os_miss";
     const tokenHash = createHash("sha256").update(rawKey).digest("hex");
     mockReadCache.mockResolvedValue({ status: "miss", value: null });
     mockFindFirst.mockResolvedValue({
@@ -97,7 +97,7 @@ describe("api key auth cache", () => {
 
     const { validateApiKey } = await import("@/lib/api-auth");
 
-    await expect(validateApiKey("Bearer re_unknown")).resolves.toBeNull();
+    await expect(validateApiKey("Bearer os_unknown")).resolves.toBeNull();
     expect(mockFindFirst).toHaveBeenCalledOnce();
   });
 

@@ -20,11 +20,14 @@ import { useEffect, useMemo, useState } from "react";
 interface EmailsSendingPageProps {
   apiKeys: { id: string; name: string }[];
   emails: EmailListItem[];
+  hasAnyEmails?: boolean;
 }
 
 function parseInitialFilters(searchParams: URLSearchParams): EmailFilters {
   const startDate = searchParams.get("startDate");
   const endDate = searchParams.get("endDate");
+  const status =
+    searchParams.get("status") ?? searchParams.get("statuses") ?? "";
 
   return {
     search: searchParams.get("search") ?? "",
@@ -32,7 +35,7 @@ function parseInitialFilters(searchParams: URLSearchParams): EmailFilters {
       startDate && endDate
         ? `custom:${startDate}:${endDate}`
         : (searchParams.get("dateRange") ?? "Last 15 days"),
-    status: searchParams.get("status") ?? searchParams.get("statuses") ?? "",
+    status: status === "all" ? "" : status,
     apiKeyId:
       searchParams.get("apiKeyId") ?? searchParams.get("api_key_id") ?? "",
   };
@@ -64,7 +67,20 @@ function buildQueryString(filters: EmailFilters): string {
   return params.toString();
 }
 
-export function EmailsSendingPage({ apiKeys, emails }: EmailsSendingPageProps) {
+function hasActiveFilters(filters: EmailFilters): boolean {
+  return Boolean(
+    filters.search ||
+      filters.status ||
+      filters.apiKeyId ||
+      filters.dateRange !== "Last 15 days",
+  );
+}
+
+export function EmailsSendingPage({
+  apiKeys,
+  emails,
+  hasAnyEmails = emails.length > 0,
+}: EmailsSendingPageProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -114,7 +130,12 @@ export function EmailsSendingPage({ apiKeys, emails }: EmailsSendingPageProps) {
         onFiltersChange={setFilters}
       />
       <div className="mt-4">
-        <EmailsSendingDataTable emails={filteredEmails} />
+        <EmailsSendingDataTable
+          emails={filteredEmails}
+          emptyState={
+            hasAnyEmails || hasActiveFilters(filters) ? "filtered" : "first-run"
+          }
+        />
       </div>
     </div>
   );

@@ -20,7 +20,7 @@ import {
 const mockKey: ApiKeyDetailData = {
   id: "key-123",
   name: "testing",
-  tokenPreview: "re_jQP...TWu",
+  tokenPreview: "os_jQP...TWu",
   permission: "full_access",
   domain: null,
   domainName: "All domains",
@@ -55,7 +55,7 @@ describe("ApiKeyDetail", () => {
     expect(screen.getByText("All domains")).toBeTruthy();
     expect(screen.getByText("TOTAL USES")).toBeTruthy();
     expect(screen.getByText("TOKEN")).toBeTruthy();
-    expect(screen.getByText("re_jQP...TWu")).toBeTruthy();
+    expect(screen.getByText("os_jQP...TWu")).toBeTruthy();
     expect(screen.getByText("LAST USED")).toBeTruthy();
     expect(screen.getByText("CREATED")).toBeTruthy();
     expect(screen.getByText("CREATOR")).toBeTruthy();
@@ -133,6 +133,6 @@ describe("ApiKeyDetail", () => {
   it("token is always truncated", () => {
     render(<ApiKeyDetail apiKey={mockKey} domains={mockDomains} />);
     // Token should show truncated prefix, never full key
-    expect(screen.getByText("re_jQP...TWu")).toBeTruthy();
+    expect(screen.getByText("os_jQP...TWu")).toBeTruthy();
   });
 });

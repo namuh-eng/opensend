@@ -18,7 +18,7 @@ function apiKeyRow(overrides: Partial<ApiKeyRow> = {}): ApiKeyRow {
     id: "key-1",
     name: "Primary",
     tokenHash: "hash-1",
-    tokenPreview: "re_123...abcd",
+    tokenPreview: "os_123...abcd",
     permission: "full_access",
     domain: null,
     lastUsedAt: null,
@@ -65,7 +65,7 @@ describe("api key service", () => {
 
     const service = createApiKeyService({
       repository,
-      generateRawKey: () => "re_1234567890abcdef",
+      generateRawKey: () => "os_1234567890abcdef",
       invalidateAuthCache,
     });
 
@@ -77,15 +77,15 @@ describe("api key service", () => {
 
     expect(result).toEqual({
       id: "created-key",
-      token: "re_1234567890abcdef",
+      token: "os_1234567890abcdef",
       tokenHash:
-        "437645b2b0886d92d681fba33b3096bc45cea50aed15a8a812a15fbb7082a49c",
+        "c6211569fdd72118cc04a214c955d05f6d25c8746b012a6cd224359c82841f18",
     });
     expect(inserted).toMatchObject({
       name: "Primary",
       tokenHash:
-        "437645b2b0886d92d681fba33b3096bc45cea50aed15a8a812a15fbb7082a49c",
-      tokenPreview: "re_123...cdef",
+        "c6211569fdd72118cc04a214c955d05f6d25c8746b012a6cd224359c82841f18",
+      tokenPreview: "os_123...cdef",
       permission: "sending_access",
       domain: "domain-1",
     });
@@ -183,7 +183,7 @@ describe("api key service", () => {
   it("formats public API-key payloads with token visible only on create", () => {
     const created = {
       id: "created-key",
-      token: "re_created",
+      token: "os_created",
       tokenHash: "hash-created",
     };
     const list = toApiKeyListResponse({
@@ -196,7 +196,7 @@ describe("api key service", () => {
 
     expect(toApiKeyCreateResponse(created)).toEqual({
       id: "created-key",
-      token: "re_created",
+      token: "os_created",
     });
     expect(JSON.stringify(list)).not.toContain("token");
     expect(JSON.stringify(detail)).not.toContain("token");

@@ -41,7 +41,7 @@ const detailCreatedAt = new Date("2026-05-06T01:00:00.000Z");
 
 function request(url: string) {
   return new Request(url, {
-    headers: { Authorization: "Bearer re_test" },
+    headers: { Authorization: "Bearer os_test" },
   });
 }
 

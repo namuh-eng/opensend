@@ -47,7 +47,7 @@ describe("observability telemetry helpers", () => {
   it("redacts PII-bearing fields and hashes email addresses in freeform logs", () => {
     const sanitized = sanitizeTelemetryFields({
       Authorization: "Bearer secret-token",
-      apiKey: "re_secret",
+      apiKey: "os_secret",
       from: "sender@example.com",
       metadata: "recipient@example.com clicked",
       email_id: "email-1",
@@ -59,7 +59,7 @@ describe("observability telemetry helpers", () => {
 
     const serialized = JSON.stringify(sanitized);
     expect(serialized).not.toContain("secret-token");
-    expect(serialized).not.toContain("re_secret");
+    expect(serialized).not.toContain("os_secret");
     expect(serialized).not.toContain("sender@example.com");
     expect(serialized).not.toContain("recipient@example.com");
     expect(serialized).not.toContain("Account reset");

@@ -169,7 +169,7 @@ export function SettingsPage({
               {`SMTP_HOST=smtp.opensend.com
 SMTP_PORT=465
 SMTP_USER=resend
-SMTP_PASS=re_YOUR_API_KEY`}
+SMTP_PASS=os_YOUR_API_KEY`}
             </pre>
           </div>
         </div>

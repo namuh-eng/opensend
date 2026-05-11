@@ -151,4 +151,44 @@ describe("EmailsSendingPage", () => {
     expect(screen.queryByText("alice@example.com")).toBeNull();
     expect(screen.queryByText("bob@example.com")).toBeNull();
   });
+
+  it("renders first-run onboarding when the account has no emails", () => {
+    render(
+      <EmailsSendingPage apiKeys={apiKeys} emails={[]} hasAnyEmails={false} />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "No sent emails yet" }),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Go to docs" }).getAttribute("href"),
+    ).toBe("/docs");
+  });
+
+  it("keeps filtered empty results distinct from first-run onboarding", () => {
+    mockSearchParams = new URLSearchParams("search=missing");
+
+    render(
+      <EmailsSendingPage
+        apiKeys={apiKeys}
+        emails={emails}
+        hasAnyEmails={true}
+      />,
+    );
+
+    expect(screen.getByText("No emails match your filters")).toBeDefined();
+    expect(screen.queryByText("No sent emails yet")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Go to docs" })).toBeNull();
+  });
+
+  it("uses filtered empty copy for active filters even before the first email", () => {
+    mockSearchParams = new URLSearchParams("search=missing");
+
+    render(
+      <EmailsSendingPage apiKeys={apiKeys} emails={[]} hasAnyEmails={false} />,
+    );
+
+    expect(screen.getByText("No emails match your filters")).toBeDefined();
+    expect(screen.queryByText("No sent emails yet")).toBeNull();
+  });
 });

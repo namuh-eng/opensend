@@ -104,7 +104,7 @@ function makeRequest(
   const init: RequestInit = {
     method,
     headers: {
-      Authorization: "Bearer re_test123",
+      Authorization: "Bearer os_test123",
       "Content-Type": "application/json",
     },
   };

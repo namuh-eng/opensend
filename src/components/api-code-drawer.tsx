@@ -45,7 +45,7 @@ const EMAIL_SECTIONS: ApiCodeSection[] = [
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.emails.send({
   from: 'you@example.com',
@@ -54,7 +54,7 @@ const { data, error } = await resend.emails.send({
   html: '<p>Congrats on sending your <strong>first email</strong>!</p>',
 }, { idempotencyKey: 'welcome-user-123' });`,
       curl: `curl -X POST https://api.example.com/emails \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: welcome-user-123" \\
   -d '{
@@ -70,7 +70,7 @@ const { data, error } = await resend.emails.send({
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.batch.send([
   {
@@ -87,7 +87,7 @@ const { data, error } = await resend.batch.send([
   },
 ], { idempotencyKey: 'batch-campaign-123' });`,
       curl: `curl -X POST https://api.example.com/emails/batch \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: batch-campaign-123" \\
   -d '[
@@ -111,13 +111,13 @@ const { data, error } = await resend.batch.send([
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.emails.get(
   '49a3999c-0ce1-4ea6-ab68-afcd6dc2e794'
 );`,
       curl: `curl -X GET https://api.example.com/emails/49a3999c-0ce1-4ea6-ab68-afcd6dc2e794 \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
@@ -125,14 +125,14 @@ const { data, error } = await resend.emails.get(
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.emails.update({
   id: '49a3999c-0ce1-4ea6-ab68-afcd6dc2e794',
   scheduledAt: '2024-08-05T11:52:01.858Z',
 });`,
       curl: `curl -X PATCH https://api.example.com/emails/49a3999c-0ce1-4ea6-ab68-afcd6dc2e794 \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
     "scheduledAt": "2024-08-05T11:52:01.858Z"
@@ -147,13 +147,13 @@ const DOMAIN_SECTIONS: ApiCodeSection[] = [
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.domains.create({
   name: 'example.com',
 });`,
       curl: `curl -X POST https://api.example.com/domains \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{"name": "example.com"}'`,
     },
@@ -163,13 +163,13 @@ const { data, error } = await resend.domains.create({
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.domains.get(
   'd91cd9bd-1176-453e-8fc1-35364d380206'
 );`,
       curl: `curl -X GET https://api.example.com/domains/d91cd9bd-1176-453e-8fc1-35364d380206 \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
@@ -177,13 +177,13 @@ const { data, error } = await resend.domains.get(
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.domains.verify(
   'd91cd9bd-1176-453e-8fc1-35364d380206'
 );`,
       curl: `curl -X POST https://api.example.com/domains/d91cd9bd-1176-453e-8fc1-35364d380206/verify \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
@@ -191,7 +191,7 @@ const { data, error } = await resend.domains.verify(
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.domains.update({
   id: 'd91cd9bd-1176-453e-8fc1-35364d380206',
@@ -199,7 +199,7 @@ const { data, error } = await resend.domains.update({
   clickTracking: true,
 });`,
       curl: `curl -X PATCH https://api.example.com/domains/d91cd9bd-1176-453e-8fc1-35364d380206 \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
     "openTracking": true,
@@ -212,11 +212,11 @@ const { data, error } = await resend.domains.update({
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.domains.list();`,
       curl: `curl -X GET https://api.example.com/domains \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
@@ -224,13 +224,13 @@ const { data, error } = await resend.domains.list();`,
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.domains.remove(
   'd91cd9bd-1176-453e-8fc1-35364d380206'
 );`,
       curl: `curl -X DELETE https://api.example.com/domains/d91cd9bd-1176-453e-8fc1-35364d380206 \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
 ];
@@ -241,14 +241,14 @@ const WEBHOOK_SECTIONS: ApiCodeSection[] = [
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.webhooks.create({
   endpoint: 'https://example.com/webhooks',
   events: ['email.sent', 'email.delivered', 'email.bounced'],
 });`,
       curl: `curl -X POST https://api.example.com/webhooks \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
     "endpoint": "https://example.com/webhooks",
@@ -261,11 +261,11 @@ const { data, error } = await resend.webhooks.create({
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.webhooks.list();`,
       curl: `curl -X GET https://api.example.com/webhooks \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
@@ -273,13 +273,13 @@ const { data, error } = await resend.webhooks.list();`,
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.webhooks.remove(
   'wh_123456789'
 );`,
       curl: `curl -X DELETE https://api.example.com/webhooks/wh_123456789 \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
 ];
@@ -290,14 +290,14 @@ const API_KEY_SECTIONS: ApiCodeSection[] = [
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.apiKeys.create({
   name: 'Production',
   permission: 'full_access',
 });`,
       curl: `curl -X POST https://api.example.com/api-keys \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
     "name": "Production",
@@ -310,11 +310,11 @@ const { data, error } = await resend.apiKeys.create({
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.apiKeys.list();`,
       curl: `curl -X GET https://api.example.com/api-keys \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
@@ -322,13 +322,13 @@ const { data, error } = await resend.apiKeys.list();`,
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.apiKeys.remove(
   'key_123456789'
 );`,
       curl: `curl -X DELETE https://api.example.com/api-keys/key_123456789 \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
 ];
@@ -339,7 +339,7 @@ const CONTACT_SECTIONS: ApiCodeSection[] = [
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.contacts.create({
   email: 'user@example.com',
@@ -349,7 +349,7 @@ const { data, error } = await resend.contacts.create({
   segmentId: '78261eea-8f8b-4381-83c6-79fa7120f1cf',
 });`,
       curl: `curl -X POST https://api.example.com/contacts \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
     "email": "user@example.com",
@@ -365,13 +365,13 @@ const { data, error } = await resend.contacts.create({
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.contacts.list({
   segmentId: '78261eea-8f8b-4381-83c6-79fa7120f1cf',
 });`,
       curl: `curl -X GET "https://api.example.com/contacts?segmentId=78261eea-8f8b-4381-83c6-79fa7120f1cf" \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
@@ -379,14 +379,14 @@ const { data, error } = await resend.contacts.list({
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.contacts.remove({
   id: '520784e2-887d-4c25-b53c-4ad46ad38100',
   segmentId: '78261eea-8f8b-4381-83c6-79fa7120f1cf',
 });`,
       curl: `curl -X DELETE "https://api.example.com/contacts/520784e2-887d-4c25-b53c-4ad46ad38100?segmentId=78261eea-8f8b-4381-83c6-79fa7120f1cf" \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
 ];
@@ -397,7 +397,7 @@ const BROADCAST_SECTIONS: ApiCodeSection[] = [
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.broadcasts.create({
   segmentId: '78261eea-8f8b-4381-83c6-79fa7120f1cf',
@@ -406,7 +406,7 @@ const { data, error } = await resend.broadcasts.create({
   html: '<p>Hello subscribers!</p>',
 });`,
       curl: `curl -X POST https://api.example.com/broadcasts \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
     "segmentId": "78261eea-8f8b-4381-83c6-79fa7120f1cf",
@@ -421,13 +421,13 @@ const { data, error } = await resend.broadcasts.create({
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.broadcasts.send(
   '49a3999c-0ce1-4ea6-ab68-afcd6dc2e794'
 );`,
       curl: `curl -X POST https://api.example.com/broadcasts/49a3999c-0ce1-4ea6-ab68-afcd6dc2e794/send \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
@@ -435,11 +435,11 @@ const { data, error } = await resend.broadcasts.send(
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.broadcasts.list();`,
       curl: `curl -X GET https://api.example.com/broadcasts \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
 ];
@@ -450,14 +450,14 @@ const TEMPLATE_SECTIONS: ApiCodeSection[] = [
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.templates.create({
   name: 'Welcome Email',
   html: '<p>Welcome {{name}}!</p>',
 });`,
       curl: `curl -X POST https://api.example.com/templates \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
     "name": "Welcome Email",
@@ -470,11 +470,11 @@ const { data, error } = await resend.templates.create({
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.templates.list();`,
       curl: `curl -X GET https://api.example.com/templates \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
@@ -482,13 +482,13 @@ const { data, error } = await resend.templates.list();`,
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.templates.remove(
   'tmpl_123456789'
 );`,
       curl: `curl -X DELETE https://api.example.com/templates/tmpl_123456789 \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
 ];
@@ -499,13 +499,13 @@ const SEGMENT_SECTIONS: ApiCodeSection[] = [
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.segments.create({
   name: 'Newsletter Subscribers',
 });`,
       curl: `curl -X POST https://api.example.com/segments \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{"name": "Newsletter Subscribers"}'`,
     },
@@ -515,11 +515,11 @@ const { data, error } = await resend.segments.create({
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.segments.list();`,
       curl: `curl -X GET https://api.example.com/segments \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
@@ -527,13 +527,13 @@ const { data, error } = await resend.segments.list();`,
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.segments.remove(
   '78261eea-8f8b-4381-83c6-79fa7120f1cf'
 );`,
       curl: `curl -X DELETE https://api.example.com/segments/78261eea-8f8b-4381-83c6-79fa7120f1cf \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
 ];
@@ -544,13 +544,13 @@ const TOPIC_SECTIONS: ApiCodeSection[] = [
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.topics.create({
   name: 'Product Updates',
 });`,
       curl: `curl -X POST https://api.example.com/topics \\
-  -H "Authorization: Bearer re_123456789" \\
+  -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{"name": "Product Updates"}'`,
     },
@@ -560,11 +560,11 @@ const { data, error } = await resend.topics.create({
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.topics.list();`,
       curl: `curl -X GET https://api.example.com/topics \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
@@ -572,13 +572,13 @@ const { data, error } = await resend.topics.list();`,
     code: {
       nodejs: `import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789');
+const resend = new Resend('os_123456789');
 
 const { data, error } = await resend.topics.remove(
   'topic_123456789'
 );`,
       curl: `curl -X DELETE https://api.example.com/topics/topic_123456789 \\
-  -H "Authorization: Bearer re_123456789"`,
+  -H "Authorization: Bearer os_123456789"`,
     },
   },
 ];

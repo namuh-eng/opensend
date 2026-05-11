@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockFindByIdempotencyKey = vi.hoisted(() => vi.fn());
+const mockExpireIdempotencyKeyBefore = vi.hoisted(() => vi.fn());
 const mockCreateEmail = vi.hoisted(() => vi.fn());
 const mockUpdateEmail = vi.hoisted(() => vi.fn());
 const mockCreateEmailEvent = vi.hoisted(() => vi.fn());
@@ -16,6 +17,7 @@ vi.mock("../packages/core/src/db/repositories/emailEventRepo", () => ({
 vi.mock("../packages/core/src/db/repositories/emailRepo", () => ({
   emailRepo: {
     findByIdempotencyKey: mockFindByIdempotencyKey,
+    expireIdempotencyKeyBefore: mockExpireIdempotencyKeyBefore,
     create: mockCreateEmail,
     update: mockUpdateEmail,
   },
@@ -46,11 +48,16 @@ describe("EmailService", () => {
     vi.resetModules();
     vi.clearAllMocks();
     mockFindByIdempotencyKey.mockResolvedValue(null);
+    mockExpireIdempotencyKeyBefore.mockResolvedValue(undefined);
     mockCreateEmail.mockResolvedValue([{ id: "email-1" }]);
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
       reason: "queue_url_missing",
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("creates queued rows and publishes send jobs without calling SES", async () => {
@@ -105,9 +112,47 @@ describe("EmailService", () => {
     expect(mockFindByIdempotencyKey).toHaveBeenCalledWith(
       "send-key-1",
       "user-1",
+      { createdAtOrAfter: expect.any(Date) },
     );
+    expect(mockExpireIdempotencyKeyBefore).not.toHaveBeenCalled();
     expect(mockCreateEmail).not.toHaveBeenCalled();
     expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("expires stale idempotency keys before accepting a new service send", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T12:00:00.000Z"));
+
+    const { EmailService } = await import(
+      "../packages/core/src/services/email"
+    );
+    const service = new EmailService();
+
+    await expect(
+      service.send({
+        from: "sender@example.com",
+        to: ["user@example.com"],
+        subject: "Hello",
+        idempotencyKey: "send-key-1",
+        userId: "user-1",
+      }),
+    ).resolves.toEqual({ id: "email-1", providerId: null });
+
+    expect(mockFindByIdempotencyKey).toHaveBeenCalledWith(
+      "send-key-1",
+      "user-1",
+      { createdAtOrAfter: new Date("2026-05-11T12:00:00.000Z") },
+    );
+    expect(mockExpireIdempotencyKeyBefore).toHaveBeenCalledWith(
+      "send-key-1",
+      new Date("2026-05-11T12:00:00.000Z"),
+      "user-1",
+    );
+    expect(mockCreateEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: "send-key-1" }),
+    );
+
+    vi.useRealTimers();
   });
 
   it("audits queue publish failures on the persisted email row and timeline", async () => {

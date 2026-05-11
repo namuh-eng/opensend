@@ -71,7 +71,7 @@ describe("received email API route boundary", () => {
     const response = await GET(
       new Request(
         "http://localhost:3015/api/emails/receiving?limit=2&after=received-0&to=User@Example.com",
-        { headers: { Authorization: "Bearer re_test123" } },
+        { headers: { Authorization: "Bearer os_test123" } },
       ),
     );
 
@@ -111,7 +111,7 @@ describe("received email API route boundary", () => {
     const { GET } = await import("@/app/api/emails/receiving/[id]/route");
     const response = await GET(
       new Request("http://localhost:3015/api/emails/receiving/received-1", {
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }),
       { params: Promise.resolve({ id: "received-1" }) },
     );
@@ -138,7 +138,7 @@ describe("received email API route boundary", () => {
     const { GET } = await import("@/app/api/emails/receiving/[id]/route");
     const response = await GET(
       new Request("http://localhost:3015/api/emails/receiving/missing", {
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }),
       { params: Promise.resolve({ id: "missing" }) },
     );
@@ -168,7 +168,7 @@ describe("received email API route boundary", () => {
     const response = await GET(
       new Request(
         "http://localhost:3015/api/emails/receiving/received-1/attachments",
-        { headers: { Authorization: "Bearer re_test123" } },
+        { headers: { Authorization: "Bearer os_test123" } },
       ),
       { params: Promise.resolve({ id: "received-1" }) },
     );
@@ -204,7 +204,7 @@ describe("received email API route boundary", () => {
     const response = await GET(
       new Request(
         "http://localhost:3015/api/emails/receiving/missing/attachments",
-        { headers: { Authorization: "Bearer re_test123" } },
+        { headers: { Authorization: "Bearer os_test123" } },
       ),
       { params: Promise.resolve({ id: "missing" }) },
     );
@@ -232,7 +232,7 @@ describe("received email API route boundary", () => {
     const response = await GET(
       new Request(
         "http://localhost:3015/api/emails/receiving/received-1/attachments/att-1",
-        { headers: { Authorization: "Bearer re_test123" } },
+        { headers: { Authorization: "Bearer os_test123" } },
       ),
       {
         params: Promise.resolve({ id: "received-1", attachmentId: "att-1" }),
@@ -269,7 +269,7 @@ describe("received email API route boundary", () => {
     const response = await GET(
       new Request(
         "http://localhost:3015/api/emails/receiving/received-1/attachments/missing",
-        { headers: { Authorization: "Bearer re_test123" } },
+        { headers: { Authorization: "Bearer os_test123" } },
       ),
       {
         params: Promise.resolve({
