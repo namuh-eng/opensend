@@ -5,18 +5,40 @@ import {
 import { getServerSession } from "@/lib/api-auth";
 import { isBillingEnabled } from "@/lib/billing";
 import { loadBillingSummary } from "@/lib/billing/summary";
-import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function BillingSettingsPage() {
-  if (!isBillingEnabled()) {
-    notFound();
-  }
-
   const session = await getServerSession();
   if (!session?.user?.id) {
     redirect("/auth");
+  }
+
+  if (!isBillingEnabled()) {
+    return (
+      <div className="max-w-2xl space-y-4">
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold text-[#F0F0F0]">Billing</h1>
+          <p className="text-[14px] text-[#A1A4A5]">
+            Billing is not enabled for this Opensend deployment.
+          </p>
+        </div>
+        <div className="rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] p-4">
+          <p className="text-[13px] text-[#A1A4A5]">
+            Your dashboard is still available, but plan management and checkout
+            are unavailable until the deployment owner configures billing.
+          </p>
+        </div>
+        <Link
+          href="/settings"
+          className="inline-flex rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] transition-colors hover:bg-[rgba(24,25,28,1)]"
+        >
+          Back to settings
+        </Link>
+      </div>
+    );
   }
 
   const summary = await loadBillingSummary(session.user.id);
