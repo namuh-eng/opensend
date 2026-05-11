@@ -42,6 +42,7 @@ export * from "./services/contact";
 export * from "./services/contact-operations";
 export * from "./services/email";
 export * from "./services/deliveryFailureExport";
+export * from "./services/emailEventTrace";
 export * from "./services/emailLifecycle";
 export * from "./services/emailRead";
 export * from "./services/emailDetail";

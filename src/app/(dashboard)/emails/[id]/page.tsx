@@ -2,7 +2,8 @@ import { EmailDetail } from "@/components/email-detail";
 import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { emailEvents, emailSuppressions, emails, logs } from "@/lib/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { toEmailEventTraceItem } from "@opensend/core";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 
 export default async function EmailDetailPage({
@@ -30,7 +31,7 @@ export default async function EmailDetailPage({
     .select()
     .from(emailEvents)
     .where(and(eq(emailEvents.emailId, id), eq(emailEvents.userId, userId)))
-    .orderBy(desc(emailEvents.receivedAt));
+    .orderBy(asc(emailEvents.receivedAt));
 
   const associatedLogs = await db
     .select({
@@ -78,10 +79,16 @@ export default async function EmailDetailPage({
           suppressedAt: suppression.suppressedAt.toISOString(),
         }
       : null,
-    events: events.map((e) => ({
-      type: e.type,
-      timestamp: e.receivedAt.toISOString(),
-    })),
+    events: events.map((event) => {
+      const trace = toEmailEventTraceItem(event);
+      return {
+        id: trace.id,
+        type: trace.type,
+        timestamp: trace.created_at.toISOString(),
+        summary: trace.summary,
+        details: trace.details,
+      };
+    }),
     logs: associatedLogs.map((log) => ({
       id: log.id,
       method: log.method ?? "GET",

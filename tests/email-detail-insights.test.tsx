@@ -1,4 +1,4 @@
-import { EmailDetail } from "@/components/email-detail";
+import { EmailDetail, type EmailDetailData } from "@/components/email-detail";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -6,7 +6,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
 }));
 
-const mockEmail = {
+const mockEmail: EmailDetailData = {
   id: "88269538-8271-43a8-9ee3-1300abcd1234",
   from: "test@updates.foreverbrowsing.com",
   to: ["jaeyunha0317@gmail.com"],
@@ -18,8 +18,20 @@ const mockEmail = {
   tags: [],
   headers: {},
   events: [
-    { type: "sent", timestamp: "2026-03-28T16:14:00.000Z" },
-    { type: "delivered", timestamp: "2026-03-28T16:14:02.000Z" },
+    {
+      id: "event-sent",
+      type: "sent",
+      timestamp: "2026-03-28T16:14:00.000Z",
+      summary: "Accepted by provider",
+      details: {},
+    },
+    {
+      id: "event-delivered",
+      type: "delivered",
+      timestamp: "2026-03-28T16:14:02.000Z",
+      summary: "Delivered",
+      details: {},
+    },
   ],
 };
 

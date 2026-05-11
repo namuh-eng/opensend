@@ -275,6 +275,8 @@ describe("email lifecycle service boundary", () => {
           type: "queued",
           payload: { delivery: true },
           created_at: new Date("2026-05-01T00:00:00.000Z"),
+          summary: "Provider event recorded",
+          details: {},
         },
         {
           object: "email_event",
@@ -282,10 +284,78 @@ describe("email lifecycle service boundary", () => {
           type: "delivered",
           payload: { delivery: true },
           created_at: new Date("2026-05-01T00:01:00.000Z"),
+          summary: "Delivered",
+          details: {},
         },
       ],
     });
     expect(capturedScope).toEqual({ id: "email-1", userId: "user-1" });
     expect(capturedEmailId).toBe("email-1");
+  });
+
+  it("adds bounded sanitized event trace details without removing legacy payload", async () => {
+    const service = createEmailLifecycleService({
+      repository: makeRepository({
+        async listEventsByEmailIdAsc() {
+          return [
+            makeEvent({
+              id: "event-bounce",
+              type: "bounced",
+              payload: {
+                bounceType: "Permanent",
+                bounceSubType: "General",
+                bouncedRecipients: [
+                  {
+                    emailAddress: "recipient@example.com",
+                    action: "failed",
+                    status: "5.1.1",
+                    diagnosticCode: "smtp; 550 5.1.1 user unknown",
+                  },
+                ],
+                authorization: "Bearer should-not-render",
+                html: "<p>body should not render</p>",
+              },
+              receivedAt: new Date("2026-05-01T00:01:00.000Z"),
+            }),
+          ];
+        },
+      }),
+    });
+
+    await expect(service.listEvents("user-1", "email-1")).resolves.toEqual({
+      object: "list",
+      data: [
+        {
+          object: "email_event",
+          id: "event-bounce",
+          type: "bounced",
+          payload: {
+            bounceType: "Permanent",
+            bounceSubType: "General",
+            bouncedRecipients: [
+              {
+                emailAddress: "recipient@example.com",
+                action: "failed",
+                status: "5.1.1",
+                diagnosticCode: "smtp; 550 5.1.1 user unknown",
+              },
+            ],
+            authorization: "Bearer should-not-render",
+            html: "<p>body should not render</p>",
+          },
+          created_at: new Date("2026-05-01T00:01:00.000Z"),
+          summary:
+            "Permanent bounce — for recipient@example.com — smtp; 550 5.1.1 user unknown",
+          details: {
+            bounce_type: "Permanent",
+            bounce_subtype: "General",
+            diagnostic_code: "smtp; 550 5.1.1 user unknown",
+            status: "5.1.1",
+            action: "failed",
+            recipients: ["recipient@example.com"],
+          },
+        },
+      ],
+    });
   });
 });
