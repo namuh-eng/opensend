@@ -127,11 +127,24 @@ function isBroadcastsCollectionAlias(
 function isApiLikeRequest(request: NextRequest): boolean {
   const accept = request.headers.get("accept") ?? "";
   const contentType = request.headers.get("content-type") ?? "";
+
+  if (
+    accept.includes("text/html") ||
+    request.headers.has("rsc") ||
+    request.headers.has("next-router-state-tree") ||
+    request.headers.has("next-url") ||
+    request.headers.get("sec-fetch-dest") === "document"
+  ) {
+    return false;
+  }
+
+  // Root GET aliases that collide with dashboard pages are intentionally
+  // narrower than detail/mutation aliases: ambiguous browser/RSC navigations can
+  // send Accept: */*, so require an explicit API signal before rewriting.
   return (
     request.headers.has("authorization") ||
     accept.includes("application/json") ||
-    contentType.includes("application/json") ||
-    !accept.includes("text/html")
+    contentType.includes("application/json")
   );
 }
 
