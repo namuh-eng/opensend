@@ -1,11 +1,16 @@
-import { WebhooksList } from "@/components/webhooks-list";
 import {
   createWebhookSchema,
   updateWebhookSchema,
 } from "@/lib/validation/webhooks";
 import { SUPPORTED_WEBHOOK_EVENT_TYPES } from "@opensend/core/src/webhook-events";
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
+import { WebhooksList } from "@/components/webhooks-list";
 
 describe("webhook event type support", () => {
   it("accepts every shared supported webhook event type for create and update", () => {
