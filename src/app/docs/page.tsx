@@ -22,7 +22,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/emails",
         description:
-          "Send an email. Reusing the same Idempotency-Key returns the original accepted { id } response instead of accepting a duplicate.",
+          "Send an email. Reusing the same Idempotency-Key within 24 hours returns the original accepted { id } response instead of accepting a duplicate; after 24 hours the same key is accepted as a new request.",
         curl: `curl -X POST https://api.opensend.com/api/emails \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -52,7 +52,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/emails/batch",
         description:
-          "Send a batch of emails with one Idempotency-Key for the whole batch. Duplicate batch keys currently return 409 idempotency_conflict before quota reservation, row persistence, or queue publish.",
+          "Send a batch of emails with one Idempotency-Key for the whole batch. Reusing the same key within 24 hours returns the original accepted { data: [{ id }] } envelope without reserving quota, creating rows, or publishing queue jobs again; after 24 hours the same key is accepted as a new batch.",
         curl: `curl -X POST https://api.opensend.com/api/emails/batch \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
@@ -393,6 +393,10 @@ export default function DocsPage() {
             <code className="px-1.5 py-0.5 bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded text-[13px] text-[#F0F0F0] font-mono">
               https://api.opensend.com
             </code>
+            .{" "}
+            {
+              "Use your OpenSend API key (`os_...`) with the Resend-compatible API surface."
+            }
           </p>
           <div className="mt-5 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] p-4">
             <p className="text-[13px] text-[#A1A4A5]">

@@ -296,7 +296,7 @@ function jsonRequest(url: string, body: unknown, method = "POST") {
   return new Request(url, {
     method,
     headers: {
-      Authorization: "Bearer re_test",
+      Authorization: "Bearer os_test",
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -434,7 +434,7 @@ describe("automation API routes", () => {
 
     const response = await GET(
       new Request("http://localhost/api/automations", {
-        headers: { Authorization: "Bearer re_sending" },
+        headers: { Authorization: "Bearer os_sending" },
       }),
     );
 
@@ -1050,7 +1050,7 @@ describe("automation API routes", () => {
     const response = await GET(
       new Request(
         "http://localhost/api/automations/auto_1/runs?status=queued,waiting&limit=10",
-        { headers: { Authorization: "Bearer re_test" } },
+        { headers: { Authorization: "Bearer os_test" } },
       ),
       { params: Promise.resolve({ id: "auto_1" }) },
     );
@@ -1081,7 +1081,7 @@ describe("automation API routes", () => {
 
     const response = await GET(
       new Request("http://localhost/api/automations/auto_1/runs/run_1", {
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
       { params: Promise.resolve({ id: "auto_1", runId: "run_1" }) },
     );
@@ -1188,7 +1188,7 @@ describe("automation API routes", () => {
     const response = await GET(
       new Request(
         "http://localhost/api/automations/auto_1/runs/metrics?from=2026-05-02T00%3A00%3A00.000Z&to=2026-05-03T00%3A00%3A00.000Z",
-        { headers: { Authorization: "Bearer re_test" } },
+        { headers: { Authorization: "Bearer os_test" } },
       ),
       { params: Promise.resolve({ id: "auto_1" }) },
     );
@@ -1231,7 +1231,7 @@ describe("automation API routes", () => {
 
     const response = await GET(
       new Request("http://localhost/api/automations/auto_1/runs/missing", {
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
       { params: Promise.resolve({ id: "auto_1", runId: "missing" }) },
     );
@@ -1312,7 +1312,7 @@ describe("events API routes", () => {
     );
     const listed = await GET(
       new Request("http://localhost/api/events?limit=10&after=evt_0", {
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
     );
 
@@ -1351,7 +1351,7 @@ describe("events API routes", () => {
     const response = await DELETE(
       new Request("http://localhost/api/events?id=evt_1", {
         method: "DELETE",
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
     );
 
@@ -1376,7 +1376,7 @@ describe("events API routes", () => {
     const response = await DELETE(
       new Request("http://localhost/api/events?id=missing", {
         method: "DELETE",
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
     );
 

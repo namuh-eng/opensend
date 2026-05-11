@@ -178,7 +178,6 @@ export const openApiDocument = {
         responses: {
           "200": { $ref: "#/components/responses/BatchEmailAccepted" },
           "202": { $ref: "#/components/responses/BatchEmailAccepted" },
-          "409": { $ref: "#/components/responses/IdempotencyConflict" },
           ...errorResponses,
         },
       },
@@ -234,7 +233,6 @@ export const openApiDocument = {
         responses: {
           "200": { $ref: "#/components/responses/BatchEmailAccepted" },
           "202": { $ref: "#/components/responses/BatchEmailAccepted" },
-          "409": { $ref: "#/components/responses/IdempotencyConflict" },
           ...errorResponses,
         },
       },
@@ -386,7 +384,7 @@ export const openApiDocument = {
         name: "Idempotency-Key",
         in: "header",
         description:
-          "Optional idempotency key, up to 256 characters. Duplicate send keys return the original accepted `{ id }` response for single send and an idempotency_conflict error for batch send.",
+          "Optional idempotency key, up to 256 characters. Duplicate single and batch send keys within 24 hours return the original accepted response without creating duplicate emails; after 24 hours the same key is accepted as a new request.",
         schema: { type: "string", minLength: 1, maxLength: 256 },
       },
     },

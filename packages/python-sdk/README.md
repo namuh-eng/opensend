@@ -3,6 +3,8 @@
 Minimal first-party Python SDK for OpenSend transactional email sends with a
 Resend-shaped API surface.
 
+Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+
 ## Installation
 
 This package is staged for future PyPI publishing. From this repository today:

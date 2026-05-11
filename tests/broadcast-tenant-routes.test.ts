@@ -66,7 +66,7 @@ function jsonRequest(url: string, body: Record<string, unknown>): NextRequest {
   return makeNextRequest(url, {
     method: "POST",
     headers: {
-      Authorization: "Bearer re_test",
+      Authorization: "Bearer os_test",
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -249,7 +249,7 @@ describe("broadcast tenant isolation", () => {
     );
     const getRewrite = await middleware(
       makeNextRequest("http://localhost:3015/broadcasts?limit=5", {
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
     );
     expect(postRewrite.headers.get("x-middleware-rewrite")).toBe(
@@ -265,7 +265,7 @@ describe("broadcast tenant isolation", () => {
     );
     const listResponse = await apiRoute.GET(
       makeNextRequest("http://localhost:3015/api/broadcasts?limit=5", {
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
     );
 
@@ -288,7 +288,7 @@ describe("broadcast tenant isolation", () => {
     const { GET } = await import("@/app/api/broadcasts/[id]/route");
     const response = await GET(
       makeNextRequest("http://localhost:3015/api/broadcasts/broadcast-a", {
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
       { params: Promise.resolve({ id: "broadcast-a" }) },
     );
@@ -343,7 +343,7 @@ describe("broadcast tenant isolation", () => {
     const deleteResponse = await DELETE(
       makeNextRequest("http://localhost:3015/api/broadcasts/broadcast-1", {
         method: "DELETE",
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
       { params: Promise.resolve({ id: "broadcast-1" }) },
     );
@@ -383,7 +383,7 @@ describe("broadcast tenant isolation", () => {
     const sendRoute = await import("@/app/broadcasts/[id]/send/route");
     const detailResponse = await detailRoute.GET(
       makeNextRequest("http://localhost:3015/broadcasts/broadcast-1", {
-        headers: { Authorization: "Bearer re_test" },
+        headers: { Authorization: "Bearer os_test" },
       }),
       { params: Promise.resolve({ id: "broadcast-1" }) },
     );
@@ -498,7 +498,7 @@ describe("broadcast tenant isolation", () => {
     const response = await GET(
       makeNextRequest(
         "http://localhost:3015/api/broadcasts/broadcast-1/metrics",
-        { headers: { Authorization: "Bearer re_test" } },
+        { headers: { Authorization: "Bearer os_test" } },
       ),
       { params: Promise.resolve({ id: "broadcast-1" }) },
     );

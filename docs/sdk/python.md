@@ -4,6 +4,8 @@ OpenSend includes a minimal first-party Python SDK package at
 [`packages/python-sdk`](../../packages/python-sdk) for Resend-shaped
 transactional email sends.
 
+Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+
 ## Install
 
 From this repository:

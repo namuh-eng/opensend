@@ -1,4 +1,4 @@
-import { type SQL, and, desc, eq, gt, lt, lte } from "drizzle-orm";
+import { type SQL, and, desc, eq, gt, gte, lt, lte } from "drizzle-orm";
 import { db } from "../client";
 import { emails } from "../schema";
 
@@ -17,12 +17,37 @@ export const emailRepo = {
     });
   },
 
-  async findByIdempotencyKey(key: string, userId?: string | null) {
+  async findByIdempotencyKey(
+    key: string,
+    userId?: string | null,
+    options: { createdAtOrAfter?: Date } = {},
+  ) {
+    const conditions: SQL[] = [eq(emails.idempotencyKey, key)];
+    if (userId) conditions.push(eq(emails.userId, userId));
+    if (options.createdAtOrAfter) {
+      conditions.push(gte(emails.createdAt, options.createdAtOrAfter));
+    }
+
     return await db.query.emails.findFirst({
-      where: userId
-        ? and(eq(emails.idempotencyKey, key), eq(emails.userId, userId))
-        : eq(emails.idempotencyKey, key),
+      where: and(...conditions),
     });
+  },
+
+  async expireIdempotencyKeyBefore(
+    key: string,
+    before: Date,
+    userId?: string | null,
+  ) {
+    const conditions: SQL[] = [
+      eq(emails.idempotencyKey, key),
+      lt(emails.createdAt, before),
+    ];
+    if (userId) conditions.push(eq(emails.userId, userId));
+
+    await db
+      .update(emails)
+      .set({ idempotencyKey: null })
+      .where(and(...conditions));
   },
 
   async create(data: typeof emails.$inferInsert) {

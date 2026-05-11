@@ -85,10 +85,29 @@ describe("EmailsSendingDataTable", () => {
     expect(actionButtons.length).toBe(3);
   });
 
-  it("shows empty state when no emails", () => {
-    render(<EmailsSendingDataTable emails={[]} />);
+  it("shows first-run empty state with visible docs CTA when no emails exist", () => {
+    render(<EmailsSendingDataTable emails={[]} emptyState="first-run" />);
 
-    expect(screen.getByText("No emails found")).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: "No sent emails yet" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Start sending emails to see insights and previews for every message.",
+      ),
+    ).toBeTruthy();
+
+    const docsLink = screen.getByRole("link", { name: "Go to docs" });
+    expect(docsLink).toBeTruthy();
+    expect(docsLink.getAttribute("href")).toBe("/docs");
+  });
+
+  it("shows filter-specific empty state when existing emails are filtered out", () => {
+    render(<EmailsSendingDataTable emails={[]} emptyState="filtered" />);
+
+    expect(screen.getByText("No emails match your filters")).toBeTruthy();
+    expect(screen.queryByText("No sent emails yet")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Go to docs" })).toBeNull();
   });
 
   it("formats relative time correctly", () => {

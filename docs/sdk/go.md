@@ -4,6 +4,8 @@ OpenSend includes a minimal first-party Go SDK package at
 [`packages/go-sdk`](../../packages/go-sdk) for Resend-shaped transactional email
 sends.
 
+Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+
 ## Install
 
 ```bash

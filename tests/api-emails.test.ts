@@ -211,6 +211,7 @@ vi.mock("drizzle-orm", async () => {
     desc: vi.fn((col: unknown) => ({ op: "desc", col })),
     lt: vi.fn((...args: unknown[]) => ({ op: "lt", args })),
     gt: vi.fn((...args: unknown[]) => ({ op: "gt", args })),
+    gte: vi.fn((...args: unknown[]) => ({ op: "gte", args })),
     and: vi.fn((...args: unknown[]) => ({ op: "and", args })),
   };
 });
@@ -365,6 +366,11 @@ describe("POST /api/emails", () => {
         where: vi.fn().mockResolvedValue([]),
       }),
     });
+    mockDb.update = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
@@ -385,7 +391,7 @@ describe("POST /api/emails", () => {
     const req = makeRequest(
       "POST",
       { from: "test@domain.com" },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
     const res = await POST(req);
     expect(res.status).toBe(422);
@@ -410,7 +416,7 @@ describe("POST /api/emails", () => {
     const req = new Request("http://localhost:3015/api/emails", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
       },
       body: "{",
@@ -432,7 +438,7 @@ describe("POST /api/emails", () => {
     const req = makeRequest(
       "POST",
       { to: ["user@test.com"], subject: "Test", html: "<p>Hi</p>" },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
     const res = await POST(req);
     expect(res.status).toBe(422);
@@ -459,7 +465,7 @@ describe("POST /api/emails", () => {
         html: "<p>Hello</p>",
       },
       {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "x-correlation-id": "corr-email-test",
         traceparent,
       },
@@ -558,7 +564,7 @@ describe("POST /api/emails", () => {
             variables: {},
           },
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -619,7 +625,7 @@ describe("POST /api/emails", () => {
             variables: { PRODUCT: "Widget" },
           },
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -668,7 +674,7 @@ describe("POST /api/emails", () => {
             variables: {},
           },
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -712,7 +718,7 @@ describe("POST /api/emails", () => {
           subject: "Test Email",
           html: "<p>Hello</p>",
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -760,7 +766,7 @@ describe("POST /api/emails", () => {
           html: "<p>Hello</p>",
         },
         {
-          Authorization: "Bearer re_test123",
+          Authorization: "Bearer os_test123",
           "Idempotency-Key": "send-key-1",
         },
       ),
@@ -780,11 +786,103 @@ describe("POST /api/emails", () => {
             op: "eq",
             args: expect.arrayContaining([AUTH_RESULT.userId]),
           }),
+          expect.objectContaining({
+            op: "gte",
+            args: expect.arrayContaining([expect.any(Date)]),
+          }),
         ]),
       }),
     });
     expect(mockReserveEmailQuota).not.toHaveBeenCalled();
     expect(nonLogInsertCalls()).toHaveLength(0);
+  });
+
+  it("accepts the same Idempotency-Key as a new send after the 24-hour window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T12:00:00.000Z"));
+
+    const findFirst = vi.fn().mockResolvedValue(null);
+    Object.assign(mockDb.query, {
+      emails: { findFirst },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-new" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    const updateWhere = vi.fn().mockResolvedValue(undefined);
+    const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+    mockDb.update = vi.fn().mockReturnValue({ set: updateSet });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Fresh after expiry",
+          html: "<p>Hello</p>",
+        },
+        {
+          Authorization: "Bearer os_test123",
+          "Idempotency-Key": "send-expired-key",
+        },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ id: "email-new" });
+    expect(findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["send-expired-key"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+          expect.objectContaining({
+            op: "gte",
+            args: expect.arrayContaining([
+              new Date("2026-05-11T12:00:00.000Z"),
+            ]),
+          }),
+        ]),
+      }),
+    });
+    expect(updateSet).toHaveBeenCalledWith({ idempotencyKey: null });
+    expect(updateWhere).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["send-expired-key"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+          expect.objectContaining({
+            op: "lt",
+            args: expect.arrayContaining([
+              new Date("2026-05-11T12:00:00.000Z"),
+            ]),
+          }),
+        ]),
+      }),
+    );
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: "send-expired-key" }),
+    );
+    expect(mockReserveEmailQuota).toHaveBeenCalledTimes(1);
+    expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(1);
   });
 
   it("returns p95 under 50ms when the SES mock takes 500ms", async () => {
@@ -814,7 +912,7 @@ describe("POST /api/emails", () => {
           subject: "Fast queue",
           html: "<p>Hello</p>",
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       );
 
       const startedAt = performance.now();
@@ -855,7 +953,7 @@ describe("POST /api/emails", () => {
         subject: "Test",
         html: "<p>Hi</p>",
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
     const res = await POST(req);
     expect(res.status).toBe(200);
@@ -882,7 +980,7 @@ describe("POST /api/emails", () => {
           subject: "Recipient forms",
           html: "<p>Hi</p>",
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -921,7 +1019,7 @@ describe("POST /api/emails", () => {
         html: "<p>Hi</p>",
         tags,
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -945,7 +1043,7 @@ describe("POST /api/emails", () => {
         html: "<p>Hi</p>",
         tags: [{ name: "campaign.id", value: "spring 2026" }],
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -987,7 +1085,7 @@ describe("POST /api/emails", () => {
           "POST",
           { ...basePayload, tags },
           {
-            Authorization: "Bearer re_test123",
+            Authorization: "Bearer os_test123",
           },
         ),
       );
@@ -1024,7 +1122,7 @@ describe("POST /api/emails", () => {
           value: "ok",
         })),
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1069,7 +1167,7 @@ describe("POST /api/emails", () => {
         html: '<p><a href="{{{RESEND_UNSUBSCRIBE_URL}}}">Unsubscribe</a></p>',
         headers: { "X-Custom": "ok" },
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1104,7 +1202,7 @@ describe("POST /api/emails", () => {
         subject: "Sandbox delivered",
         html: "<p>Sandbox</p>",
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1141,7 +1239,7 @@ describe("POST /api/emails", () => {
         subject: "Suppressed sandbox",
         html: "<p>No send</p>",
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1184,7 +1282,7 @@ describe("POST /api/emails", () => {
         subject: "Suppressed",
         html: "<p>No send</p>",
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1230,7 +1328,7 @@ describe("POST /api/emails", () => {
           },
         ],
       },
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1270,7 +1368,7 @@ describe("POST /api/emails", () => {
           html: "<p>Hi</p>",
           attachments: [{ filename: "missing.txt" }],
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -1305,7 +1403,7 @@ describe("POST /api/emails", () => {
             },
           ],
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -1346,7 +1444,7 @@ describe("POST /api/emails", () => {
           html: "<p>ISO</p>",
           scheduled_at: "2026-05-08T00:00:00.000Z",
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
     const naturalRes = await POST(
@@ -1359,7 +1457,7 @@ describe("POST /api/emails", () => {
           html: "<p>Natural</p>",
           scheduled_at: "in 1 min",
         },
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -1397,7 +1495,7 @@ describe("POST /api/emails", () => {
         makeRequest(
           "POST",
           { ...payload, scheduled_at },
-          { Authorization: "Bearer re_test123" },
+          { Authorization: "Bearer os_test123" },
         ),
       );
       expect(res.status).toBe(422);
@@ -1444,6 +1542,11 @@ describe("POST /api/emails/batch", () => {
         where: vi.fn().mockResolvedValue([]),
       }),
     });
+    mockDb.update = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
@@ -1467,7 +1570,7 @@ describe("POST /api/emails/batch", () => {
       html: `<p>${i}</p>`,
     }));
     const req = makeRequest("POST", emailsArr, {
-      Authorization: "Bearer re_test123",
+      Authorization: "Bearer os_test123",
     });
     const res = await POST(req);
     expect(res.status).toBe(422);
@@ -1486,7 +1589,7 @@ describe("POST /api/emails/batch", () => {
     const req = new Request("http://localhost:3015/api/emails/batch", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
       },
       body: "[",
@@ -1521,7 +1624,7 @@ describe("POST /api/emails/batch", () => {
           },
         ],
         {
-          Authorization: "Bearer re_test123",
+          Authorization: "Bearer os_test123",
           "Idempotency-Key": "x".repeat(256),
         },
       ),
@@ -1551,7 +1654,7 @@ describe("POST /api/emails/batch", () => {
         },
       ],
       {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Idempotency-Key": "x".repeat(257),
       },
     );
@@ -1568,11 +1671,22 @@ describe("POST /api/emails/batch", () => {
     expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
   });
 
-  it("short-circuits duplicate batch Idempotency-Key retries before quota, rows, or queue", async () => {
+  it("replays duplicate batch Idempotency-Key retries before quota, rows, or queue", async () => {
+    const acceptedBatchResponse = {
+      data: [{ id: "email-1" }, { id: "email-2" }],
+    };
     const findFirst = vi
       .fn()
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: "email-1" });
+      .mockResolvedValueOnce({
+        id: "email-1",
+        document: {
+          idempotency: {
+            endpoint: "emails.batch",
+            response: acceptedBatchResponse,
+          },
+        },
+      });
     Object.assign(mockDb.query, {
       emails: { findFirst },
       contacts: { findFirst: vi.fn().mockResolvedValue(null) },
@@ -1582,7 +1696,10 @@ describe("POST /api/emails/batch", () => {
     const valuesMock = vi.fn().mockImplementation(() => ({
       returning: vi.fn().mockResolvedValue([{ id: `email-${++callCount}` }]),
     }));
+    const updateWhere = vi.fn().mockResolvedValue(undefined);
+    const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
     mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    mockDb.update = vi.fn().mockReturnValue({ set: updateSet });
 
     const { POST } = await import("@/app/api/emails/batch/route");
     const emailsArr = [
@@ -1610,28 +1727,21 @@ describe("POST /api/emails/batch", () => {
 
     const first = await POST(
       makeRequest("POST", emailsArr, {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Idempotency-Key": "batch-key-1",
       }),
     );
     const retry = await POST(
       makeRequest("POST", emailsArr, {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Idempotency-Key": "batch-key-1",
       }),
     );
 
     expect(first.status).toBe(200);
-    expect(await first.json()).toEqual({
-      data: [{ id: "email-1" }, { id: "email-2" }],
-    });
-    expect(retry.status).toBe(409);
-    await expect(retry.json()).resolves.toMatchObject({
-      name: "idempotency_conflict",
-      code: "idempotency_conflict",
-      statusCode: 409,
-      details: { id: "email-1" },
-    });
+    await expect(first.json()).resolves.toEqual(acceptedBatchResponse);
+    expect(retry.status).toBe(200);
+    await expect(retry.json()).resolves.toEqual(acceptedBatchResponse);
 
     expect(mockReserveEmailQuota).toHaveBeenCalledTimes(1);
     expect(nonLogInsertCalls()).toHaveLength(2);
@@ -1648,6 +1758,10 @@ describe("POST /api/emails/batch", () => {
             op: "eq",
             args: expect.arrayContaining([AUTH_RESULT.userId]),
           }),
+          expect.objectContaining({
+            op: "gte",
+            args: expect.arrayContaining([expect.any(Date)]),
+          }),
         ]),
       }),
     });
@@ -1663,6 +1777,10 @@ describe("POST /api/emails/batch", () => {
             op: "eq",
             args: expect.arrayContaining([AUTH_RESULT.userId]),
           }),
+          expect.objectContaining({
+            op: "gte",
+            args: expect.arrayContaining([expect.any(Date)]),
+          }),
         ]),
       }),
     });
@@ -1671,6 +1789,131 @@ describe("POST /api/emails/batch", () => {
         .map(([value]) => value.idempotencyKey)
         .filter((value) => value !== undefined),
     ).toEqual(["batch-key-1", null]);
+    expect(updateSet).toHaveBeenCalledWith({
+      document: {
+        idempotency: {
+          endpoint: "emails.batch",
+          response: acceptedBatchResponse,
+        },
+      },
+    });
+    expect(updateWhere).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["email-1"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ]),
+      }),
+    );
+  });
+
+  it("accepts the same batch Idempotency-Key as a new batch after the 24-hour window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T12:00:00.000Z"));
+
+    const findFirst = vi.fn().mockResolvedValue(null);
+    Object.assign(mockDb.query, {
+      emails: { findFirst },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+    });
+
+    let callCount = 0;
+    const valuesMock = vi.fn().mockImplementation(() => ({
+      returning: vi
+        .fn()
+        .mockResolvedValue([{ id: `batch-new-${++callCount}` }]),
+    }));
+    const updateWhere = vi.fn().mockResolvedValue(undefined);
+    const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    mockDb.update = vi.fn().mockReturnValue({ set: updateSet });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        [
+          {
+            from: "sender@domain.com",
+            to: ["user1@test.com"],
+            subject: "Fresh batch after expiry 1",
+            html: "<p>1</p>",
+          },
+          {
+            from: "sender@domain.com",
+            to: ["user2@test.com"],
+            subject: "Fresh batch after expiry 2",
+            html: "<p>2</p>",
+          },
+        ],
+        {
+          Authorization: "Bearer os_test123",
+          "Idempotency-Key": "batch-expired-key",
+        },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      data: [{ id: "batch-new-1" }, { id: "batch-new-2" }],
+    });
+    expect(findFirst).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["batch-expired-key"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+          expect.objectContaining({
+            op: "gte",
+            args: expect.arrayContaining([
+              new Date("2026-05-11T12:00:00.000Z"),
+            ]),
+          }),
+        ]),
+      }),
+    });
+    expect(updateSet).toHaveBeenCalledWith({ idempotencyKey: null });
+    expect(updateWhere).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["batch-expired-key"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+          expect.objectContaining({
+            op: "lt",
+            args: expect.arrayContaining([
+              new Date("2026-05-11T12:00:00.000Z"),
+            ]),
+          }),
+        ]),
+      }),
+    );
+    expect(
+      valuesMock.mock.calls
+        .map(([value]) => value.idempotencyKey)
+        .filter((value) => value !== undefined),
+    ).toEqual(["batch-expired-key", null]);
+    expect(mockReserveEmailQuota).toHaveBeenCalledTimes(1);
+    expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(2);
   });
 
   it("injects managed unsubscribe headers for batch items with known contact placeholders", async () => {
@@ -1700,7 +1943,7 @@ describe("POST /api/emails/batch", () => {
           text: "Leave: {{{RESEND_UNSUBSCRIBE_URL}}}",
         },
       ],
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1752,7 +1995,7 @@ describe("POST /api/emails/batch", () => {
           html: "<p>Suppressed</p>",
         },
       ],
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1820,7 +2063,7 @@ describe("POST /api/emails/batch", () => {
           html: "<p>Blocked</p>",
         },
       ],
-      { Authorization: "Bearer re_test123" },
+      { Authorization: "Bearer os_test123" },
     );
 
     const res = await POST(req);
@@ -1881,7 +2124,7 @@ describe("POST /api/emails/batch", () => {
       },
     ];
     const req = makeRequest("POST", emailsArr, {
-      Authorization: "Bearer re_test123",
+      Authorization: "Bearer os_test123",
     });
     const res = await POST(req);
     expect(res.status).toBe(200);
@@ -1914,7 +2157,7 @@ describe("POST /api/emails/batch", () => {
             tags: [{ name: "bad.name", value: "bad value" }],
           },
         ],
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -1954,7 +2197,7 @@ describe("POST /api/emails/batch", () => {
             })),
           },
         ],
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -2002,7 +2245,7 @@ describe("POST /api/emails/batch", () => {
             scheduled_at: "in 2 hours",
           },
         ],
-        { Authorization: "Bearer re_test123" },
+        { Authorization: "Bearer os_test123" },
       ),
     );
 
@@ -2037,7 +2280,7 @@ describe("POST /api/emails/batch", () => {
     ]) {
       const res = await POST(
         makeRequest("POST", [{ ...base, scheduled_at }], {
-          Authorization: "Bearer re_test123",
+          Authorization: "Bearer os_test123",
         }),
       );
       expect(res.status).toBe(422);
@@ -2085,6 +2328,11 @@ describe("services/api transactional email routes", () => {
         where: vi.fn().mockResolvedValue([]),
       }),
     });
+    mockDb.update = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
@@ -2105,7 +2353,7 @@ describe("services/api transactional email routes", () => {
     const res = await createApp().request("/emails", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -2157,7 +2405,7 @@ describe("services/api transactional email routes", () => {
     const invalid = await app.request("/emails", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ from: "sender@domain.com" }),
@@ -2191,7 +2439,7 @@ describe("services/api transactional email routes", () => {
     const res = await createApp().request("/emails", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
         "Idempotency-Key": "svc-idempotency-1",
       },
@@ -2223,7 +2471,7 @@ describe("services/api transactional email routes", () => {
     const res = await createApp().request("/emails/batch", {
       method: "POST",
       headers: {
-        Authorization: "Bearer re_test123",
+        Authorization: "Bearer os_test123",
         "Content-Type": "application/json",
         "Idempotency-Key": "svc-batch-key-1",
       },
@@ -2309,7 +2557,7 @@ describe("GET /api/emails", () => {
 
     const { GET } = await import("@/app/api/emails/route");
     const req = new Request("http://localhost:3015/api/emails?limit=20", {
-      headers: { Authorization: "Bearer re_test123" },
+      headers: { Authorization: "Bearer os_test123" },
     });
     const res = await GET(req);
     expect(res.status).toBe(200);
@@ -2355,7 +2603,7 @@ describe("GET /api/emails", () => {
 
     const { GET } = await import("@/app/api/emails/route");
     const req = new Request("http://localhost:3015/api/emails?status=queued", {
-      headers: { Authorization: "Bearer re_test123" },
+      headers: { Authorization: "Bearer os_test123" },
     });
 
     const res = await GET(req);
@@ -2409,7 +2657,7 @@ describe("GET /api/emails/:id", () => {
 
     const { GET } = await import("@/app/api/emails/[id]/route");
     const req = new Request("http://localhost:3015/api/emails/email-uuid", {
-      headers: { Authorization: "Bearer re_test123" },
+      headers: { Authorization: "Bearer os_test123" },
     });
     const res = await GET(req, {
       params: Promise.resolve({ id: "email-uuid" }),
@@ -2433,7 +2681,7 @@ describe("GET /api/emails/:id", () => {
 
     const { GET } = await import("@/app/api/emails/[id]/route");
     const req = new Request("http://localhost:3015/api/emails/nonexistent", {
-      headers: { Authorization: "Bearer re_test123" },
+      headers: { Authorization: "Bearer os_test123" },
     });
     const res = await GET(req, {
       params: Promise.resolve({ id: "nonexistent" }),
@@ -2464,7 +2712,7 @@ describe("PATCH /api/emails/:id", () => {
     const res = await PATCH(
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
         body: JSON.stringify({ scheduled_at: "2026-05-08T00:00:00.000Z" }),
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
@@ -2487,7 +2735,7 @@ describe("PATCH /api/emails/:id", () => {
     const res = await PATCH(
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
         body: "{invalid",
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
@@ -2525,7 +2773,7 @@ describe("PATCH /api/emails/:id", () => {
       const res = await PATCH(
         new Request("http://localhost:3015/api/emails/email-uuid", {
           method: "PATCH",
-          headers: { Authorization: "Bearer re_test123" },
+          headers: { Authorization: "Bearer os_test123" },
           body: JSON.stringify({ scheduled_at: null }),
         }),
         { params: Promise.resolve({ id: "email-uuid" }) },
@@ -2547,7 +2795,7 @@ describe("PATCH /api/emails/:id", () => {
     const res = await PATCH(
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
         body: JSON.stringify([]),
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
@@ -2579,7 +2827,7 @@ describe("DELETE /api/emails", () => {
     const res = await DELETE(
       new Request("http://localhost:3015/api/emails?id=email-uuid", {
         method: "DELETE",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }),
     );
 
@@ -2615,7 +2863,7 @@ describe("GET /api/emails/:id/attachments", () => {
     const { GET } = await import("@/app/api/emails/[id]/attachments/route");
     const res = await GET(
       new Request("http://localhost:3015/api/emails/email-uuid/attachments", {
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2645,7 +2893,7 @@ describe("GET /api/emails/:id/attachments", () => {
     const { GET } = await import("@/app/api/emails/[id]/attachments/route");
     const res = await GET(
       new Request("http://localhost:3015/api/emails/email-uuid/attachments", {
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2669,7 +2917,7 @@ describe("GET /api/emails/:id/attachments", () => {
       new Request(
         "http://localhost:3015/api/emails/email-uuid/attachments/missing",
         {
-          headers: { Authorization: "Bearer re_test123" },
+          headers: { Authorization: "Bearer os_test123" },
         },
       ) as never,
       {
@@ -2710,7 +2958,7 @@ describe("POST /api/emails/:id/cancel", () => {
     const res = await POST(
       new Request("http://localhost:3015/api/emails/email-uuid/cancel", {
         method: "POST",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2739,7 +2987,7 @@ describe("POST /api/emails/:id/cancel", () => {
     const res = await POST(
       new Request("http://localhost:3015/api/emails/email-uuid/cancel", {
         method: "POST",
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2766,7 +3014,7 @@ describe("GET /api/emails/:id/events", () => {
     const { GET } = await import("@/app/api/emails/[id]/events/route");
     const res = await GET(
       new Request("http://localhost:3015/api/emails/email-uuid/events", {
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2796,7 +3044,7 @@ describe("GET /api/emails/:id/events", () => {
     const { GET } = await import("@/app/api/emails/[id]/events/route");
     const res = await GET(
       new Request("http://localhost:3015/api/emails/email-uuid/events", {
-        headers: { Authorization: "Bearer re_test123" },
+        headers: { Authorization: "Bearer os_test123" },
       }) as never,
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
@@ -2866,7 +3114,7 @@ describe("API key sending permissions", () => {
           subject: "Allowed",
           html: "<p>Hello</p>",
         },
-        { Authorization: "Bearer re_sending" },
+        { Authorization: "Bearer os_sending" },
       ),
     );
 
@@ -2895,7 +3143,7 @@ describe("API key sending permissions", () => {
           subject: "Blocked",
           html: "<p>Hello</p>",
         },
-        { Authorization: "Bearer re_sending" },
+        { Authorization: "Bearer os_sending" },
       ),
     );
 

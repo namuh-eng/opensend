@@ -134,7 +134,7 @@ describe("audience metadata route adapters", () => {
 
     const response = await GET(
       makeNextRequest("http://localhost/api/properties/prop-1", {
-        headers: { authorization: "Bearer re_test" },
+        headers: { authorization: "Bearer os_test" },
       }) as never,
       { params: Promise.resolve({ id: "prop-1" }) },
     );
@@ -168,7 +168,7 @@ describe("audience metadata route adapters", () => {
       makeNextRequest(
         "http://localhost/api/segments/seg-1/contacts?limit=10&after=contact-9",
         {
-          headers: { authorization: "Bearer re_test" },
+          headers: { authorization: "Bearer os_test" },
         },
       ) as never,
       { params: Promise.resolve({ id: "seg-1" }) },
@@ -198,7 +198,7 @@ describe("audience metadata route adapters", () => {
       makeNextRequest("http://localhost/api/topics/topic-1", {
         method: "PATCH",
         headers: {
-          authorization: "Bearer re_test",
+          authorization: "Bearer os_test",
           "content-type": "application/json",
         },
         body: JSON.stringify({}),
@@ -223,7 +223,7 @@ describe("audience metadata route adapters", () => {
 
     const response = await GET(
       makeNextRequest("http://localhost/api/properties/prop-1", {
-        headers: { authorization: "Bearer re_test" },
+        headers: { authorization: "Bearer os_test" },
       }) as never,
       { params: Promise.resolve({ id: "prop-1" }) },
     );

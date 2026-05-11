@@ -1,9 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetServerSession = vi.hoisted(() => vi.fn());
-const mockGetUsage = vi.hoisted(() => vi.fn());
 const mockIsBillingEnabled = vi.hoisted(() => vi.fn());
-const mockLoadBillingSummary = vi.hoisted(() => vi.fn());
+const mockGetUsage = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/api-auth", () => ({
   getServerSession: mockGetServerSession,
@@ -19,11 +18,7 @@ vi.mock("@/lib/billing", () => ({
 }));
 
 vi.mock("@/lib/billing/summary", () => ({
-  loadBillingSummary: mockLoadBillingSummary,
-}));
-
-vi.mock("@opensend/core", () => ({
-  createDashboardAggregateService: () => ({
+  createDefaultBillingSummaryService: () => ({
     getUsage: mockGetUsage,
   }),
 }));
@@ -58,63 +53,38 @@ describe("usage route adapter", () => {
       session: { id: "session-1" },
       user: { id: "user-1" },
     });
-    mockGetUsage.mockResolvedValue(usagePayload);
     mockIsBillingEnabled.mockReturnValue(false);
-    mockLoadBillingSummary.mockResolvedValue(null);
+    mockGetUsage.mockResolvedValue(usagePayload);
   });
 
-  it("keeps dashboard auth adapter-side and returns the core usage envelope", async () => {
+  it("keeps dashboard auth adapter-side and returns the service usage envelope", async () => {
     const usageRoute = await import("@/app/api/usage/route");
     const response = await usageRoute.GET();
 
     expect(response.status).toBe(200);
-    expect(mockGetUsage).toHaveBeenCalledOnce();
-    expect(mockLoadBillingSummary).not.toHaveBeenCalled();
+    expect(mockGetUsage).toHaveBeenCalledWith({
+      billingEnabled: false,
+      userId: "user-1",
+    });
     await expect(response.json()).resolves.toEqual(usagePayload);
   });
 
-  it("uses the billing summary as the source of truth for active plan domain limits", async () => {
+  it("passes billing-enabled state and optional user id to the service", async () => {
     mockIsBillingEnabled.mockReturnValue(true);
-    mockLoadBillingSummary.mockResolvedValueOnce({
-      plan: {
-        id: "plan-pro",
-        slug: "pro",
-        name: "Pro",
-        monthlyPriceCents: 2900,
-        monthlyEmailQuota: 50000,
-        maxDomains: 10,
-        maxApiKeys: 10,
-        isPublic: true,
-      },
-      subscription: null,
-      usage: {
-        emails: { used: 123, limit: 50000 },
-        domains: { used: 4, limit: 10 },
-        apiKeys: { used: 1, limit: 10 },
-        periodStart: null,
-        periodEnd: null,
-        hasUsagePeriod: false,
-      },
+    mockGetServerSession.mockResolvedValueOnce({
+      session: { id: "session-1" },
+      user: null,
     });
-
     const usageRoute = await import("@/app/api/usage/route");
+
     const response = await usageRoute.GET();
 
     expect(response.status).toBe(200);
-    expect(mockLoadBillingSummary).toHaveBeenCalledWith("user-1");
-    await expect(response.json()).resolves.toEqual({
-      ...usagePayload,
-      plan: { name: "Pro", slug: "pro" },
-      transactional: {
-        ...usagePayload.transactional,
-        monthlyLimit: 50000,
-      },
-      team: {
-        ...usagePayload.team,
-        domainsUsed: 4,
-        domainsLimit: 10,
-      },
+    expect(mockGetUsage).toHaveBeenCalledWith({
+      billingEnabled: true,
+      userId: undefined,
     });
+    await expect(response.json()).resolves.toEqual(usagePayload);
   });
 
   it("maps missing sessions and service failures to existing responses", async () => {

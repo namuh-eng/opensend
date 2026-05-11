@@ -2,6 +2,8 @@
 
 TypeScript SDK for the OpenSend email API with a Resend-compatible client surface.
 
+Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+
 ## Installation
 
 ```bash
@@ -154,10 +156,10 @@ within 30 days; unparseable, past, or out-of-policy values return
 Pass a per-request `idempotencyKey` option to prevent accidental duplicate
 acceptance when retrying sends. Keys must match the API contract: 1-256
 characters. OpenSend replays duplicate single-send keys with the original
-accepted `{ id }` response. Batch duplicate keys currently return
-`409 idempotency_conflict` with the originally accepted first email id in
-`details.id` before reserving quota, creating additional rows, or publishing
-more queue jobs.
+accepted `{ id }` response and duplicate batch keys with the original
+accepted `{ data: [{ id }] }` response before reserving quota, creating
+additional rows, or publishing more queue jobs. Idempotency keys expire after
+24 hours; reusing the same key after that window is accepted as a new request.
 
 ```typescript
 await resend.emails.send(
