@@ -2,6 +2,9 @@ import type {
   ApiKeyListItem,
   ApiKeyListResponse,
   ApiKeyResponse,
+  AudienceListItem,
+  AudienceListResponse,
+  AudienceResponse,
   BatchEmailItemError,
   BatchEmailItemResponse,
   BatchEmailResponse,
@@ -10,8 +13,10 @@ import type {
   ContactResponse,
   ContactTopicPreference,
   CreateApiKeyPayload,
+  CreateAudiencePayload,
   CreateContactPayload,
   CreateContactResponse,
+  DeleteAudienceResponse,
   DeleteContactResponse,
   DomainCapability,
   DomainListItem,
@@ -111,6 +116,10 @@ export interface CreateEventPayload {
 export interface ListOptions {
   limit?: number;
   after?: string;
+}
+
+export interface AudienceListOptions extends ListOptions {
+  search?: string;
 }
 
 export interface AutomationRunListOptions extends ListOptions {
@@ -409,6 +418,42 @@ class Contacts {
   }
 }
 
+class Audiences {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(
+    payload: CreateAudiencePayload,
+  ): Promise<ApiResponse<AudienceResponse>> {
+    return this.http.request<AudienceResponse>("POST", "/audiences", payload);
+  }
+
+  async list(
+    options: AudienceListOptions = {},
+  ): Promise<ApiResponse<AudienceListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.search) params.set("search", options.search);
+
+    const query = params.toString();
+    return this.http.request<AudienceListResponse>(
+      "GET",
+      query ? `/audiences?${query}` : "/audiences",
+    );
+  }
+
+  async get(id: string): Promise<ApiResponse<AudienceResponse>> {
+    return this.http.request<AudienceResponse>("GET", `/audiences/${id}`);
+  }
+
+  async delete(id: string): Promise<ApiResponse<DeleteAudienceResponse>> {
+    return this.http.request<DeleteAudienceResponse>(
+      "DELETE",
+      `/audiences/${id}`,
+    );
+  }
+}
+
 class Automations {
   constructor(private readonly http: HttpClient) {}
 
@@ -532,6 +577,7 @@ class Opensend {
   public readonly domains: Domains;
   public readonly apiKeys: ApiKeys;
   public readonly contacts: Contacts;
+  public readonly audiences: Audiences;
   public readonly automations: Automations;
   public readonly events: Events;
 
@@ -546,6 +592,7 @@ class Opensend {
     this.domains = new Domains(http);
     this.apiKeys = new ApiKeys(http);
     this.contacts = new Contacts(http);
+    this.audiences = new Audiences(http);
     this.automations = new Automations(http);
     this.events = new Events(http);
   }
@@ -583,6 +630,11 @@ export type {
   ApiKeyResponse,
   ApiKeyListItem,
   ApiKeyListResponse,
+  CreateAudiencePayload,
+  AudienceResponse,
+  AudienceListItem,
+  AudienceListResponse,
+  DeleteAudienceResponse,
   CreateContactPayload,
   CreateContactResponse,
   UpdateContactPayload,
