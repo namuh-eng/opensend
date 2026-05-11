@@ -47,6 +47,7 @@ export * from "./services/receivedEmail";
 export * from "./services/logs";
 export * from "./services/suppressions";
 export * from "./services/emailProvider";
+export * from "./services/tracking";
 export * from "./services/sandboxTestRecipients";
 export * from "./services/storage";
 export * from "./services/template";
