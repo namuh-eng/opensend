@@ -23,6 +23,12 @@ export const domainRepo = {
     });
   },
 
+  async findByIdForUser(id: string, userId: string) {
+    return await db.query.domains.findFirst({
+      where: and(eq(domains.id, id), eq(domains.userId, userId)),
+    });
+  },
+
   async create(data: typeof domains.$inferInsert) {
     return await db.insert(domains).values(data).returning();
   },

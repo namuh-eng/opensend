@@ -1,18 +1,20 @@
 import { createEmailTrackingToken } from "@opensend/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockFindEmail = vi.hoisted(() => vi.fn());
-const mockFindDomain = vi.hoisted(() => vi.fn());
+const mockFindTrackingContext = vi.hoisted(() => vi.fn());
 const mockQueueEvent = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    query: {
-      emails: { findFirst: mockFindEmail },
-      domains: { findFirst: mockFindDomain },
+vi.mock("@opensend/core", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@opensend/core")>();
+
+  return {
+    ...actual,
+    trackingRouteService: {
+      ...actual.trackingRouteService,
+      findTrackingContext: mockFindTrackingContext,
     },
-  },
-}));
+  };
+});
 
 vi.mock("@/lib/events", () => ({
   queueEvent: mockQueueEvent,
@@ -32,15 +34,14 @@ function trackingToken(kind: "open" | "click", targetUrl?: string) {
 describe("tracking routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockFindEmail.mockResolvedValue({
-      id: "email-1",
-      userId: "user-1",
-    });
-    mockFindDomain.mockResolvedValue({
-      id: "domain-1",
-      userId: "user-1",
-      trackClicks: true,
-      trackOpens: true,
+    mockFindTrackingContext.mockResolvedValue({
+      email: { id: "email-1", userId: "user-1" },
+      domain: {
+        id: "domain-1",
+        userId: "user-1",
+        trackClicks: true,
+        trackOpens: true,
+      },
     });
     mockQueueEvent.mockResolvedValue({ eventId: "event-1", deliveryIds: [] });
   });
@@ -127,12 +128,7 @@ describe("tracking routes", () => {
   });
 
   it("does not create events when the domain toggle is disabled", async () => {
-    mockFindDomain.mockResolvedValue({
-      id: "domain-1",
-      userId: "user-1",
-      trackClicks: false,
-      trackOpens: true,
-    });
+    mockFindTrackingContext.mockResolvedValue(null);
     const { GET } = await import("../src/app/api/track/click/[token]/route");
 
     const response = await GET(
@@ -150,7 +146,7 @@ describe("tracking routes", () => {
   });
 
   it("does not create events when token tenant context is missing", async () => {
-    mockFindDomain.mockResolvedValue(null);
+    mockFindTrackingContext.mockResolvedValue(null);
     const { GET } = await import("../src/app/api/track/open/[token]/route");
 
     const response = await GET(
