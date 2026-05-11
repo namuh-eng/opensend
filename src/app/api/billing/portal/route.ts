@@ -1,7 +1,6 @@
 import { getServerSession } from "@/lib/api-auth";
 import { getBillingBackend } from "@/lib/billing";
-import { getStripe } from "@/lib/billing/stripe";
-import { stripeCustomerRepo } from "@opensend/core";
+import { createDefaultBillingSessionService } from "@/lib/billing/session-factory";
 import { NextResponse } from "next/server";
 
 function getRequestOrigin(request: Request) {
@@ -21,18 +20,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const customer = await stripeCustomerRepo.findByUserId(session.user.id);
-  if (!customer) {
+  const result = await createDefaultBillingSessionService().createPortalSession(
+    {
+      userId: session.user.id,
+      origin: getRequestOrigin(request),
+    },
+  );
+
+  if (!result.ok) {
     return NextResponse.json(
       { error: "Stripe customer not found" },
       { status: 404 },
     );
   }
 
-  const portalSession = await getStripe().billingPortal.sessions.create({
-    customer: customer.stripeCustomerId,
-    return_url: `${getRequestOrigin(request)}/settings/billing`,
-  });
-
-  return NextResponse.json({ url: portalSession.url });
+  return NextResponse.json({ url: result.url });
 }
