@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type {
   ApiKeyListItem,
   ApiKeyListResponse,
@@ -63,7 +64,7 @@ interface ApiResponse<T> {
 }
 
 export type SendEmailPayload = EmailOptions & {
-  react?: unknown;
+  react?: ReactNode;
 };
 export type CreateDomainPayload = DomainOptions;
 
@@ -314,14 +315,49 @@ function toBroadcastPayload<T extends BroadcastPayloadAliases>(
   return normalized;
 }
 
-async function renderReactToHtml(element: unknown): Promise<string | null> {
+interface ReactRenderSuccess {
+  html: string;
+  error: null;
+}
+
+interface ReactRenderFailure {
+  html: null;
+  error: ApiError;
+}
+
+type ReactRenderResult = ReactRenderSuccess | ReactRenderFailure;
+
+function formatUnknownError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function createReactRenderError(error: unknown): ApiError {
+  const cause = formatUnknownError(error);
+
+  return {
+    message:
+      "Unable to render React email in the OpenSend SDK. Install react and react-dom in your application, then pass a renderable React element to emails.send({ react }).",
+    statusCode: 500,
+    name: "react_render_error",
+    code: "react_render_error",
+    details: { cause },
+  };
+}
+
+async function renderReactToHtml(
+  element: ReactNode,
+): Promise<ReactRenderResult> {
   try {
-    const { renderToStaticMarkup } = await import("react-dom/server");
-    return renderToStaticMarkup(
-      element as Parameters<typeof renderToStaticMarkup>[0],
-    );
-  } catch {
-    return null;
+    const renderer = await import("react-dom/server");
+    if (typeof renderer.renderToStaticMarkup !== "function") {
+      throw new Error(
+        "react-dom/server is unavailable: renderToStaticMarkup export was not found.",
+      );
+    }
+
+    return { html: renderer.renderToStaticMarkup(element), error: null };
+  } catch (error) {
+    return { html: null, error: createReactRenderError(error) };
   }
 }
 
@@ -388,9 +424,10 @@ class Emails {
 
     if (react != null) {
       const rendered = await renderReactToHtml(react);
-      if (rendered) {
-        rest.html = rendered;
+      if (rendered.error) {
+        return { data: null, error: rendered.error };
       }
+      rest.html = rendered.html;
     }
 
     return this.http.request<EmailResponse>("POST", "/emails", rest, options);

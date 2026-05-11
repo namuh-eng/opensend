@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { DEFAULT_BASE_URL, Opensend, Resend } from "../packages/sdk/src";
 import type {
@@ -26,6 +27,8 @@ import type {
 describe("Opensend SDK", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.doUnmock("react-dom/server");
   });
 
   it("constructs Resend and Opensend clients with the hosted default baseUrl", async () => {
@@ -151,7 +154,7 @@ describe("Opensend SDK", () => {
     expectTypeOf<SDKOptions>().toMatchTypeOf<{ baseUrl?: string }>();
     expectTypeOf<RequestOptions>().toMatchTypeOf<{ idempotencyKey?: string }>();
     expectTypeOf<SendEmailPayload>().toMatchTypeOf<
-      EmailOptions & { react?: unknown }
+      EmailOptions & { react?: ReactNode }
     >();
     expectTypeOf<ApiResponse<EmailResponse>>().toEqualTypeOf<{
       data: EmailResponse | null;
@@ -242,7 +245,88 @@ describe("Opensend SDK", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, options] = fetchMock.mock.calls[0] ?? [];
-    expect(options?.body).toContain("<strong>Hello</strong>");
+    const outgoingBody = JSON.parse(String(options?.body)) as Record<
+      string,
+      unknown
+    >;
+    expect(outgoingBody).toMatchObject({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<strong>Hello</strong>",
+    });
+    expect(outgoingBody).not.toHaveProperty("react");
+  });
+
+  it("returns a clear SDK error when the React renderer cannot load", async () => {
+    vi.resetModules();
+    vi.doMock("react-dom/server", () => ({
+      renderToStaticMarkup: "missing renderer",
+    }));
+
+    const { Opensend: MockedOpensend } = await import("../packages/sdk/src");
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new MockedOpensend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    const response = await client.emails.send({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      react: <strong>Hello</strong>,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      data: null,
+      error: {
+        name: "react_render_error",
+        code: "react_render_error",
+        statusCode: 500,
+        message:
+          "Unable to render React email in the OpenSend SDK. Install react and react-dom in your application, then pass a renderable React element to emails.send({ react }).",
+        details: {
+          cause:
+            "react-dom/server is unavailable: renderToStaticMarkup export was not found.",
+        },
+      },
+    });
+
+    vi.doUnmock("react-dom/server");
+    vi.resetModules();
+  });
+
+  it("returns a clear SDK error when React rendering throws", async () => {
+    function BrokenEmail(): ReactNode {
+      throw new Error("template exploded");
+    }
+
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    const response = await client.emails.send({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      react: <BrokenEmail />,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.error).toMatchObject({
+      name: "react_render_error",
+      code: "react_render_error",
+      statusCode: 500,
+      message:
+        "Unable to render React email in the OpenSend SDK. Install react and react-dom in your application, then pass a renderable React element to emails.send({ react }).",
+      details: { cause: "template exploded" },
+    });
   });
 
   it("passes email lifecycle status filters when listing emails", async () => {

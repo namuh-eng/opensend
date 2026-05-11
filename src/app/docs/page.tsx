@@ -442,6 +442,56 @@ Content-Type: application/json
               contact properties, API-key management, and public npx packaging.
             </p>
           </div>
+
+          <div className="mt-5 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] p-4 space-y-3">
+            <h2 className="text-[15px] font-semibold text-[#F0F0F0]">
+              React Email with the TypeScript SDK
+            </h2>
+            <p className="text-[13px] text-[#A1A4A5]">
+              Use the Resend-compatible SDK path when you want to author emails
+              as React components. Install{" "}
+              <code className="font-mono text-[#F0F0F0]">react</code> and{" "}
+              <code className="font-mono text-[#F0F0F0]">react-dom</code>{" "}
+              alongside{" "}
+              <code className="font-mono text-[#F0F0F0]">opensend</code>; the
+              SDK renders the component to HTML locally and posts JSON to the
+              email API.
+            </p>
+            <pre className="text-[12px] text-[#A1A4A5] font-mono bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
+              {`import { Html, Text } from "@react-email/components";
+import { Resend } from "opensend";
+
+function EmailTemplate({ name }: { name: string }) {
+  return (
+    <Html>
+      <Text>Hello {name}, welcome to OpenSend.</Text>
+    </Html>
+  );
+}
+
+const resend = new Resend(process.env.OPENSEND_API_KEY);
+
+export async function POST() {
+  const { data, error } = await resend.emails.send({
+    from: "hello@updates.example.com",
+    to: "user@example.com",
+    subject: "Welcome!",
+    react: <EmailTemplate name="Ada" />,
+  });
+
+  if (error) {
+    return Response.json({ error: error.message }, { status: error.statusCode });
+  }
+
+  return Response.json(data);
+}`}
+            </pre>
+            <p className="text-[12px] text-[#A1A4A5]">
+              The REST API remains JSON-only: send React components through the
+              TypeScript SDK, or send pre-rendered{" "}
+              <code className="font-mono text-[#F0F0F0]">html</code> directly.
+            </p>
+          </div>
         </div>
 
         {/* Groups */}

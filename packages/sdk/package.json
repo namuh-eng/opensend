@@ -17,7 +17,23 @@
   },
   "keywords": ["email", "api", "sdk", "resend"],
   "license": "MIT",
+  "dependencies": {
+    "@types/react": "^19.2.14"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@types/react-dom": "^19.2.3",
     "typescript": "^5.0.0"
   }
 }
