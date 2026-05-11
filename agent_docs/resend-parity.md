@@ -119,7 +119,7 @@ Rows are ordered roughly by priority within each area. The inspector's tie-break
 |---|---|---|---|---|---|---|---|---|---|
 | SOC2 | yes | TBD | ? | ? | ? | ? | needs Jaeyun | | |
 | GDPR / EU data residency | yes | TBD | ? | ? | ? | ? | needs Jaeyun | | |
-| Audit log | yes | TBD | ? | ? | ? | ? | P1 | | |
+| Audit log | yes | TBD | ? | ? | ? | ? | P1 | #394 | 2026-05-11 |
 | Suppression list management | suppresses recipients after hard bounce or spam complaint; suppression details are visible from email detail and can be removed ([docs](https://resend.com/docs/dashboard/emails/email-suppressions)) | missing: no suppression table/API/dashboard route (`https://opensend.namuh.co/api/suppressions` returned 404 on 2026-05-05); contacts only store manual unsubscribe state (`src/lib/db/schema.ts:192`, `src/lib/db/schema.ts:199`); send routes queue recipients without suppression lookup (`src/app/api/emails/route.ts:344`, `src/app/api/emails/route.ts:358`, `src/app/api/emails/batch/route.ts:264`, `src/app/api/emails/batch/route.ts:278`); SES bounce/complaint events update email status but do not create suppressions (`packages/ingester/src/ses-event-normalization.ts:5`, `packages/ingester/src/ses-event-normalization.ts:6`, `packages/core/src/db/repositories/emailEventRepo.ts:5`) | missing | behind | behind | n/a | P0 | #191 | 2026-05-05 |
 
 ## Pricing
