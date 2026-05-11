@@ -76,13 +76,14 @@ describe("UsageTab", () => {
     expect(screen.getByText(/Design and send marketing emails/)).toBeDefined();
   });
 
-  it("links upgrade affordances to pricing when billing is enabled", () => {
+  it("links upgrade affordances to the authenticated billing plans page when billing is enabled", () => {
     render(<UsageTab usage={defaultUsage} billingEnabled={true} />);
 
     const upgradeLinks = screen.getAllByRole("link", { name: "Upgrade" });
     expect(upgradeLinks).toHaveLength(3);
     for (const link of upgradeLinks) {
-      expect(link.getAttribute("href")).toBe("/pricing");
+      expect(link.getAttribute("href")).toBe("/settings/billing/plans");
+      expect(link.getAttribute("href")).not.toBe("/auth");
     }
   });
 
