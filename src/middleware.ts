@@ -96,6 +96,14 @@ function isContactsAlias(pathname: string, method: string): boolean {
   return false;
 }
 
+function isAudiencesAlias(pathname: string, method: string): boolean {
+  if (pathname === "/audiences") return ["GET", "POST"].includes(method);
+  if (pathname.startsWith("/audiences/")) {
+    return ["GET", "DELETE"].includes(method);
+  }
+  return false;
+}
+
 function isSendApiPost(pathname: string, method: string): boolean {
   return (
     method === "POST" &&
@@ -113,6 +121,11 @@ function getRateLimitPathname(pathname: string, method: string): string {
     return pathname === "/contacts"
       ? "/api/contacts"
       : pathname.replace(/^\/contacts/, "/api/contacts");
+  }
+  if (isAudiencesAlias(pathname, method)) {
+    return pathname === "/audiences"
+      ? "/api/segments"
+      : pathname.replace(/^\/audiences/, "/api/segments");
   }
   return pathname;
 }
@@ -163,7 +176,13 @@ export async function middleware(request: NextRequest) {
   // aliases must bypass dashboard session redirects and use public API auth.
   const isSendAlias = isSendPostAlias(pathname, request.method);
   const isContactAlias = isContactsAlias(pathname, request.method);
-  if (!pathname.startsWith("/api/") && !isSendAlias && !isContactAlias) {
+  const isAudienceAlias = isAudiencesAlias(pathname, request.method);
+  if (
+    !pathname.startsWith("/api/") &&
+    !isSendAlias &&
+    !isContactAlias &&
+    !isAudienceAlias
+  ) {
     // Allow auth page, public landing page, and static assets
     if (
       pathname === "/" ||

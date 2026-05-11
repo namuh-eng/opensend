@@ -3,9 +3,12 @@ import { DEFAULT_BASE_URL, Opensend, Resend } from "../packages/sdk/src";
 import type {
   ApiError,
   ApiResponse,
+  AudienceListResponse,
+  AudienceResponse,
   BatchEmailResponse,
   ContactListResponse,
   ContactResponse,
+  DeleteAudienceResponse,
   DeleteContactResponse,
   EmailOptions,
   EmailResponse,
@@ -149,6 +152,24 @@ describe("Opensend SDK", () => {
       error: ApiError | null;
     }>();
     expectTypeOf<BatchEmailResponse>().toMatchTypeOf<{ data: unknown[] }>();
+    expectTypeOf<AudienceListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{
+        id: string;
+        name: string;
+        created_at: string;
+      }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<AudienceResponse>().toMatchTypeOf<{
+      object: "audience";
+      id: string;
+      name: string;
+    }>();
+    expectTypeOf<DeleteAudienceResponse>().toMatchTypeOf<{
+      object: "audience";
+      deleted: true;
+    }>();
     expectTypeOf<ContactListResponse>().toMatchTypeOf<{
       object: "list";
       data: Array<{
@@ -310,6 +331,53 @@ describe("Opensend SDK", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
       "https://api.example.com/contacts/user@example.com",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("uses Resend-compatible root audiences endpoints for CRUD", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({ object: "audience", id: "aud_123", name: "VIP" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+    const resend = new Resend("re_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.audiences.create({ name: "Registered Users" });
+    await client.audiences.list({ limit: 10, after: "aud_100", search: "vip" });
+    await resend.audiences.get("aud_123");
+    await resend.audiences.delete("aud_123");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/audiences",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/audiences?limit=10&after=aud_100&search=vip",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/audiences/aud_123",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "https://api.example.com/audiences/aud_123",
       expect.objectContaining({ method: "DELETE" }),
     );
   });
