@@ -1,5 +1,5 @@
 // E2E category: provider-gated/mocked integration; Stripe paths are skipped or route-mocked unless billing env is configured.
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 const billingBackend = process.env.BILLING_BACKEND?.toLowerCase() ?? "disabled";
 const billingEnabled =
@@ -8,7 +8,9 @@ const billingEnabled =
 test.describe("Billing — disabled (self-host default)", () => {
   test.skip(billingEnabled, "Only runs when billing is disabled");
 
-  test.beforeEach(async ({ context }) => {
+  test.beforeEach(async ({ context }, testInfo) => {
+    if (testInfo.title.includes("/settings/billing renders")) return;
+
     await context.addCookies([
       {
         name: "better-auth.session_token",
@@ -21,9 +23,19 @@ test.describe("Billing — disabled (self-host default)", () => {
     ]);
   });
 
-  test("/settings/billing returns 404", async ({ page }) => {
-    const response = await page.goto("/settings/billing");
-    expect(response?.status()).toBe(404);
+  test("/settings/billing renders the disabled billing state", async ({
+    authenticatedPage,
+  }) => {
+    const response = await authenticatedPage.goto("/settings/billing");
+    expect(response?.status()).toBe(200);
+    await expect(
+      authenticatedPage.getByText(
+        "Billing is not enabled for this Opensend deployment.",
+      ),
+    ).toBeVisible();
+    await expect(
+      authenticatedPage.getByRole("link", { name: "Back to settings" }),
+    ).toHaveAttribute("href", "/settings");
   });
 
   test("/settings/billing/plans returns 404", async ({ page }) => {
@@ -54,7 +66,7 @@ test.describe("Billing — enabled (Stripe)", () => {
     "Requires BILLING_BACKEND=stripe + STRIPE_SECRET_KEY",
   );
 
-  test("dashboard → pricing → checkout redirect lands on checkout.stripe.com", async ({
+  test("dashboard plans → checkout redirect lands on checkout.stripe.com", async ({
     page,
     context,
   }) => {
