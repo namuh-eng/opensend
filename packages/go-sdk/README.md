@@ -16,7 +16,7 @@ go get github.com/namuh-eng/opensend/packages/go-sdk
 Use environment variables instead of hardcoding API keys:
 
 ```bash
-export OPENSEND_API_KEY="re_your_api_key"
+export OPENSEND_API_KEY="os_your_api_key"
 ```
 
 For self-hosted OpenSend, point the SDK at your deployment origin. The default

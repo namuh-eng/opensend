@@ -30,6 +30,7 @@ vi.mock("next/link", () => ({
   },
 }));
 
+import type { BroadcastsListProps } from "@/components/broadcasts-list";
 import {
   cleanup,
   fireEvent,
@@ -40,7 +41,7 @@ import {
 import React from "react";
 
 type BroadcastsListModule = typeof import("@/components/broadcasts-list");
-let BroadcastsList: BroadcastsListModule["BroadcastsList"];
+let BroadcastsList: React.ComponentType<BroadcastsListProps>;
 
 const mockBroadcasts = [
   {
@@ -96,7 +97,8 @@ describe("BroadcastsList", () => {
     vi.resetModules();
     vi.clearAllMocks();
     const mod = await import("@/components/broadcasts-list");
-    BroadcastsList = mod.BroadcastsList;
+    BroadcastsList =
+      mod.BroadcastsList as BroadcastsListModule["BroadcastsList"];
   });
 
   afterEach(() => {
@@ -162,6 +164,70 @@ describe("BroadcastsList", () => {
     await waitFor(() => {
       expect(screen.getByText("No broadcasts")).toBeDefined();
     });
+  });
+
+  it("renders initial empty broadcasts without staying in loading or requiring a client list fetch", async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/segments")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({ data: mockSegments, total: mockSegments.length }),
+        });
+      }
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+    });
+
+    render(
+      React.createElement(BroadcastsList, {
+        initialBroadcasts: [],
+        initialTotal: 0,
+      }),
+    );
+
+    expect(screen.queryByText("Loading broadcasts...")).toBeNull();
+    expect(screen.getByText("No broadcasts")).toBeDefined();
+
+    await waitFor(() => {
+      const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+      expect(
+        calls.some((call) => {
+          const url = call[0];
+          return typeof url === "string" && url.startsWith("/api/segments");
+        }),
+      ).toBe(true);
+    });
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(
+      calls.some((call) => {
+        const url = call[0];
+        return typeof url === "string" && url.startsWith("/api/broadcasts");
+      }),
+    ).toBe(false);
+  });
+
+  it("shows an actionable error state when loading broadcasts fails", async () => {
+    global.fetch = vi.fn().mockImplementation((url: string) => {
+      if (url.includes("/api/segments")) {
+        return Promise.resolve({
+          ok: true,
+          json: () =>
+            Promise.resolve({ data: mockSegments, total: mockSegments.length }),
+        });
+      }
+      return Promise.resolve({
+        ok: false,
+        json: () => Promise.resolve({ error: "Session expired" }),
+      });
+    });
+
+    render(React.createElement(BroadcastsList));
+
+    await waitFor(() => {
+      expect(screen.getByText("Unable to load broadcasts")).toBeDefined();
+    });
+    expect(screen.getByText("Session expired")).toBeDefined();
+    expect(screen.getByText("Retry")).toBeDefined();
   });
 
   it("has a Create email button", async () => {

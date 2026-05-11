@@ -1,4 +1,4 @@
-import { EmailDetail } from "@/components/email-detail";
+import { EmailDetail, type EmailDetailData } from "@/components/email-detail";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -6,7 +6,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
 }));
 
-const mockEmail = {
+const mockEmail: EmailDetailData = {
   id: "88269538-8271-43a8-9ee3-1300abcd1234",
   from: "test@updates.foreverbrowsing.com",
   to: ["jaeyunha0317@gmail.com"],
@@ -18,8 +18,23 @@ const mockEmail = {
   tags: [],
   headers: {},
   events: [
-    { type: "sent", timestamp: "2026-03-28T16:14:00.000Z" },
-    { type: "delivered", timestamp: "2026-03-28T16:14:02.000Z" },
+    {
+      id: "event-sent",
+      type: "sent",
+      timestamp: "2026-03-28T16:14:00.000Z",
+      summary: "Accepted by provider as ses-message-123",
+      details: { message_id: "ses-message-123" },
+    },
+    {
+      id: "event-delivered",
+      type: "delivered",
+      timestamp: "2026-03-28T16:14:02.000Z",
+      summary: "Delivered to jaeyunha0317@gmail.com — 250 Ok",
+      details: {
+        recipients: ["jaeyunha0317@gmail.com"],
+        smtp_response: "250 Ok",
+      },
+    },
   ],
 };
 
@@ -46,7 +61,7 @@ describe("EmailDetail", () => {
   it("renders event timeline in chronological order", () => {
     render(<EmailDetail email={mockEmail} />);
 
-    expect(screen.getByText("EMAIL EVENTS")).toBeTruthy();
+    expect(screen.getByText("EMAIL EVENT TRACE")).toBeTruthy();
 
     const sentBadge = screen.getByText("Sent");
     const deliveredBadge = screen.getByText("Delivered");
@@ -59,6 +74,17 @@ describe("EmailDetail", () => {
     expect(badges.length).toBe(2);
     expect(badges[0].textContent).toBe("Sent");
     expect(badges[1].textContent).toBe("Delivered");
+  });
+
+  it("renders event ids and sanitized payload-backed details", () => {
+    render(<EmailDetail email={mockEmail} />);
+
+    expect(screen.getByText("event_id: event-delivered")).toBeTruthy();
+    expect(
+      screen.getByText("Delivered to jaeyunha0317@gmail.com — 250 Ok"),
+    ).toBeTruthy();
+    expect(screen.getByText("Smtp Response:")).toBeTruthy();
+    expect(screen.getByText("250 Ok")).toBeTruthy();
   });
 
   it("renders email ID with copy button", () => {
@@ -122,6 +148,8 @@ describe("EmailDetail", () => {
 
     expect(screen.getByText("ASSOCIATED LOGS")).toBeTruthy();
     expect(screen.getByText("/api/emails")).toBeTruthy();
+    expect(screen.getByText("same email_id")).toBeTruthy();
+    expect(screen.getByText("log_id: log-123")).toBeTruthy();
     expect(
       screen.getByRole("link", { name: /View all logs/i }).getAttribute("href"),
     ).toBe(`/logs?q=${mockEmail.id}`);

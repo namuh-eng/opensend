@@ -297,7 +297,7 @@ export async function handlePostEmailRequest(
   const idempotencyKey = request.headers.get("idempotency-key");
   if (
     idempotencyKey &&
-    (idempotencyKey.length < 1 || idempotencyKey.length > 255)
+    (idempotencyKey.length < 1 || idempotencyKey.length > 256)
   ) {
     recordAcceptMetric(telemetry, {
       durationMs: performance.now() - startedAt,
@@ -307,7 +307,7 @@ export async function handlePostEmailRequest(
       jsonWithTelemetry(
         publicApiError(
           "invalid_idempotency_key",
-          "Idempotency-Key must be between 1 and 255 characters.",
+          "Idempotency-Key must be between 1 and 256 characters.",
           400,
         ),
         telemetry,
@@ -390,16 +390,7 @@ export async function handlePostEmailRequest(
         outcome: "queued",
       });
       return await logResponse(
-        jsonWithTelemetry(
-          publicApiError(
-            "idempotency_conflict",
-            "A request with this idempotency key has already been accepted.",
-            409,
-            { id: existing.id },
-          ),
-          telemetry,
-          { status: 409 },
-        ),
+        jsonWithTelemetry({ id: existing.id }, telemetry, { status: 200 }),
         { emailId: existing.id },
       );
     }

@@ -9,7 +9,10 @@ const mockDeleteDomainIdentity = vi.hoisted(() => vi.fn());
 const mockGetDomainIdentity = vi.hoisted(() => vi.fn());
 const mockCreateDomainIdentity = vi.hoisted(() => vi.fn());
 const mockCheckDomainQuota = vi.hoisted(() => vi.fn());
+const mockCreateDomainService = vi.hoisted(() => vi.fn());
+const mockCreateDomainDetailService = vi.hoisted(() => vi.fn());
 const mockCreateDomain = vi.hoisted(() => vi.fn());
+const mockListDomains = vi.hoisted(() => vi.fn());
 const mockGetDomainDetail = vi.hoisted(() => vi.fn());
 const mockUpdateDomainDetail = vi.hoisted(() => vi.fn());
 const mockDeleteDomainDetail = vi.hoisted(() => vi.fn());
@@ -60,15 +63,8 @@ vi.mock("@opensend/core", () => ({
   DomainDetailServiceError: MockDomainDetailServiceError,
   DMARC_RECORD_VALUE: "v=DMARC1; p=none;",
   buildDmarcRecordName: (domain: string) => `_dmarc.${domain}`,
-  createDomainService: () => ({
-    createDomain: mockCreateDomain,
-    listDomains: vi.fn(),
-  }),
-  createDomainDetailService: () => ({
-    getDomainDetail: mockGetDomainDetail,
-    updateDomainDetail: mockUpdateDomainDetail,
-    deleteDomainDetail: mockDeleteDomainDetail,
-  }),
+  createDomainService: mockCreateDomainService,
+  createDomainDetailService: mockCreateDomainDetailService,
   domainService: {
     reconcileVerification: mockReconcileVerification,
   },
@@ -136,7 +132,19 @@ describe("Domain API validation", () => {
       ok: true,
       info: { limit: 10, used: 0 },
     });
+    mockCreateDomainService.mockReset();
+    mockCreateDomainDetailService.mockReset();
     mockCreateDomain.mockReset();
+    mockListDomains.mockReset();
+    mockCreateDomainService.mockImplementation(() => ({
+      createDomain: mockCreateDomain,
+      listDomains: mockListDomains,
+    }));
+    mockCreateDomainDetailService.mockImplementation(() => ({
+      getDomainDetail: mockGetDomainDetail,
+      updateDomainDetail: mockUpdateDomainDetail,
+      deleteDomainDetail: mockDeleteDomainDetail,
+    }));
     mockGetDomainDetail.mockReset();
     mockUpdateDomainDetail.mockReset();
     mockDeleteDomainDetail.mockReset();
@@ -194,6 +202,40 @@ describe("Domain API validation", () => {
         capabilities: expect.any(Array),
       }),
     });
+  });
+
+  it("wires domain creation through core without route-level SES provider imports", async () => {
+    mockCreateDomain.mockResolvedValueOnce({
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      status: "not_started",
+      region: "us-east-1",
+      records: [],
+      customReturnPath: null,
+      trackOpens: false,
+      trackClicks: false,
+      trackingSubdomain: null,
+      tls: "opportunistic",
+      capabilities: [{ name: "sending", enabled: true }],
+      createdAt: new Date("2026-05-06T00:00:00.000Z"),
+    });
+
+    const { POST } = await import("@/app/api/domains/route");
+    const res = await POST(
+      makeRequest("http://localhost:3015/api/domains", "POST", {
+        name: "example.com",
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(mockCreateDomainService).toHaveBeenCalledWith({
+      invalidateDomainCaches: expect.any(Function),
+    });
+    expect(mockCreateDomainService).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        createDomainIdentity: expect.any(Function),
+      }),
+    );
   });
 
   it("creates a domain from an authenticated dashboard session", async () => {
@@ -346,6 +388,43 @@ describe("Domain API validation", () => {
         }),
       }),
     });
+  });
+
+  it("wires domain detail mutations through core without route-level SES or Cloudflare providers", async () => {
+    mockDeleteDomainDetail.mockResolvedValueOnce({
+      response: { object: "domain", id: VALID_DOMAIN_ID, deleted: true },
+      eventPayload: { id: VALID_DOMAIN_ID, name: "example.com" },
+    });
+
+    const { DELETE } = await import("@/app/api/domains/[id]/route");
+    const res = await DELETE(
+      makeRequest(
+        `http://localhost:3015/api/domains/${VALID_DOMAIN_ID}`,
+        "DELETE",
+      ),
+      { params: Promise.resolve({ id: VALID_DOMAIN_ID }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockCreateDomainDetailService).toHaveBeenCalledWith({
+      getDomainById: expect.any(Function),
+      invalidateDomainCaches: expect.any(Function),
+    });
+    expect(mockCreateDomainDetailService).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        deleteDomainIdentity: expect.any(Function),
+      }),
+    );
+    expect(mockCreateDomainDetailService).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        listDNSRecords: expect.any(Function),
+      }),
+    );
+    expect(mockCreateDomainDetailService).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        deleteDNSRecord: expect.any(Function),
+      }),
+    );
   });
 
   it("deletes a domain and enqueues domain.deleted for the caller tenant", async () => {

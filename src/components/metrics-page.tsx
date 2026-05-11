@@ -23,6 +23,9 @@ const DATE_RANGE_TO_API: Record<string, string> = {
   "Last 30 days": "last_30_days",
 };
 
+const TAG_NAME_PREFIX = "name:";
+const TAG_VALUE_PREFIX = "value:";
+
 // ── Types ───────────────────────────────────────────────────────────
 
 interface DailyDataPoint {
@@ -52,6 +55,11 @@ interface DailyComplainPoint {
   rate: number;
 }
 
+interface TagOption {
+  name: string;
+  values: string[];
+}
+
 interface MetricsData {
   totalEmails: number;
   deliverabilityRate: number;
@@ -59,12 +67,41 @@ interface MetricsData {
   complainRate: number;
   complained: number;
   domains: string[];
+  tagOptions: TagOption[];
   dailyData: DailyDataPoint[];
   domainBreakdown: DomainBreakdownEntry[];
   bounceBreakdown: BounceBreakdown;
   dailyBounceData: DailyBouncePoint[];
   dailyComplainData: DailyComplainPoint[];
   lastUpdated: string;
+}
+
+function tagNameFilterValue(name: string): string {
+  return `${TAG_NAME_PREFIX}${name}`;
+}
+
+function tagValueFilterValue(name: string, value: string): string {
+  return `${TAG_VALUE_PREFIX}${name}:${value}`;
+}
+
+function getTagLabel(name: string, value: string): string {
+  return `${name}: ${value === "" ? "(empty)" : value}`;
+}
+
+function appendTagParams(params: URLSearchParams, tagFilter: string): void {
+  if (tagFilter.startsWith(TAG_VALUE_PREFIX)) {
+    const raw = tagFilter.slice(TAG_VALUE_PREFIX.length);
+    const separatorIndex = raw.indexOf(":");
+    if (separatorIndex <= 0) return;
+    params.set("tag_name", raw.slice(0, separatorIndex));
+    params.set("tag_value", raw.slice(separatorIndex + 1));
+    return;
+  }
+
+  if (tagFilter.startsWith(TAG_NAME_PREFIX)) {
+    const name = tagFilter.slice(TAG_NAME_PREFIX.length);
+    if (name) params.set("tag_name", name);
+  }
 }
 
 // ── MetricSection (collapsible) ─────────────────────────────────────
@@ -146,6 +183,7 @@ export function MetricSection({
 export function MetricsPage() {
   const [dateRange, setDateRange] = useState("Last 15 days");
   const [domain, setDomain] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
   const [eventType, setEventType] = useState("all");
   const [data, setData] = useState<MetricsData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -160,6 +198,9 @@ export function MetricsPage() {
     if (eventType !== "all") {
       params.set("event_type", eventType);
     }
+    if (tagFilter !== "all") {
+      appendTagParams(params, tagFilter);
+    }
     try {
       const res = await fetch(`/api/metrics?${params.toString()}`);
       if (res.ok) {
@@ -169,7 +210,7 @@ export function MetricsPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange, domain, eventType]);
+  }, [dateRange, domain, eventType, tagFilter]);
 
   useEffect(() => {
     fetchMetrics();
@@ -182,6 +223,17 @@ export function MetricsPage() {
       value: d,
       label: d,
     })),
+  ];
+
+  const tagOptions: ComboboxOption[] = [
+    { value: "all", label: "All Tags" },
+    ...(data?.tagOptions ?? []).flatMap((tag) => [
+      { value: tagNameFilterValue(tag.name), label: `${tag.name}: Any value` },
+      ...tag.values.map((value) => ({
+        value: tagValueFilterValue(tag.name, value),
+        label: getTagLabel(tag.name, value),
+      })),
+    ]),
   ];
 
   const lastUpdatedStr = data?.lastUpdated
@@ -201,6 +253,11 @@ export function MetricsPage() {
             options={domainOptions}
             value={domain}
             onChange={setDomain}
+          />
+          <ComboboxFilter
+            options={tagOptions}
+            value={tagFilter}
+            onChange={setTagFilter}
           />
           <DateRangePicker value={dateRange} onChange={setDateRange} />
         </div>

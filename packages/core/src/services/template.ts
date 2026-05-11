@@ -83,6 +83,16 @@ export type TemplatePublishResult = Pick<
   "id" | "status" | "publishedAt" | "hasUnpublishedVersions"
 >;
 
+type TemplateListOptions = {
+  search?: string;
+  status?: string;
+  userId?: string;
+};
+
+type TemplateCreateOptions = {
+  userId?: string;
+};
+
 export type TemplateServiceErrorCode =
   | "invalid_input"
   | "invalid_variables"
@@ -107,6 +117,7 @@ export type TemplateRepository = {
   listForApi(options: {
     search?: string;
     status?: string;
+    userId?: string;
   }): Promise<TemplateListResult>;
 };
 
@@ -384,19 +395,25 @@ export function createTemplateService({
   now = () => new Date(),
 }: TemplateServiceDependencies = {}) {
   return {
-    async listTemplates(options: {
-      search?: string;
-      status?: string;
-    }): Promise<TemplateListResult> {
+    async listTemplates(
+      options: TemplateListOptions,
+    ): Promise<TemplateListResult> {
       const search = options.search?.trim() || "";
       const rawStatus = options.status?.trim() || "";
       const status =
         rawStatus === "published" || rawStatus === "draft" ? rawStatus : "";
 
-      return await repository.listForApi({ search, status });
+      return await repository.listForApi({
+        search,
+        status,
+        userId: options.userId,
+      });
     },
 
-    async createTemplate(input: unknown): Promise<TemplateCreateResult> {
+    async createTemplate(
+      input: unknown,
+      options: TemplateCreateOptions = {},
+    ): Promise<TemplateCreateResult> {
       const body = asRecord(input);
       const name = typeof body.name === "string" ? body.name.trim() : "";
       const html = typeof body.html === "string" ? body.html.trim() : "";
@@ -413,7 +430,7 @@ export function createTemplateService({
           ? body.alias.trim()
           : generateAlias(name);
 
-      const [template] = await repository.create({
+      const createData: TemplateInsert = {
         name,
         alias,
         html,
@@ -424,7 +441,10 @@ export function createTemplateService({
         text: toTruthyStoredString(body.text),
         variables: normalizeVariablesOrThrow(body.variables),
         status: "draft",
-      });
+      };
+      if (options.userId) createData.userId = options.userId;
+
+      const [template] = await repository.create(createData);
 
       return {
         id: template.id,

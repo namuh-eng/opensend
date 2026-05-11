@@ -1,17 +1,17 @@
 import { expect, test } from "./fixtures/auth";
-// E2E category: smoke-only; templates list/create tests need deterministic template fixture follow-up (#229 audit).
-test.skip(
-  true,
-  "E2E category: smoke-only; templates list/create tests need deterministic template fixture follow-up (#229 audit).",
-);
 
 test.describe("Templates List Page", () => {
   test("navigate to template editor from card", async ({
     authenticatedPage: page,
+    e2eDb,
+    e2eUser,
   }) => {
     // Create a template first
     const res = await page.request.post("/api/templates", {
-      data: { name: "E2E Test Template" },
+      data: {
+        name: "E2E Test Template",
+        html: "<p>E2E test template</p>",
+      },
     });
     expect(res.ok()).toBeTruthy();
     const template = await res.json();
@@ -30,10 +30,17 @@ test.describe("Templates List Page", () => {
     );
 
     // Cleanup
-    await page.request.delete(`/api/templates/${template.id}`);
+    await e2eDb.query("delete from templates where id = $1 and user_id = $2", [
+      template.id,
+      e2eUser.id,
+    ]);
   });
 
-  test("create new template", async ({ authenticatedPage: page }) => {
+  test("create new template", async ({
+    authenticatedPage: page,
+    e2eDb,
+    e2eUser,
+  }) => {
     await page.goto("/templates");
     await page.waitForLoadState("networkidle");
 
@@ -42,5 +49,16 @@ test.describe("Templates List Page", () => {
 
     // Verify navigation to editor
     await expect(page).toHaveURL(/\/templates\/[^/]+\/editor/);
+    const templateId = new URL(page.url()).pathname.split("/")[2];
+    const result = await e2eDb.query<{ user_id: string | null }>(
+      "select user_id from templates where id = $1",
+      [templateId],
+    );
+    expect(result.rows[0]?.user_id).toBe(e2eUser.id);
+
+    await e2eDb.query("delete from templates where id = $1 and user_id = $2", [
+      templateId,
+      e2eUser.id,
+    ]);
   });
 });

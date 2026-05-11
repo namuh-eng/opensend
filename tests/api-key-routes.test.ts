@@ -9,7 +9,34 @@ const mockCreateApiKeyService = vi.hoisted(() => vi.fn());
 const mockListApiKeys = vi.hoisted(() => vi.fn());
 const mockCreateApiKey = vi.hoisted(() => vi.fn());
 const mockGetApiKey = vi.hoisted(() => vi.fn());
+const mockUpdateApiKey = vi.hoisted(() => vi.fn());
 const mockDeleteApiKey = vi.hoisted(() => vi.fn());
+const mockRecordAuditEvent = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/audit-events", () => ({
+  auditContextForApiKey: (input: { userId: string; apiKeyId: string }) => ({
+    userId: input.userId,
+    actor: { type: "api_key", id: input.apiKeyId },
+    source: "api_key",
+    sourceApiKeyId: input.apiKeyId,
+  }),
+  auditContextForDashboardSession: (session: {
+    user?: { id?: string; email?: string };
+  }) =>
+    session.user?.id
+      ? {
+          userId: session.user.id,
+          actor: {
+            type: "user",
+            id: session.user.id,
+            email: session.user.email ?? null,
+          },
+          source: "dashboard",
+          sourceApiKeyId: null,
+        }
+      : null,
+  recordAuditEvent: mockRecordAuditEvent,
+}));
 
 vi.mock("@/lib/api-auth", () => ({
   authorizeDashboardOrApiKey: mockAuthorizeDashboardOrApiKey,
@@ -84,6 +111,7 @@ describe("API key route boundary", () => {
       listApiKeys: mockListApiKeys,
       createApiKey: mockCreateApiKey,
       getApiKey: mockGetApiKey,
+      updateApiKey: mockUpdateApiKey,
       deleteApiKey: mockDeleteApiKey,
     });
   });
@@ -163,6 +191,25 @@ describe("API key route boundary", () => {
     expect(mockCreateApiKeyService).toHaveBeenCalledWith({
       invalidateAuthCache: mockInvalidateApiKeyAuthCache,
     });
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith({
+      context: {
+        userId: "user-1",
+        actor: { type: "api_key", id: "caller-key" },
+        source: "api_key",
+        sourceApiKeyId: "caller-key",
+      },
+      action: "api_key.created",
+      targetType: "api_key",
+      targetId: "created-key",
+      metadata: {
+        name: "Primary",
+        permission: "sending_access",
+        domain_id: "domain-1",
+      },
+    });
+    expect(JSON.stringify(mockRecordAuditEvent.mock.calls)).not.toContain(
+      "re_created",
+    );
   });
 
   it("returns API-key detail without token material", async () => {
@@ -195,6 +242,57 @@ describe("API key route boundary", () => {
     expect(mockGetApiKey).toHaveBeenCalledWith("key-1", "user-1");
   });
 
+  it("updates caller-owned API keys and records sanitized audit metadata", async () => {
+    mockUpdateApiKey.mockResolvedValue({
+      id: "key-1",
+      name: "Renamed",
+      createdAt,
+      lastUsedAt,
+      permission: "sending_access",
+      domain: "domain-1",
+    });
+
+    const route = await import("@/app/api/api-keys/[id]/route");
+    const response = await route.PATCH(
+      request("http://localhost/api/api-keys/key-1", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Renamed",
+          permission: "sending_access",
+          domain_id: "domain-1",
+        }),
+      }),
+      detailParams(),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      object: "api_key",
+      id: "key-1",
+      name: "Renamed",
+      permission: "sending_access",
+      domain: "domain-1",
+    });
+    expect(mockUpdateApiKey).toHaveBeenCalledWith("key-1", "user-1", {
+      name: "Renamed",
+      permission: "sending_access",
+      domainId: "domain-1",
+    });
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "api_key.updated",
+        targetType: "api_key",
+        targetId: "key-1",
+        metadata: {
+          name: "Renamed",
+          permission: "sending_access",
+          domain_id: "domain-1",
+        },
+      }),
+    );
+  });
+
   it("deletes caller-owned API keys with an empty 200 response body", async () => {
     mockDeleteApiKey.mockResolvedValue({
       id: "key-1",
@@ -213,6 +311,13 @@ describe("API key route boundary", () => {
     expect(mockCreateApiKeyService).toHaveBeenCalledWith({
       invalidateAuthCache: mockInvalidateApiKeyAuthCache,
     });
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "api_key.deleted",
+        targetType: "api_key",
+        targetId: "key-1",
+      }),
+    );
   });
 
   it("preserves dashboard-session callers by resolving the session user before the service call", async () => {

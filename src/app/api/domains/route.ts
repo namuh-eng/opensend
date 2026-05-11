@@ -4,10 +4,15 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
+import {
+  type AuditContext,
+  auditContextForApiKey,
+  auditContextForDashboardSession,
+  recordAuditEvent,
+} from "@/lib/audit-events";
 import { checkDomainQuota, quotaExceededResponse } from "@/lib/billing/quota";
 import { invalidateDomainCaches } from "@/lib/domain-cache";
 import { queueEvent } from "@/lib/events";
-import { createDomainIdentity } from "@/lib/ses";
 import { createDomainSchema } from "@/lib/validation/domains";
 import {
   createDomainService,
@@ -16,7 +21,6 @@ import {
 
 function domainService() {
   return createDomainService({
-    createDomainIdentity,
     invalidateDomainCaches,
   });
 }
@@ -60,8 +64,17 @@ export async function POST(request: Request): Promise<Response> {
   if (permissionError) return permissionError;
 
   const session = "dashboard" in auth ? await getServerSession() : null;
-  const userId = "userId" in auth ? auth.userId : session?.user?.id;
-  if (!userId) return unauthorizedResponse();
+  const auditContext: AuditContext | null =
+    "userId" in auth
+      ? auth.userId
+        ? auditContextForApiKey({
+            userId: auth.userId,
+            apiKeyId: auth.apiKeyId,
+          })
+        : null
+      : auditContextForDashboardSession(session);
+  if (!auditContext) return unauthorizedResponse();
+  const userId = auditContext.userId;
 
   let body: unknown;
   try {
@@ -111,6 +124,23 @@ export async function POST(request: Request): Promise<Response> {
       }),
     });
 
+    await recordAuditEvent({
+      context: auditContext,
+      action: "domain.created",
+      targetType: "domain",
+      targetId: row.id,
+      metadata: {
+        name: row.name,
+        region: row.region,
+        custom_return_path: row.customReturnPath,
+        open_tracking: row.trackOpens,
+        click_tracking: row.trackClicks,
+        tracking_subdomain: row.trackingSubdomain,
+        tls: row.tls,
+        capabilities: row.capabilities,
+      },
+    });
+
     return Response.json(
       {
         object: "domain",
@@ -144,8 +174,17 @@ export async function GET(request: Request): Promise<Response> {
   if (permissionError) return permissionError;
 
   const session = "dashboard" in auth ? await getServerSession() : null;
-  const userId = "userId" in auth ? auth.userId : session?.user?.id;
-  if (!userId) return unauthorizedResponse();
+  const auditContext: AuditContext | null =
+    "userId" in auth
+      ? auth.userId
+        ? auditContextForApiKey({
+            userId: auth.userId,
+            apiKeyId: auth.apiKeyId,
+          })
+        : null
+      : auditContextForDashboardSession(session);
+  if (!auditContext) return unauthorizedResponse();
+  const userId = auditContext.userId;
 
   const url = new URL(request.url);
   const limit = Number(url.searchParams.get("limit")) || 20;

@@ -3,6 +3,7 @@ import {
   type DomainRepository,
   createDomainService,
 } from "../packages/core/src/services/domain";
+import { domainIdentityProvider } from "../packages/core/src/services/domain-providers";
 
 type DomainRow = NonNullable<Awaited<ReturnType<DomainRepository["findById"]>>>;
 type DomainInsert = Parameters<DomainRepository["create"]>[0];
@@ -60,6 +61,51 @@ function createRepository(overrides: Partial<DomainRepository> = {}) {
 }
 
 describe("domain service", () => {
+  it("uses the core domain identity provider when route adapters do not inject SES", async () => {
+    const inserted: DomainInsert[] = [];
+    const createDomainIdentity = vi
+      .spyOn(domainIdentityProvider, "createDomainIdentity")
+      .mockResolvedValueOnce({
+        dkimOrigin: "EXTERNAL",
+        status: "PENDING",
+        dkimSelector: "opensend-test",
+        dkimPublicKey: "public-key",
+        dkimPrivateKeyEnc: { ct: "ciphertext", iv: "iv" },
+      });
+    const repository = createRepository({
+      async create(data) {
+        inserted.push(data);
+        return [domainRow({ ...data, id: "created-domain" })];
+      },
+    });
+
+    try {
+      const service = createDomainService({ repository });
+      await service.createDomain({ name: "Example.COM", userId: "user-1" });
+
+      expect(createDomainIdentity).toHaveBeenCalledWith("example.com", {
+        userId: "user-1",
+      });
+      expect(inserted[0]).toMatchObject({
+        name: "example.com",
+        dkimOrigin: "EXTERNAL",
+        dkimSelector: "opensend-test",
+        dkimPublicKey: "public-key",
+        dkimPrivateKeyCt: "ciphertext",
+        dkimPrivateKeyIv: "iv",
+      });
+      expect(inserted[0]?.records).toContainEqual({
+        type: "TXT",
+        name: "opensend-test._domainkey.example.com",
+        value: "v=DKIM1; k=rsa; p=public-key",
+        status: "pending",
+        ttl: "Auto",
+      });
+    } finally {
+      createDomainIdentity.mockRestore();
+    }
+  });
+
   it("creates a domain identity, persists SES DNS records, and invalidates caches", async () => {
     const inserted: DomainInsert[] = [];
     const createDomainIdentity = vi.fn(async () => ({

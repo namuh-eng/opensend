@@ -3,7 +3,10 @@ import { db } from "../db/client";
 import { domainRepo } from "../db/repositories/domainRepo";
 import { domains } from "../db/schema";
 import { getEffectiveReturnPathLabel } from "./domain";
-import { emailProvider } from "./emailProvider";
+import {
+  cloudflareDnsCleanupProvider,
+  domainIdentityProvider,
+} from "./domain-providers";
 
 type DomainRow = typeof domains.$inferSelect;
 type DomainInsert = typeof domains.$inferInsert;
@@ -272,9 +275,11 @@ export function createDomainDetailService({
   updateDomainForUser = defaultUpdateDomainForUser,
   deleteDomainForUser = defaultDeleteDomainForUser,
   deleteDomainIdentity = (domain: string) =>
-    emailProvider.deleteDomainIdentity(domain),
-  listDNSRecords = async () => [],
-  deleteDNSRecord = async () => {},
+    domainIdentityProvider.deleteDomainIdentity(domain),
+  listDNSRecords = (input: { name: string }) =>
+    cloudflareDnsCleanupProvider.listDNSRecords(input),
+  deleteDNSRecord = (id: string) =>
+    cloudflareDnsCleanupProvider.deleteDNSRecord(id),
   invalidateDomainCaches = async () => {},
   logger = console,
 }: DomainDetailServiceDependencies = {}) {

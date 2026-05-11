@@ -22,9 +22,9 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/emails",
         description:
-          "Send an email. Reusing the same Idempotency-Key returns the existing 409 idempotency_conflict response instead of accepting a duplicate.",
+          "Send an email. Reusing the same Idempotency-Key returns the original accepted { id } response instead of accepting a duplicate.",
         curl: `curl -X POST https://api.opensend.com/api/emails \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: welcome-user-123" \\
   -d '{
@@ -39,22 +39,22 @@ const API_GROUPS: EndpointGroup[] = [
         path: "/api/emails",
         description: "List all emails with pagination",
         curl: `curl https://api.opensend.com/api/emails \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "GET",
         path: "/api/emails/:id",
         description: "Retrieve a specific email by ID",
         curl: `curl https://api.opensend.com/api/emails/EMAIL_ID \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "POST",
         path: "/api/emails/batch",
         description:
-          "Send a batch of emails with one Idempotency-Key for the whole batch. Duplicate keys return 409 idempotency_conflict before quota reservation, row persistence, or queue publish.",
+          "Send a batch of emails with one Idempotency-Key for the whole batch. Duplicate batch keys currently return 409 idempotency_conflict before quota reservation, row persistence, or queue publish.",
         curl: `curl -X POST https://api.opensend.com/api/emails/batch \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: batch-campaign-123" \\
   -d '[
@@ -72,7 +72,7 @@ const API_GROUPS: EndpointGroup[] = [
         path: "/api/domains",
         description: "Add a new domain",
         curl: `curl -X POST https://api.opensend.com/api/domains \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "mail.example.com" }'`,
       },
@@ -81,28 +81,28 @@ const API_GROUPS: EndpointGroup[] = [
         path: "/api/domains",
         description: "List all domains",
         curl: `curl https://api.opensend.com/api/domains \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "GET",
         path: "/api/domains/:id",
         description: "Retrieve a domain by ID",
         curl: `curl https://api.opensend.com/api/domains/DOMAIN_ID \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "DELETE",
         path: "/api/domains/:id",
         description: "Delete a domain",
         curl: `curl -X DELETE https://api.opensend.com/api/domains/DOMAIN_ID \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "POST",
         path: "/api/domains/:id/auto-configure",
         description: "Auto-configure DNS records for a domain",
         curl: `curl -X POST https://api.opensend.com/api/domains/DOMAIN_ID/auto-configure \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
     ],
   },
@@ -114,7 +114,7 @@ const API_GROUPS: EndpointGroup[] = [
         path: "/api/api-keys",
         description: "Create a new API key",
         curl: `curl -X POST https://api.opensend.com/api/api-keys \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Production Key" }'`,
       },
@@ -123,14 +123,14 @@ const API_GROUPS: EndpointGroup[] = [
         path: "/api/api-keys",
         description: "List all API keys",
         curl: `curl https://api.opensend.com/api/api-keys \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "DELETE",
         path: "/api/api-keys/:id",
         description: "Delete an API key",
         curl: `curl -X DELETE https://api.opensend.com/api/api-keys/KEY_ID \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
     ],
   },
@@ -142,7 +142,7 @@ const API_GROUPS: EndpointGroup[] = [
         path: "/api/templates",
         description: "Create a new template",
         curl: `curl -X POST https://api.opensend.com/api/templates \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Welcome Email", "html": "<p>Welcome {{name}}</p>" }'`,
       },
@@ -151,21 +151,21 @@ const API_GROUPS: EndpointGroup[] = [
         path: "/api/templates",
         description: "List all templates",
         curl: `curl https://api.opensend.com/api/templates \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "GET",
         path: "/api/templates/:id",
         description: "Retrieve a template by ID",
         curl: `curl https://api.opensend.com/api/templates/TEMPLATE_ID \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "PATCH",
         path: "/api/templates/:id",
         description: "Update a template",
         curl: `curl -X PATCH https://api.opensend.com/api/templates/TEMPLATE_ID \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Updated Template" }'`,
       },
@@ -174,7 +174,7 @@ const API_GROUPS: EndpointGroup[] = [
         path: "/api/templates/:id",
         description: "Delete a template",
         curl: `curl -X DELETE https://api.opensend.com/api/templates/TEMPLATE_ID \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
     ],
   },
@@ -186,7 +186,7 @@ const API_GROUPS: EndpointGroup[] = [
         path: "/api/contacts",
         description: "Create a new contact",
         curl: `curl -X POST https://api.opensend.com/api/contacts \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "email": "user@example.com", "first_name": "Jane" }'`,
       },
@@ -195,7 +195,7 @@ const API_GROUPS: EndpointGroup[] = [
         path: "/api/contacts",
         description: "List all contacts",
         curl: `curl https://api.opensend.com/api/contacts \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
     ],
   },
@@ -207,7 +207,7 @@ const API_GROUPS: EndpointGroup[] = [
         path: "/broadcasts",
         description: "Create a new broadcast",
         curl: `curl -X POST https://api.opensend.com/broadcasts \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "March Newsletter", "from": "Acme <news@example.com>", "subject": "March updates", "segment_id": "SEGMENT_ID" }'
 
@@ -225,21 +225,21 @@ await client.broadcasts.create({
         path: "/broadcasts",
         description: "List all broadcasts",
         curl: `curl https://api.opensend.com/broadcasts \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "GET",
         path: "/broadcasts/:id",
         description: "Retrieve a broadcast by ID",
         curl: `curl https://api.opensend.com/broadcasts/BROADCAST_ID \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "POST",
         path: "/broadcasts/:id/send",
         description: "Send or schedule a broadcast",
         curl: `curl -X POST https://api.opensend.com/broadcasts/BROADCAST_ID/send \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "scheduled_at": "in 1 min" }'
 
@@ -258,7 +258,7 @@ await client.broadcasts.send("BROADCAST_ID", {
         path: "/api/segments",
         description: "Create a new segment",
         curl: `curl -X POST https://api.opensend.com/api/segments \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Active Users" }'`,
       },
@@ -267,7 +267,7 @@ await client.broadcasts.send("BROADCAST_ID", {
         path: "/api/segments",
         description: "List all segments",
         curl: `curl https://api.opensend.com/api/segments \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
     ],
   },
@@ -279,7 +279,7 @@ await client.broadcasts.send("BROADCAST_ID", {
         path: "/api/topics",
         description: "Create a new topic",
         curl: `curl -X POST https://api.opensend.com/api/topics \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Product Updates" }'`,
       },
@@ -288,7 +288,7 @@ await client.broadcasts.send("BROADCAST_ID", {
         path: "/api/topics",
         description: "List all topics",
         curl: `curl https://api.opensend.com/api/topics \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
     ],
   },
@@ -300,7 +300,7 @@ await client.broadcasts.send("BROADCAST_ID", {
         path: "/api/properties",
         description: "Create a new property",
         curl: `curl -X POST https://api.opensend.com/api/properties \\
-  -H "Authorization: Bearer re_YOUR_API_KEY" \\
+  -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "plan", "type": "string" }'`,
       },
@@ -309,7 +309,7 @@ await client.broadcasts.send("BROADCAST_ID", {
         path: "/api/properties",
         description: "List all properties",
         curl: `curl https://api.opensend.com/api/properties \\
-  -H "Authorization: Bearer re_YOUR_API_KEY"`,
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
     ],
   },
