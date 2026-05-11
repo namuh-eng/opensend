@@ -10,13 +10,11 @@ import {
   auditContextForDashboardSession,
   recordAuditEvent,
 } from "@/lib/audit-events";
-import { deleteDNSRecord, listDNSRecords } from "@/lib/cloudflare";
 import {
   getCachedDomainById,
   invalidateDomainCaches,
 } from "@/lib/domain-cache";
 import { queueEvent } from "@/lib/events";
-import { deleteDomainIdentity } from "@/lib/ses";
 import {
   domainRouteParamsSchema,
   updateDomainSchema,
@@ -30,9 +28,6 @@ import { NextResponse } from "next/server";
 function domainDetailService() {
   return createDomainDetailService({
     getDomainById: getCachedDomainById,
-    deleteDomainIdentity,
-    listDNSRecords,
-    deleteDNSRecord,
     invalidateDomainCaches,
   });
 }

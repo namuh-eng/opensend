@@ -35,6 +35,8 @@ export * from "./webhook-signing";
 export * from "./webhook-events";
 export * from "./services/dns";
 export * from "./services/domain";
+export * from "./services/domain-providers";
+export * from "./services/dkim-keys";
 export * from "./services/domain-detail";
 export * from "./services/domain-events";
 export * from "./services/webhook";

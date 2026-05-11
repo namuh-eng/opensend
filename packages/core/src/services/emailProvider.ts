@@ -1,10 +1,18 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import {
   CreateEmailIdentityCommand,
   DeleteEmailIdentityCommand,
   GetEmailIdentityCommand,
+  PutEmailIdentityDkimSigningAttributesCommand,
   SESv2Client,
   SendEmailCommand,
 } from "@aws-sdk/client-sesv2";
+import {
+  type EncryptedBlob,
+  decryptSecret,
+  generateDkimKeypair,
+} from "./dkim-keys";
 
 type EmailAttachment = {
   filename: string;
@@ -14,6 +22,33 @@ type EmailAttachment = {
   content_type?: string;
   content_id?: string;
 };
+
+type EmailProviderCreateDomainIdentityOptions = {
+  userId?: string;
+};
+
+type EmailProviderCreateDomainIdentityResult = {
+  dkimOrigin: "AWS_SES" | "EXTERNAL";
+  status: string;
+  dkimSelector?: string;
+  dkimPublicKey?: string;
+  dkimPrivateKeyEnc?: EncryptedBlob;
+  dkimTokens?: string[];
+};
+
+type EmailProviderGetDomainIdentityResult = {
+  verified: boolean;
+  dkimStatus: string;
+  dkimTokens: string[];
+};
+
+const hasAwsCredentials =
+  !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) ||
+  !!process.env.AWS_PROFILE ||
+  existsSync(join(process.env.HOME ?? "", ".aws", "credentials"));
+
+const useDomainDevStub =
+  process.env.NODE_ENV === "development" && !hasAwsCredentials;
 
 export class EmailProviderService {
   private client: SESv2Client | null = null;
@@ -83,33 +118,159 @@ export class EmailProviderService {
     return { id: res.MessageId };
   }
 
-  async getDomainIdentity(domain: string) {
-    if (!process.env.AWS_ACCESS_KEY_ID)
-      return { verified: true, dkimTokens: ["dev1", "dev2", "dev3"] };
+  async getDomainIdentity(
+    domain: string,
+  ): Promise<EmailProviderGetDomainIdentityResult> {
+    if (!domain) throw new Error("domain is required");
+
+    if (useDomainDevStub) {
+      return { verified: false, dkimStatus: "NOT_STARTED", dkimTokens: [] };
+    }
+
     const res = await this.getClient().send(
       new GetEmailIdentityCommand({ EmailIdentity: domain }),
     );
+
     return {
-      verified: res.VerifiedForSendingStatus,
-      dkimTokens: res.DkimAttributes?.Tokens,
+      verified: res.VerifiedForSendingStatus ?? false,
+      dkimStatus: res.DkimAttributes?.Status ?? "NOT_STARTED",
+      dkimTokens: res.DkimAttributes?.Tokens ?? [],
     };
   }
 
-  async deleteDomainIdentity(domain: string) {
-    if (!process.env.AWS_ACCESS_KEY_ID) return;
+  async deleteDomainIdentity(domain: string): Promise<void> {
+    if (!domain) throw new Error("domain is required");
+
+    if (useDomainDevStub) {
+      console.log(`[DEV] Would delete SES identity for domain: ${domain}`);
+      return;
+    }
+
     await this.getClient().send(
       new DeleteEmailIdentityCommand({ EmailIdentity: domain }),
     );
   }
 
-  async createDomainIdentity(domain: string) {
-    if (!process.env.AWS_ACCESS_KEY_ID)
-      return { dkimTokens: ["dev1", "dev2", "dev3"] };
-    const res = await this.getClient().send(
-      new CreateEmailIdentityCommand({ EmailIdentity: domain }),
-    );
-    return { dkimTokens: res.DkimAttributes?.Tokens };
+  async createDomainIdentity(
+    domain: string,
+    options: EmailProviderCreateDomainIdentityOptions = {},
+  ): Promise<EmailProviderCreateDomainIdentityResult> {
+    if (!domain) throw new Error("domain is required");
+
+    if (options.userId) {
+      return this.createExternalDkimIdentity(domain, options.userId);
+    }
+
+    return this.createSesManagedIdentity(domain);
   }
+
+  private async createExternalDkimIdentity(
+    domain: string,
+    userId: string,
+  ): Promise<EmailProviderCreateDomainIdentityResult> {
+    const keypair = generateDkimKeypair(userId);
+
+    if (useDomainDevStub) {
+      console.log(
+        `[DEV] Would create SES EXTERNAL identity for ${domain} (selector ${keypair.selector})`,
+      );
+      return {
+        dkimOrigin: "EXTERNAL",
+        status: "PENDING",
+        dkimSelector: keypair.selector,
+        dkimPublicKey: keypair.publicKeyDnsValue,
+        dkimPrivateKeyEnc: keypair.privateKeyPemEncrypted,
+      };
+    }
+
+    const privateKeyPem = decryptSecret(keypair.privateKeyPemEncrypted);
+    const signingAttributes = {
+      DomainSigningSelector: keypair.selector,
+      DomainSigningPrivateKey: pemToBase64Body(privateKeyPem),
+    };
+
+    try {
+      const res = await this.getClient().send(
+        new CreateEmailIdentityCommand({
+          EmailIdentity: domain,
+          DkimSigningAttributes: signingAttributes,
+        }),
+      );
+      return {
+        dkimOrigin: "EXTERNAL",
+        status: res.DkimAttributes?.Status ?? "PENDING",
+        dkimSelector: keypair.selector,
+        dkimPublicKey: keypair.publicKeyDnsValue,
+        dkimPrivateKeyEnc: keypair.privateKeyPemEncrypted,
+      };
+    } catch (error) {
+      if (!isAlreadyExistsError(error)) throw error;
+      await this.getClient().send(
+        new PutEmailIdentityDkimSigningAttributesCommand({
+          EmailIdentity: domain,
+          SigningAttributesOrigin: "EXTERNAL",
+          SigningAttributes: signingAttributes,
+        }),
+      );
+      return {
+        dkimOrigin: "EXTERNAL",
+        status: "PENDING",
+        dkimSelector: keypair.selector,
+        dkimPublicKey: keypair.publicKeyDnsValue,
+        dkimPrivateKeyEnc: keypair.privateKeyPemEncrypted,
+      };
+    }
+  }
+
+  private async createSesManagedIdentity(
+    domain: string,
+  ): Promise<EmailProviderCreateDomainIdentityResult> {
+    if (useDomainDevStub) {
+      console.log(`[DEV] Would create SES identity for domain: ${domain}`);
+      return {
+        dkimOrigin: "AWS_SES",
+        dkimTokens: ["dev-token-1", "dev-token-2", "dev-token-3"],
+        status: "PENDING",
+      };
+    }
+
+    try {
+      const res = await this.getClient().send(
+        new CreateEmailIdentityCommand({ EmailIdentity: domain }),
+      );
+      return {
+        dkimOrigin: "AWS_SES",
+        dkimTokens: res.DkimAttributes?.Tokens ?? [],
+        status: res.DkimAttributes?.Status ?? "PENDING",
+      };
+    } catch (error) {
+      if (!isAlreadyExistsError(error)) throw error;
+      const res = await this.getClient().send(
+        new GetEmailIdentityCommand({ EmailIdentity: domain }),
+      );
+      return {
+        dkimOrigin: "AWS_SES",
+        dkimTokens: res.DkimAttributes?.Tokens ?? [],
+        status: res.DkimAttributes?.Status ?? "PENDING",
+      };
+    }
+  }
+}
+
+function pemToBase64Body(pem: string): string {
+  return pem
+    .replace(/-----BEGIN [^-]+-----/g, "")
+    .replace(/-----END [^-]+-----/g, "")
+    .replace(/\s+/g, "");
+}
+
+function isAlreadyExistsError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "name" in error &&
+    (error as { name: string }).name === "AlreadyExistsException"
+  );
 }
 
 export const emailProvider = new EmailProviderService();
