@@ -23,6 +23,18 @@ export const apiKeyRepo = {
     return await db.insert(apiKeys).values(data).returning();
   },
 
+  async update(
+    id: string,
+    userId: string,
+    data: Partial<typeof apiKeys.$inferInsert>,
+  ) {
+    return await db
+      .update(apiKeys)
+      .set(data)
+      .where(ownedApiKeyWhere(id, userId))
+      .returning();
+  },
+
   async delete(id: string, userId: string) {
     return await db
       .delete(apiKeys)

@@ -40,6 +40,9 @@ function createRepository(overrides: Partial<ApiKeyRepository> = {}) {
     async findById() {
       return apiKeyRow();
     },
+    async update(id: string, _userId: string, data) {
+      return [apiKeyRow({ id, ...data })];
+    },
     async delete(id: string) {
       return [{ id }];
     },
@@ -220,6 +223,48 @@ describe("api key service", () => {
       permission: "full_access",
       domain: null,
     });
+  });
+
+  it("updates API key metadata without exposing token material", async () => {
+    let updateInput: Partial<ApiKeyInsert> | null = null;
+    const invalidateAuthCache = vi.fn<(_: string) => Promise<void>>();
+    const service = createApiKeyService({
+      invalidateAuthCache,
+      repository: createRepository({
+        async update(_id, _userId, data) {
+          updateInput = data;
+          return [
+            apiKeyRow({
+              name: data.name ?? "Primary",
+              permission: data.permission ?? "full_access",
+              domain: data.domain ?? null,
+            }),
+          ];
+        },
+      }),
+    });
+
+    const result = await service.updateApiKey("key-1", "user-1", {
+      name: "  Renamed  ",
+      permission: "sending_access",
+      domainId: "domain-1",
+    });
+
+    expect(updateInput).toEqual({
+      name: "Renamed",
+      permission: "sending_access",
+      domain: "domain-1",
+    });
+    expect(result).toEqual({
+      id: "key-1",
+      name: "Renamed",
+      createdAt: new Date("2026-05-02T00:00:00.000Z"),
+      lastUsedAt: null,
+      permission: "sending_access",
+      domain: "domain-1",
+    });
+    expect(JSON.stringify(result)).not.toContain("token");
+    expect(invalidateAuthCache).toHaveBeenCalledWith("hash-1");
   });
 
   it("returns not_found for get and delete misses", async () => {
