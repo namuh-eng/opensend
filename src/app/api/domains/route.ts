@@ -13,7 +13,6 @@ import {
 import { checkDomainQuota, quotaExceededResponse } from "@/lib/billing/quota";
 import { invalidateDomainCaches } from "@/lib/domain-cache";
 import { queueEvent } from "@/lib/events";
-import { createDomainIdentity } from "@/lib/ses";
 import { createDomainSchema } from "@/lib/validation/domains";
 import {
   createDomainService,
@@ -22,7 +21,6 @@ import {
 
 function domainService() {
   return createDomainService({
-    createDomainIdentity,
     invalidateDomainCaches,
   });
 }

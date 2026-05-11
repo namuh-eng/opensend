@@ -5,6 +5,10 @@ import {
   DomainDetailServiceError,
   createDomainDetailService,
 } from "../packages/core/src/services/domain-detail";
+import {
+  cloudflareDnsCleanupProvider,
+  domainIdentityProvider,
+} from "../packages/core/src/services/domain-providers";
 
 type DomainRow = typeof domains.$inferSelect;
 type DomainUpdateInput = Parameters<
@@ -255,6 +259,54 @@ describe("domain detail service", () => {
       id: "11111111-1111-4111-8111-111111111111",
       name: "example.com",
     });
+  });
+
+  it("uses core provider defaults for best-effort SES and Cloudflare cleanup", async () => {
+    const deleteDomainIdentity = vi
+      .spyOn(domainIdentityProvider, "deleteDomainIdentity")
+      .mockResolvedValueOnce();
+    const listDNSRecords = vi
+      .spyOn(cloudflareDnsCleanupProvider, "listDNSRecords")
+      .mockResolvedValueOnce([
+        {
+          id: "spf",
+          name: "send.example.com",
+          content: "v=spf1 include:amazonses.com ~all",
+        },
+        {
+          id: "unrelated",
+          name: "www.example.com",
+          content: "1.2.3.4",
+        },
+      ]);
+    const deleteDNSRecord = vi
+      .spyOn(cloudflareDnsCleanupProvider, "deleteDNSRecord")
+      .mockResolvedValueOnce();
+
+    try {
+      const service = createDomainDetailService({
+        getDomainById: async () => domainRow(),
+        deleteDomainForUser: async (input) => ({
+          id: input.id,
+          name: "example.com",
+        }),
+      });
+
+      const result = await service.deleteDomainDetail({
+        id: "11111111-1111-4111-8111-111111111111",
+        userId: "user-1",
+      });
+
+      expect(result.response.deleted).toBe(true);
+      expect(deleteDomainIdentity).toHaveBeenCalledWith("example.com");
+      expect(listDNSRecords).toHaveBeenCalledWith({ name: "example.com" });
+      expect(deleteDNSRecord).toHaveBeenCalledWith("spf");
+      expect(deleteDNSRecord).toHaveBeenCalledTimes(1);
+    } finally {
+      deleteDomainIdentity.mockRestore();
+      listDNSRecords.mockRestore();
+      deleteDNSRecord.mockRestore();
+    }
   });
 
   it("deletes with best-effort SES and Cloudflare cleanup, cache invalidation, and event payload", async () => {
