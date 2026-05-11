@@ -366,3 +366,12 @@ export interface UsagePeriodResponse {
 }
 
 export const FREE_PLAN_SLUG = "free";
+export const FREE_PLAN_DEFAULTS = {
+  slug: FREE_PLAN_SLUG,
+  name: "Free",
+  monthlyPriceCents: 0,
+  monthlyEmailQuota: 3000,
+  maxDomains: 1,
+  maxApiKeys: 3,
+  isPublic: true,
+} as const;

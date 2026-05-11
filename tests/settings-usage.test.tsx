@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 afterEach(cleanup);
 
 const defaultUsage = {
+  plan: { name: "Free", slug: "free" },
   transactional: {
     monthlyUsed: 3,
     monthlyLimit: 3000,
@@ -75,10 +76,30 @@ describe("UsageTab", () => {
     expect(screen.getByText(/Design and send marketing emails/)).toBeDefined();
   });
 
-  it("shows upgrade buttons for each section", () => {
-    render(<UsageTab usage={defaultUsage} />);
-    const upgradeButtons = screen.getAllByText("Upgrade");
-    expect(upgradeButtons.length).toBeGreaterThanOrEqual(2);
+  it("links upgrade affordances to pricing when billing is enabled", () => {
+    render(<UsageTab usage={defaultUsage} billingEnabled={true} />);
+
+    const upgradeLinks = screen.getAllByRole("link", { name: "Upgrade" });
+    expect(upgradeLinks).toHaveLength(3);
+    for (const link of upgradeLinks) {
+      expect(link.getAttribute("href")).toBe("/pricing");
+    }
+  });
+
+  it("renders disabled explanatory upgrade affordances when billing is disabled", () => {
+    render(<UsageTab usage={defaultUsage} billingEnabled={false} />);
+
+    expect(screen.queryByRole("link", { name: "Upgrade" })).toBeNull();
+    const unavailableButtons = screen.getAllByRole("button", {
+      name: "Upgrade unavailable",
+    });
+    expect(unavailableButtons).toHaveLength(3);
+    for (const button of unavailableButtons) {
+      expect(button).toHaveProperty("disabled", true);
+    }
+    expect(
+      screen.getAllByText(/Billing is disabled for this installation/),
+    ).toHaveLength(3);
   });
 
   it("renders circular progress indicators for quota rows", () => {
@@ -102,6 +123,24 @@ describe("UsageTab", () => {
       "svg.quota-indicator.at-limit",
     );
     expect(warningIndicators.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("explains over-limit team domain usage with the active plan name", () => {
+    const overLimitUsage = {
+      ...defaultUsage,
+      team: {
+        ...defaultUsage.team,
+        domainsUsed: 4,
+        domainsLimit: 3,
+      },
+    };
+
+    render(<UsageTab usage={overLimitUsage} billingEnabled={true} />);
+
+    expect(screen.getByRole("alert").textContent).toContain(
+      "You are 1 domain over the Free plan domain limit.",
+    );
+    expect(screen.getByText("4 / 3")).toBeDefined();
   });
 
   it("formats numbers with commas", () => {

@@ -184,6 +184,7 @@ describe("dashboard aggregate service", () => {
     expect(countInput?.startOfMonth).toEqual(new Date(2026, 3, 1));
     expect(countInput?.startOfDay).toEqual(new Date(2026, 3, 23));
     expect(payload).toEqual({
+      plan: { name: "Free", slug: "free" },
       transactional: {
         monthlyUsed: 42,
         monthlyLimit: 3000,
@@ -199,7 +200,7 @@ describe("dashboard aggregate service", () => {
       },
       team: {
         domainsUsed: 2,
-        domainsLimit: 3,
+        domainsLimit: 1,
         rateLimit: 2,
       },
     });
