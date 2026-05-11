@@ -1,9 +1,11 @@
 // ABOUTME: E2E tests for complain rate section — info panel open/close, breakdown link, Escape key
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 test.describe("Complain Rate Section", () => {
-  test("should open and close complain rate info panel", async ({ page }) => {
+  test("should open and close complain rate info panel", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/metrics");
 
     // Find the complain rate section
@@ -29,7 +31,7 @@ test.describe("Complain Rate Section", () => {
   });
 
   test("should show complain breakdown table with Complained row", async ({
-    page,
+    authenticatedPage: page,
   }) => {
     await page.goto("/metrics");
 
@@ -43,7 +45,9 @@ test.describe("Complain Rate Section", () => {
     await expect(complainSection.getByText("Complained")).toBeVisible();
   });
 
-  test("should close info panel on Escape key", async ({ page }) => {
+  test("should close info panel on Escape key", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/metrics");
 
     const infoBtn = page.getByRole("button", { name: /complain rate info/i });

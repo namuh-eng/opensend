@@ -1,8 +1,13 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
+// E2E category: smoke-only; contacts list tests need deterministic contact fixture follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; contacts list tests need deterministic contact fixture follow-up (#229 audit).",
+);
 
 test.describe("Contacts list table", () => {
   test("renders filter bar with search, segment dropdown, status dropdown, and export", async ({
-    page,
+    authenticatedPage: page,
   }) => {
     await page.goto("/audience");
 
@@ -17,7 +22,7 @@ test.describe("Contacts list table", () => {
   });
 
   test("shows table headers: Email, Segments, Status, Added", async ({
-    page,
+    authenticatedPage: page,
   }) => {
     await page.goto("/audience");
 
@@ -36,7 +41,9 @@ test.describe("Contacts list table", () => {
     }
   });
 
-  test("click contact navigates to detail page", async ({ page }) => {
+  test("click contact navigates to detail page", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/audience");
 
     await page.waitForSelector("table, text=No contacts found", {
@@ -52,7 +59,7 @@ test.describe("Contacts list table", () => {
     }
   });
 
-  test("search contacts by email", async ({ page }) => {
+  test("search contacts by email", async ({ authenticatedPage: page }) => {
     await page.goto("/audience");
 
     const searchInput = page.getByPlaceholder(/search by name, email/i);

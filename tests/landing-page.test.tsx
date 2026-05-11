@@ -54,22 +54,24 @@ describe("Landing page route", () => {
   it("renders the hero headline", () => {
     render(<LandingPage />);
     const heading = screen.getByRole("heading", { level: 1 });
-    expect(heading.textContent).toMatch(/open-source email API/i);
+    expect(heading.textContent).toMatch(/email infrastructure/i);
+    expect(heading.textContent).toMatch(/open by default/i);
   });
 
   it("renders all required marketing CTAs", () => {
     render(<LandingPage />);
 
-    const selfHost = screen
-      .getAllByText(/self-host/i)
-      .find((el) => el.getAttribute("data-testid") === "cta-self-host");
-    expect(selfHost?.getAttribute("href")).toMatch(/github\.com/);
+    const selfHost = screen.getByTestId("cta-self-host");
+    expect(selfHost.getAttribute("href")).toMatch(/github\.com/);
 
     const hosted = screen.getByTestId("cta-hosted");
     expect(hosted.getAttribute("href")).toBe("/auth");
 
     const github = screen.getByTestId("cta-github");
     expect(github.getAttribute("href")).toMatch(/github\.com/);
+
+    const navSignIn = screen.getByTestId("nav-sign-in");
+    expect(navSignIn.getAttribute("href")).toBe("/auth");
   });
 
   it("links to docs and GitHub from header navigation", () => {
@@ -102,31 +104,30 @@ describe("Landing page route", () => {
   it("renders the dev-focused landing sections", () => {
     render(<LandingPage />);
 
-    expect(screen.getByText(/opensend\.emails\.send/i)).toBeDefined();
+    expect(screen.getByLabelText(/TypeScript SDK code sample/i)).toBeDefined();
     expect(
-      screen.getByRole("table", {
-        name: /comparison of opensend, resend, and postmark/i,
-      }),
+      screen.getByRole("heading", { name: /none of the lock-in/i }),
     ).toBeDefined();
     expect(
-      screen.getByRole("heading", { name: /pricing that matches/i }),
+      screen.getByRole("heading", { name: /cloud, or yours/i }),
     ).toBeDefined();
     expect(
-      screen.getByRole("heading", { name: /frequently asked questions/i }),
+      screen.getByRole("heading", { name: /shipping in public/i }),
     ).toBeDefined();
-    expect(screen.getAllByText(/\?/).length).toBeGreaterThanOrEqual(4);
-    expect(screen.getByAltText(/OpenSend dashboard/i)).toBeDefined();
+    expect(
+      screen.getByRole("heading", { name: /stop renting your/i }),
+    ).toBeDefined();
   });
 
-  it("renders a footer with copyright and license attribution", () => {
+  it("renders a footer with license attribution", () => {
     render(<LandingPage />);
-    expect(screen.getAllByText(/Elastic License 2\.0/i).length).toBeGreaterThan(
-      0,
-    );
+    expect(screen.getAllByText(/ELv2/i).length).toBeGreaterThan(0);
   });
 
   it("includes a self-host quickstart code block", () => {
     render(<LandingPage />);
-    expect(screen.getByText(/docker compose up -d/i)).toBeDefined();
+    expect(screen.getAllByText(/docker compose up -d/i).length).toBeGreaterThan(
+      0,
+    );
   });
 });

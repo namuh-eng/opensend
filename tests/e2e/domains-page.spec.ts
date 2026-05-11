@@ -20,11 +20,14 @@ test.describe("Domains Page", () => {
     await authenticatedPage.goto("/domains");
     const domainLink = authenticatedPage.locator("table a").first();
     const count = await domainLink.count();
-    if (count > 0) {
-      const href = await domainLink.getAttribute("href");
-      expect(href).toBeTruthy();
-      await domainLink.click();
-      await expect(authenticatedPage).toHaveURL(href as string);
-    }
+    test.skip(
+      count === 0,
+      "Seed a domain to run domain detail navigation smoke E2E.",
+    );
+
+    const href = await domainLink.getAttribute("href");
+    expect(href).toBeTruthy();
+    await domainLink.click();
+    await expect(authenticatedPage).toHaveURL(href as string);
   });
 });

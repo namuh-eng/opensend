@@ -12,44 +12,37 @@ for (const route of ["/", "/landing"] as const) {
       await expect(
         page.getByRole("heading", {
           level: 1,
-          name: /open-source email API/i,
+          name: /email infrastructure/i,
         }),
       ).toBeVisible();
       await expect(
-        page.getByRole("heading", { name: /What's in the box/i }),
+        page.getByRole("heading", { name: /none of the lock-in/i }),
       ).toBeVisible();
       await expect(page.getByTestId("cta-self-host")).toBeVisible();
       await expect(page.getByTestId("cta-hosted")).toBeVisible();
     });
 
-    test("renders the developer code sample, comparison table, dashboard screenshot, and FAQ", async ({
+    test("renders the developer code sample, comparison, self-host quickstart, and roadmap", async ({
       page,
     }) => {
       await page.goto(route);
 
       await expect(page.getByLabel("TypeScript SDK code sample")).toContainText(
-        "opensend.emails.send",
+        "send.emails.send",
       );
       await expect(
-        page.getByRole("table", {
-          name: /comparison of opensend, resend, and postmark/i,
-        }),
+        page.getByRole("heading", { name: /cloud, or yours/i }),
+      ).toBeVisible();
+      await expect(page.getByText(/option B · default/i)).toBeVisible();
+      await expect(
+        page.getByText("docker compose up -d").first(),
       ).toBeVisible();
       await expect(
-        page.getByRole("columnheader", { name: "Postmark" }),
+        page.getByRole("heading", { name: /shipping in public/i }),
       ).toBeVisible();
       await expect(
-        page.getByRole("img", { name: /opensend dashboard/i }),
+        page.getByRole("heading", { name: /stop renting your/i }),
       ).toBeVisible();
-      await expect(
-        page.getByRole("heading", { name: /frequently asked questions/i }),
-      ).toBeVisible();
-      await expect(
-        page.getByText(/What does the Elastic License 2\.0 allow/i),
-      ).toBeVisible();
-      await expect(page.getByText(/Do I need AWS SES/i)).toBeVisible();
-      await expect(page.getByText(/self-host or use hosted/i)).toBeVisible();
-      await expect(page.getByText(/migrate from Resend-style/i)).toBeVisible();
     });
   });
 }
@@ -66,6 +59,33 @@ test("hosted CTA navigates to the auth page", async ({ page }) => {
   await page.goto("/");
   await page.getByTestId("cta-hosted").click();
   await expect(page).toHaveURL(/\/auth$/);
+});
+
+test("pricing billing toggle updates selected period and plan prices", async ({
+  page,
+}) => {
+  await page.goto("/pricing");
+
+  await expect(page.getByTestId("billing-monthly")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByTestId("plan-starter")).toContainText(
+    /\$\s*19\s*\/mo/,
+  );
+  await expect(page.getByTestId("plan-growth")).toContainText(/\$\s*79\s*\/mo/);
+
+  await page.getByTestId("billing-yearly").click();
+
+  await expect(page).toHaveURL(/\/pricing\?billing=yearly$/);
+  await expect(page.getByTestId("billing-yearly")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByTestId("plan-starter")).toContainText(
+    /\$\s*15\s*\/mo/,
+  );
+  await expect(page.getByTestId("plan-growth")).toContainText(/\$\s*65\s*\/mo/);
 });
 
 test("unauthenticated dashboard routes remain protected", async ({ page }) => {

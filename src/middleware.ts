@@ -238,6 +238,8 @@ export async function middleware(request: NextRequest) {
       pathname === "/openapi.json" ||
       pathname === "/landing" ||
       pathname.startsWith("/landing/") ||
+      pathname === "/pricing" ||
+      pathname.startsWith("/pricing/") ||
       pathname.startsWith("/_next/") ||
       pathname.startsWith("/favicon")
     ) {

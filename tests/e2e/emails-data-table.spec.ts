@@ -1,7 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 test.describe("Emails Sending Data Table", () => {
-  test("click email navigates to detail page", async ({ page }) => {
+  test("click email navigates to detail page", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/emails");
 
     // Wait for the data table to render

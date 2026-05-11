@@ -78,7 +78,7 @@ If you install dependencies with `--ignore-scripts`, run `bun run hooks:install`
 | `bun run check` | Run the same change-scoped push guardrails used by `pre-push` |
 | `make check` | Run full-repo TypeScript typecheck + Biome lint/format |
 | `make test` | Unit tests (Vitest) |
-| `make test-e2e` | E2E tests (Playwright, requires dev server) |
+| `make test-e2e` | E2E tests (Playwright; sources `.env` and starts dev server) |
 | `make all` | Run everything |
 
 Run `make check && make test` before opening a PR.
@@ -105,7 +105,7 @@ New AWS accounts start in SES **sandbox mode** — you can only send to verified
 
 - **Biome** handles formatting — `make check` auto-reports issues, `bun run lint:fix` fixes them
 - **TypeScript strict mode** — no `any`, no type assertions without justification
-- Every feature needs at least one unit test (Vitest) and one E2E test (Playwright)
+- Every feature needs at least one unit test (Vitest) and one E2E/scenario proof (Playwright) where applicable. Auth, tenant, security, API, or persistence-sensitive work must use real Postgres/Next.js-route E2E proof via `tests/e2e/fixtures/auth.ts`; route mocks are only for explicitly labeled client/provider integration tests.
 
 ## Pull Requests
 

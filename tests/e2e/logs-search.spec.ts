@@ -1,6 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
-test("logs dashboard exposes URL-backed search", async ({ page }) => {
+test("logs dashboard exposes URL-backed search", async ({
+  authenticatedPage: page,
+}) => {
   test.skip(
     !process.env.DATABASE_URL,
     "DATABASE_URL is required for dashboard logs",

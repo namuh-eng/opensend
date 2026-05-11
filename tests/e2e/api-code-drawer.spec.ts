@@ -1,7 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 test.describe("API Code Drawer", () => {
-  test("open and close API drawer on emails page", async ({ page }) => {
+  test("open and close API drawer on emails page", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/emails");
 
     // Click API drawer button
@@ -46,7 +48,9 @@ test.describe("API Code Drawer", () => {
     await expect(drawer).not.toBeVisible();
   });
 
-  test("close drawer by pressing Escape", async ({ page }) => {
+  test("close drawer by pressing Escape", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/emails");
 
     const drawerBtn = page.locator('button[aria-label="API drawer"]');

@@ -1,7 +1,7 @@
 # Next API thin-adapter/control-plane inventory
 
-Issue: [#307](https://github.com/namuh-eng/opensend/issues/307)  
-Parent tracker: [#71](https://github.com/namuh-eng/opensend/issues/71)  
+Issue: [#307](https://github.com/namuh-eng/opensend/issues/307)
+Parent tracker: [#71](https://github.com/namuh-eng/opensend/issues/71)
 Inventory date: 2026-05-10
 
 ## Scope and non-goals

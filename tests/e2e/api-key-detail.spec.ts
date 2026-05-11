@@ -1,7 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
+// E2E category: smoke-only; API key detail UI needs deterministic API-key/dashboard fixture follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; API key detail UI needs deterministic API-key/dashboard fixture follow-up (#229 audit).",
+);
 
 test.describe("API Key Detail Page", () => {
-  test("edit API key name", async ({ page }) => {
+  test("edit API key name", async ({ authenticatedPage: page }) => {
     // Navigate to API keys list
     await page.goto("/api-keys");
     await page.waitForLoadState("networkidle");

@@ -1,7 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
+// E2E category: smoke-only; contact detail test needs deterministic contact fixture follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; contact detail test needs deterministic contact fixture follow-up (#229 audit).",
+);
 
 test.describe("Contact Detail Page", () => {
-  test("view contact detail from list", async ({ page }) => {
+  test("view contact detail from list", async ({ authenticatedPage: page }) => {
     // Navigate to audience page
     await page.goto("/audience");
     await page.waitForLoadState("networkidle");

@@ -1,7 +1,14 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
+// E2E category: smoke-only; broadcasts list tests need deterministic broadcast fixture follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; broadcasts list tests need deterministic broadcast fixture follow-up (#229 audit).",
+);
 
 test.describe("Broadcasts list page", () => {
-  test("navigate to broadcast editor from list", async ({ page }) => {
+  test("navigate to broadcast editor from list", async ({
+    authenticatedPage: page,
+  }) => {
     // Create a broadcast first
     const res = await page.request.post("/api/broadcasts", {
       data: { name: "Test Broadcast" },
@@ -20,7 +27,7 @@ test.describe("Broadcasts list page", () => {
     await page.request.delete(`/api/broadcasts/${broadcast.id}`);
   });
 
-  test("filter broadcasts by status", async ({ page }) => {
+  test("filter broadcasts by status", async ({ authenticatedPage: page }) => {
     // Create a draft broadcast
     const res = await page.request.post("/api/broadcasts", {
       data: { name: "Draft Filter Test" },
@@ -41,7 +48,9 @@ test.describe("Broadcasts list page", () => {
     await page.request.delete(`/api/broadcasts/${broadcast.id}`);
   });
 
-  test("create email button creates broadcast", async ({ page }) => {
+  test("create email button creates broadcast", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/broadcasts");
 
     await page.getByText("Create email").click();

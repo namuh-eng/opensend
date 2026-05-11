@@ -1,8 +1,8 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 test.describe("Audience page layout", () => {
   test("renders Audience page with 4 tabs, Contacts active by default", async ({
-    page,
+    authenticatedPage: page,
   }) => {
     await page.goto("/audience");
     await expect(page.locator("h1")).toHaveText("Audience");
@@ -15,7 +15,9 @@ test.describe("Audience page layout", () => {
     await expect(page.getByText("Topics")).toBeVisible();
   });
 
-  test("navigate between Audience tabs", async ({ page }) => {
+  test("navigate between Audience tabs", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/audience");
 
     // Contacts tab active by default
@@ -43,22 +45,34 @@ test.describe("Audience page layout", () => {
     ).toBeVisible();
   });
 
-  test("direct URL to Topics tab shows Topics as active", async ({ page }) => {
+  test("direct URL to Topics tab shows Topics as active", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/audience/topics");
     await expect(
       page.locator('a[href="/audience/topics"][data-state="active"]'),
     ).toBeVisible();
   });
 
-  test("summary stats are visible", async ({ page }) => {
+  test("summary stats are visible", async ({ authenticatedPage: page }) => {
     await page.goto("/audience");
-    await expect(page.getByText("ALL CONTACTS")).toBeVisible();
-    await expect(page.getByText("SUBSCRIBERS")).toBeVisible();
-    await expect(page.getByText("UNSUBSCRIBERS")).toBeVisible();
-    await expect(page.getByText("METRICS")).toBeVisible();
+    await expect(
+      page.getByText("ALL CONTACTS", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("SUBSCRIBERS", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("UNSUBSCRIBERS", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("METRICS", { exact: true }).first(),
+    ).toBeVisible();
   });
 
-  test("Add contacts dropdown shows options", async ({ page }) => {
+  test("Add contacts dropdown shows options", async ({
+    authenticatedPage: page,
+  }) => {
     await page.goto("/audience");
     await page.getByRole("button", { name: /add contacts/i }).click();
     await expect(page.getByText("Add manually")).toBeVisible();

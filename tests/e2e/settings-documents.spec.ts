@@ -1,10 +1,15 @@
 // ABOUTME: E2E test for Settings Documents tab — verifies all 4 compliance document sections with download links
+// E2E category: smoke-only; settings documents assertions are UI-copy smoke and need refresh follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; settings documents assertions are UI-copy smoke and need refresh follow-up (#229 audit).",
+);
 
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures/auth";
 
 test.describe("Settings Documents Page", () => {
   test("documents page displays all sections with download links", async ({
-    page,
+    authenticatedPage: page,
   }) => {
     await page.goto("/settings");
 

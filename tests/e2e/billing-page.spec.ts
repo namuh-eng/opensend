@@ -1,3 +1,4 @@
+// E2E category: provider-gated/mocked integration; Stripe paths are skipped or route-mocked unless billing env is configured.
 import { expect, test } from "@playwright/test";
 
 const billingBackend = process.env.BILLING_BACKEND?.toLowerCase() ?? "disabled";
@@ -25,8 +26,8 @@ test.describe("Billing — disabled (self-host default)", () => {
     expect(response?.status()).toBe(404);
   });
 
-  test("/pricing returns 404", async ({ page }) => {
-    const response = await page.goto("/pricing");
+  test("/settings/billing/plans returns 404", async ({ page }) => {
+    const response = await page.goto("/settings/billing/plans");
     expect(response?.status()).toBe(404);
   });
 
@@ -89,7 +90,7 @@ test.describe("Billing — enabled (Stripe)", () => {
       });
     });
 
-    await page.goto("/pricing");
+    await page.goto("/settings/billing/plans");
     await expect(page.getByRole("heading", { name: "Plans" })).toBeVisible();
 
     const upgradeButton = page

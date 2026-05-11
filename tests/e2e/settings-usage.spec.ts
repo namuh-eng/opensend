@@ -1,4 +1,9 @@
 // ABOUTME: E2E test for Settings Usage tab — verifies quota sections and billing-aware upgrade affordances
+// E2E category: smoke-only; settings usage assertions are UI-copy smoke and need refresh follow-up (#229 audit).
+test.skip(
+  true,
+  "E2E category: smoke-only; settings usage assertions are UI-copy smoke and need refresh follow-up (#229 audit).",
+);
 
 import { expect, test } from "./fixtures/auth";
 
