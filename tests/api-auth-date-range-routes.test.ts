@@ -293,6 +293,7 @@ describe("route smoke coverage", () => {
               bounceRate: 20,
               complainRate: 10,
               domains: ["example.com"],
+              tagOptions: [{ name: "campaign", values: ["launch"] }],
               dailyData: [{ date: "2026-04-23", count: 7 }],
               domainBreakdown: [{ domain: "example.com", count: 10, rate: 70 }],
               bounceBreakdown: {

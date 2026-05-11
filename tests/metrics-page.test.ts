@@ -1,6 +1,12 @@
 // ABOUTME: Unit tests for the Metrics page layout — component structure, collapsible sections
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -144,6 +150,81 @@ describe("Metrics Page Layout", () => {
       // Info icon (circle with i) should be present
       const infoSvgs = container.querySelectorAll("svg");
       expect(infoSvgs.length).toBeGreaterThanOrEqual(2); // chevron + info icon
+    });
+  });
+
+  describe("MetricsPage tag filter behavior", () => {
+    let originalFetch: typeof globalThis.fetch;
+
+    beforeEach(() => {
+      originalFetch = globalThis.fetch;
+      const payload = {
+        totalEmails: 3,
+        deliverabilityRate: 100,
+        bounceRate: 0,
+        complainRate: 0,
+        complained: 0,
+        domains: ["example.com"],
+        tagOptions: [
+          { name: "campaign", values: ["launch", ""] },
+          { name: "workflow", values: ["reset"] },
+        ],
+        dailyData: [{ date: "2026-05-11", count: 3 }],
+        domainBreakdown: [{ domain: "example.com", count: 3, rate: 100 }],
+        bounceBreakdown: {
+          permanent: 0,
+          transient: 0,
+          undetermined: 0,
+        },
+        dailyBounceData: [],
+        dailyComplainData: [],
+        lastUpdated: "2026-05-11T00:00:00.000Z",
+      };
+      globalThis.fetch = vi.fn(
+        async () =>
+          new Response(JSON.stringify(payload), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+      );
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it("renders tenant tag options and sends tag_name/tag_value query params", async () => {
+      const { MetricsPage } = await import("../src/components/metrics-page");
+      render(React.createElement(MetricsPage));
+
+      await waitFor(() => {
+        expect(globalThis.fetch).toHaveBeenCalledWith(
+          "/api/metrics?range=last_15_days",
+        );
+      });
+
+      fireEvent.click(await screen.findByText("All Tags"));
+      fireEvent.click(screen.getByText("campaign: launch"));
+
+      await waitFor(() => {
+        expect(globalThis.fetch).toHaveBeenLastCalledWith(
+          "/api/metrics?range=last_15_days&tag_name=campaign&tag_value=launch",
+        );
+      });
+    });
+
+    it("can request a tag-name-only filter", async () => {
+      const { MetricsPage } = await import("../src/components/metrics-page");
+      render(React.createElement(MetricsPage));
+
+      fireEvent.click(await screen.findByText("All Tags"));
+      fireEvent.click(screen.getByText("workflow: Any value"));
+
+      await waitFor(() => {
+        expect(globalThis.fetch).toHaveBeenLastCalledWith(
+          "/api/metrics?range=last_15_days&tag_name=workflow",
+        );
+      });
     });
   });
 });

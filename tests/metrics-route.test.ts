@@ -21,13 +21,17 @@ vi.mock("@/lib/cache/dashboard-aggregates", () => ({
     range,
     domain,
     eventType,
+    tagName,
+    tagValue,
   }: {
     userId: string;
     range: string;
     domain: string | null;
     eventType: string | null;
+    tagName: string | null;
+    tagValue: string | null;
   }) =>
-    `dashboard-aggregate:v1:metrics:${userId}:${range}:${domain ?? "all"}:${eventType ?? "all"}`,
+    `dashboard-aggregate:v1:metrics:${userId}:${range}:${domain ?? "all"}:${eventType ?? "all"}:${tagName ?? "all"}:${tagValue ?? "all"}`,
   readDashboardAggregateCache: mockReadDashboardAggregateCache,
   writeDashboardAggregateCache: mockWriteDashboardAggregateCache,
 }));
@@ -77,6 +81,7 @@ const freshPayload = {
   complainRate: 10,
   complained: 1,
   domains: ["example.com"],
+  tagOptions: [{ name: "campaign", values: ["launch"] }],
   dailyData: [{ date: "2026-04-23", count: 7 }],
   domainBreakdown: [{ domain: "example.com", count: 10, rate: 70 }],
   bounceBreakdown: {
@@ -117,7 +122,7 @@ describe("metrics route adapter", () => {
     const metricsRoute = await import("@/app/api/metrics/route");
     const response = await metricsRoute.GET(
       makeNextRequest(
-        "http://localhost/api/metrics?range=last_7_days&domain=example.com&event_type=delivered",
+        "http://localhost/api/metrics?range=last_7_days&domain=example.com&event_type=delivered&tag_name=campaign&tag_value=launch",
       ) as never,
     );
 
@@ -127,7 +132,7 @@ describe("metrics route adapter", () => {
     expect(mockWriteDashboardAggregateCache).not.toHaveBeenCalled();
     await expect(response.json()).resolves.toMatchObject({ totalEmails: 99 });
     expect(mockReadDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:delivered",
+      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:delivered:campaign:launch",
     );
   });
 
@@ -135,7 +140,7 @@ describe("metrics route adapter", () => {
     const metricsRoute = await import("@/app/api/metrics/route");
     const response = await metricsRoute.GET(
       makeNextRequest(
-        "http://localhost/api/metrics?range=last_7_days&domain=example.com&event_type=opened",
+        "http://localhost/api/metrics?range=last_7_days&domain=example.com&event_type=opened&tag_name=campaign",
       ) as never,
     );
 
@@ -146,6 +151,8 @@ describe("metrics route adapter", () => {
     expect(input.userId).toBe("user-1");
     expect(input.domain).toBe("example.com");
     expect(input.eventType).toBe("opened");
+    expect(input.tagName).toBe("campaign");
+    expect(input.tagValue).toBeNull();
     expectLocalDateParts(requireDate(input.start), {
       year: 2026,
       month: 3,
@@ -165,7 +172,7 @@ describe("metrics route adapter", () => {
       millisecond: 999,
     });
     expect(mockWriteDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:opened",
+      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:opened:campaign:all",
       freshPayload,
       60,
     );

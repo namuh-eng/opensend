@@ -41,6 +41,9 @@ function makeRepository(
     async listDomainBreakdown() {
       return [];
     },
+    async listTagOptions() {
+      return [];
+    },
     async countUsage() {
       return {
         monthlyEmails: 0,
@@ -99,6 +102,8 @@ describe("dashboard aggregate service", () => {
       start,
       end,
       domain: "example.com",
+      tagName: "campaign",
+      tagValue: "launch",
       eventType: "opened",
       now: new Date("2026-04-23T06:45:30.000Z"),
     });
@@ -108,12 +113,16 @@ describe("dashboard aggregate service", () => {
       start,
       end,
       domain: "example.com",
+      tagName: "campaign",
+      tagValue: "launch",
     });
     expect(dailyInput).toEqual({
       userId: "user-1",
       start,
       end,
       domain: "example.com",
+      tagName: "campaign",
+      tagValue: "launch",
       statuses: ["opened"],
     });
     expect(payload).toEqual({
@@ -122,6 +131,7 @@ describe("dashboard aggregate service", () => {
       bounceRate: 20,
       complainRate: 10,
       domains: ["example.com"],
+      tagOptions: [],
       dailyData: [{ date: "2026-04-23", count: 7 }],
       domainBreakdown: [{ domain: "example.com", count: 10, rate: 70 }],
       bounceBreakdown: {
@@ -134,6 +144,83 @@ describe("dashboard aggregate service", () => {
       dailyComplainData: [{ date: "2026-04-23", rate: 10 }],
       lastUpdated: "2026-04-23T06:45:30.000Z",
     });
+  });
+
+  it("applies tenant and tag filters consistently across metric aggregate reads", async () => {
+    const start = new Date("2026-05-01T00:00:00.000Z");
+    const end = new Date("2026-05-11T23:59:59.999Z");
+    const metricInputs: MetricsBaseInput[] = [];
+    const dailyInputs: DailyCountsInput[] = [];
+    let tagOptionsUserId: string | undefined;
+
+    const service = createDashboardAggregateService({
+      repository: makeRepository({
+        async aggregateMetrics(input) {
+          metricInputs.push(input);
+          return {
+            total: 0,
+            delivered: 0,
+            bounced: 0,
+            hard_bounced: 0,
+            soft_bounced: 0,
+            undetermined_bounced: 0,
+            complained: 0,
+          };
+        },
+        async listDailyCounts(input) {
+          dailyInputs.push(input);
+          return [];
+        },
+        async listDailyBounceRates(input) {
+          metricInputs.push(input);
+          return [];
+        },
+        async listDailyComplainRates(input) {
+          metricInputs.push(input);
+          return [];
+        },
+        async listDomainBreakdown(input) {
+          metricInputs.push(input);
+          return [];
+        },
+        async listTagOptions(userId) {
+          tagOptionsUserId = userId;
+          return [{ name: "campaign", values: ["launch"] }];
+        },
+      }),
+    });
+
+    const payload = await service.getMetrics({
+      userId: "tenant-1",
+      start,
+      end,
+      domain: "example.com",
+      tagName: "campaign",
+      tagValue: "launch",
+      eventType: "delivered",
+    });
+
+    const expectedBase = {
+      userId: "tenant-1",
+      start,
+      end,
+      domain: "example.com",
+      tagName: "campaign",
+      tagValue: "launch",
+    };
+    expect(metricInputs).toEqual([
+      expectedBase,
+      expectedBase,
+      expectedBase,
+      expectedBase,
+    ]);
+    expect(dailyInputs).toEqual([{ ...expectedBase, statuses: ["delivered"] }]);
+    expect(tagOptionsUserId).toBe("tenant-1");
+    expect(payload.tagOptions).toEqual([
+      { name: "campaign", values: ["launch"] },
+    ]);
+    expect(payload.totalEmails).toBe(0);
+    expect(payload.dailyData).toEqual([]);
   });
 
   it("leaves daily counts unfiltered for all or unknown event types", async () => {
@@ -152,6 +239,8 @@ describe("dashboard aggregate service", () => {
       start: new Date("2026-04-01T00:00:00.000Z"),
       end: new Date("2026-04-02T00:00:00.000Z"),
       domain: null,
+      tagName: null,
+      tagValue: null,
     };
 
     await service.getMetrics({ ...base, eventType: "all" });

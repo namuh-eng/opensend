@@ -70,11 +70,23 @@ export type DashboardDomainBreakdownRow = {
   delivered: number;
 };
 
+export type DashboardTagOption = {
+  name: string;
+  values: string[];
+};
+
+export type DashboardStoredEmailTag = {
+  name: string;
+  value: string;
+};
+
 export type DashboardMetricsBaseInput = {
   userId: string;
   start: Date;
   end: Date;
   domain: string | null;
+  tagName: string | null;
+  tagValue: string | null;
 };
 
 export type DashboardDailyCountsInput = DashboardMetricsBaseInput & {
@@ -110,6 +122,7 @@ export type DashboardAggregateRepository = {
   listDomainBreakdown(
     input: DashboardMetricsBaseInput,
   ): Promise<DashboardDomainBreakdownRow[]>;
+  listTagOptions(userId: string): Promise<DashboardTagOption[]>;
   countUsage(input: DashboardUsageCountInput): Promise<DashboardUsageCounts>;
 };
 
@@ -128,6 +141,7 @@ export type DashboardMetricsPayload = {
   bounceRate: number;
   complainRate: number;
   domains: string[];
+  tagOptions: DashboardTagOption[];
   dailyData: DashboardDailyCountRow[];
   domainBreakdown: Array<{
     domain: string;
@@ -187,7 +201,49 @@ function metricConditions(input: DashboardMetricsBaseInput): SQL<unknown>[] {
     conditions.push(eq(senderDomainSql, input.domain));
   }
 
+  if (input.tagName) {
+    const tagPredicate: Array<{ name: string; value?: string }> = [
+      input.tagValue === null
+        ? { name: input.tagName }
+        : { name: input.tagName, value: input.tagValue },
+    ];
+    conditions.push(
+      sql`${emails.tags} @> ${JSON.stringify(tagPredicate)}::jsonb`,
+    );
+  }
+
   return conditions;
+}
+
+function isStoredEmailTag(value: unknown): value is DashboardStoredEmailTag {
+  if (!value || typeof value !== "object") return false;
+  const tag = value as Record<string, unknown>;
+  return typeof tag.name === "string" && typeof tag.value === "string";
+}
+
+function collectTagOptions(
+  rows: Array<{ tags: DashboardStoredEmailTag[] | null }>,
+): DashboardTagOption[] {
+  const valuesByName = new Map<string, Set<string>>();
+
+  for (const row of rows) {
+    if (!Array.isArray(row.tags)) continue;
+    for (const tag of row.tags) {
+      if (!isStoredEmailTag(tag) || tag.name === "") continue;
+      const values = valuesByName.get(tag.name) ?? new Set<string>();
+      values.add(tag.value);
+      valuesByName.set(tag.name, values);
+    }
+  }
+
+  return Array.from(valuesByName.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, values]) => ({
+      name,
+      values: Array.from(values).sort((left, right) =>
+        left.localeCompare(right),
+      ),
+    }));
 }
 
 const emptyMetricsStats: DashboardMetricsStats = {
@@ -274,6 +330,15 @@ const defaultDashboardAggregateRepository: DashboardAggregateRepository = {
       .orderBy(sql`count(*) desc`);
   },
 
+  async listTagOptions(userId) {
+    const rows = await db
+      .select({ tags: emails.tags })
+      .from(emails)
+      .where(eq(emails.userId, userId));
+
+    return collectTagOptions(rows);
+  },
+
   async countUsage(input) {
     const [
       monthlyEmails,
@@ -329,18 +394,27 @@ export function createDashboardAggregateService({
         start: input.start,
         end: input.end,
         domain: input.domain,
+        tagName: input.tagName,
+        tagValue: input.tagValue,
       };
-      const [stats, dailyRows, dailyBounceRows, dailyComplainRows, domainRows] =
-        await Promise.all([
-          repository.aggregateMetrics(baseInput),
-          repository.listDailyCounts({
-            ...baseInput,
-            statuses: getEventStatuses(input.eventType),
-          }),
-          repository.listDailyBounceRates(baseInput),
-          repository.listDailyComplainRates(baseInput),
-          repository.listDomainBreakdown(baseInput),
-        ]);
+      const [
+        stats,
+        dailyRows,
+        dailyBounceRows,
+        dailyComplainRows,
+        domainRows,
+        tagOptions,
+      ] = await Promise.all([
+        repository.aggregateMetrics(baseInput),
+        repository.listDailyCounts({
+          ...baseInput,
+          statuses: getEventStatuses(input.eventType),
+        }),
+        repository.listDailyBounceRates(baseInput),
+        repository.listDailyComplainRates(baseInput),
+        repository.listDomainBreakdown(baseInput),
+        repository.listTagOptions(input.userId),
+      ]);
 
       const totalEmails = stats.total;
       const domainBreakdown = domainRows
@@ -360,6 +434,7 @@ export function createDashboardAggregateService({
         bounceRate: roundRate(stats.bounced, totalEmails),
         complainRate: roundRate(stats.complained, totalEmails),
         domains: domainBreakdown.map((item) => item.domain),
+        tagOptions,
         dailyData: dailyRows.map((row) => ({
           date: row.date,
           count: row.count,
