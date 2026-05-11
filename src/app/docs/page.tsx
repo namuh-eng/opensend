@@ -52,7 +52,7 @@ const API_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/emails/batch",
         description:
-          "Send a batch of emails with one Idempotency-Key for the whole batch. Duplicate batch keys currently return 409 idempotency_conflict before quota reservation, row persistence, or queue publish.",
+          "Send a batch of emails with one Idempotency-Key for the whole batch. Reusing the same key returns the original accepted { data: [{ id }] } envelope without reserving quota, creating rows, or publishing queue jobs again.",
         curl: `curl -X POST https://api.opensend.com/api/emails/batch \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\

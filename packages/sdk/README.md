@@ -156,10 +156,9 @@ within 30 days; unparseable, past, or out-of-policy values return
 Pass a per-request `idempotencyKey` option to prevent accidental duplicate
 acceptance when retrying sends. Keys must match the API contract: 1-256
 characters. OpenSend replays duplicate single-send keys with the original
-accepted `{ id }` response. Batch duplicate keys currently return
-`409 idempotency_conflict` with the originally accepted first email id in
-`details.id` before reserving quota, creating additional rows, or publishing
-more queue jobs.
+accepted `{ id }` response and duplicate batch keys with the original
+accepted `{ data: [{ id }] }` response before reserving quota, creating
+additional rows, or publishing more queue jobs.
 
 ```typescript
 await resend.emails.send(

@@ -1447,6 +1447,11 @@ describe("POST /api/emails/batch", () => {
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
+    mockDb.update = vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      }),
+    });
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
       reason: "queue_url_missing",
@@ -1568,11 +1573,22 @@ describe("POST /api/emails/batch", () => {
     expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
   });
 
-  it("short-circuits duplicate batch Idempotency-Key retries before quota, rows, or queue", async () => {
+  it("replays duplicate batch Idempotency-Key retries before quota, rows, or queue", async () => {
+    const acceptedBatchResponse = {
+      data: [{ id: "email-1" }, { id: "email-2" }],
+    };
     const findFirst = vi
       .fn()
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: "email-1" });
+      .mockResolvedValueOnce({
+        id: "email-1",
+        document: {
+          idempotency: {
+            endpoint: "emails.batch",
+            response: acceptedBatchResponse,
+          },
+        },
+      });
     Object.assign(mockDb.query, {
       emails: { findFirst },
       contacts: { findFirst: vi.fn().mockResolvedValue(null) },
@@ -1582,7 +1598,10 @@ describe("POST /api/emails/batch", () => {
     const valuesMock = vi.fn().mockImplementation(() => ({
       returning: vi.fn().mockResolvedValue([{ id: `email-${++callCount}` }]),
     }));
+    const updateWhere = vi.fn().mockResolvedValue(undefined);
+    const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
     mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    mockDb.update = vi.fn().mockReturnValue({ set: updateSet });
 
     const { POST } = await import("@/app/api/emails/batch/route");
     const emailsArr = [
@@ -1622,16 +1641,9 @@ describe("POST /api/emails/batch", () => {
     );
 
     expect(first.status).toBe(200);
-    expect(await first.json()).toEqual({
-      data: [{ id: "email-1" }, { id: "email-2" }],
-    });
-    expect(retry.status).toBe(409);
-    await expect(retry.json()).resolves.toMatchObject({
-      name: "idempotency_conflict",
-      code: "idempotency_conflict",
-      statusCode: 409,
-      details: { id: "email-1" },
-    });
+    await expect(first.json()).resolves.toEqual(acceptedBatchResponse);
+    expect(retry.status).toBe(200);
+    await expect(retry.json()).resolves.toEqual(acceptedBatchResponse);
 
     expect(mockReserveEmailQuota).toHaveBeenCalledTimes(1);
     expect(nonLogInsertCalls()).toHaveLength(2);
@@ -1671,6 +1683,29 @@ describe("POST /api/emails/batch", () => {
         .map(([value]) => value.idempotencyKey)
         .filter((value) => value !== undefined),
     ).toEqual(["batch-key-1", null]);
+    expect(updateSet).toHaveBeenCalledWith({
+      document: {
+        idempotency: {
+          endpoint: "emails.batch",
+          response: acceptedBatchResponse,
+        },
+      },
+    });
+    expect(updateWhere).toHaveBeenCalledWith(
+      expect.objectContaining({
+        op: "and",
+        args: expect.arrayContaining([
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining(["email-1"]),
+          }),
+          expect.objectContaining({
+            op: "eq",
+            args: expect.arrayContaining([AUTH_RESULT.userId]),
+          }),
+        ]),
+      }),
+    );
   });
 
   it("injects managed unsubscribe headers for batch items with known contact placeholders", async () => {

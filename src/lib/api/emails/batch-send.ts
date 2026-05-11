@@ -3,7 +3,11 @@ import {
   publicApiKeyUnauthorizedResponse,
   validateApiKey,
 } from "@/lib/api-auth";
-import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
+import {
+  type PublicApiErrorEnvelope,
+  publicApiError,
+  zodValidationDetails,
+} from "@/lib/api-errors";
 import { requireAllowedBatchSendingDomains } from "@/lib/api-key-permissions";
 import { captureApiResponseLog } from "@/lib/api-logging";
 import {
@@ -41,6 +45,60 @@ import {
   recordTelemetryError,
 } from "@opensend/core";
 import { and, eq } from "drizzle-orm";
+
+type BatchSendResultItem = { id: string } | { error: PublicApiErrorEnvelope };
+type BatchSendResponseBody = { data: BatchSendResultItem[] };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isPublicApiErrorEnvelope(
+  value: unknown,
+): value is PublicApiErrorEnvelope {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.name === "string" &&
+    typeof value.code === "string" &&
+    typeof value.message === "string" &&
+    typeof value.statusCode === "number"
+  );
+}
+
+function isBatchSendResultItem(value: unknown): value is BatchSendResultItem {
+  if (!isRecord(value)) return false;
+  if (typeof value.id === "string") return true;
+  return isPublicApiErrorEnvelope(value.error);
+}
+
+function isBatchSendResponseBody(
+  value: unknown,
+): value is BatchSendResponseBody {
+  if (!isRecord(value) || !Array.isArray(value.data)) return false;
+  return value.data.every(isBatchSendResultItem);
+}
+
+function getBatchReplayResponse(existing: {
+  id: string;
+  document: unknown;
+}): BatchSendResponseBody {
+  const document = existing.document;
+  if (isRecord(document) && isRecord(document.idempotency)) {
+    const { idempotency } = document;
+    if (
+      idempotency.endpoint === "emails.batch" &&
+      isBatchSendResponseBody(idempotency.response)
+    ) {
+      return idempotency.response;
+    }
+  }
+
+  return { data: [{ id: existing.id }] };
+}
+
+function emailIdsFromBatchResponse(response: BatchSendResponseBody): string[] {
+  return response.data.flatMap((item) => ("id" in item ? [item.id] : []));
+}
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -324,23 +382,20 @@ export async function handlePostEmailBatchRequest(
       ),
     });
     if (existing) {
+      const replayResponse = getBatchReplayResponse(existing);
+      const replayEmailIds = emailIdsFromBatchResponse(replayResponse);
       recordBatchMetric(telemetry, {
         durationMs: performance.now() - startedAt,
         outcome: "accepted",
         count: 0,
       });
       return await logResponse(
-        jsonWithTelemetry(
-          publicApiError(
-            "idempotency_conflict",
-            "A request with this idempotency key has already been accepted.",
-            409,
-            { id: existing.id },
-          ),
-          telemetry,
-          { status: 409 },
-        ),
-        { emailId: existing.id },
+        jsonWithTelemetry(replayResponse, telemetry, { status: 200 }),
+        {
+          emailId: replayEmailIds[0] ?? existing.id,
+          emailIds: replayEmailIds,
+          idempotencyReplay: true,
+        },
       );
     }
   }
@@ -529,7 +584,47 @@ export async function handlePostEmailBatchRequest(
         persisted.push({ index, id: email.id, shouldQueueNow });
       }
 
-      return { ok: true as const, emails: persisted };
+      const resultByIndex = new Map<number, { id: string }>();
+      for (const email of persisted) {
+        resultByIndex.set(email.index, { id: email.id });
+      }
+
+      const responseBody: BatchSendResponseBody = {
+        data: validatedItems.map((_, index) => {
+          const success = resultByIndex.get(index);
+          if (success) return success;
+          const sandboxSuppressed = sandboxSuppressedResults[index] ?? [];
+          if (sandboxSuppressed.length > 0) {
+            return {
+              error: sandboxSuppressedRecipientError(sandboxSuppressed),
+            };
+          }
+          return {
+            error: suppressedRecipientError(suppressedResults[index] ?? []),
+          };
+        }),
+      };
+
+      const replayAnchor = persisted.find(
+        (email) => email.index === firstAcceptedIndex,
+      );
+      if (idempotencyKey && replayAnchor) {
+        await tx
+          .update(emails)
+          .set({
+            document: {
+              idempotency: {
+                endpoint: "emails.batch",
+                response: responseBody,
+              },
+            },
+          })
+          .where(
+            and(eq(emails.id, replayAnchor.id), eq(emails.userId, userId)),
+          );
+      }
+
+      return { ok: true as const, emails: persisted, responseBody };
     });
 
     if (!reservation.ok) {
@@ -555,7 +650,6 @@ export async function handlePostEmailBatchRequest(
 
     quotaReserved = true;
 
-    const resultByIndex = new Map<number, { id: string }>();
     const CONCURRENCY = 5;
     const queuedEmails = reservation.emails.filter(
       (email) => email.shouldQueueNow,
@@ -597,22 +691,6 @@ export async function handlePostEmailBatchRequest(
       );
     }
 
-    for (const email of reservation.emails) {
-      resultByIndex.set(email.index, { id: email.id });
-    }
-
-    const results = validatedItems.map((_, index) => {
-      const success = resultByIndex.get(index);
-      if (success) return success;
-      const sandboxSuppressed = sandboxSuppressedResults[index] ?? [];
-      if (sandboxSuppressed.length > 0) {
-        return { error: sandboxSuppressedRecipientError(sandboxSuppressed) };
-      }
-      return {
-        error: suppressedRecipientError(suppressedResults[index] ?? []),
-      };
-    });
-
     const durationMs = performance.now() - startedAt;
     logTelemetry("info", "email.batch_accepted", telemetry, {
       email_count: acceptedCount,
@@ -624,9 +702,12 @@ export async function handlePostEmailBatchRequest(
       count: acceptedCount,
     });
     quotaReserved = false;
-    return await logResponse(jsonWithTelemetry({ data: results }, telemetry), {
-      emailIds: reservation.emails.map((email) => email.id),
-    });
+    return await logResponse(
+      jsonWithTelemetry(reservation.responseBody, telemetry),
+      {
+        emailIds: reservation.emails.map((email) => email.id),
+      },
+    );
   } catch (err) {
     recordTelemetryError(telemetry, "email.batch_accept.failed", err);
     if (quotaReserved) {
