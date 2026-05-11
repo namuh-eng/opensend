@@ -9,6 +9,7 @@ import {
   requireFullAccessApiKey,
   requireFullAccessForApiKeyCaller,
 } from "@/lib/api-key-permissions";
+import { auditContextForApiKey, recordAuditEvent } from "@/lib/audit-events";
 import {
   createWebhookSchema,
   updateWebhookSchema,
@@ -201,6 +202,21 @@ export async function handleCreateWebhookRequest(
       events,
     });
 
+    await recordAuditEvent({
+      context: auditContextForApiKey({
+        userId: authResult.auth.userId,
+        apiKeyId: authResult.auth.apiKeyId,
+      }),
+      action: "webhook.created",
+      targetType: "webhook",
+      targetId: webhook.id,
+      metadata: {
+        endpoint: webhook.endpoint,
+        events: webhook.events,
+        status: webhook.status,
+      },
+    });
+
     return Response.json(mapWebhookCreateResult(webhook), { status: 201 });
   } catch (error) {
     return mapWebhookError(error, "Failed to create webhook");
@@ -269,6 +285,22 @@ export async function handleUpdateWebhookRequest(
       return Response.json({ error: "Webhook not found" }, { status: 404 });
     }
 
+    await recordAuditEvent({
+      context: auditContextForApiKey({
+        userId: authResult.auth.userId,
+        apiKeyId: authResult.auth.apiKeyId,
+      }),
+      action: "webhook.updated",
+      targetType: "webhook",
+      targetId: updated.id,
+      metadata: {
+        endpoint: validated.endpoint ?? validated.url,
+        events: validated.events ?? validated.event_types,
+        status: validated.status,
+        active: validated.active,
+      },
+    });
+
     return Response.json({
       object: "webhook",
       ...mapWebhookListItem(updated),
@@ -294,6 +326,16 @@ export async function handleDeleteWebhookRequest(
     if (!deleted) {
       return Response.json({ error: "Webhook not found" }, { status: 404 });
     }
+
+    await recordAuditEvent({
+      context: auditContextForApiKey({
+        userId: authResult.auth.userId,
+        apiKeyId: authResult.auth.apiKeyId,
+      }),
+      action: "webhook.deleted",
+      targetType: "webhook",
+      targetId: deleted.id,
+    });
 
     return Response.json({
       object: "webhook",

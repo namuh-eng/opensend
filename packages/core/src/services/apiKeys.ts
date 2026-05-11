@@ -65,6 +65,12 @@ export type CreateApiKeyResult = {
   tokenHash: string;
 };
 
+export type UpdateApiKeyInput = {
+  name?: string;
+  permission?: ApiKeyPermission;
+  domainId?: string | null;
+};
+
 export type DeleteApiKeyResult = {
   id: string;
   tokenHash: string;
@@ -92,6 +98,11 @@ export type ApiKeyRepository = {
   }>;
   create(data: ApiKeyInsert): Promise<ApiKeyRow[]>;
   findById(id: string, userId: string): Promise<ApiKeyRow | undefined>;
+  update(
+    id: string,
+    userId: string,
+    data: Partial<ApiKeyInsert>,
+  ): Promise<ApiKeyRow[]>;
   delete(id: string, userId: string): Promise<Array<{ id: string }>>;
 };
 
@@ -135,6 +146,24 @@ export function parseCreateApiKeyBody(body: unknown): {
         ? permission
         : undefined,
     domainId: typeof domainId === "string" ? domainId : undefined,
+  };
+}
+
+export function parseUpdateApiKeyBody(body: unknown): UpdateApiKeyInput {
+  const data =
+    body && typeof body === "object" && !Array.isArray(body) ? body : {};
+  const record = data as Record<string, unknown>;
+  const permission = record.permission;
+  const domainId = record.domain_id;
+
+  return {
+    name: typeof record.name === "string" ? record.name : undefined,
+    permission:
+      permission === "full_access" || permission === "sending_access"
+        ? permission
+        : undefined,
+    domainId:
+      typeof domainId === "string" || domainId === null ? domainId : undefined,
   };
 }
 
@@ -254,6 +283,56 @@ export function createApiKeyService({
         lastUsedAt: key.lastUsedAt,
         permission: key.permission,
         domain: key.domain,
+      };
+    },
+
+    async updateApiKey(
+      id: string,
+      userId: string,
+      input: UpdateApiKeyInput,
+    ): Promise<ApiKeyDetail> {
+      const existing = await repository.findById(id, userId);
+      if (!existing) {
+        throw new ApiKeyServiceError("not_found", "API key not found");
+      }
+
+      const updates: Partial<ApiKeyInsert> = {};
+
+      if (input.name !== undefined) {
+        const name = input.name.trim();
+        if (!name) {
+          throw new ApiKeyServiceError("invalid_name", "name is required");
+        }
+        if (name.length > 50) {
+          throw new ApiKeyServiceError(
+            "name_too_long",
+            "name must be 50 characters or less",
+          );
+        }
+        updates.name = name;
+      }
+
+      if (input.permission !== undefined) {
+        updates.permission = input.permission;
+      }
+      if (input.domainId !== undefined) {
+        updates.domain = input.domainId;
+      }
+
+      const [updated] = await repository.update(id, userId, updates);
+      if (!updated) {
+        throw new ApiKeyServiceError("not_found", "API key not found");
+      }
+
+      await invalidateAuthCache(existing.tokenHash);
+
+      return {
+        id: updated.id,
+        name: updated.name,
+        createdAt: updated.createdAt,
+        lastUsedAt: updated.lastUsedAt,
+        permission: updated.permission,
+        domain: updated.domain,
       };
     },
 

@@ -115,6 +115,9 @@ export async function cleanupE2ERun(
   await client.query("delete from emails where user_id like $1", [
     `${userPrefix}%`,
   ]);
+  await client.query("delete from audit_events where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query(
     "delete from logs where user_id like $1 or document->>'test_run_id' = $2",
     [`${userPrefix}%`, runId],

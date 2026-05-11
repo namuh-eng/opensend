@@ -4,22 +4,37 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
+import {
+  type AuditContext,
+  auditContextForApiKey,
+  auditContextForDashboardSession,
+} from "@/lib/audit-events";
 import { ApiKeyServiceError } from "@opensend/core";
 
 type ApiKeyRouteAuth = NonNullable<
   Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
 >;
 
-async function resolveUserId(auth: ApiKeyRouteAuth): Promise<string | null> {
-  if ("userId" in auth) return auth.userId;
+async function resolveAuditContext(
+  auth: ApiKeyRouteAuth,
+): Promise<AuditContext | null> {
+  if ("userId" in auth) {
+    if (!auth.userId) return null;
+    return auditContextForApiKey({
+      userId: auth.userId,
+      apiKeyId: auth.apiKeyId,
+    });
+  }
 
   const session = await getServerSession();
-  return session?.user?.id ?? null;
+  return auditContextForDashboardSession(session);
 }
 
 export async function authorizeApiKeyRoute(
   request: Request,
-): Promise<{ userId: string } | { response: Response }> {
+): Promise<
+  { userId: string; auditContext: AuditContext } | { response: Response }
+> {
   const auth = await authorizeDashboardOrApiKey(
     request.headers.get("authorization"),
   );
@@ -28,10 +43,10 @@ export async function authorizeApiKeyRoute(
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return { response: permissionError };
 
-  const userId = await resolveUserId(auth);
-  if (!userId) return { response: unauthorizedResponse() };
+  const auditContext = await resolveAuditContext(auth);
+  if (!auditContext) return { response: unauthorizedResponse() };
 
-  return { userId };
+  return { userId: auditContext.userId, auditContext };
 }
 
 export function mapApiKeyServiceError(
