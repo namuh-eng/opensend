@@ -53,7 +53,10 @@ test.describe("Settings Usage Page", () => {
       const upgradeLinks = authenticatedPage.getByRole("link", {
         name: "Upgrade",
       });
-      await expect(upgradeLinks.first()).toHaveAttribute("href", "/pricing");
+      await expect(upgradeLinks.first()).toHaveAttribute(
+        "href",
+        "/settings/billing/plans",
+      );
       expect(await upgradeLinks.count()).toBe(3);
     } else {
       const unavailableButtons = authenticatedPage.getByRole("button", {
