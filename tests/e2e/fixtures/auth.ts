@@ -97,9 +97,21 @@ export async function cleanupE2ERun(
      )`,
     [`${userPrefix}%`],
   );
+  await client.query(
+    `delete from webhook_deliveries
+     where webhook_id in (
+       select id from webhooks
+       where user_id like $1 or document->>'test_run_id' = $2
+     )`,
+    [`${userPrefix}%`, runId],
+  );
   await client.query("delete from email_events where user_id like $1", [
     `${userPrefix}%`,
   ]);
+  await client.query(
+    "delete from webhooks where user_id like $1 or document->>'test_run_id' = $2",
+    [`${userPrefix}%`, runId],
+  );
   await client.query(
     "delete from contacts_to_segments where contact_id in (select id from contacts where user_id like $1 or email like $2 or document->>'test_run_id' = $3)",
     [`${userPrefix}%`, emailPattern, runId],

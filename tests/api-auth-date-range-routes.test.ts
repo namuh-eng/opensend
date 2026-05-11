@@ -257,6 +257,15 @@ describe("route smoke coverage", () => {
           this.name = "AudienceMetadataServiceError";
         }
       }
+      class WebhookServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+        ) {
+          super(message);
+          this.name = "WebhookServiceError";
+        }
+      }
 
       const notFound = (message: string) =>
         new AudienceMetadataServiceError("not_found", message, 404);
@@ -270,6 +279,7 @@ describe("route smoke coverage", () => {
         ContactOperationsServiceError,
         BroadcastServiceError,
         AudienceMetadataServiceError,
+        WebhookServiceError,
         createDashboardAggregateService: () => ({
           async getMetrics() {
             await mockSelect().from().where();
