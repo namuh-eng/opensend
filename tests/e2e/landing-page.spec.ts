@@ -61,6 +61,33 @@ test("hosted CTA navigates to the auth page", async ({ page }) => {
   await expect(page).toHaveURL(/\/auth$/);
 });
 
+test("pricing billing toggle updates selected period and plan prices", async ({
+  page,
+}) => {
+  await page.goto("/pricing");
+
+  await expect(page.getByTestId("billing-monthly")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByTestId("plan-starter")).toContainText(
+    /\$\s*19\s*\/mo/,
+  );
+  await expect(page.getByTestId("plan-growth")).toContainText(/\$\s*79\s*\/mo/);
+
+  await page.getByTestId("billing-yearly").click();
+
+  await expect(page).toHaveURL(/\/pricing\?billing=yearly$/);
+  await expect(page.getByTestId("billing-yearly")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByTestId("plan-starter")).toContainText(
+    /\$\s*15\s*\/mo/,
+  );
+  await expect(page.getByTestId("plan-growth")).toContainText(/\$\s*65\s*\/mo/);
+});
+
 test("unauthenticated dashboard routes remain protected", async ({ page }) => {
   await page.goto("/emails");
   await expect(page).toHaveURL(/\/auth$/);
