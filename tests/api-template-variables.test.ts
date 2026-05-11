@@ -108,6 +108,26 @@ describe("template variable metadata service", () => {
     });
   });
 
+  it("stores the authenticated dashboard user on created templates", async () => {
+    const inserted: TemplateInsert[] = [];
+    const repository = createRepository({
+      async create(data) {
+        inserted.push(data);
+        return [templateRow({ ...data })];
+      },
+    });
+
+    await createTemplateService({ repository }).createTemplate(
+      {
+        name: "Dashboard draft",
+        html: "<p>Hello</p>",
+      },
+      { userId: "user-123" },
+    );
+
+    expect(inserted[0]?.userId).toBe("user-123");
+  });
+
   it("preserves reserved-name and 50-variable validation on create", async () => {
     const create = vi.fn(async () => [templateRow()]);
     const service = createTemplateService({

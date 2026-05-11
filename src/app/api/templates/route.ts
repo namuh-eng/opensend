@@ -1,7 +1,6 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import { TemplateServiceError, createTemplateService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
+import { authorizeTemplateRoute } from "./auth";
 
 function mapTemplateError(error: unknown, fallback: string) {
   if (error instanceof TemplateServiceError) {
@@ -18,15 +17,16 @@ function templateService() {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeTemplateRoute(
+    request.headers.get("authorization"),
+  );
+  if (!auth.ok) return auth.response;
 
   try {
     const result = await templateService().listTemplates({
       search: request.nextUrl.searchParams.get("search") ?? undefined,
       status: request.nextUrl.searchParams.get("status") ?? undefined,
+      userId: auth.userId,
     });
 
     return NextResponse.json({
@@ -49,14 +49,15 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeTemplateRoute(
+    request.headers.get("authorization"),
+  );
+  if (!auth.ok) return auth.response;
 
   try {
     const created = await templateService().createTemplate(
       await request.json(),
+      { userId: auth.userId },
     );
 
     return NextResponse.json(
