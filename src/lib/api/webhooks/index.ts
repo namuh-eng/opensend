@@ -3,5 +3,6 @@ export {
   handleDeleteWebhookRequest,
   handleGetWebhookRequest,
   handleListWebhooksRequest,
+  handleReplayWebhookDeliveryRequest,
   handleUpdateWebhookRequest,
 } from "./handlers";

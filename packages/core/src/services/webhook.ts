@@ -56,6 +56,10 @@ export type UpdateWebhookInput = {
 };
 
 export type WebhookDeliveryRepository = {
+  findById(id: string): Promise<WebhookDeliveryRow | undefined>;
+  create(
+    data: typeof webhookDeliveries.$inferInsert,
+  ): Promise<WebhookDeliveryRow>;
   listByWebhookId(
     webhookId: string,
     options?: { limit?: number; after?: string },
@@ -64,6 +68,15 @@ export type WebhookDeliveryRepository = {
     hasMore: boolean;
   }>;
 };
+
+export type WebhookReplayResult = {
+  originalDelivery: WebhookDeliveryListItem;
+  replayDelivery: WebhookDeliveryListItem;
+};
+
+export type WebhookDispatchDelivery = (
+  deliveryId: string,
+) => Promise<WebhookDeliveryRow | null | undefined>;
 
 export type WebhookRepository = {
   list(options: { userId: string; limit?: number; after?: string }): Promise<{
@@ -83,8 +96,24 @@ export type WebhookRepository = {
 export type WebhookServiceDependencies = {
   repository?: WebhookRepository;
   deliveryRepository?: WebhookDeliveryRepository;
+  dispatchDelivery?: WebhookDispatchDelivery;
   generateSigningSecret?: () => string;
 };
+
+export type WebhookServiceErrorCode =
+  | "not_found"
+  | "disabled"
+  | "dispatch_failed";
+
+export class WebhookServiceError extends Error {
+  constructor(
+    readonly code: WebhookServiceErrorCode,
+    message: string,
+  ) {
+    super(message);
+    this.name = "WebhookServiceError";
+  }
+}
 
 function normalizeLimit(limit: number | undefined): number {
   return Math.min(Math.max(limit || 20, 1), 100);
@@ -163,6 +192,7 @@ function buildUpdateData(input: UpdateWebhookInput): Partial<WebhookInsert> {
 export function createWebhookService({
   repository = webhookRepo,
   deliveryRepository = webhookDeliveryRepo,
+  dispatchDelivery,
   generateSigningSecret = generateSecureSigningSecret,
 }: WebhookServiceDependencies = {}) {
   return {
@@ -227,6 +257,64 @@ export function createWebhookService({
       const [deleted] = await repository.delete(id, userId);
       return deleted;
     },
+
+    async replayWebhookDelivery(input: {
+      webhookId: string;
+      deliveryId: string;
+      userId: string;
+    }): Promise<WebhookReplayResult> {
+      const webhook = await repository.findById(input.webhookId, input.userId);
+      if (!webhook) {
+        throw new WebhookServiceError(
+          "not_found",
+          "Webhook endpoint not found or deleted",
+        );
+      }
+
+      if (webhook.status !== "active") {
+        throw new WebhookServiceError(
+          "disabled",
+          "Webhook endpoint is disabled and cannot replay deliveries",
+        );
+      }
+
+      const originalDelivery = await deliveryRepository.findById(
+        input.deliveryId,
+      );
+      if (!originalDelivery || originalDelivery.webhookId !== input.webhookId) {
+        throw new WebhookServiceError(
+          "not_found",
+          "Webhook delivery not found for this endpoint",
+        );
+      }
+
+      const replayDelivery = await deliveryRepository.create({
+        webhookId: webhook.id,
+        eventId: originalDelivery.eventId,
+        status: "pending",
+        attempt: 0,
+        statusCode: null,
+        responseBody: null,
+        attemptedAt: null,
+        nextRetryAt: null,
+      });
+
+      const dispatchedDelivery = dispatchDelivery
+        ? await dispatchDelivery(replayDelivery.id)
+        : replayDelivery;
+
+      if (!dispatchedDelivery) {
+        throw new WebhookServiceError(
+          "dispatch_failed",
+          "Webhook replay delivery could not be dispatched",
+        );
+      }
+
+      return {
+        originalDelivery: toWebhookDeliveryListItem(originalDelivery),
+        replayDelivery: toWebhookDeliveryListItem(dispatchedDelivery),
+      };
+    },
   };
 }
 
@@ -255,6 +343,14 @@ export class WebhookService {
 
   async delete(id: string, userId: string) {
     return await this.service.deleteWebhook(id, userId);
+  }
+
+  async replayDelivery(input: {
+    webhookId: string;
+    deliveryId: string;
+    userId: string;
+  }) {
+    return await this.service.replayWebhookDelivery(input);
   }
 }
 
