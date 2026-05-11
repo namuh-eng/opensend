@@ -57,15 +57,6 @@ interface FieldErrorProps {
   field: keyof AutomationFormState;
 }
 
-function getApiKey(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage?.getItem?.("api_key") ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function findError(
   errors: AutomationFormValidationError[],
   field: keyof AutomationFormState,
@@ -366,18 +357,11 @@ export function AutomationBuilderForm({
       setTemplatesLoading(true);
       setTemplatesError(null);
       try {
-        const apiKey = getApiKey();
-        const headers: Record<string, string> = {};
-        if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-        const res = await fetch("/api/templates?status=published", { headers });
+        const res = await fetch("/api/templates?status=published");
         if (!res.ok) {
           if (!cancelled) {
             setTemplates([]);
-            setTemplatesError(
-              res.status === 401
-                ? "Set an API key to load published templates."
-                : "Could not load templates.",
-            );
+            setTemplatesError("Could not load templates.");
           }
           return;
         }

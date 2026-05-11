@@ -174,6 +174,31 @@ async function mockAutomationApis(page: Page) {
   };
 }
 
+async function mockEmptyAutomationApis(page: Page) {
+  const automationAuthorizationHeaders: Array<string | undefined> = [];
+
+  await page.route("**/api/auth/get-session", async (route) => {
+    await route.fulfill({
+      json: {
+        session: { id: "e2e-session", token: "e2e-session-token" },
+        user: { id: "e2e-user", email: "e2e@example.com", name: "E2E User" },
+      },
+    });
+  });
+  await page.route(/.*\/api\/automations(?:\?.*)?$/, async (route) => {
+    automationAuthorizationHeaders.push(
+      route.request().headers().authorization,
+    );
+    await route.fulfill({
+      json: { object: "list", data: [], has_more: false, total: 0 },
+    });
+  });
+
+  return {
+    getAutomationAuthorizationHeaders: () => automationAuthorizationHeaders,
+  };
+}
+
 test("automations dashboard lists automations and shows run failure fields", async ({
   context,
   page,
@@ -205,6 +230,27 @@ test("automations dashboard lists automations and shows run failure fields", asy
   await expect(page.getByRole("link", { name: "Failed" })).toBeVisible();
   await expect(page.getByRole("cell", { name: "send_email" })).toBeVisible();
   await expect(page.getByText("Template render failed")).toBeVisible();
+});
+
+test("empty automations dashboard uses session auth without a client API key", async ({
+  context,
+  page,
+}) => {
+  await signIn(context);
+  const mocks = await mockEmptyAutomationApis(page);
+  await page.addInitScript(() => {
+    window.localStorage.setItem("api_key", "re_should_not_be_sent");
+  });
+
+  await page.goto("/automations");
+
+  await expect(
+    page.getByRole("heading", { name: "Automations" }),
+  ).toBeVisible();
+  await expect(page.getByText("No automations")).toBeVisible();
+  await expect(page.locator("p[role='alert']")).toHaveCount(0);
+  await expect(page.getByText(/set an api key/i)).toHaveCount(0);
+  expect(mocks.getAutomationAuthorizationHeaders()).toEqual([undefined]);
 });
 
 test("automation create form submits an advanced condition flow", async ({

@@ -16,15 +16,6 @@ interface Props {
   mode: "create";
 }
 
-function getApiKey(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage?.getItem?.("api_key") ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export function AutomationBuilder({ mode }: Props) {
   const router = useRouter();
   const [state, setState] = useState<AutomationFormState>(DEFAULT_FORM_STATE);
@@ -39,11 +30,9 @@ export function AutomationBuilder({ mode }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      const apiKey = getApiKey();
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
-      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
       const res = await fetch("/api/automations", {
         method: "POST",
         headers,

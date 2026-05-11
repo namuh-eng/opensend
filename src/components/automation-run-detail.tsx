@@ -49,20 +49,9 @@ const SENSITIVE_OUTPUT_KEYS = [
   "body",
 ];
 
-function getApiKey(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage?.getItem?.("api_key") ?? null;
-  } catch {
-    return null;
-  }
-}
-
 function apiHeaders(contentType = false): Record<string, string> {
   const headers: Record<string, string> = {};
   if (contentType) headers["Content-Type"] = "application/json";
-  const apiKey = getApiKey();
-  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
   return headers;
 }
 
@@ -152,11 +141,7 @@ export function AutomationRunDetail({ automationId, runId }: Props) {
         return;
       }
       if (!res.ok) {
-        setError(
-          res.status === 401
-            ? "Set an API key to view this run."
-            : "Failed to load run.",
-        );
+        setError("Failed to load run.");
         return;
       }
       setRun((await res.json()) as AutomationRunDetailPayload);
