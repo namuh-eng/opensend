@@ -72,6 +72,30 @@ describe("dashboard production deep links", () => {
     expect(mockRedirect).toHaveBeenCalledWith("/audience");
   });
 
+  it("renders an unavailable state for the topics unsubscribe editor deep link", async () => {
+    const Page = (
+      await import(
+        "@/app/(dashboard)/audience/topics/unsubscribe-page/edit/page"
+      )
+    ).default;
+
+    render(Page() as React.ReactElement);
+
+    expect(
+      screen.getByRole("heading", {
+        name: "Unsubscribe page editor unavailable",
+      }),
+    ).toBeDefined();
+    expect(
+      screen.getByText(
+        "Opensend still serves the default unsubscribe page for public topics, but dashboard customization is not available yet.",
+      ),
+    ).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Back to topics" }).getAttribute("href"),
+    ).toBe("/audience/topics");
+  });
+
   it("renders a billing unavailable state instead of raw-404 when billing is disabled", async () => {
     const Page = (await import("@/app/(dashboard)/settings/billing/page"))
       .default;

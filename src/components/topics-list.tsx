@@ -1,8 +1,10 @@
 "use client";
 
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
-import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+
+const UNSUBSCRIBE_EDITOR_UNAVAILABLE_COPY =
+  "Editor unavailable; the default unsubscribe page remains active.";
 
 interface Topic {
   id: string;
@@ -116,12 +118,7 @@ export function TopicsList() {
           <option value="opt_out">Opt-out</option>
         </select>
 
-        <Link
-          href="/audience/topics/unsubscribe-page/edit"
-          className="h-9 px-4 text-[13px] font-medium text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] rounded-md hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors inline-flex items-center"
-        >
-          Edit Unsubscribe Page
-        </Link>
+        <UnsubscribeEditorUnavailableControl label="Edit Unsubscribe Page" />
 
         <button
           type="button"
@@ -155,12 +152,10 @@ export function TopicsList() {
             >
               Create topic
             </button>
-            <Link
-              href="/audience/topics/unsubscribe-page/edit"
-              className="px-4 py-2 rounded-md text-[13px] font-medium text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
-            >
-              Customize page
-            </Link>
+            <UnsubscribeEditorUnavailableControl
+              label="Customize page"
+              align="center"
+            />
           </div>
         </div>
       ) : (
@@ -286,12 +281,10 @@ export function TopicsList() {
           <h3 className="text-[14px] font-medium text-[#F0F0F0]">
             Unsubscribe Page Preview
           </h3>
-          <Link
-            href="/audience/topics/unsubscribe-page/edit"
-            className="text-[13px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
-          >
-            Customize page
-          </Link>
+          <UnsubscribeEditorUnavailableControl
+            label="Customize page"
+            align="right"
+          />
         </div>
         <div className="bg-white rounded-b-lg p-8">
           <div className="max-w-[400px] mx-auto text-center">
@@ -355,6 +348,39 @@ export function TopicsList() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function UnsubscribeEditorUnavailableControl({
+  label,
+  align = "left",
+}: {
+  label: string;
+  align?: "left" | "center" | "right";
+}) {
+  const copyId = useId();
+  const alignmentClass =
+    align === "right"
+      ? "items-end text-right"
+      : align === "center"
+        ? "items-center text-center"
+        : "items-start text-left";
+
+  return (
+    <div className={`flex max-w-[230px] flex-col gap-1 ${alignmentClass}`}>
+      <button
+        type="button"
+        disabled
+        aria-describedby={copyId}
+        title={UNSUBSCRIBE_EDITOR_UNAVAILABLE_COPY}
+        className="inline-flex cursor-not-allowed items-center rounded-md border border-[rgba(176,199,217,0.145)] px-4 py-2 text-[13px] font-medium text-[#666] opacity-80"
+      >
+        {label}
+      </button>
+      <p id={copyId} className="text-[11px] leading-4 text-[#777]">
+        {UNSUBSCRIBE_EDITOR_UNAVAILABLE_COPY}
+      </p>
     </div>
   );
 }
