@@ -1,11 +1,6 @@
-import {
-  authorizeDashboardOrApiKey,
-  getServerSession,
-  invalidateApiKeyAuthCache,
-  unauthorizedResponse,
-} from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { ApiKeyServiceError, createApiKeyService } from "@opensend/core";
+import { invalidateApiKeyAuthCache } from "@/lib/api-auth";
+import { createApiKeyService, toApiKeyDetailResponse } from "@opensend/core";
+import { authorizeApiKeyRoute, mapApiKeyServiceError } from "../route-helpers";
 
 function apiKeyService() {
   return createApiKeyService({
@@ -13,47 +8,20 @@ function apiKeyService() {
   });
 }
 
-function mapServiceError(err: unknown, fallback: string): Response {
-  if (err instanceof ApiKeyServiceError) {
-    return Response.json({ error: err.message }, { status: 404 });
-  }
-
-  const message = err instanceof Error ? err.message : fallback;
-  return Response.json({ error: message }, { status: 500 });
-}
-
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
-  if (!auth) {
-    return unauthorizedResponse();
-  }
-  const permissionError =
-    "apiKeyId" in auth ? requireFullAccessApiKey(auth) : null;
-  if (permissionError) return permissionError;
-  const session = "dashboard" in auth ? await getServerSession() : null;
-  const userId = "userId" in auth ? auth.userId : session?.user?.id;
-  if (!userId) return unauthorizedResponse();
+  const auth = await authorizeApiKeyRoute(request);
+  if ("response" in auth) return auth.response;
 
   const { id } = await params;
   try {
-    const key = await apiKeyService().getApiKey(id, userId);
+    const key = await apiKeyService().getApiKey(id, auth.userId);
 
-    return Response.json({
-      object: "api_key",
-      id: key.id,
-      name: key.name,
-      created_at: key.createdAt,
-      last_used_at: key.lastUsedAt,
-      permission: key.permission,
-      domain: key.domain,
-    });
+    return Response.json(toApiKeyDetailResponse(key));
   } catch (err) {
-    return mapServiceError(err, "Failed to get API key");
+    return mapApiKeyServiceError(err, "Failed to get API key");
   }
 }
 
@@ -61,25 +29,15 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
-  if (!auth) {
-    return unauthorizedResponse();
-  }
-  const permissionError =
-    "apiKeyId" in auth ? requireFullAccessApiKey(auth) : null;
-  if (permissionError) return permissionError;
-  const session = "dashboard" in auth ? await getServerSession() : null;
-  const userId = "userId" in auth ? auth.userId : session?.user?.id;
-  if (!userId) return unauthorizedResponse();
+  const auth = await authorizeApiKeyRoute(request);
+  if ("response" in auth) return auth.response;
 
   const { id } = await params;
   try {
-    await apiKeyService().deleteApiKey(id, userId);
+    await apiKeyService().deleteApiKey(id, auth.userId);
 
     return new Response(null, { status: 200 });
   } catch (err) {
-    return mapServiceError(err, "Failed to delete API key");
+    return mapApiKeyServiceError(err, "Failed to delete API key");
   }
 }

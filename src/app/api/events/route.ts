@@ -1,11 +1,16 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { formatCustomEvent } from "@/lib/automations";
 import {
   createCustomEventSchema,
   listEventsQuerySchema,
 } from "@/lib/validation/events";
-import { AutomationValidationError, customEventRepo } from "@opensend/core";
+import {
+  AutomationValidationError,
+  CustomEventServiceError,
+  createCustomEventService,
+} from "@opensend/core";
+
+const customEventService = createCustomEventService();
 
 function isUniqueViolation(err: unknown): boolean {
   return (
@@ -14,6 +19,36 @@ function isUniqueViolation(err: unknown): boolean {
     "code" in err &&
     err.code === "23505"
   );
+}
+
+function mapCreateEventError(err: unknown): Response {
+  if (err instanceof AutomationValidationError) {
+    return Response.json(
+      { error: err.message, code: err.code },
+      { status: 422 },
+    );
+  }
+  if (isUniqueViolation(err)) {
+    return Response.json(
+      { error: "An event with this name already exists" },
+      { status: 409 },
+    );
+  }
+  const message = err instanceof Error ? err.message : "Failed to create event";
+  return Response.json({ error: message }, { status: 500 });
+}
+
+function mapListEventError(err: unknown): Response {
+  const message = err instanceof Error ? err.message : "Failed to list events";
+  return Response.json({ error: message }, { status: 500 });
+}
+
+function mapDeleteEventError(err: unknown): Response {
+  if (err instanceof CustomEventServiceError && err.code === "not_found") {
+    return Response.json({ error: err.message }, { status: 404 });
+  }
+  const message = err instanceof Error ? err.message : "Failed to delete event";
+  return Response.json({ error: message }, { status: 500 });
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -38,28 +73,13 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   try {
-    const event = await customEventRepo.create({
-      name: parsed.data.name,
-      schema: parsed.data.schema ?? null,
+    const event = await customEventService.createCustomEvent({
       userId: auth.userId,
+      data: parsed.data,
     });
-    return Response.json(formatCustomEvent(event), { status: 201 });
+    return Response.json(event, { status: 201 });
   } catch (err) {
-    if (err instanceof AutomationValidationError) {
-      return Response.json(
-        { error: err.message, code: err.code },
-        { status: 422 },
-      );
-    }
-    if (isUniqueViolation(err)) {
-      return Response.json(
-        { error: "An event with this name already exists" },
-        { status: 409 },
-      );
-    }
-    const message =
-      err instanceof Error ? err.message : "Failed to create event";
-    return Response.json({ error: message }, { status: 500 });
+    return mapCreateEventError(err);
   }
 }
 
@@ -82,19 +102,43 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   try {
-    const { data, hasMore } = await customEventRepo.list({
-      limit: parsed.data.limit ?? 50,
-      after: parsed.data.after,
+    const list = await customEventService.listCustomEvents({
       userId: auth.userId,
+      limit: parsed.data.limit,
+      after: parsed.data.after,
     });
-    return Response.json({
-      object: "list",
-      data: data.map(formatCustomEvent),
-      has_more: hasMore,
-    });
+    return Response.json(list);
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to list events";
-    return Response.json({ error: message }, { status: 500 });
+    return mapListEventError(err);
+  }
+}
+
+export async function DELETE(request: Request): Promise<Response> {
+  const auth = await validateApiKey(request.headers.get("authorization"));
+  if (!auth) return unauthorizedResponse();
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
+
+  const url = new URL(request.url);
+  const id = url.searchParams.get("id");
+  if (!id) {
+    return Response.json(
+      {
+        error: "Validation failed",
+        details: {
+          formErrors: [],
+          fieldErrors: { id: ["Required"] },
+        },
+      },
+      { status: 422 },
+    );
+  }
+
+  try {
+    return Response.json(
+      await customEventService.deleteCustomEvent({ userId: auth.userId, id }),
+    );
+  } catch (err) {
+    return mapDeleteEventError(err);
   }
 }

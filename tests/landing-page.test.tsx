@@ -75,14 +75,30 @@ describe("Landing page route", () => {
   });
 
   it("links to docs and GitHub from header navigation", () => {
-    render(<LandingPage />);
+    render(
+      <LandingPage githubStars={{ count: 1_234, formattedCount: "1.2k" }} />,
+    );
     const docsLinks = screen.getAllByRole("link", { name: "Docs" });
     expect(docsLinks.some((el) => el.getAttribute("href") === "/docs")).toBe(
       true,
     );
 
-    const githubLink = screen.getByTestId("cta-github");
-    expect(githubLink.getAttribute("href")).toMatch(/github\.com/);
+    const githubLink = screen.getByTestId("nav-github");
+    expect(githubLink.textContent).toContain("Star on GitHub");
+    expect(githubLink.textContent).toContain("1.2k stars");
+    expect(githubLink.getAttribute("href")).toContain(
+      "github.com/namuh-eng/opensend",
+    );
+  });
+
+  it("keeps the GitHub nav render safe when the live star count is unavailable", () => {
+    render(<LandingPage githubStars={null} />);
+
+    const githubLink = screen.getByTestId("nav-github");
+    expect(githubLink.textContent).toBe("Star on GitHub");
+    expect(githubLink.getAttribute("href")).toContain(
+      "github.com/namuh-eng/opensend",
+    );
   });
 
   it("renders the dev-focused landing sections", () => {

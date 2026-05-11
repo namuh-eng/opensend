@@ -1,28 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  LogReadServiceError as ActualLogReadServiceError,
+  type LogRepository,
+  createLogReadService as createActualLogReadService,
+} from "../packages/core/src/services/logs";
 
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
-const mockFindFirst = vi.hoisted(() => vi.fn());
-const mockSelect = vi.hoisted(() => vi.fn());
-const recordedWhere = vi.hoisted(() => [] as unknown[]);
-const mockEq = vi.hoisted(() =>
-  vi.fn((left, right) => ({ op: "eq", args: [left, right] })),
-);
-const mockAnd = vi.hoisted(() => vi.fn((...args) => ({ op: "and", args })));
-const mockOr = vi.hoisted(() => vi.fn((...args) => ({ op: "or", args })));
-const mockIlike = vi.hoisted(() =>
-  vi.fn((left, right) => ({ op: "ilike", args: [left, right] })),
-);
-const mockGte = vi.hoisted(() =>
-  vi.fn((left, right) => ({ op: "gte", args: [left, right] })),
-);
-const mockLte = vi.hoisted(() =>
-  vi.fn((left, right) => ({ op: "lte", args: [left, right] })),
-);
-const mockGt = vi.hoisted(() =>
-  vi.fn((left, right) => ({ op: "gt", args: [left, right] })),
-);
-const mockLt = vi.hoisted(() =>
-  vi.fn((left, right) => ({ op: "lt", args: [left, right] })),
+const mockCreateLogReadService = vi.hoisted(() => vi.fn());
+const mockListLogs = vi.hoisted(() => vi.fn());
+const mockGetLog = vi.hoisted(() => vi.fn());
+const MockLogReadServiceError = vi.hoisted(
+  () =>
+    class LogReadServiceError extends Error {
+      constructor(
+        readonly code: "not_found",
+        message: string,
+      ) {
+        super(message);
+        this.name = "LogReadServiceError";
+      }
+    },
 );
 
 vi.mock("@/lib/api-auth", async () => {
@@ -34,132 +31,280 @@ vi.mock("@/lib/api-auth", async () => {
   };
 });
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    query: { logs: { findFirst: mockFindFirst } },
-    select: mockSelect,
-  },
+vi.mock("@opensend/core", () => ({
+  createLogReadService: mockCreateLogReadService,
+  LogReadServiceError: MockLogReadServiceError,
 }));
 
-vi.mock("drizzle-orm", async () => {
-  const actual = await vi.importActual("drizzle-orm");
-  return {
-    ...actual,
-    and: mockAnd,
-    or: mockOr,
-    eq: mockEq,
-    gt: mockGt,
-    gte: mockGte,
-    lt: mockLt,
-    lte: mockLte,
-    ilike: mockIlike,
-    desc: vi.fn((column) => ({ op: "desc", column })),
-    sql: vi.fn((parts: TemplateStringsArray, ...values: unknown[]) => ({
-      op: "sql",
-      text: Array.from(parts).join("?"),
-      values,
-    })),
-  };
-});
+const createdAt = new Date("2026-05-06T00:00:00.000Z");
+const detailCreatedAt = new Date("2026-05-06T01:00:00.000Z");
 
-function makeQuery<T>(rows: T[]) {
-  const chain = {
-    from: vi.fn(() => chain),
-    where: vi.fn((condition: unknown) => {
-      recordedWhere.push(condition);
-      return chain;
-    }),
-    orderBy: vi.fn(() => chain),
-    limit: vi.fn(() => Promise.resolve(rows)),
-  };
-  return chain;
+function request(url: string) {
+  return new Request(url, {
+    headers: { Authorization: "Bearer re_test" },
+  });
 }
 
-describe("/api/logs", () => {
-  beforeEach(() => {
-    vi.resetModules();
-    vi.clearAllMocks();
-    recordedWhere.length = 0;
-    mockValidateApiKey.mockResolvedValue({
-      apiKeyId: "api-key-a",
-      permission: "full_access",
-      domain: null,
+function fullAccessAuth() {
+  return {
+    apiKeyId: "api-key-a",
+    permission: "full_access",
+    domain: null,
+    userId: "user-a",
+  };
+}
+
+describe("log read service", () => {
+  it("normalizes filters, preserves cursor aliases, and scopes list queries to the caller", async () => {
+    const calls: Parameters<LogRepository["listForApi"]>[0][] = [];
+    const repository: LogRepository = {
+      async listForApi(options) {
+        calls.push(options);
+        return {
+          data: [
+            {
+              id: "log-1",
+              method: "POST",
+              endpoint: "/api/emails",
+              status: 200,
+              userAgent: "opensend-test",
+              apiKeyId: "api-key-a",
+              createdAt,
+            },
+          ],
+          hasMore: true,
+        };
+      },
+      async findByIdForUser() {
+        return undefined;
+      },
+    };
+    const service = createActualLogReadService({ repository });
+
+    const response = await service.listLogs({
       userId: "user-a",
+      limit: 500,
+      status: "200",
+      method: "post",
+      apiKeyId: "api-key-a",
+      after: "log-z",
+      before: "log-0",
+      dateFrom: "2026-05-01",
+      dateTo: "2026-05-06",
+      userAgent: "test",
+      search: "  email-1  ",
     });
-  });
 
-  it("lists only caller-owned logs and applies search/date/user-agent filters", async () => {
-    mockSelect.mockReturnValue(
-      makeQuery([
-        {
-          id: "log-1",
-          method: "POST",
-          endpoint: "/api/emails",
-          status: 200,
-          userAgent: "opensend-test",
-          apiKeyId: "api-key-a",
-          createdAt: new Date("2026-05-06T00:00:00Z"),
-        },
-      ]),
-    );
-
-    const { GET } = await import("@/app/api/logs/route");
-    const res = await GET(
-      new Request(
-        "http://localhost:3015/api/logs?q=email-1&user_agent=test&date_from=2026-05-01&date_to=2026-05-06&api_key_id=api-key-a",
-        { headers: { Authorization: "Bearer re_test" } },
-      ),
-    );
-
-    expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({
+    expect(response).toEqual({
       object: "list",
       data: [
         {
           id: "log-1",
+          method: "POST",
           endpoint: "/api/emails",
+          response_status: 200,
+          user_agent: "opensend-test",
           api_key_id: "api-key-a",
+          created_at: createdAt,
         },
       ],
+      has_more: true,
     });
-    expect(mockEq.mock.calls.some(([, right]) => right === "user-a")).toBe(
-      true,
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      userId: "user-a",
+      limit: 100,
+      status: 200,
+      method: "POST",
+      apiKeyId: "api-key-a",
+      after: "log-z",
+      before: "log-0",
+      userAgent: "test",
+      search: "email-1",
+    });
+    expect(calls[0].dateFrom).toBeInstanceOf(Date);
+    expect(calls[0].dateTo).toBeInstanceOf(Date);
+    expect(calls[0].dateTo?.getHours()).toBe(23);
+    expect(calls[0].dateTo?.getMinutes()).toBe(59);
+  });
+
+  it("returns log detail DTOs with request and response bodies", async () => {
+    const repository: LogRepository = {
+      async listForApi() {
+        return { data: [], hasMore: false };
+      },
+      async findByIdForUser(id, userId) {
+        expect(id).toBe("log-1");
+        expect(userId).toBe("user-a");
+        return {
+          id: "log-1",
+          method: "GET",
+          endpoint: "/api/logs/log-1",
+          status: 200,
+          userAgent: "opensend-test",
+          requestBody: { query: "test" },
+          responseBody: { ok: true },
+          createdAt: detailCreatedAt,
+          document: { trace: "trace-1" },
+          userId: "user-a",
+          apiKeyId: "api-key-a",
+        };
+      },
+    };
+    const service = createActualLogReadService({ repository });
+
+    await expect(service.getLog("user-a", "log-1")).resolves.toEqual({
+      object: "log",
+      id: "log-1",
+      method: "GET",
+      endpoint: "/api/logs/log-1",
+      status: 200,
+      user_agent: "opensend-test",
+      api_key_id: "api-key-a",
+      request_body: { query: "test" },
+      response_body: { ok: true },
+      created_at: detailCreatedAt,
+    });
+  });
+
+  it("raises a typed not-found error for cross-tenant or missing log detail", async () => {
+    const repository: LogRepository = {
+      async listForApi() {
+        return { data: [], hasMore: false };
+      },
+      async findByIdForUser() {
+        return undefined;
+      },
+    };
+    const service = createActualLogReadService({ repository });
+
+    await expect(service.getLog("user-a", "log-b")).rejects.toMatchObject({
+      code: "not_found",
+      message: "Log not found",
+    });
+    await expect(service.getLog("user-a", "log-b")).rejects.toBeInstanceOf(
+      ActualLogReadServiceError,
     );
-    expect(mockEq.mock.calls.some(([, right]) => right === "api-key-a")).toBe(
-      true,
+  });
+});
+
+describe("/api/logs routes", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockValidateApiKey.mockResolvedValue(fullAccessAuth());
+    mockCreateLogReadService.mockReturnValue({
+      listLogs: mockListLogs,
+      getLog: mockGetLog,
+    });
+  });
+
+  it("lists logs through the service with compatible aliases", async () => {
+    mockListLogs.mockResolvedValue({
+      object: "list",
+      data: [
+        {
+          id: "log-1",
+          method: "POST",
+          endpoint: "/api/emails",
+          response_status: 200,
+          user_agent: "opensend-test",
+          api_key_id: "api-key-a",
+          created_at: createdAt,
+        },
+      ],
+      has_more: false,
+    });
+
+    const { GET } = await import("@/app/api/logs/route");
+    const res = await GET(
+      request(
+        "http://localhost:3015/api/logs?q=email-1&user_agent=test&date_from=2026-05-01&date_to=2026-05-06&api_key_id=api-key-a&after=log-z&before=log-0&method=post&status=200&limit=50",
+      ),
     );
-    expect(mockIlike).toHaveBeenCalledWith(expect.anything(), "%test%");
-    expect(mockGte).toHaveBeenCalled();
-    expect(mockLte).toHaveBeenCalled();
-    expect(mockOr).toHaveBeenCalled();
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      object: "list",
+      data: [
+        {
+          id: "log-1",
+          method: "POST",
+          endpoint: "/api/emails",
+          response_status: 200,
+          user_agent: "opensend-test",
+          api_key_id: "api-key-a",
+          created_at: createdAt.toISOString(),
+        },
+      ],
+      has_more: false,
+    });
+    expect(mockListLogs).toHaveBeenCalledWith({
+      userId: "user-a",
+      limit: 50,
+      status: "200",
+      method: "post",
+      apiKeyId: "api-key-a",
+      after: "log-z",
+      before: "log-0",
+      dateFrom: "2026-05-01",
+      dateTo: "2026-05-06",
+      userAgent: "test",
+      search: "email-1",
+    });
+  });
+
+  it("supports camelCase and created date aliases", async () => {
+    mockListLogs.mockResolvedValue({
+      object: "list",
+      data: [],
+      has_more: false,
+    });
+
+    const { GET } = await import("@/app/api/logs/route");
+    const res = await GET(
+      request(
+        "http://localhost:3015/api/logs?apiKeyId=api-key-a&userAgent=agent&search=needle&created_after=2026-05-01&created_before=2026-05-06",
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockListLogs).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiKeyId: "api-key-a",
+        userAgent: "agent",
+        search: "needle",
+        dateFrom: "2026-05-01",
+        dateTo: "2026-05-06",
+      }),
+    );
+  });
+
+  it("requires full-access API keys for log reads", async () => {
+    mockValidateApiKey.mockResolvedValue({
+      ...fullAccessAuth(),
+      permission: "sending_access",
+    });
+
+    const { GET } = await import("@/app/api/logs/route");
+    const res = await GET(request("http://localhost:3015/api/logs"));
+
+    expect(res.status).toBe(403);
+    expect(mockListLogs).not.toHaveBeenCalled();
   });
 
   it("returns 404 for another tenant's log detail", async () => {
-    mockFindFirst.mockResolvedValue(null);
-
-    const { GET } = await import("@/app/api/logs/[id]/route");
-    const res = await GET(
-      new Request("http://localhost:3015/api/logs/log-b", {
-        headers: { Authorization: "Bearer re_test" },
-      }),
-      { params: Promise.resolve({ id: "log-b" }) },
+    mockGetLog.mockRejectedValue(
+      new MockLogReadServiceError("not_found", "Log not found"),
     );
 
-    expect(res.status).toBe(404);
-    expect(mockFindFirst).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        op: "and",
-        args: expect.arrayContaining([
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining(["log-b"]),
-          }),
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining(["user-a"]),
-          }),
-        ]),
-      }),
+    const { GET } = await import("@/app/api/logs/[id]/route");
+    const res = await GET(request("http://localhost:3015/api/logs/log-b"), {
+      params: Promise.resolve({ id: "log-b" }),
     });
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({ error: "Log not found" });
+    expect(mockGetLog).toHaveBeenCalledWith("user-a", "log-b");
   });
 });

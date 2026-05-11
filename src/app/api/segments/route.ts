@@ -1,12 +1,41 @@
 import {
   authorizeDashboardOrApiKey,
+  getServerSession,
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { segments } from "@/lib/db/schema";
-import { and, asc, count, desc, ilike, lt } from "drizzle-orm";
+import {
+  AudienceMetadataServiceError,
+  createAudienceMetadataService,
+} from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
+
+type SegmentRouteAuth = NonNullable<
+  Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
+>;
+
+async function resolveUserId(auth: SegmentRouteAuth): Promise<string | null> {
+  if ("userId" in auth) return auth.userId;
+
+  const session = await getServerSession();
+  return session?.user?.id ?? null;
+}
+
+function audienceMetadataService() {
+  return createAudienceMetadataService();
+}
+
+function mapServiceError(error: unknown, fallback: string) {
+  if (error instanceof AudienceMetadataServiceError) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: error.status },
+    );
+  }
+
+  console.error(`${fallback}:`, error);
+  return NextResponse.json({ error: fallback }, { status: 500 });
+}
 
 export async function GET(request: NextRequest) {
   const auth = await authorizeDashboardOrApiKey(
@@ -15,59 +44,21 @@ export async function GET(request: NextRequest) {
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const url = request.nextUrl;
-    const limit = Math.min(
-      100,
-      Math.max(1, Number(url.searchParams.get("limit")) || 20),
-    );
-    const search = url.searchParams.get("search")?.trim() || "";
-    const after = url.searchParams.get("after") || "";
-
-    const conditions = [];
-    if (search) {
-      conditions.push(ilike(segments.name, `%${search}%`));
-    }
-    if (after) {
-      conditions.push(lt(segments.id, after));
-    }
-
-    const rows = await db
-      .select({
-        id: segments.id,
-        name: segments.name,
-        createdAt: segments.createdAt,
-      })
-      .from(segments)
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(segments.id))
-      .limit(limit + 1);
-
-    const hasMore = rows.length > limit;
-    const dataRows = hasMore ? rows.slice(0, limit) : rows;
-
-    const totalCount = await db.$count(
-      segments,
-      conditions.length > 0 ? and(...conditions) : undefined,
-    );
-
-    return NextResponse.json({
-      object: "list",
-      data: dataRows.map((r) => ({
-        id: r.id,
-        name: r.name,
-        created_at: r.createdAt,
-      })),
-      has_more: hasMore,
-      total: Number(totalCount),
+    const result = await audienceMetadataService().listSegments({
+      userId,
+      limit: Number(url.searchParams.get("limit")) || undefined,
+      search: url.searchParams.get("search") || undefined,
+      after: url.searchParams.get("after") || undefined,
     });
+
+    return NextResponse.json(result);
   } catch (error) {
-    console.error("Failed to fetch segments:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch segments" },
-      { status: 500 },
-    );
+    return mapServiceError(error, "Failed to fetch segments");
   }
 }
 
@@ -78,33 +69,18 @@ export async function POST(request: NextRequest) {
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const body = await request.json();
-    const name = body.name?.trim();
+    const result = await audienceMetadataService().createSegment({
+      userId,
+      body,
+    });
 
-    if (!name) {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
-    }
-
-    const [segment] = await db
-      .insert(segments)
-      .values({ name })
-      .returning({ id: segments.id, name: segments.name });
-
-    return NextResponse.json(
-      {
-        object: "segment",
-        id: segment.id,
-        name: segment.name,
-      },
-      { status: 201 },
-    );
+    return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    console.error("Failed to create segment:", error);
-    return NextResponse.json(
-      { error: "Failed to create segment" },
-      { status: 500 },
-    );
+    return mapServiceError(error, "Failed to create segment");
   }
 }

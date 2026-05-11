@@ -72,7 +72,8 @@ export interface AutomationStepPayload {
     | "condition"
     | "wait_for_event"
     | "contact_update"
-    | "contact_delete";
+    | "contact_delete"
+    | "add_to_segment";
   config?: Record<string, unknown>;
   position?: number;
 }
@@ -80,6 +81,7 @@ export interface AutomationStepPayload {
 export interface AutomationConnectionPayload {
   from: string;
   to: string;
+  type?: "default" | "condition_met" | "condition_not_met";
 }
 
 export interface CreateAutomationPayload {
@@ -113,6 +115,15 @@ export interface ListOptions {
 
 export interface AutomationRunListOptions extends ListOptions {
   status?: string;
+}
+
+export interface CancelAutomationRunPayload {
+  reason?: string;
+}
+
+export interface AutomationRunMetricsOptions {
+  from?: string;
+  to?: string;
 }
 
 function normalizeBaseUrl(baseUrl: string = DEFAULT_BASE_URL): string {
@@ -461,6 +472,34 @@ class Automations {
     return this.http.request<unknown>(
       "GET",
       `/api/automations/${id}/runs/${runId}`,
+    );
+  }
+
+  async cancelRun(
+    id: string,
+    runId: string,
+    payload: CancelAutomationRunPayload = {},
+  ): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>(
+      "POST",
+      `/api/automations/${id}/runs/${runId}/cancel`,
+      payload,
+    );
+  }
+
+  async getRunMetrics(
+    id: string,
+    options: AutomationRunMetricsOptions = {},
+  ): Promise<ApiResponse<unknown>> {
+    const params = new URLSearchParams();
+    if (options.from) params.set("from", options.from);
+    if (options.to) params.set("to", options.to);
+    const query = params.toString();
+    return this.http.request<unknown>(
+      "GET",
+      query
+        ? `/api/automations/${id}/runs/metrics?${query}`
+        : `/api/automations/${id}/runs/metrics`,
     );
   }
 }

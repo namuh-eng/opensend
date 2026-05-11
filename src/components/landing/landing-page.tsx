@@ -1,10 +1,12 @@
 "use client";
 
+import { type GithubStars, OPENSEND_GITHUB_REPO_URL } from "@/lib/github-stars";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import { useEffect, useState } from "react";
 
-const GITHUB_URL = "https://github.com/namuh-eng/opensend";
+const GITHUB_URL = OPENSEND_GITHUB_REPO_URL;
+const GITHUB_CTA_LABEL = "Star on GitHub";
 const DOCS_URL = "/docs";
 const HOSTED_SIGNIN_URL = "/auth";
 const SELF_HOST_URL = `${GITHUB_URL}#self-host`;
@@ -141,7 +143,7 @@ function LogoGlyphLarge({
   );
 }
 
-function TopNav() {
+function TopNav({ githubStars }: { githubStars?: GithubStars | null }) {
   return (
     <header
       style={{
@@ -190,6 +192,7 @@ function TopNav() {
           </Link>
           <a
             href={GITHUB_URL}
+            data-testid="nav-github"
             rel="noreferrer noopener"
             target="_blank"
             style={{
@@ -214,11 +217,14 @@ function TopNav() {
               aria-hidden="true"
               focusable="false"
             >
-              <title>star</title>
               <path d="M8 12.4l-4.7 2.6 1-5.3L.6 6l5.3-.7L8 .4l2.1 4.9L15.4 6l-3.7 3.7 1 5.3z" />
             </svg>
-            <span>Star</span>
-            <span style={{ color: "var(--fg)", fontWeight: 500 }}>2.4k</span>
+            <span>{GITHUB_CTA_LABEL}</span>
+            {githubStars ? (
+              <span style={{ color: "var(--fg)", fontWeight: 500 }}>
+                {githubStars.formattedCount} stars
+              </span>
+            ) : null}
           </a>
           <Link
             href={HOSTED_SIGNIN_URL}
@@ -620,7 +626,7 @@ function Hero() {
                 className="btn btn-link mono"
                 style={{ fontSize: 13 }}
               >
-                ★ 2.4k on github →
+                {GITHUB_CTA_LABEL} →
               </a>
             </div>
             <div
@@ -1888,12 +1894,16 @@ function SiteFooter() {
   );
 }
 
-export function LandingPage() {
+type LandingPageProps = {
+  githubStars?: GithubStars | null;
+};
+
+export function LandingPage({ githubStars = null }: LandingPageProps) {
   return (
     <div className="landing-root">
       <div className="grain" aria-hidden />
       <div className="landing-content">
-        <TopNav />
+        <TopNav githubStars={githubStars} />
         <Hero />
         <hr className="line" />
         <StatsBar />

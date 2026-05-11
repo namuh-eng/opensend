@@ -1,9 +1,28 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { emailSuppressions } from "../packages/core/src/db/schema";
+import {
+  SuppressionServiceError as ActualSuppressionServiceError,
+  type SuppressionRepository,
+  createSuppressionService as createActualSuppressionService,
+} from "../packages/core/src/services/suppressions";
 
 const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
-const mockRemoveSuppression = vi.hoisted(() => vi.fn());
+const mockCreateSuppressionService = vi.hoisted(() => vi.fn());
 const mockListSuppressions = vi.hoisted(() => vi.fn());
+const mockDeleteSuppression = vi.hoisted(() => vi.fn());
+const MockSuppressionServiceError = vi.hoisted(
+  () =>
+    class SuppressionServiceError extends Error {
+      constructor(
+        readonly code: "not_found",
+        message: string,
+      ) {
+        super(message);
+        this.name = "SuppressionServiceError";
+      }
+    },
+);
 
 vi.mock("@/lib/api-auth", () => ({
   authorizeDashboardOrApiKey: mockAuthorizeDashboardOrApiKey,
@@ -12,26 +31,131 @@ vi.mock("@/lib/api-auth", () => ({
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
 
-vi.mock("@/lib/suppressions", () => ({
-  listSuppressions: mockListSuppressions,
-  removeSuppression: mockRemoveSuppression,
-  serializeSuppression: (row: {
-    id: string;
-    email: string;
-    reason: string;
-  }) => ({
-    id: row.id,
-    object: "suppression",
-    email: row.email,
-    reason: row.reason,
-    scope: "user",
-  }),
+vi.mock("@opensend/core", () => ({
+  createSuppressionService: mockCreateSuppressionService,
+  SuppressionServiceError: MockSuppressionServiceError,
 }));
+
+const suppressedAt = new Date("2026-05-05T12:00:00.000Z");
+const updatedAt = new Date("2026-05-05T12:30:00.000Z");
+
+type SuppressionRow = typeof emailSuppressions.$inferSelect;
+
+function suppressionRow(
+  overrides: Partial<SuppressionRow> = {},
+): SuppressionRow {
+  return {
+    id: "supp-1",
+    userId: "user-1",
+    email: "blocked@test.com",
+    reason: "bounced",
+    sourceEventId: "evt-1",
+    sourceEmailId: "email-1",
+    sourceMessageId: "msg-1",
+    metadata: { source: "ses", bounceType: "Permanent" },
+    suppressedAt,
+    updatedAt,
+    ...overrides,
+  };
+}
+
+describe("suppression service", () => {
+  it("lists user-scoped suppressions with public DTO shape and clamps limits", async () => {
+    const calls: Parameters<SuppressionRepository["list"]>[0][] = [];
+    const repository: SuppressionRepository = {
+      async list(options) {
+        calls.push(options);
+        return {
+          data: [suppressionRow()],
+          hasMore: true,
+        };
+      },
+      async removeForUser() {
+        return [];
+      },
+    };
+
+    const service = createActualSuppressionService({ repository });
+    const response = await service.listSuppressions({
+      userId: "user-1",
+      limit: 500,
+      after: "supp-0",
+    });
+
+    expect(calls).toEqual([{ userId: "user-1", limit: 100, after: "supp-0" }]);
+    expect(response).toEqual({
+      object: "list",
+      scope: "user",
+      data: [
+        {
+          id: "supp-1",
+          object: "suppression",
+          email: "blocked@test.com",
+          reason: "bounced",
+          scope: "user",
+          source_event_id: "evt-1",
+          source_email_id: "email-1",
+          source_message_id: "msg-1",
+          metadata: { source: "ses", bounceType: "Permanent" },
+          suppressed_at: "2026-05-05T12:00:00.000Z",
+          updated_at: "2026-05-05T12:30:00.000Z",
+        },
+      ],
+      has_more: true,
+    });
+
+    await service.listSuppressions({ userId: "user-1", limit: -1 });
+    await service.listSuppressions({ userId: "user-1", limit: Number.NaN });
+
+    expect(calls.slice(1)).toEqual([
+      { userId: "user-1", limit: 1, after: undefined },
+      { userId: "user-1", limit: 50, after: undefined },
+    ]);
+  });
+
+  it("deletes within caller scope and reports not_found when no row is removed", async () => {
+    const calls: Array<{ userId: string; email: string }> = [];
+    const repository: SuppressionRepository = {
+      async list() {
+        return { data: [], hasMore: false };
+      },
+      async removeForUser(userId, email) {
+        calls.push({ userId, email });
+        return calls.length === 1 ? [{ id: "supp-1" }] : [];
+      },
+    };
+
+    const service = createActualSuppressionService({ repository });
+
+    await expect(
+      service.deleteSuppression("user-1", "Blocked@Test.com"),
+    ).resolves.toEqual({ object: "suppression", deleted: true });
+
+    let error: unknown;
+    try {
+      await service.deleteSuppression("user-2", "blocked@test.com");
+    } catch (err) {
+      error = err;
+    }
+
+    expect(error).toBeInstanceOf(ActualSuppressionServiceError);
+    expect(error).toMatchObject({ code: "not_found" });
+
+    expect(calls).toEqual([
+      { userId: "user-1", email: "Blocked@Test.com" },
+      { userId: "user-2", email: "blocked@test.com" },
+    ]);
+  });
+});
 
 describe("suppression management routes", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    mockCreateSuppressionService.mockReturnValue({
+      listSuppressions: mockListSuppressions,
+      deleteSuppression: mockDeleteSuppression,
+    });
     mockAuthorizeDashboardOrApiKey.mockResolvedValue({
       apiKeyId: "key-1",
       permission: "full_access",
@@ -40,17 +164,30 @@ describe("suppression management routes", () => {
     });
   });
 
-  it("lists user-scoped suppression records", async () => {
+  it("lists user-scoped suppression records through the core service", async () => {
     mockListSuppressions.mockResolvedValue({
-      data: [{ id: "supp-1", email: "blocked@test.com", reason: "bounced" }],
-      hasMore: false,
+      object: "list",
+      scope: "user",
+      data: [
+        {
+          id: "supp-1",
+          object: "suppression",
+          email: "blocked@test.com",
+          reason: "bounced",
+          scope: "user",
+        },
+      ],
+      has_more: false,
     });
 
     const { GET } = await import("@/app/api/suppressions/route");
     const res = await GET(
-      new Request("http://localhost:3015/api/suppressions?limit=10", {
-        headers: { Authorization: "Bearer re_test" },
-      }),
+      new Request(
+        "http://localhost:3015/api/suppressions?limit=10&after=supp-0",
+        {
+          headers: { Authorization: "Bearer re_test" },
+        },
+      ),
     );
 
     expect(res.status).toBe(200);
@@ -71,12 +208,73 @@ describe("suppression management routes", () => {
     expect(mockListSuppressions).toHaveBeenCalledWith({
       userId: "user-1",
       limit: 10,
+      after: "supp-0",
+    });
+  });
+
+  it("resolves dashboard session users before listing suppressions", async () => {
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({ dashboard: true });
+    mockGetServerSession.mockResolvedValue({ user: { id: "dashboard-user" } });
+    mockListSuppressions.mockResolvedValue({
+      object: "list",
+      scope: "user",
+      data: [],
+      has_more: false,
+    });
+
+    const { GET } = await import("@/app/api/suppressions/route");
+    const res = await GET(
+      new Request("http://localhost:3015/api/suppressions?limit=abc"),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockListSuppressions).toHaveBeenCalledWith({
+      userId: "dashboard-user",
+      limit: Number.NaN,
       after: undefined,
     });
   });
 
+  it("keeps unauthorized and API-key permission responses route-local", async () => {
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce(null);
+
+    const { GET } = await import("@/app/api/suppressions/route");
+    const unauthorized = await GET(
+      new Request("http://localhost:3015/api/suppressions"),
+    );
+
+    expect(unauthorized.status).toBe(401);
+    await expect(unauthorized.json()).resolves.toEqual({
+      error: "Missing or invalid API key",
+    });
+    expect(mockListSuppressions).not.toHaveBeenCalled();
+
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({
+      apiKeyId: "key-1",
+      permission: "sending_access",
+      domain: null,
+      userId: "user-1",
+    });
+
+    const forbidden = await GET(
+      new Request("http://localhost:3015/api/suppressions", {
+        headers: { Authorization: "Bearer re_test" },
+      }),
+    );
+
+    expect(forbidden.status).toBe(403);
+    await expect(forbidden.json()).resolves.toMatchObject({
+      code: "insufficient_api_key_permission",
+      statusCode: 403,
+    });
+    expect(mockListSuppressions).not.toHaveBeenCalled();
+  });
+
   it("removes a suppression for the authenticated user", async () => {
-    mockRemoveSuppression.mockResolvedValue({ id: "supp-1" });
+    mockDeleteSuppression.mockResolvedValue({
+      object: "suppression",
+      deleted: true,
+    });
 
     const { DELETE } = await import("@/app/api/suppressions/[email]/route");
     const res = await DELETE(
@@ -92,9 +290,30 @@ describe("suppression management routes", () => {
       object: "suppression",
       deleted: true,
     });
-    expect(mockRemoveSuppression).toHaveBeenCalledWith({
-      userId: "user-1",
-      email: "blocked@test.com",
+    expect(mockDeleteSuppression).toHaveBeenCalledWith(
+      "user-1",
+      "blocked@test.com",
+    );
+  });
+
+  it("preserves the not-found delete response when the core service misses", async () => {
+    mockDeleteSuppression.mockRejectedValue(
+      new MockSuppressionServiceError("not_found", "Suppression not found"),
+    );
+
+    const { DELETE } = await import("@/app/api/suppressions/[email]/route");
+    const res = await DELETE(
+      new Request("http://localhost:3015/api/suppressions/absent%40test.com", {
+        method: "DELETE",
+        headers: { Authorization: "Bearer re_test" },
+      }),
+      { params: Promise.resolve({ email: "absent%40test.com" }) },
+    );
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({
+      error: "Suppression not found",
+      code: "not_found",
     });
   });
 });

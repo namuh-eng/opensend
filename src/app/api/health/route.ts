@@ -1,16 +1,22 @@
 // ABOUTME: Healthcheck endpoint — confirms the app is running and the database is reachable.
 
 import { db } from "@/lib/db";
-import { sql } from "drizzle-orm";
+import { createHealthService } from "@opensend/core";
+
+const healthService = createHealthService({
+  database: {
+    execute(query) {
+      return db.execute(query);
+    },
+  },
+});
 
 export async function GET() {
-  try {
-    await db.execute(sql`SELECT 1`);
-    return Response.json({ status: "ok", db: "connected" });
-  } catch {
-    return Response.json(
-      { status: "error", db: "unreachable" },
-      { status: 503 },
-    );
+  const health = await healthService.check();
+
+  if (health.status === "error") {
+    return Response.json(health, { status: 503 });
   }
+
+  return Response.json(health);
 }

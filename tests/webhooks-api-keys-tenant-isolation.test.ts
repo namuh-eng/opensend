@@ -45,6 +45,62 @@ vi.mock("@opensend/core", () => ({
     getApiKey: mockGetApiKey,
     deleteApiKey: mockDeleteApiKey,
   }),
+  parseCreateApiKeyBody: (body: unknown) => {
+    const record =
+      body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    return {
+      name: typeof record.name === "string" ? record.name : "",
+      permission:
+        record.permission === "full_access" ||
+        record.permission === "sending_access"
+          ? record.permission
+          : undefined,
+      domainId:
+        typeof record.domain_id === "string" ? record.domain_id : undefined,
+    };
+  },
+  toApiKeyCreateResponse: (created: { id: string; token: string }) => ({
+    id: created.id,
+    token: created.token,
+  }),
+  toApiKeyDetailResponse: (key: {
+    id: string;
+    name: string;
+    createdAt: Date | string;
+    lastUsedAt: Date | string | null;
+    permission: string;
+    domain: string | null;
+  }) => ({
+    object: "api_key",
+    id: key.id,
+    name: key.name,
+    created_at: key.createdAt,
+    last_used_at: key.lastUsedAt,
+    permission: key.permission,
+    domain: key.domain,
+  }),
+  toApiKeyListResponse: (result: {
+    data: Array<{
+      id: string;
+      name: string;
+      createdAt: Date | string;
+      lastUsedAt: Date | string | null;
+      permission: string;
+      domain: string | null;
+    }>;
+    hasMore: boolean;
+  }) => ({
+    object: "list",
+    data: result.data.map((key) => ({
+      id: key.id,
+      name: key.name,
+      created_at: key.createdAt,
+      last_used_at: key.lastUsedAt,
+      permission: key.permission,
+      domain: key.domain,
+    })),
+    has_more: result.hasMore,
+  }),
   createWebhookService: () => ({
     listWebhooks: mockListWebhooks,
     createWebhook: mockCreateWebhook,
@@ -179,6 +235,220 @@ describe("webhook API tenant isolation", () => {
 
     expect(response.status).toBe(401);
     expect(mockListWebhooks).not.toHaveBeenCalled();
+  });
+});
+
+describe("control-plane webhooks API parity", () => {
+  it("exposes API-key-authenticated Hono webhook CRUD through the existing route service path", async () => {
+    mockListWebhooks.mockResolvedValue({
+      data: [
+        {
+          id: "wh-b",
+          endpoint: "https://example.com/b",
+          events: ["email.delivered"],
+          status: "enabled",
+          createdAt: "2026-05-05T00:00:00.000Z",
+        },
+      ],
+      hasMore: true,
+    });
+    mockCreateWebhook.mockResolvedValue({
+      id: "wh-created",
+      endpoint: "https://example.com/created",
+      events: ["email.sent"],
+      status: "enabled",
+      signingSecret: "whsec_created",
+      createdAt: "2026-05-05T00:01:00.000Z",
+    });
+    mockGetWebhook.mockResolvedValue({
+      id: "wh-b",
+      endpoint: "https://example.com/b",
+      events: ["email.delivered"],
+      status: "enabled",
+      createdAt: "2026-05-05T00:00:00.000Z",
+      recentDeliveries: [
+        {
+          id: "delivery-1",
+          status: "pending",
+          attempt: 2,
+          statusCode: 503,
+          responseBody: "unavailable",
+          attemptedAt: "2026-05-05T00:02:00.000Z",
+          nextRetryAt: "2026-05-05T00:07:00.000Z",
+          createdAt: "2026-05-05T00:01:30.000Z",
+        },
+      ],
+    });
+    mockUpdateWebhook.mockResolvedValue({
+      id: "wh-b",
+      endpoint: "https://example.com/updated",
+      events: ["email.bounced"],
+      status: "disabled",
+      createdAt: "2026-05-05T00:00:00.000Z",
+    });
+    mockDeleteWebhook.mockResolvedValue({ id: "wh-b" });
+
+    const { createApp } = await import("../services/api/src/index");
+    const app = createApp();
+
+    const listResponse = await app.request("/webhooks?limit=50&after=wh-a", {
+      headers: { authorization: "Bearer user-b-key" },
+    });
+    expect(listResponse.status).toBe(200);
+    await expect(listResponse.json()).resolves.toEqual({
+      object: "list",
+      data: [
+        {
+          id: "wh-b",
+          endpoint: "https://example.com/b",
+          events: ["email.delivered"],
+          status: "enabled",
+          created_at: "2026-05-05T00:00:00.000Z",
+        },
+      ],
+      has_more: true,
+    });
+    expect(mockListWebhooks).toHaveBeenCalledWith({
+      userId: "user-b",
+      limit: 50,
+      after: "wh-a",
+    });
+
+    const createResponse = await app.request("/webhooks", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer user-b-key",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        endpoint: "https://example.com/created",
+        events: ["email.sent"],
+      }),
+    });
+    expect(createResponse.status).toBe(201);
+    await expect(createResponse.json()).resolves.toEqual({
+      object: "webhook",
+      id: "wh-created",
+      endpoint: "https://example.com/created",
+      events: ["email.sent"],
+      status: "enabled",
+      signing_secret: "whsec_created",
+      created_at: "2026-05-05T00:01:00.000Z",
+    });
+    expect(mockCreateWebhook).toHaveBeenCalledWith({
+      userId: "user-b",
+      endpoint: "https://example.com/created",
+      events: ["email.sent"],
+    });
+
+    const detailResponse = await app.request("/webhooks/wh-b", {
+      headers: { authorization: "Bearer user-b-key" },
+    });
+    expect(detailResponse.status).toBe(200);
+    const detailBody = await detailResponse.json();
+    expect(detailBody).toEqual({
+      object: "webhook",
+      id: "wh-b",
+      endpoint: "https://example.com/b",
+      events: ["email.delivered"],
+      status: "enabled",
+      created_at: "2026-05-05T00:00:00.000Z",
+      recent_deliveries: [
+        {
+          id: "delivery-1",
+          status: "pending",
+          attempt: 2,
+          status_code: 503,
+          response_body: "unavailable",
+          attempted_at: "2026-05-05T00:02:00.000Z",
+          next_retry_at: "2026-05-05T00:07:00.000Z",
+          created_at: "2026-05-05T00:01:30.000Z",
+        },
+      ],
+    });
+    expect(detailBody).not.toHaveProperty("signing_secret");
+    expect(mockGetWebhook).toHaveBeenCalledWith("wh-b", "user-b");
+
+    const updateResponse = await app.request("/webhooks/wh-b", {
+      method: "PATCH",
+      headers: {
+        authorization: "Bearer user-b-key",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        url: "https://example.com/updated",
+        event_types: ["email.bounced"],
+        active: false,
+      }),
+    });
+    expect(updateResponse.status).toBe(200);
+    const updateBody = await updateResponse.json();
+    expect(updateBody).toEqual({
+      object: "webhook",
+      id: "wh-b",
+      endpoint: "https://example.com/updated",
+      events: ["email.bounced"],
+      status: "disabled",
+      created_at: "2026-05-05T00:00:00.000Z",
+    });
+    expect(updateBody).not.toHaveProperty("signing_secret");
+    expect(mockUpdateWebhook).toHaveBeenCalledWith("wh-b", "user-b", {
+      endpoint: "https://example.com/updated",
+      events: ["email.bounced"],
+      status: undefined,
+      active: false,
+    });
+
+    const deleteResponse = await app.request("/webhooks/wh-b", {
+      method: "DELETE",
+      headers: { authorization: "Bearer user-b-key" },
+    });
+    expect(deleteResponse.status).toBe(200);
+    await expect(deleteResponse.json()).resolves.toEqual({
+      object: "webhook",
+      id: "wh-b",
+      deleted: true,
+    });
+    expect(mockDeleteWebhook).toHaveBeenCalledWith("wh-b", "user-b");
+  });
+
+  it("preserves Hono webhooks auth and permission failures before service calls", async () => {
+    const { createApp } = await import("../services/api/src/index");
+    const app = createApp();
+
+    mockValidateApiKey.mockResolvedValueOnce(null);
+    const unauthenticated = await app.request("/webhooks", {
+      headers: { authorization: "Bearer invalid" },
+    });
+    expect(unauthenticated.status).toBe(401);
+    await expect(unauthenticated.json()).resolves.toEqual({
+      error: "Missing or invalid API key",
+    });
+    expect(mockListWebhooks).not.toHaveBeenCalled();
+
+    mockValidateApiKey.mockResolvedValueOnce({
+      apiKeyId: "sending-key",
+      permission: "sending_access",
+      domain: null,
+      userId: "user-b",
+    });
+    const forbidden = await app.request("/webhooks", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer sending-key",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        endpoint: "https://example.com/b",
+        events: ["email.delivered"],
+      }),
+    });
+    expect(forbidden.status).toBe(403);
+    await expect(forbidden.json()).resolves.toMatchObject({
+      code: "insufficient_api_key_permission",
+      statusCode: 403,
+    });
+    expect(mockCreateWebhook).not.toHaveBeenCalled();
   });
 });
 

@@ -303,11 +303,61 @@ describe("Topics API route", () => {
         Promise.resolve({
           apiKeyId: "test",
           permission: "full_access",
-          domainId: null,
+          domain: null,
+          userId: "user-1",
         }),
       unauthorizedResponse: () =>
         Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
+      getServerSession: () => Promise.resolve({ user: { id: "user-1" } }),
     }));
+    vi.doMock("@opensend/core", () => {
+      class AudienceMetadataServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+          readonly status: number,
+        ) {
+          super(message);
+          this.name = "AudienceMetadataServiceError";
+        }
+      }
+
+      return {
+        AudienceMetadataServiceError,
+        createAudienceMetadataService: () => ({
+          async listTopics() {
+            return { object: "list", data: [], has_more: false, total: 0 };
+          },
+          async createTopic(input: { body: Record<string, unknown> }) {
+            const name =
+              typeof input.body.name === "string" ? input.body.name.trim() : "";
+            if (!name) {
+              throw new AudienceMetadataServiceError(
+                "invalid_input",
+                "Name is required",
+                400,
+              );
+            }
+            return {
+              object: "topic",
+              id: "t1",
+              name,
+              description:
+                typeof input.body.description === "string"
+                  ? input.body.description.trim()
+                  : null,
+              defaultSubscription:
+                input.body.defaultSubscription === "opt_in"
+                  ? "opt_in"
+                  : "opt_out",
+              visibility:
+                input.body.visibility === "private" ? "private" : "public",
+              createdAt: new Date("2026-05-10T00:00:00.000Z"),
+            };
+          },
+        }),
+      };
+    });
   });
 
   it("GET /api/topics returns paginated list", async () => {

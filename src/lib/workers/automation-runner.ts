@@ -1121,6 +1121,10 @@ export async function processAutomationRunStep(
   run: AutomationRun,
   deps: AutomationRunnerDeps = defaultDeps,
 ): Promise<AutomationRun | null> {
+  if (run.status !== "queued" && run.status !== "waiting") {
+    return run;
+  }
+
   const now = deps.now();
   const automation = await deps.getAutomation(run.automationId);
   if (!automation) {

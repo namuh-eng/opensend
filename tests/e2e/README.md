@@ -98,6 +98,24 @@ external credentials or optional provider state must either:
 2. call `test.skip(...)` with a named env/prerequisite reason and list that
    prerequisite in the audit table below.
 
+## Current E2E classification audit
+
+| Spec | Classification | Notes |
+| --- | --- | --- |
+| `tenant-isolation.spec.ts` | Real Playwright API E2E | Canonical issue #229 proof: real app routes, API keys, Postgres users/contacts, cross-tenant list/detail/mutation/delete denial. |
+| `domain-create-auth.spec.ts` | Real browser E2E | Uses `authenticatedPage`, real Better Auth rows, dashboard UI, and Postgres domain assertion. |
+| `domains-page.spec.ts` | Real browser E2E | Uses `authenticatedPage`; mostly page rendering/navigation over current DB state. |
+| `landing-page.spec.ts` | Real browser E2E | Public landing page plus signed-in redirect through real auth fixture. |
+| `logs-search.spec.ts` | Real browser/API-backed E2E | Requires `DATABASE_URL`; seeds dashboard log data. |
+| `unsubscribe.spec.ts` | Real public route E2E | Uses real Postgres contact row for success path; invalid-token path is public-route smoke. |
+| `emails-alias.spec.ts`, `openapi.spec.ts` | Real API smoke | Calls real app routes, but negative/static assertions only; not a full domain workflow proof. |
+| `billing-checkout.spec.ts`, `billing-page.spec.ts` | Mixed smoke/mocked integration | Negative API assertions are real route smoke; checkout UI uses route mocks for Stripe-dependent flow. |
+| `automations-dashboard.spec.ts`, `sidebar-logout.spec.ts` | Mocked browser integration | Route-mocks auth/API responses; useful UI coverage but not server auth or DB proof. |
+| Broadcast/template editor/list specs | API-assisted UI smoke | Create data through page request and exercise UI, but currently depend on legacy request auth assumptions; treat as smoke until migrated to shared fixtures. |
+| Remaining component/page specs | Browser smoke | Primarily render/navigation/interaction checks; use them for UI regressions, not tenant/auth/data-isolation proof. |
+
+When adding or changing a spec, update this table if its proof level changes.
+
 ## Running E2E tests
 
 `make test-e2e` runs `bun run test:e2e`, which starts `bun run dev` on port

@@ -15,6 +15,18 @@ const mockListDNSRecords = vi.hoisted(() => vi.fn());
 const mockDeleteDNSRecord = vi.hoisted(() => vi.fn());
 const mockQueueEvent = vi.hoisted(() => vi.fn());
 const mockReconcileVerification = vi.hoisted(() => vi.fn());
+const MockDomainDetailServiceError = vi.hoisted(
+  () =>
+    class DomainDetailServiceError extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+      ) {
+        super(message);
+        this.name = "DomainDetailServiceError";
+      }
+    },
+);
 
 const VALID_DOMAIN_ID = "11111111-1111-4111-8111-111111111111";
 
@@ -26,6 +38,7 @@ const mockDb = vi.hoisted(() => ({
 }));
 
 vi.mock("@opensend/core", () => ({
+  DomainDetailServiceError: MockDomainDetailServiceError,
   ApiKeyServiceError: class ApiKeyServiceError extends Error {},
   createApiKeyService: () => ({
     createApiKey: mockCreateApiKey,
@@ -33,8 +46,84 @@ vi.mock("@opensend/core", () => ({
     getApiKey: vi.fn(),
     listApiKeys: vi.fn(),
   }),
+  parseCreateApiKeyBody: (body: unknown) => {
+    const record =
+      body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    return {
+      name: typeof record.name === "string" ? record.name : "",
+      permission:
+        record.permission === "full_access" ||
+        record.permission === "sending_access"
+          ? record.permission
+          : undefined,
+      domainId:
+        typeof record.domain_id === "string" ? record.domain_id : undefined,
+    };
+  },
+  toApiKeyCreateResponse: (created: { id: string; token: string }) => ({
+    id: created.id,
+    token: created.token,
+  }),
+  toApiKeyDetailResponse: (key: {
+    id: string;
+    name: string;
+    createdAt: Date | string;
+    lastUsedAt: Date | string | null;
+    permission: string;
+    domain: string | null;
+  }) => ({
+    object: "api_key",
+    id: key.id,
+    name: key.name,
+    created_at: key.createdAt,
+    last_used_at: key.lastUsedAt,
+    permission: key.permission,
+    domain: key.domain,
+  }),
   createDomainService: () => ({
     createDomain: mockCreateDomain,
+  }),
+  createDomainDetailService: () => ({
+    updateDomainDetail: async (input: {
+      id: string;
+      userId: string;
+      updates: Record<string, unknown>;
+    }) => {
+      const existing = await mockGetCachedDomainById(input.id);
+      if (!existing || existing.userId !== input.userId) {
+        throw new MockDomainDetailServiceError("not_found", "Not found");
+      }
+      await mockInvalidateDomainCaches({ id: input.id, name: existing.name });
+      return {
+        response: { object: "domain", id: input.id },
+        changedFields: Object.keys(input.updates),
+        eventPayload: {
+          id: input.id,
+          changed_fields: Object.keys(input.updates),
+          domain: {
+            id: input.id,
+            name: existing.name,
+            status: existing.status ?? "not_started",
+            region: existing.region ?? "us-east-1",
+            records: existing.records ?? [],
+            capabilities: existing.capabilities ?? [],
+            created_at:
+              existing.createdAt ?? new Date("2026-05-06T00:00:00.000Z"),
+          },
+        },
+      };
+    },
+    deleteDomainDetail: async (input: { id: string; userId: string }) => {
+      const existing = await mockGetCachedDomainById(input.id);
+      if (!existing || existing.userId !== input.userId) {
+        throw new MockDomainDetailServiceError("not_found", "Not found");
+      }
+      await mockInvalidateDomainCaches({ id: input.id, name: existing.name });
+      return {
+        response: { object: "domain", id: input.id, deleted: true },
+        eventPayload: { id: input.id, name: existing.name },
+      };
+    },
   }),
   domainService: {
     reconcileVerification: mockReconcileVerification,

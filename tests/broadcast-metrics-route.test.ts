@@ -4,18 +4,30 @@ const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockReadDashboardAggregateCache = vi.hoisted(() => vi.fn());
 const mockWriteDashboardAggregateCache = vi.hoisted(() => vi.fn());
-const mockSelect = vi.hoisted(() => vi.fn());
+const mockBroadcastService = vi.hoisted(() => ({
+  getBroadcastMetrics: vi.fn(),
+}));
+const mockCreateBroadcastService = vi.hoisted(() =>
+  vi.fn(() => mockBroadcastService),
+);
 
-function makeChain<T>(rows: T[]) {
-  const chain = {
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(),
-    // biome-ignore lint/suspicious/noThenProperty: mocks Drizzle's thenable query builder
-    then: (resolve: (value: T[]) => unknown) => Promise.resolve(resolve(rows)),
-  };
+const MockBroadcastServiceError = vi.hoisted(
+  () =>
+    class BroadcastServiceError extends Error {
+      constructor(
+        readonly code: "not_found",
+        message: string,
+      ) {
+        super(message);
+        this.name = "BroadcastServiceError";
+      }
+    },
+);
 
-  return chain;
+function makeNextRequest(url: string, init?: RequestInit) {
+  const request = new Request(url, init) as Request & { nextUrl: URL };
+  request.nextUrl = new URL(url);
+  return request;
 }
 
 vi.mock("@/lib/api-auth", () => ({
@@ -39,17 +51,10 @@ vi.mock("@/lib/cache/dashboard-aggregates", () => ({
   writeDashboardAggregateCache: mockWriteDashboardAggregateCache,
 }));
 
-vi.mock("@/lib/db", () => ({
-  db: {
-    select: mockSelect,
-  },
+vi.mock("@opensend/core", () => ({
+  BroadcastServiceError: MockBroadcastServiceError,
+  createBroadcastService: mockCreateBroadcastService,
 }));
-
-function makeNextRequest(url: string, init?: RequestInit) {
-  const request = new Request(url, init) as Request & { nextUrl: URL };
-  request.nextUrl = new URL(url);
-  return request;
-}
 
 describe("broadcast metrics route cache", () => {
   beforeEach(() => {
@@ -64,21 +69,23 @@ describe("broadcast metrics route cache", () => {
     mockWriteDashboardAggregateCache.mockResolvedValue(undefined);
   });
 
-  it("returns cached broadcast aggregates after verifying broadcast ownership", async () => {
-    mockSelect.mockReturnValueOnce(makeChain([{ id: "b1" }]));
-    mockReadDashboardAggregateCache.mockResolvedValue({
-      object: "broadcast_metrics",
-      broadcast_id: "b1",
-      total: 5,
-      delivered: 4,
-      bounced: 1,
-      complained: 0,
-      opened: 3,
-      clicked: 1,
-      delivery_rate: 80,
-      open_rate: 60,
-      click_rate: 20,
-      bounce_rate: 20,
+  it("returns cached broadcast aggregates after service ownership verification", async () => {
+    mockBroadcastService.getBroadcastMetrics.mockResolvedValue({
+      cacheStatus: "hit",
+      payload: {
+        object: "broadcast_metrics",
+        broadcast_id: "b1",
+        total: 5,
+        delivered: 4,
+        bounced: 1,
+        complained: 0,
+        opened: 3,
+        clicked: 1,
+        delivery_rate: 80,
+        open_rate: 60,
+        click_rate: 20,
+        bounce_rate: 20,
+      },
     });
 
     const route = await import("@/app/api/broadcasts/[id]/metrics/route");
@@ -91,25 +98,57 @@ describe("broadcast metrics route cache", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-opensend-cache")).toBe("hit");
-    expect(mockSelect).toHaveBeenCalledOnce();
-    expect(mockWriteDashboardAggregateCache).not.toHaveBeenCalled();
+    expect(mockBroadcastService.getBroadcastMetrics).toHaveBeenCalledWith({
+      userId: "user-1",
+      id: "b1",
+    });
+    expect(mockCreateBroadcastService).toHaveBeenCalledWith({
+      metricsCache: {
+        ttlSeconds: 120,
+        getKey: expect.any(Function),
+        read: mockReadDashboardAggregateCache,
+        write: mockWriteDashboardAggregateCache,
+      },
+    });
   });
 
-  it("caches fresh broadcast aggregates with a short ttl", async () => {
-    mockSelect
-      .mockReturnValueOnce(makeChain([{ id: "b1" }]))
-      .mockReturnValueOnce(
-        makeChain([
-          {
-            total: 100,
-            delivered: 95,
-            bounced: 2,
-            complained: 0,
-            opened: 40,
-            clicked: 10,
-          },
-        ]),
-      );
+  it("returns 404 when the broadcast metrics service reports not found", async () => {
+    mockBroadcastService.getBroadcastMetrics.mockRejectedValueOnce(
+      new MockBroadcastServiceError("not_found", "Broadcast not found"),
+    );
+
+    const route = await import("@/app/api/broadcasts/[id]/metrics/route");
+    const response = await route.GET(
+      makeNextRequest("http://localhost/api/broadcasts/missing/metrics", {
+        headers: { authorization: "Bearer token" },
+      }) as never,
+      { params: Promise.resolve({ id: "missing" }) },
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "Broadcast not found",
+    });
+  });
+
+  it("returns fresh broadcast aggregates with miss cache header", async () => {
+    mockBroadcastService.getBroadcastMetrics.mockResolvedValue({
+      cacheStatus: "miss",
+      payload: {
+        object: "broadcast_metrics",
+        broadcast_id: "b1",
+        total: 100,
+        delivered: 95,
+        bounced: 2,
+        complained: 0,
+        opened: 40,
+        clicked: 10,
+        delivery_rate: 95,
+        open_rate: 40,
+        click_rate: 10,
+        bounce_rate: 2,
+      },
+    });
 
     const route = await import("@/app/api/broadcasts/[id]/metrics/route");
     const response = await route.GET(
@@ -121,15 +160,10 @@ describe("broadcast metrics route cache", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("x-opensend-cache")).toBe("miss");
-    expect(mockWriteDashboardAggregateCache).toHaveBeenCalledOnce();
-    expect(mockWriteDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:broadcast-metrics:user-1:b1",
-      expect.objectContaining({
-        object: "broadcast_metrics",
-        broadcast_id: "b1",
-        total: 100,
-      }),
-      120,
-    );
+    await expect(response.json()).resolves.toMatchObject({
+      object: "broadcast_metrics",
+      broadcast_id: "b1",
+      total: 100,
+    });
   });
 });

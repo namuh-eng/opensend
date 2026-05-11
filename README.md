@@ -71,6 +71,7 @@ That's it. Open **http://localhost:3015** and sign in with Google (configure `GO
 - **Idempotency Keys** — Opt-in `Idempotency-Key` header (or per-row keys on batch sends) so retries collapse safely
 - **TypeScript SDK** — [`opensend`](./packages/sdk) npm package with full type safety
 - **Python SDK** — [`opensend`](./packages/python-sdk) package with a Resend-shaped transactional email surface
+- **Go SDK** — [`github.com/namuh-eng/opensend/packages/go-sdk`](./packages/go-sdk) package for the first transactional send slice
 - **React Email Templates** — Pass React components via the SDK's `react` prop
 - **Domain Verification** — DKIM, SPF, DMARC records auto-written to Cloudflare DNS, with click-tracking subdomains and custom return paths supported
 - **API Key Management** — `full_access` and `sending_access` permission scopes
@@ -128,7 +129,7 @@ go test ./...
 go run .
 ```
 
-The Go ingester is shadow-only for future issue #71 parity slices. The current production ingester remains `packages/ingester` on port **3016** for SES/SNS ingestion, Stripe webhooks, scheduled jobs, and webhook dispatch.
+The Go ingester is shadow-only for future issue #71 parity slices. The current production ingester remains `packages/ingester` on port **3016** for SES/SNS ingestion, Stripe webhooks, scheduled jobs, webhook dispatch, and automatic domain-verification reconciliation. Docker Compose also starts a `scheduler` sidecar that posts to `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify` every minute, using `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when configured.
 
 ### TypeScript SDK
 
@@ -180,6 +181,46 @@ print("Queued email", email["id"])
 
 Full Python SDK docs: [`packages/python-sdk/README.md`](./packages/python-sdk/README.md) and [`docs/sdk/python.md`](./docs/sdk/python.md)
 
+### Go SDK
+
+```bash
+go get github.com/namuh-eng/opensend/packages/go-sdk
+```
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+
+	opensend "github.com/namuh-eng/opensend/packages/go-sdk"
+)
+
+func main() {
+	client, err := opensend.NewClient(os.Getenv("OPENSEND_API_KEY"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	email, err := client.Send(context.Background(), opensend.SendRequest{
+		From:    "hello@yourdomain.com",
+		To:      []string{"recipient@example.com"},
+		Subject: "Hello from Opensend",
+		HTML:    "<h1>It works!</h1>",
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("Queued email", email.ID)
+}
+```
+
+Full Go SDK docs: [`packages/go-sdk/README.md`](./packages/go-sdk/README.md) and [`docs/sdk/go.md`](./docs/sdk/go.md)
+
 ## Self-Hosting
 
 ### Requirements
@@ -227,6 +268,7 @@ and the split app/ingester service shape — read the dedicated guides:
 - **[`docs/self-hosting.md`](docs/self-hosting.md)** — full self-hosting deep dive (environment variables, database, SES, DNS, auth, reverse proxy, background jobs, Redis, upgrades, troubleshooting)
 - **[`docs/ingester-deploy.md`](docs/ingester-deploy.md)** — running the ingester as a separate service with SNS cutover and replay runbook
 - **[`docs/observability.md`](docs/observability.md)** — log/metric/trace catalog and the API-to-provider tracing runbook
+- **[`docs/hosted-stripe-cutover.md`](docs/hosted-stripe-cutover.md)** — hosted Stripe/paywall env, Price ID mapping, preflight, and live validation checklist
 
 The included multi-stage `Dockerfile` builds the app, the migrator, and (via
 `packages/ingester/Dockerfile`) the ingester. Images run on any container
@@ -257,7 +299,8 @@ packages/
 ├── ingester/        # @opensend/ingester — Hono service for SES/SNS events,
 │                    #   scheduled-email worker, webhook retry scan (port 3016)
 ├── sdk/             # opensend — published TypeScript SDK
-└── python-sdk/      # opensend — first-party Python SDK package
+├── python-sdk/      # opensend — first-party Python SDK package
+└── go-sdk/          # github.com/namuh-eng/opensend/packages/go-sdk — first send Go SDK
 
 services/
 ├── api/             # Bun + Hono control-plane skeleton (port 3026)
@@ -305,7 +348,7 @@ bun run hooks:install  # optional manual reinstall if you used --ignore-scripts
 bun run check          # runs the same change-scoped push guardrail used on pre-push
 make check             # full repo typecheck + lint
 make test              # Unit tests
-make test-e2e          # E2E tests (sources .env; Playwright starts dev server)
+make test-e2e          # E2E tests (requires dev server)
 make all               # Everything
 ```
 
