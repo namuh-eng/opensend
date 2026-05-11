@@ -1,6 +1,21 @@
-// ABOUTME: Settings Documents tab — static compliance documents list with download links for Penetration test, SOC 2, DPA, Form W-9
+// ABOUTME: Settings Documents tab — compliance document availability without vendor-branded placeholder copy
 
-const DOCUMENTS = [
+type AvailableDocument = {
+  title: string;
+  descriptions: string[];
+  status: "available";
+  file: string;
+};
+
+type UnavailableDocument = {
+  title: string;
+  descriptions: string[];
+  status: "unavailable";
+};
+
+type SettingsDocument = AvailableDocument | UnavailableDocument;
+
+const DOCUMENTS: SettingsDocument[] = [
   {
     title: "Penetration test",
     descriptions: [
@@ -8,22 +23,23 @@ const DOCUMENTS = [
       "You can download the Letter of Attestation below.",
     ],
     file: "/static/documents/penetration-test.pdf",
+    status: "available",
   },
   {
     title: "SOC 2",
     descriptions: [
-      "Resend is SOC 2 Type II compliant, a compliance framework developed by AICPA.",
-      "This audit was completed by Vanta & Advantage Partners and covers the period of February 1, 2024 to February 1, 2025.",
+      "SOC 2 is a compliance framework developed by AICPA for service organizations.",
+      "OpenSend does not currently provide a self-service SOC 2 report in the dashboard. We will publish an OpenSend-specific report here when it is available.",
     ],
-    file: "/static/documents/soc2-report.pdf",
+    status: "unavailable",
   },
   {
     title: "DPA",
     descriptions: [
       "Data Processing Agreement (DPA) is a contract that regulates data processing conducted for business purposes.",
-      "The attached DPA is a version signed by us, and is considered fully executed once you signup to Resend.",
+      "OpenSend does not currently provide a self-service DPA download in the dashboard. Contact support if your organization needs a DPA before it is available here.",
     ],
-    file: "/static/documents/dpa.pdf",
+    status: "unavailable",
   },
   {
     title: "Form W-9",
@@ -32,6 +48,7 @@ const DOCUMENTS = [
       "The attached Form W-9 is a version signed by us.",
     ],
     file: "/static/documents/form-w9.pdf",
+    status: "available",
   },
 ];
 
@@ -54,14 +71,20 @@ export function DocumentsTab() {
               {desc}
             </p>
           ))}
-          <a
-            href={doc.file}
-            className="mt-2 inline-flex items-center px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] bg-[rgba(176,199,217,0.08)] border border-[rgba(176,199,217,0.145)] rounded-md hover:bg-[rgba(176,199,217,0.15)] transition-colors"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Download
-          </a>
+          {doc.status === "available" ? (
+            <a
+              href={doc.file}
+              className="mt-2 inline-flex items-center px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] bg-[rgba(176,199,217,0.08)] border border-[rgba(176,199,217,0.145)] rounded-md hover:bg-[rgba(176,199,217,0.15)] transition-colors"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Download
+            </a>
+          ) : (
+            <span className="mt-2 inline-flex items-center px-3 py-1.5 text-[13px] font-medium text-[#A1A4A5] bg-[rgba(176,199,217,0.04)] border border-dashed border-[rgba(176,199,217,0.145)] rounded-md">
+              Unavailable
+            </span>
+          )}
         </div>
       ))}
     </div>

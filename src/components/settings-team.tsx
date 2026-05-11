@@ -33,13 +33,25 @@ export function TeamTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-[14px] text-[#A1A4A5]">
-          Manage your team members and their access levels.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-2">
+          <p className="text-[14px] text-[#A1A4A5]">
+            View your team members and their access levels.
+          </p>
+          <p
+            id="team-actions-unavailable"
+            className="max-w-2xl text-[13px] text-[#A1A4A5]"
+          >
+            Team invitations and role editing are not available in OpenSend yet.
+            These controls are disabled until member management is ready.
+          </p>
+        </div>
         <button
           type="button"
-          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 transition-colors"
+          className="h-9 shrink-0 cursor-not-allowed rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(176,199,217,0.08)] px-4 text-[13px] font-medium text-[#A1A4A5] opacity-70"
+          disabled
+          aria-describedby="team-actions-unavailable"
+          title="Team invitations are not available yet."
         >
           Invite member
         </button>
@@ -91,7 +103,11 @@ export function TeamTab() {
                 <td className="px-4 py-4 text-right">
                   <button
                     type="button"
-                    className="text-[12px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+                    className="cursor-not-allowed text-[12px] text-[#6F7377] opacity-70"
+                    disabled
+                    aria-describedby="team-actions-unavailable"
+                    aria-label={`Edit ${member.name} unavailable`}
+                    title="Team role editing is not available yet."
                   >
                     Edit
                   </button>
