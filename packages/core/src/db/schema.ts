@@ -172,7 +172,7 @@ export const emails = pgTable(
     document: jsonb("document"),
     userId: text("user_id"),
     topicId: uuid("topic_id"),
-    idempotencyKey: varchar("idempotency_key", { length: 255 }),
+    idempotencyKey: varchar("idempotency_key", { length: 256 }),
   },
   (table) => [
     index("emails_status_idx").on(table.status),

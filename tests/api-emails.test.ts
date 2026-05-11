@@ -468,8 +468,7 @@ describe("POST /api/emails", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("x-correlation-id")).toBe("corr-email-test");
     expect(res.headers.get("traceparent")).toBe(traceparent);
-    const json = await res.json();
-    expect(json).toHaveProperty("id", emailId);
+    await expect(res.json()).resolves.toEqual({ id: emailId });
     expect(mockSendEmail).not.toHaveBeenCalled();
     expect(valuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -743,7 +742,7 @@ describe("POST /api/emails", () => {
     expect(mockReleaseEmailQuota).toHaveBeenCalledWith(AUTH_RESULT.userId, 1);
   });
 
-  it("checks duplicate Idempotency-Key retries only within the authenticated user scope", async () => {
+  it("replays the accepted id for duplicate Idempotency-Key retries within the authenticated user scope", async () => {
     const findFirst = vi.fn().mockResolvedValue({ id: "email-1" });
     Object.assign(mockDb.query, {
       emails: { findFirst },
@@ -767,11 +766,8 @@ describe("POST /api/emails", () => {
       ),
     );
 
-    expect(res.status).toBe(409);
-    await expect(res.json()).resolves.toMatchObject({
-      name: "idempotency_conflict",
-      details: { id: "email-1" },
-    });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ id: "email-1" });
     expect(findFirst).toHaveBeenCalledWith({
       where: expect.objectContaining({
         op: "and",
@@ -865,6 +861,43 @@ describe("POST /api/emails", () => {
     expect(res.status).toBe(200);
     expect(mockSendEmail).not.toHaveBeenCalled();
     expect(mockPublishBackgroundJob).toHaveBeenCalledOnce();
+  });
+
+  it("accepts array recipients plus cc, bcc, and reply_to forms", async () => {
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-recipients-uuid" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["first@test.com", "second@test.com"],
+          cc: "cc@test.com",
+          bcc: ["bcc-one@test.com", "bcc-two@test.com"],
+          reply_to: ["reply-one@test.com", "reply-two@test.com"],
+          subject: "Recipient forms",
+          html: "<p>Hi</p>",
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      id: "email-recipients-uuid",
+    });
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: ["first@test.com", "second@test.com"],
+        cc: ["cc@test.com"],
+        bcc: ["bcc-one@test.com", "bcc-two@test.com"],
+        replyTo: ["reply-one@test.com", "reply-two@test.com"],
+      }),
+    );
   });
 
   it("persists valid Resend-compatible tags unchanged", async () => {
@@ -1469,6 +1502,42 @@ describe("POST /api/emails/batch", () => {
     });
   });
 
+  it("accepts a 256-character batch Idempotency-Key", async () => {
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-256-key" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const { POST } = await import("@/app/api/emails/batch/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        [
+          {
+            from: "sender@domain.com",
+            to: ["user@test.com"],
+            subject: "Test",
+            html: "<p>Test</p>",
+          },
+        ],
+        {
+          Authorization: "Bearer re_test123",
+          "Idempotency-Key": "x".repeat(256),
+        },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      data: [{ id: "email-256-key" }],
+    });
+    expect(valuesMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idempotencyKey: "x".repeat(256),
+      }),
+    );
+  });
+
   it("returns 400 for an invalid batch Idempotency-Key before reserving quota", async () => {
     const { POST } = await import("@/app/api/emails/batch/route");
     const req = makeRequest(
@@ -1483,7 +1552,7 @@ describe("POST /api/emails/batch", () => {
       ],
       {
         Authorization: "Bearer re_test123",
-        "Idempotency-Key": "x".repeat(256),
+        "Idempotency-Key": "x".repeat(257),
       },
     );
 
@@ -2108,7 +2177,7 @@ describe("services/api transactional email routes", () => {
     expect(mockReserveEmailQuota).not.toHaveBeenCalled();
   });
 
-  it("preserves service idempotency conflict behavior before quota or rows", async () => {
+  it("preserves service idempotency replay behavior before quota or rows", async () => {
     const findFirst = vi.fn().mockResolvedValue({ id: "existing-email" });
     Object.assign(mockDb.query, {
       emails: { findFirst },
@@ -2134,11 +2203,8 @@ describe("services/api transactional email routes", () => {
       }),
     });
 
-    expect(res.status).toBe(409);
-    await expect(res.json()).resolves.toMatchObject({
-      name: "idempotency_conflict",
-      details: { id: "existing-email" },
-    });
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ id: "existing-email" });
     expect(mockReserveEmailQuota).not.toHaveBeenCalled();
     expect(nonLogInsertCalls()).toHaveLength(0);
   });

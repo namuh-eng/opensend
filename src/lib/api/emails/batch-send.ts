@@ -297,7 +297,7 @@ export async function handlePostEmailBatchRequest(
   const idempotencyKey = request.headers.get("idempotency-key");
   if (
     idempotencyKey &&
-    (idempotencyKey.length < 1 || idempotencyKey.length > 255)
+    (idempotencyKey.length < 1 || idempotencyKey.length > 256)
   ) {
     recordBatchMetric(telemetry, {
       durationMs: performance.now() - startedAt,
@@ -307,7 +307,7 @@ export async function handlePostEmailBatchRequest(
       jsonWithTelemetry(
         publicApiError(
           "invalid_idempotency_key",
-          "Idempotency-Key must be between 1 and 255 characters.",
+          "Idempotency-Key must be between 1 and 256 characters.",
           400,
         ),
         telemetry,

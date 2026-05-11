@@ -15,7 +15,7 @@ go get github.com/namuh-eng/opensend/packages/go-sdk
 Store API keys in environment variables; do not hardcode real keys.
 
 ```bash
-export OPENSEND_API_KEY="re_your_api_key"
+export OPENSEND_API_KEY="os_your_api_key"
 export OPENSEND_BASE_URL="http://localhost:3026" # optional for self-hosting
 ```
 
