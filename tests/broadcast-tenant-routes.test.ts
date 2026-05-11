@@ -88,6 +88,45 @@ beforeEach(() => {
 });
 
 describe("broadcast tenant isolation", () => {
+  it("exposes root broadcast aliases as JSON API routes instead of dashboard fallthrough", async () => {
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce(null);
+
+    const { middleware } = await import("@/middleware");
+    const rewrite = await middleware(
+      makeNextRequest("http://localhost:3015/broadcasts", {
+        headers: { accept: "application/json" },
+      }),
+    );
+    expect(rewrite.headers.get("x-middleware-rewrite")).toBe(
+      "http://localhost:3015/api/broadcasts",
+    );
+
+    const apiRoute = await import("@/app/api/broadcasts/route");
+    const response = await apiRoute.GET(
+      makeNextRequest("http://localhost:3015/api/broadcasts", {
+        headers: { accept: "application/json" },
+      }),
+    );
+    expect(response.status).toBe(401);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    await expect(response.json()).resolves.toEqual({
+      error: "Missing or invalid API key",
+    });
+    expect(mockBroadcastService.listBroadcasts).not.toHaveBeenCalled();
+  });
+
+  it("keeps browser navigations to the broadcasts dashboard out of API rewrites", async () => {
+    const { middleware } = await import("@/middleware");
+    const response = await middleware(
+      makeNextRequest("http://localhost:3015/broadcasts", {
+        headers: { accept: "text/html" },
+      }),
+    );
+
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("location")).toBe("http://localhost:3015/auth");
+  });
+
   it("passes tenant and list filters to the broadcast service", async () => {
     const createdAt = new Date("2026-01-01T00:00:00Z");
     mockBroadcastService.listBroadcasts.mockResolvedValueOnce({
@@ -175,6 +214,72 @@ describe("broadcast tenant isolation", () => {
     });
   });
 
+  it("delegates root broadcast collection aliases to existing service behavior", async () => {
+    const createdAt = new Date("2026-01-01T00:00:00Z");
+    const body = {
+      name: "Launch",
+      from: "team@example.com",
+      subject: "Hello",
+      segment_id: "segment-1",
+    };
+    mockBroadcastService.createBroadcast.mockResolvedValueOnce({
+      id: "broadcast-1",
+      name: "Launch",
+      status: "draft",
+      createdAt,
+    });
+    mockBroadcastService.listBroadcasts.mockResolvedValueOnce({
+      data: [
+        {
+          id: "broadcast-1",
+          name: "Launch",
+          status: "draft",
+          audienceId: "segment-1",
+          topicId: null,
+          createdAt,
+          scheduledAt: null,
+        },
+      ],
+      hasMore: false,
+    });
+
+    const { middleware } = await import("@/middleware");
+    const postRewrite = await middleware(
+      jsonRequest("http://localhost:3015/broadcasts", body),
+    );
+    const getRewrite = await middleware(
+      makeNextRequest("http://localhost:3015/broadcasts?limit=5", {
+        headers: { Authorization: "Bearer re_test" },
+      }),
+    );
+    expect(postRewrite.headers.get("x-middleware-rewrite")).toBe(
+      "http://localhost:3015/api/broadcasts",
+    );
+    expect(getRewrite.headers.get("x-middleware-rewrite")).toBe(
+      "http://localhost:3015/api/broadcasts",
+    );
+
+    const apiRoute = await import("@/app/api/broadcasts/route");
+    const createResponse = await apiRoute.POST(
+      jsonRequest("http://localhost:3015/api/broadcasts", body),
+    );
+    const listResponse = await apiRoute.GET(
+      makeNextRequest("http://localhost:3015/api/broadcasts?limit=5", {
+        headers: { Authorization: "Bearer re_test" },
+      }),
+    );
+
+    expect(createResponse.status).toBe(201);
+    expect(listResponse.status).toBe(200);
+    expect(mockBroadcastService.createBroadcast).toHaveBeenCalledWith({
+      userId: "user-b",
+      body,
+    });
+    expect(mockBroadcastService.listBroadcasts).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-b", limit: 5 }),
+    );
+  });
+
   it("returns 404 for broadcast detail reads outside the tenant", async () => {
     mockBroadcastService.getBroadcast.mockRejectedValueOnce(
       new MockBroadcastServiceError("not_found", "Broadcast not found"),
@@ -248,6 +353,60 @@ describe("broadcast tenant isolation", () => {
       "user-b",
       "broadcast-1",
     );
+  });
+
+  it("delegates root broadcast detail and send aliases with route params", async () => {
+    const createdAt = new Date("2026-01-01T00:00:00Z");
+    const scheduledAt = new Date("2026-06-01T00:00:00Z");
+    mockBroadcastService.getBroadcast.mockResolvedValueOnce({
+      id: "broadcast-1",
+      name: "Launch",
+      status: "draft",
+      from: "team@example.com",
+      subject: "Hello",
+      html: null,
+      text: null,
+      replyTo: null,
+      previewText: null,
+      audienceId: "segment-1",
+      topicId: null,
+      scheduledAt: null,
+      createdAt,
+    });
+    mockBroadcastService.sendBroadcast.mockResolvedValueOnce({
+      id: "broadcast-1",
+      status: "scheduled",
+      scheduledAt,
+    });
+
+    const detailRoute = await import("@/app/broadcasts/[id]/route");
+    const sendRoute = await import("@/app/broadcasts/[id]/send/route");
+    const detailResponse = await detailRoute.GET(
+      makeNextRequest("http://localhost:3015/broadcasts/broadcast-1", {
+        headers: { Authorization: "Bearer re_test" },
+      }),
+      { params: Promise.resolve({ id: "broadcast-1" }) },
+    );
+    const sendBody = { scheduled_at: scheduledAt.toISOString() };
+    const sendResponse = await sendRoute.POST(
+      jsonRequest(
+        "http://localhost:3015/broadcasts/broadcast-1/send",
+        sendBody,
+      ),
+      { params: Promise.resolve({ id: "broadcast-1" }) },
+    );
+
+    expect(detailResponse.status).toBe(200);
+    expect(sendResponse.status).toBe(200);
+    expect(mockBroadcastService.getBroadcast).toHaveBeenCalledWith(
+      "user-b",
+      "broadcast-1",
+    );
+    expect(mockBroadcastService.sendBroadcast).toHaveBeenCalledWith({
+      userId: "user-b",
+      id: "broadcast-1",
+      body: sendBody,
+    });
   });
 
   it("passes broadcast send requests through the service with tenant scope", async () => {

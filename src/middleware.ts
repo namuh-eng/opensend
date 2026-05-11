@@ -104,6 +104,46 @@ function isAudiencesAlias(pathname: string, method: string): boolean {
   return false;
 }
 
+function isBroadcastsAlias(pathname: string, method: string): boolean {
+  if (pathname === "/broadcasts") return ["GET", "POST"].includes(method);
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "broadcasts") return false;
+  if (parts.length === 2) {
+    return ["GET", "PATCH", "DELETE"].includes(method);
+  }
+  if (parts.length === 3 && parts[2] === "send") {
+    return method === "POST";
+  }
+  return false;
+}
+
+function isBroadcastsCollectionAlias(
+  pathname: string,
+  method: string,
+): boolean {
+  return pathname === "/broadcasts" && ["GET", "POST"].includes(method);
+}
+
+function isApiLikeRequest(request: NextRequest): boolean {
+  const accept = request.headers.get("accept") ?? "";
+  const contentType = request.headers.get("content-type") ?? "";
+  return (
+    request.headers.has("authorization") ||
+    accept.includes("application/json") ||
+    contentType.includes("application/json") ||
+    !accept.includes("text/html")
+  );
+}
+
+function shouldHandleBroadcastsAlias(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl;
+  if (!isBroadcastsAlias(pathname, request.method)) return false;
+  if (pathname === "/broadcasts" && request.method === "GET") {
+    return isApiLikeRequest(request);
+  }
+  return true;
+}
+
 function isSendApiPost(pathname: string, method: string): boolean {
   return (
     method === "POST" &&
@@ -126,6 +166,11 @@ function getRateLimitPathname(pathname: string, method: string): string {
     return pathname === "/audiences"
       ? "/api/segments"
       : pathname.replace(/^\/audiences/, "/api/segments");
+  }
+  if (isBroadcastsAlias(pathname, method)) {
+    return pathname === "/broadcasts"
+      ? "/api/broadcasts"
+      : pathname.replace(/^\/broadcasts/, "/api/broadcasts");
   }
   return pathname;
 }
@@ -177,11 +222,13 @@ export async function middleware(request: NextRequest) {
   const isSendAlias = isSendPostAlias(pathname, request.method);
   const isContactAlias = isContactsAlias(pathname, request.method);
   const isAudienceAlias = isAudiencesAlias(pathname, request.method);
+  const isBroadcastAlias = shouldHandleBroadcastsAlias(request);
   if (
     !pathname.startsWith("/api/") &&
     !isSendAlias &&
     !isContactAlias &&
-    !isAudienceAlias
+    !isAudienceAlias &&
+    !isBroadcastAlias
   ) {
     // Allow auth page, public landing page, and static assets
     if (
@@ -219,6 +266,11 @@ export async function middleware(request: NextRequest) {
     }
     if (isBatchSendPostAlias(pathname, request.method)) {
       return NextResponse.rewrite(new URL("/api/emails/batch", request.url), {
+        headers: responseHeaders,
+      });
+    }
+    if (isBroadcastsCollectionAlias(pathname, request.method)) {
+      return NextResponse.rewrite(new URL("/api/broadcasts", request.url), {
         headers: responseHeaders,
       });
     }
@@ -277,6 +329,11 @@ export async function middleware(request: NextRequest) {
   }
   if (isBatchSendPostAlias(pathname, request.method)) {
     return NextResponse.rewrite(new URL("/api/emails/batch", request.url), {
+      headers: responseHeaders,
+    });
+  }
+  if (isBroadcastsCollectionAlias(pathname, request.method)) {
+    return NextResponse.rewrite(new URL("/api/broadcasts", request.url), {
       headers: responseHeaders,
     });
   }
