@@ -17,7 +17,9 @@ test.describe("Emails Sending Data Table", () => {
       expect(page.url()).toContain("/emails/");
     } else {
       // No emails — empty state should be visible
-      await expect(page.getByText("No emails found")).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "No sent emails yet" }),
+      ).toBeVisible();
     }
   });
 });

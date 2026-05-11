@@ -44,6 +44,7 @@ export default async function EmailsPage({
     createdAt: string;
     sentAt: string | null;
   }[] = [];
+  let hasAnyEmails = false;
 
   try {
     const emailConditions = [eq(emails.userId, userId)];
@@ -51,7 +52,7 @@ export default async function EmailsPage({
       emailConditions.push(eq(emails.status, statusFilter));
     }
 
-    const [keysResult, emailsResult] = await Promise.all([
+    const [keysResult, emailsResult, anyEmailsResult] = await Promise.all([
       db
         .select({ id: apiKeys.id, name: apiKeys.name })
         .from(apiKeys)
@@ -70,8 +71,14 @@ export default async function EmailsPage({
         .where(and(...emailConditions))
         .orderBy(desc(emails.createdAt))
         .limit(100),
+      db
+        .select({ id: emails.id })
+        .from(emails)
+        .where(eq(emails.userId, userId))
+        .limit(1),
     ]);
     keys = keysResult;
+    hasAnyEmails = anyEmailsResult.length > 0;
     emailList = emailsResult.map((e) => ({
       ...e,
       createdAt: e.createdAt.toISOString(),
@@ -81,5 +88,11 @@ export default async function EmailsPage({
     // DB unavailable — render with empty data
   }
 
-  return <EmailsSendingPage apiKeys={keys} emails={emailList} />;
+  return (
+    <EmailsSendingPage
+      apiKeys={keys}
+      emails={emailList}
+      hasAnyEmails={hasAnyEmails}
+    />
+  );
 }
