@@ -1,24 +1,21 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { templates } from "@/lib/db/schema";
-import { type SQL, and, count, desc, eq, ilike } from "drizzle-orm";
+import { TemplateServiceError, createTemplateService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 
-function generateAlias(name: string): string {
-  return (
-    name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "untitled-template"
-  );
+function mapTemplateError(error: unknown, fallback: string) {
+  if (error instanceof TemplateServiceError) {
+    const status = error.code === "not_found" ? 404 : 422;
+    return NextResponse.json({ error: error.message }, { status });
+  }
+
+  console.error(`${fallback}:`, error);
+  return NextResponse.json({ error: fallback }, { status: 500 });
 }
 
-const RESERVED_VARIABLE_NAMES = [
-  "UNSUBSCRIBE_URL",
-  "RESEND_UNSUBSCRIBE_URL",
-  "INTERNAL_ID",
-];
+function templateService() {
+  return createTemplateService();
+}
 
 export async function GET(request: NextRequest) {
   const auth = await validateApiKey(request.headers.get("authorization"));
@@ -27,46 +24,14 @@ export async function GET(request: NextRequest) {
   if (permissionError) return permissionError;
 
   try {
-    const url = request.nextUrl;
-    const search = url.searchParams.get("search")?.trim() || "";
-    const status = url.searchParams.get("status")?.trim() || "";
-
-    const conditions: SQL[] = [];
-    if (search) {
-      conditions.push(ilike(templates.name, `%${search}%`));
-    }
-    if (status === "published") {
-      conditions.push(eq(templates.status, "published"));
-    } else if (status === "draft") {
-      conditions.push(eq(templates.status, "draft"));
-    }
-
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-
-    const [totalRow] = await db
-      .select({ count: count() })
-      .from(templates)
-      .where(whereClause);
-
-    const rows = await db
-      .select({
-        id: templates.id,
-        name: templates.name,
-        alias: templates.alias,
-        status: templates.status,
-        currentVersionId: templates.currentVersionId,
-        publishedAt: templates.publishedAt,
-        hasUnpublishedVersions: templates.hasUnpublishedVersions,
-        createdAt: templates.createdAt,
-      })
-      .from(templates)
-      .where(whereClause)
-      .orderBy(desc(templates.createdAt))
-      .limit(200);
+    const result = await templateService().listTemplates({
+      search: request.nextUrl.searchParams.get("search") ?? undefined,
+      status: request.nextUrl.searchParams.get("status") ?? undefined,
+    });
 
     return NextResponse.json({
       object: "list",
-      data: rows.map((r) => ({
+      data: result.data.map((r) => ({
         id: r.id,
         name: r.name,
         alias: r.alias,
@@ -76,14 +41,10 @@ export async function GET(request: NextRequest) {
         has_unpublished_versions: r.hasUnpublishedVersions,
         created_at: r.createdAt,
       })),
-      total: totalRow?.count ?? 0,
+      total: result.total,
     });
   } catch (error) {
-    console.error("Failed to fetch templates:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch templates" },
-      { status: 500 },
-    );
+    return mapTemplateError(error, "Failed to fetch templates");
   }
 }
 
@@ -94,80 +55,20 @@ export async function POST(request: NextRequest) {
   if (permissionError) return permissionError;
 
   try {
-    const body = await request.json();
-    const name = body.name?.trim();
-    const html = body.html?.trim();
-
-    if (!name || !html) {
-      return NextResponse.json(
-        { error: "name and html are required" },
-        { status: 422 },
-      );
-    }
-
-    const alias = body.alias?.trim() || generateAlias(name);
-
-    // Validate variables
-    const variablesArr = body.variables || [];
-    if (!Array.isArray(variablesArr)) {
-      return NextResponse.json(
-        { error: "variables must be an array" },
-        { status: 422 },
-      );
-    }
-
-    if (variablesArr.length > 50) {
-      return NextResponse.json(
-        { error: "Too many variables. Max allowed is 50." },
-        { status: 422 },
-      );
-    }
-
-    for (const v of variablesArr) {
-      if (!v.name) continue;
-      if (RESERVED_VARIABLE_NAMES.includes(v.name.toUpperCase())) {
-        return NextResponse.json(
-          { error: `Variable name ${v.name} is reserved.` },
-          { status: 422 },
-        );
-      }
-    }
-
-    const [template] = await db
-      .insert(templates)
-      .values({
-        name,
-        alias,
-        html,
-        subject: body.subject || null,
-        from: body.from || null,
-        replyTo: body.reply_to || null,
-        previewText: body.preview_text || null,
-        text: body.text || null,
-        variables: (
-          variablesArr as Array<{ name: string; required?: boolean }>
-        ).map((v) => ({
-          name: v.name,
-          required: v.required ?? false,
-        })),
-        status: "draft",
-      })
-      .returning();
+    const created = await templateService().createTemplate(
+      await request.json(),
+    );
 
     return NextResponse.json(
       {
         object: "template",
-        id: template.id,
-        name: template.name,
-        alias: template.alias,
+        id: created.id,
+        name: created.name,
+        alias: created.alias,
       },
       { status: 201 },
     );
   } catch (error) {
-    console.error("Failed to create template:", error);
-    return NextResponse.json(
-      { error: "Failed to create template" },
-      { status: 500 },
-    );
+    return mapTemplateError(error, "Failed to create template");
   }
 }

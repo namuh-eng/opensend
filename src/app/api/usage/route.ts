@@ -1,8 +1,8 @@
 import { getServerSession, unauthorizedResponse } from "@/lib/api-auth";
-import { db } from "@/lib/db";
-import { contacts, domains, emails, segments } from "@/lib/db/schema";
-import { gte } from "drizzle-orm";
+import { createDashboardAggregateService } from "@opensend/core";
 import { NextResponse } from "next/server";
+
+const dashboardAggregateService = createDashboardAggregateService();
 
 // Dashboard-only internal endpoint
 export async function GET() {
@@ -10,48 +10,8 @@ export async function GET() {
   if (!session) return unauthorizedResponse();
 
   try {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfDay = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
-
-    const [
-      monthlyEmails,
-      dailyEmails,
-      contactCount,
-      segmentCount,
-      domainCount,
-    ] = await Promise.all([
-      db.$count(emails, gte(emails.createdAt, startOfMonth)),
-      db.$count(emails, gte(emails.createdAt, startOfDay)),
-      db.$count(contacts),
-      db.$count(segments),
-      db.$count(domains),
-    ]);
-
-    return NextResponse.json({
-      transactional: {
-        monthlyUsed: Number(monthlyEmails),
-        monthlyLimit: 3000,
-        dailyUsed: Number(dailyEmails),
-        dailyLimit: 100,
-      },
-      marketing: {
-        contactsUsed: Number(contactCount),
-        contactsLimit: 1000,
-        segmentsUsed: Number(segmentCount),
-        segmentsLimit: 3,
-        broadcastsLimit: "Unlimited",
-      },
-      team: {
-        domainsUsed: Number(domainCount),
-        domainsLimit: 3,
-        rateLimit: 2,
-      },
-    });
+    const payload = await dashboardAggregateService.getUsage();
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("Failed to fetch usage:", error);
     return NextResponse.json(

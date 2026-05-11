@@ -274,6 +274,35 @@ export interface ContactListResponse {
   has_more: boolean;
 }
 
+export interface CreateAudiencePayload {
+  name: string;
+}
+
+export interface AudienceResponse {
+  object: "audience";
+  id: string;
+  name: string;
+  created_at?: string;
+}
+
+export interface AudienceListItem {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface AudienceListResponse {
+  object: "list";
+  data: AudienceListItem[];
+  has_more: boolean;
+}
+
+export interface DeleteAudienceResponse {
+  object: "audience";
+  id: string;
+  deleted: true;
+}
+
 export * from "./automations";
 
 // ── Billing DTOs ───────────────────────────────────────────────────

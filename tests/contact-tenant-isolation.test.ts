@@ -12,6 +12,44 @@ const mockInsert = vi.hoisted(() => vi.fn());
 const mockUpdate = vi.hoisted(() => vi.fn());
 const mockDelete = vi.hoisted(() => vi.fn());
 const mockQueueEvent = vi.hoisted(() => vi.fn());
+const mockContactService = vi.hoisted(() => ({
+  createContact: vi.fn(),
+  listContacts: vi.fn(),
+  getContact: vi.fn(),
+  updateContact: vi.fn(),
+  deleteContact: vi.fn(),
+}));
+const mockContactOperationsService = vi.hoisted(() => ({
+  bulkAction: vi.fn(),
+  importContacts: vi.fn(),
+  listContactTopics: vi.fn(),
+  updateContactTopics: vi.fn(),
+}));
+const MockContactServiceError = vi.hoisted(
+  () =>
+    class ContactServiceError extends Error {
+      constructor(
+        readonly code: "duplicate_email" | "not_found",
+        message: string,
+      ) {
+        super(message);
+        this.name = "ContactServiceError";
+      }
+    },
+);
+const MockContactOperationsServiceError = vi.hoisted(
+  () =>
+    class ContactOperationsServiceError extends Error {
+      constructor(
+        readonly code: "invalid_input" | "not_found",
+        message: string,
+        readonly status: number,
+      ) {
+        super(message);
+        this.name = "ContactOperationsServiceError";
+      }
+    },
+);
 
 function makeRequest(url: string, init?: RequestInit) {
   const request = new Request(url, init) as Request & { nextUrl: URL };
@@ -49,27 +87,6 @@ function makeChain<T>(rows: T[]): Chain<T> {
   return chain;
 }
 
-function expressionContains(value: unknown, expected: string): boolean {
-  const seen = new Set<object>();
-
-  function visit(node: unknown): boolean {
-    if (node === expected) return true;
-    if (typeof node === "string") return node.includes(expected);
-    if (!node || typeof node !== "object") return false;
-    if (seen.has(node)) return false;
-    seen.add(node);
-
-    for (const key of Reflect.ownKeys(node)) {
-      const child = (node as Record<PropertyKey, unknown>)[key];
-      if (visit(child)) return true;
-    }
-
-    return false;
-  }
-
-  return visit(value);
-}
-
 vi.mock("@/lib/api-auth", () => ({
   authorizeDashboardOrApiKey: mockAuthorizeDashboardOrApiKey,
   getServerSession: mockGetServerSession,
@@ -80,6 +97,13 @@ vi.mock("@/lib/api-auth", () => ({
 
 vi.mock("@/lib/events", () => ({
   queueEvent: mockQueueEvent,
+}));
+
+vi.mock("@opensend/core", () => ({
+  ContactServiceError: MockContactServiceError,
+  ContactOperationsServiceError: MockContactOperationsServiceError,
+  createContactService: () => mockContactService,
+  createContactOperationsService: () => mockContactOperationsService,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -102,7 +126,7 @@ vi.mock("@/lib/db", () => ({
 describe("contact API tenant isolation", () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockValidateApiKey.mockResolvedValue({
       apiKeyId: "key-b",
       permission: "full_access",
@@ -120,6 +144,15 @@ describe("contact API tenant isolation", () => {
       eventId: "event-1",
       deliveryIds: ["delivery-1"],
     });
+    mockContactService.createContact.mockReset();
+    mockContactService.listContacts.mockReset();
+    mockContactService.getContact.mockReset();
+    mockContactService.updateContact.mockReset();
+    mockContactService.deleteContact.mockReset();
+    mockContactOperationsService.bulkAction.mockReset();
+    mockContactOperationsService.importContacts.mockReset();
+    mockContactOperationsService.listContactTopics.mockReset();
+    mockContactOperationsService.updateContactTopics.mockReset();
   });
 
   it("enqueues contact.created for the caller tenant after creating a contact", async () => {
@@ -136,8 +169,22 @@ describe("contact API tenant isolation", () => {
       document: null,
       userId: "user-b",
     };
-    const insertChain = makeChain([insertedContact]);
-    mockInsert.mockReturnValueOnce(insertChain);
+    mockContactService.createContact.mockResolvedValueOnce({
+      object: "contact",
+      id: insertedContact.id,
+      email: insertedContact.email,
+      webhookPayload: {
+        id: insertedContact.id,
+        email: insertedContact.email,
+        first_name: insertedContact.firstName,
+        last_name: insertedContact.lastName,
+        unsubscribed: insertedContact.unsubscribed,
+        properties: insertedContact.customProperties,
+        segments: [],
+        topics: [],
+        created_at: insertedContact.createdAt.toISOString(),
+      },
+    });
 
     const route = await import("@/app/api/contacts/route");
     const response = await route.POST(
@@ -157,10 +204,12 @@ describe("contact API tenant isolation", () => {
     );
 
     expect(response.status).toBe(201);
-    expect(insertChain.values.mock.calls[0]?.[0]).toMatchObject({
-      email: "b@example.com",
-      userId: "user-b",
-    });
+    expect(mockContactService.createContact).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: "B@Example.com",
+        userId: "user-b",
+      }),
+    );
     expect(mockQueueEvent).toHaveBeenCalledWith({
       type: "contact.created",
       userId: "user-b",
@@ -203,6 +252,28 @@ describe("contact API tenant isolation", () => {
       },
     ]);
     mockUpdate.mockReturnValueOnce(updateChain);
+    mockContactService.updateContact.mockResolvedValueOnce({
+      object: "contact",
+      id: "contact-b",
+      email: "b@example.com",
+      first_name: "After",
+      last_name: null,
+      unsubscribed: false,
+      properties: null,
+      created_at: new Date("2026-05-06T00:00:00.000Z"),
+      changedFields: ["first_name"],
+      webhookPayload: {
+        id: "contact-b",
+        email: "b@example.com",
+        first_name: "After",
+        last_name: null,
+        unsubscribed: false,
+        properties: {},
+        segments: [],
+        topics: [],
+        created_at: "2026-05-06T00:00:00.000Z",
+      },
+    });
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.PATCH(
@@ -225,7 +296,7 @@ describe("contact API tenant isolation", () => {
       }),
     });
 
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockValidateApiKey.mockResolvedValue({
       apiKeyId: "key-b",
       permission: "full_access",
@@ -244,6 +315,28 @@ describe("contact API tenant isolation", () => {
       createdAt: new Date("2026-05-06T00:00:00.000Z"),
       document: null,
       userId: "user-b",
+    });
+    mockContactService.updateContact.mockResolvedValueOnce({
+      object: "contact",
+      id: "contact-b",
+      email: "b@example.com",
+      first_name: "After",
+      last_name: null,
+      unsubscribed: false,
+      properties: null,
+      created_at: new Date("2026-05-06T00:00:00.000Z"),
+      changedFields: [],
+      webhookPayload: {
+        id: "contact-b",
+        email: "b@example.com",
+        first_name: "After",
+        last_name: null,
+        unsubscribed: false,
+        properties: {},
+        segments: [],
+        topics: [],
+        created_at: "2026-05-06T00:00:00.000Z",
+      },
     });
 
     const unchanged = await route.PATCH(
@@ -270,6 +363,10 @@ describe("contact API tenant isolation", () => {
       { id: "contact-b", email: "b@example.com" },
     ]);
     mockDelete.mockReturnValueOnce(deleteChain);
+    mockContactService.deleteContact.mockResolvedValueOnce({
+      id: "contact-b",
+      email: "b@example.com",
+    });
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.DELETE(
@@ -291,6 +388,10 @@ describe("contact API tenant isolation", () => {
   it("returns an empty contact list scoped to the caller user", async () => {
     const listChain = makeChain([]);
     mockSelect.mockReturnValueOnce(listChain);
+    mockContactService.listContacts.mockResolvedValueOnce({
+      data: [],
+      hasMore: false,
+    });
 
     const route = await import("@/app/api/contacts/route");
     const response = await route.GET(
@@ -305,16 +406,16 @@ describe("contact API tenant isolation", () => {
       has_more: false,
     });
     expect(response.status).toBe(200);
-    expect(
-      expressionContains(listChain.where.mock.calls[0]?.[0], "user_id"),
-    ).toBe(true);
-    expect(
-      expressionContains(listChain.where.mock.calls[0]?.[0], "user-b"),
-    ).toBe(true);
+    expect(mockContactService.listContacts).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-b" }),
+    );
   });
 
   it("returns 404 when user B requests user A's contact detail", async () => {
     mockContactFindFirst.mockResolvedValueOnce(null);
+    mockContactService.getContact.mockRejectedValueOnce(
+      new MockContactServiceError("not_found", "Contact not found"),
+    );
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.GET(
@@ -328,22 +429,17 @@ describe("contact API tenant isolation", () => {
       error: "Contact not found",
     });
     expect(response.status).toBe(404);
-    expect(
-      expressionContains(
-        mockContactFindFirst.mock.calls[0]?.[0]?.where,
-        "user_id",
-      ),
-    ).toBe(true);
-    expect(
-      expressionContains(
-        mockContactFindFirst.mock.calls[0]?.[0]?.where,
-        "user-b",
-      ),
-    ).toBe(true);
+    expect(mockContactService.getContact).toHaveBeenCalledWith(
+      "contact-a",
+      "user-b",
+    );
   });
 
   it("does not update user A's contact when called as user B", async () => {
     mockContactFindFirst.mockResolvedValueOnce(null);
+    mockContactService.updateContact.mockRejectedValueOnce(
+      new MockContactServiceError("not_found", "Contact not found"),
+    );
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.PATCH(
@@ -361,6 +457,9 @@ describe("contact API tenant isolation", () => {
 
   it("does not delete user A's contact when called as user B", async () => {
     mockContactFindFirst.mockResolvedValueOnce(null);
+    mockContactService.deleteContact.mockRejectedValueOnce(
+      new MockContactServiceError("not_found", "Contact not found"),
+    );
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.DELETE(
@@ -376,8 +475,11 @@ describe("contact API tenant isolation", () => {
   });
 
   it("does not bulk-mutate contacts outside the caller tenant", async () => {
-    mockSegmentFindFirst.mockResolvedValueOnce({ id: "seg-b", name: "VIP" });
-    mockContactFindMany.mockResolvedValueOnce([]);
+    mockContactOperationsService.bulkAction.mockResolvedValueOnce({
+      object: "bulk_action",
+      success: true,
+      count: 0,
+    });
 
     const route = await import("@/app/api/contacts/bulk/route");
     const response = await route.POST(
@@ -397,25 +499,23 @@ describe("contact API tenant isolation", () => {
       success: true,
       count: 0,
     });
+    expect(mockContactOperationsService.bulkAction).toHaveBeenCalledWith({
+      userId: "user-b",
+      body: {
+        action: "add_to_segment",
+        segment_id: "seg-b",
+        contact_ids: ["contact-a"],
+      },
+    });
     expect(mockUpdate).not.toHaveBeenCalled();
-    expect(
-      expressionContains(
-        mockContactFindMany.mock.calls[0]?.[0]?.where,
-        "user_id",
-      ),
-    ).toBe(true);
-    expect(
-      expressionContains(
-        mockContactFindMany.mock.calls[0]?.[0]?.where,
-        "user-b",
-      ),
-    ).toBe(true);
   });
 
   it("stamps imported contacts with the caller user", async () => {
-    mockContactFindFirst.mockResolvedValueOnce(null);
-    const insertChain = makeChain([{ id: "contact-b" }]);
-    mockInsert.mockReturnValueOnce(insertChain);
+    mockContactOperationsService.importContacts.mockResolvedValueOnce({
+      object: "import",
+      created_count: 1,
+      ids: ["contact-b"],
+    });
 
     const formData = {
       get: (key: string) => {
@@ -433,9 +533,11 @@ describe("contact API tenant isolation", () => {
     } as never);
 
     expect(response.status).toBe(200);
-    expect(insertChain.values.mock.calls[0]?.[0]).toMatchObject({
-      email: "b@example.com",
+    expect(mockContactOperationsService.importContacts).toHaveBeenCalledWith({
       userId: "user-b",
+      rows: [{ Email: "b@example.com" }],
+      mapping: { Email: "email" },
+      segmentId: null,
     });
   });
 

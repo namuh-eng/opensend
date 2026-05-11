@@ -1,9 +1,12 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { emails } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import {
+  EmailLifecycleServiceError,
+  createEmailLifecycleService,
+} from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
+
+const emailLifecycleService = createEmailLifecycleService();
 
 export async function GET(
   _request: NextRequest,
@@ -16,32 +19,16 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const [email] = await db
-      .select({ attachments: emails.attachments })
-      .from(emails)
-      .where(and(eq(emails.id, id), eq(emails.userId, auth.userId)))
-      .limit(1);
-
-    if (!email) {
+    const result = await emailLifecycleService.listAttachments(auth.userId, id);
+    return NextResponse.json(result);
+  } catch (error) {
+    if (
+      error instanceof EmailLifecycleServiceError &&
+      error.code === "email_not_found"
+    ) {
       return NextResponse.json({ error: "Email not found" }, { status: 404 });
     }
 
-    const attachments =
-      (email.attachments as Array<{
-        id?: string;
-        filename: string;
-        content_type?: string;
-      }>) ?? [];
-
-    return NextResponse.json({
-      object: "list",
-      data: attachments.map((a, index) => ({
-        id: a.id || `att-${index}`,
-        filename: a.filename,
-        content_type: a.content_type || "application/octet-stream",
-      })),
-    });
-  } catch (error) {
     console.error("Failed to fetch email attachments:", error);
     return NextResponse.json(
       { error: "Failed to fetch email attachments" },

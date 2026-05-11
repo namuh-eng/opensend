@@ -1,4 +1,14 @@
-import { and, asc, desc, eq, inArray, lt, lte } from "drizzle-orm";
+import {
+  type SQL,
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  lt,
+  lte,
+} from "drizzle-orm";
 import { AutomationValidationError } from "../../dto/automations";
 import { db } from "../client";
 import { automationRuns, automations } from "../schema";
@@ -65,9 +75,31 @@ export const automationRunRepo = {
     automationId: string,
     options: { limit?: number; after?: string } = {},
   ) {
-    const { limit = 25, after } = options;
-    const conditions = [eq(automationRuns.automationId, automationId)];
-    if (after) conditions.push(lt(automationRuns.id, after));
+    return await this.listForApi({
+      automationId,
+      statuses: [],
+      limit: options.limit ?? 25,
+      after: options.after,
+    });
+  },
+
+  async listForApi(input: {
+    automationId: string;
+    statuses?: readonly string[];
+    limit?: number;
+    after?: string;
+  }) {
+    const limit = input.limit ?? 25;
+    const conditions: SQL[] = [
+      eq(automationRuns.automationId, input.automationId),
+    ];
+    const statuses = input.statuses ?? [];
+    if (statuses.length === 1) {
+      conditions.push(eq(automationRuns.status, statuses[0]));
+    } else if (statuses.length > 1) {
+      conditions.push(inArray(automationRuns.status, [...statuses]));
+    }
+    if (input.after) conditions.push(lt(automationRuns.id, input.after));
 
     const results = await db
       .select()
@@ -79,6 +111,62 @@ export const automationRunRepo = {
     const hasMore = results.length > limit;
     const data = hasMore ? results.slice(0, limit) : results;
     return { data, hasMore };
+  },
+
+  async findByIdForAutomation(runId: string, automationId: string) {
+    return await db.query.automationRuns.findFirst({
+      where: and(
+        eq(automationRuns.id, runId),
+        eq(automationRuns.automationId, automationId),
+      ),
+    });
+  },
+
+  async cancelForApi(input: {
+    runId: string;
+    automationId: string;
+    stepStates: NonNullable<(typeof automationRuns.$inferInsert)["stepStates"]>;
+    failureReason: string;
+    completedAt: Date;
+    cancellableStatuses: readonly string[];
+  }) {
+    const [updated] = await db
+      .update(automationRuns)
+      .set({
+        status: "cancelled",
+        stepStates: input.stepStates,
+        completedAt: input.completedAt,
+        nextStepAt: null,
+        failureReason: input.failureReason,
+        updatedAt: input.completedAt,
+      })
+      .where(
+        and(
+          eq(automationRuns.id, input.runId),
+          eq(automationRuns.automationId, input.automationId),
+          inArray(automationRuns.status, [...input.cancellableStatuses]),
+        ),
+      )
+      .returning();
+
+    return updated;
+  },
+
+  async listForMetrics(input: {
+    automationId: string;
+    from?: Date;
+    to?: Date;
+  }) {
+    const conditions: SQL[] = [
+      eq(automationRuns.automationId, input.automationId),
+    ];
+    if (input.from) conditions.push(gte(automationRuns.createdAt, input.from));
+    if (input.to) conditions.push(lte(automationRuns.createdAt, input.to));
+
+    return await db
+      .select()
+      .from(automationRuns)
+      .where(and(...conditions));
   },
 
   async listWaitingByContact(input: {

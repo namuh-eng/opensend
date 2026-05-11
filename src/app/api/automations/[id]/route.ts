@@ -1,66 +1,46 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { formatAutomation } from "@/lib/automations";
-import { db } from "@/lib/db";
-import { automationSteps, automations } from "@/lib/db/schema";
 import { updateAutomationSchema } from "@/lib/validation/automations";
 import {
-  type AutomationStepInput,
+  AutomationServiceError,
   AutomationValidationError,
-  automationRepo,
+  createAutomationService,
 } from "@opensend/core";
-import { and, asc, eq } from "drizzle-orm";
+import { authorizeAutomationRoute } from "../route-helpers";
 
-async function findAutomationForCaller(id: string, userId: string | null) {
-  const conditions = [eq(automations.id, id)];
-  if (userId) conditions.push(eq(automations.userId, userId));
-  return (
-    (await db.query.automations.findFirst({ where: and(...conditions) })) ??
-    null
-  );
-}
+const automationService = createAutomationService();
 
-async function loadSteps(automationId: string) {
-  return await db
-    .select()
-    .from(automationSteps)
-    .where(eq(automationSteps.automationId, automationId))
-    .orderBy(asc(automationSteps.position));
-}
-
-function toStepInputs(
-  steps: Array<{
-    key: string;
-    type: AutomationStepInput["type"];
-    config?: Record<string, unknown>;
-    position?: number;
-  }>,
-): AutomationStepInput[] {
-  return steps.map((step) => ({
-    key: step.key,
-    type: step.type,
-    config: step.config ?? {},
-    position: step.position,
-  }));
+function mapAutomationServiceError(err: unknown): Response | null {
+  if (err instanceof AutomationServiceError) {
+    if (err.code === "not_found") {
+      return Response.json({ error: "Automation not found" }, { status: 404 });
+    }
+    if (err.code === "delete_forbidden") {
+      return Response.json(
+        {
+          error: err.message,
+          code: "automation_enabled",
+        },
+        { status: 409 },
+      );
+    }
+  }
+  return null;
 }
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeAutomationRoute(request);
+  if ("response" in auth) return auth.response;
 
   const { id } = await params;
   try {
-    const automation = await findAutomationForCaller(id, auth.userId);
-    if (!automation) {
-      return Response.json({ error: "Automation not found" }, { status: 404 });
-    }
-    return Response.json(formatAutomation(automation, await loadSteps(id)));
+    return Response.json(
+      await automationService.getAutomation(auth.userId, id),
+    );
   } catch (err) {
+    const mapped = mapAutomationServiceError(err);
+    if (mapped) return mapped;
     const message =
       err instanceof Error ? err.message : "Failed to retrieve automation";
     return Response.json({ error: message }, { status: 500 });
@@ -71,10 +51,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeAutomationRoute(request);
+  if ("response" in auth) return auth.response;
 
   let body: unknown;
   try {
@@ -92,95 +70,17 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const validated = parsed.data;
   try {
-    const existing = await findAutomationForCaller(id, auth.userId);
-    if (!existing) {
-      return Response.json({ error: "Automation not found" }, { status: 404 });
-    }
-
-    if (validated.steps) {
-      const normalized = automationRepo.validate({
-        name: validated.name ?? existing.name,
-        status:
-          validated.status ??
-          (existing.status as "draft" | "enabled" | "disabled"),
-        triggerEventName:
-          validated.trigger_event_name ??
-          validated.triggerEventName ??
-          existing.triggerEventName ??
-          undefined,
-        steps: toStepInputs(validated.steps),
-        connections: validated.connections,
+    return Response.json(
+      await automationService.updateAutomation({
         userId: auth.userId,
-      });
-
-      await db.transaction(async (tx) => {
-        await tx
-          .delete(automationSteps)
-          .where(eq(automationSteps.automationId, existing.id));
-        await tx.insert(automationSteps).values(
-          normalized.steps.map((step) => ({
-            automationId: existing.id,
-            key: step.key,
-            type: step.type,
-            config: step.config,
-            position: step.position ?? 0,
-          })),
-        );
-        await tx
-          .update(automations)
-          .set({
-            name: validated.name ?? existing.name,
-            status: validated.status ?? existing.status,
-            triggerEventName: normalized.triggerEventName,
-            connections: normalized.connections,
-            updatedAt: new Date(),
-          })
-          .where(eq(automations.id, existing.id));
-      });
-    } else {
-      const updates: Partial<typeof automations.$inferInsert> = {};
-      if (validated.name !== undefined) updates.name = validated.name;
-      if (validated.status !== undefined) updates.status = validated.status;
-      if (validated.trigger_event_name !== undefined) {
-        updates.triggerEventName = validated.trigger_event_name;
-      }
-      if (validated.triggerEventName !== undefined) {
-        updates.triggerEventName = validated.triggerEventName;
-      }
-      if (validated.connections !== undefined) {
-        const existingSteps = await loadSteps(existing.id);
-        const normalized = automationRepo.validate({
-          name: validated.name ?? existing.name,
-          status:
-            validated.status ??
-            (existing.status as "draft" | "enabled" | "disabled"),
-          triggerEventName:
-            updates.triggerEventName ?? existing.triggerEventName ?? undefined,
-          steps: existingSteps.map((step) => ({
-            key: step.key,
-            type: step.type as AutomationStepInput["type"],
-            config: step.config ?? {},
-            position: step.position,
-          })),
-          connections: validated.connections,
-          userId: auth.userId,
-        });
-        updates.triggerEventName = normalized.triggerEventName;
-        updates.connections = normalized.connections;
-      }
-      if (Object.keys(updates).length > 0) {
-        await automationRepo.update(existing.id, updates);
-      }
-    }
-
-    const refreshed = await findAutomationForCaller(id, auth.userId);
-    if (!refreshed) {
-      return Response.json({ error: "Automation not found" }, { status: 404 });
-    }
-    return Response.json(formatAutomation(refreshed, await loadSteps(id)));
+        id,
+        data: parsed.data,
+      }),
+    );
   } catch (err) {
+    const mapped = mapAutomationServiceError(err);
+    if (mapped) return mapped;
     if (err instanceof AutomationValidationError) {
       return Response.json(
         { error: err.message, code: err.code },
@@ -197,33 +97,17 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeAutomationRoute(request);
+  if ("response" in auth) return auth.response;
 
   const { id } = await params;
   try {
-    const automation = await findAutomationForCaller(id, auth.userId);
-    if (!automation) {
-      return Response.json({ error: "Automation not found" }, { status: 404 });
-    }
-    if (automation.status === "enabled") {
-      return Response.json(
-        {
-          error: "Disable the automation before deleting",
-          code: "automation_enabled",
-        },
-        { status: 409 },
-      );
-    }
-    await automationRepo.delete(automation.id);
-    return Response.json({
-      object: "automation",
-      id: automation.id,
-      deleted: true,
-    });
+    return Response.json(
+      await automationService.deleteAutomation(auth.userId, id),
+    );
   } catch (err) {
+    const mapped = mapAutomationServiceError(err);
+    if (mapped) return mapped;
     const message =
       err instanceof Error ? err.message : "Failed to delete automation";
     return Response.json({ error: message }, { status: 500 });

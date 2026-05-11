@@ -10,6 +10,21 @@ const mockGetDomainIdentity = vi.hoisted(() => vi.fn());
 const mockCreateDomainIdentity = vi.hoisted(() => vi.fn());
 const mockCheckDomainQuota = vi.hoisted(() => vi.fn());
 const mockCreateDomain = vi.hoisted(() => vi.fn());
+const mockGetDomainDetail = vi.hoisted(() => vi.fn());
+const mockUpdateDomainDetail = vi.hoisted(() => vi.fn());
+const mockDeleteDomainDetail = vi.hoisted(() => vi.fn());
+const MockDomainDetailServiceError = vi.hoisted(
+  () =>
+    class DomainDetailServiceError extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+      ) {
+        super(message);
+        this.name = "DomainDetailServiceError";
+      }
+    },
+);
 const mockReconcileVerification = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
@@ -42,11 +57,17 @@ vi.mock("@/lib/billing/quota", () => ({
 }));
 
 vi.mock("@opensend/core", () => ({
+  DomainDetailServiceError: MockDomainDetailServiceError,
   DMARC_RECORD_VALUE: "v=DMARC1; p=none;",
   buildDmarcRecordName: (domain: string) => `_dmarc.${domain}`,
   createDomainService: () => ({
     createDomain: mockCreateDomain,
     listDomains: vi.fn(),
+  }),
+  createDomainDetailService: () => ({
+    getDomainDetail: mockGetDomainDetail,
+    updateDomainDetail: mockUpdateDomainDetail,
+    deleteDomainDetail: mockDeleteDomainDetail,
   }),
   domainService: {
     reconcileVerification: mockReconcileVerification,
@@ -116,6 +137,9 @@ describe("Domain API validation", () => {
       info: { limit: 10, used: 0 },
     });
     mockCreateDomain.mockReset();
+    mockGetDomainDetail.mockReset();
+    mockUpdateDomainDetail.mockReset();
+    mockDeleteDomainDetail.mockReset();
     mockDb.insert.mockReset();
     mockDb.update.mockReset();
     mockDb.delete.mockReset();
@@ -217,29 +241,76 @@ describe("Domain API validation", () => {
     );
   });
 
-  it("updates a domain and enqueues domain.updated for the caller tenant", async () => {
-    const existing = {
+  it("gets a domain detail through the service adapter with the public response shape", async () => {
+    const createdAt = new Date("2026-05-06T00:00:00.000Z");
+    mockGetDomainDetail.mockResolvedValueOnce({
+      object: "domain",
       id: VALID_DOMAIN_ID,
       name: "example.com",
-      userId: "user-1",
       status: "not_started",
       region: "us-east-1",
       records: [],
-      trackOpens: false,
-      trackClicks: false,
-      trackingSubdomain: null,
+      custom_return_path: null,
+      return_path: "send",
+      open_tracking: false,
+      click_tracking: true,
+      tracking_subdomain: "track.example.com",
       tls: "opportunistic",
       capabilities: [{ name: "sending", enabled: true }],
-      createdAt: new Date("2026-05-06T00:00:00.000Z"),
-    };
-    const updated = { ...existing, trackOpens: true };
-    mockDb.query.domains.findFirst.mockResolvedValueOnce(existing);
-    mockDb.update.mockReturnValueOnce({
-      set: vi.fn().mockReturnValue({
-        where: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([updated]),
-        }),
-      }),
+      created_at: createdAt,
+    });
+
+    const { GET } = await import("@/app/api/domains/[id]/route");
+    const req = makeRequest(
+      `http://localhost:3015/api/domains/${VALID_DOMAIN_ID}`,
+      "GET",
+    );
+
+    const res = await GET(req, {
+      params: Promise.resolve({ id: VALID_DOMAIN_ID }),
+    });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(mockGetDomainDetail).toHaveBeenCalledWith({
+      id: VALID_DOMAIN_ID,
+      userId: "user-1",
+    });
+    expect(json).toEqual({
+      object: "domain",
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      status: "not_started",
+      region: "us-east-1",
+      records: [],
+      custom_return_path: null,
+      return_path: "send",
+      open_tracking: false,
+      click_tracking: true,
+      tracking_subdomain: "track.example.com",
+      tls: "opportunistic",
+      capabilities: [{ name: "sending", enabled: true }],
+      created_at: "2026-05-06T00:00:00.000Z",
+    });
+  });
+
+  it("updates a domain and enqueues domain.updated for the caller tenant", async () => {
+    mockUpdateDomainDetail.mockResolvedValueOnce({
+      response: { object: "domain", id: VALID_DOMAIN_ID },
+      changedFields: ["open_tracking"],
+      eventPayload: {
+        id: VALID_DOMAIN_ID,
+        changed_fields: ["open_tracking"],
+        domain: {
+          id: VALID_DOMAIN_ID,
+          name: "example.com",
+          status: "not_started",
+          region: "us-east-1",
+          records: [],
+          capabilities: [{ name: "sending", enabled: true }],
+          created_at: "2026-05-06T00:00:00.000Z",
+        },
+      },
     });
 
     const { PATCH } = await import("@/app/api/domains/[id]/route");
@@ -254,6 +325,15 @@ describe("Domain API validation", () => {
     });
 
     expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      object: "domain",
+      id: VALID_DOMAIN_ID,
+    });
+    expect(mockUpdateDomainDetail).toHaveBeenCalledWith({
+      id: VALID_DOMAIN_ID,
+      userId: "user-1",
+      updates: { open_tracking: true },
+    });
     expect(mockQueueEvent).toHaveBeenCalledWith({
       type: "domain.updated",
       userId: "user-1",
@@ -269,20 +349,9 @@ describe("Domain API validation", () => {
   });
 
   it("deletes a domain and enqueues domain.deleted for the caller tenant", async () => {
-    mockDb.query.domains.findFirst.mockResolvedValueOnce({
-      id: VALID_DOMAIN_ID,
-      name: "example.com",
-      userId: "user-1",
-      status: "not_started",
-      records: [],
-    });
-    mockListDNSRecords.mockResolvedValueOnce([]);
-    mockDb.delete.mockReturnValueOnce({
-      where: vi.fn().mockReturnValue({
-        returning: vi
-          .fn()
-          .mockResolvedValue([{ id: VALID_DOMAIN_ID, name: "example.com" }]),
-      }),
+    mockDeleteDomainDetail.mockResolvedValueOnce({
+      response: { object: "domain", id: VALID_DOMAIN_ID, deleted: true },
+      eventPayload: { id: VALID_DOMAIN_ID, name: "example.com" },
     });
 
     const { DELETE } = await import("@/app/api/domains/[id]/route");
@@ -296,6 +365,15 @@ describe("Domain API validation", () => {
     });
 
     expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      object: "domain",
+      id: VALID_DOMAIN_ID,
+      deleted: true,
+    });
+    expect(mockDeleteDomainDetail).toHaveBeenCalledWith({
+      id: VALID_DOMAIN_ID,
+      userId: "user-1",
+    });
     expect(mockQueueEvent).toHaveBeenCalledWith({
       type: "domain.deleted",
       userId: "user-1",
@@ -356,7 +434,45 @@ describe("Domain API validation", () => {
     expect(json.error).toBe("Validation failed");
     expect(json.details.fieldErrors.click_tracking).toBeDefined();
     expect(json.details.fieldErrors.tls).toBeDefined();
-    expect(mockDb.update).not.toHaveBeenCalled();
+    expect(mockUpdateDomainDetail).not.toHaveBeenCalled();
+  });
+
+  it("returns 422 for invalid domain detail params before calling the service", async () => {
+    const { GET } = await import("@/app/api/domains/[id]/route");
+    const req = makeRequest(
+      "http://localhost:3015/api/domains/not-a-uuid",
+      "GET",
+    );
+
+    const res = await GET(req, {
+      params: Promise.resolve({ id: "not-a-uuid" }),
+    });
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error).toBe("Validation failed");
+    expect(json.details.fieldErrors.id).toBeDefined();
+    expect(mockGetDomainDetail).not.toHaveBeenCalled();
+  });
+
+  it("maps domain detail service not-found errors to the legacy 404 body", async () => {
+    mockUpdateDomainDetail.mockRejectedValueOnce(
+      new MockDomainDetailServiceError("not_found", "Not found"),
+    );
+
+    const { PATCH } = await import("@/app/api/domains/[id]/route");
+    const req = makeRequest(
+      `http://localhost:3015/api/domains/${VALID_DOMAIN_ID}`,
+      "PATCH",
+      { open_tracking: true },
+    );
+
+    const res = await PATCH(req, {
+      params: Promise.resolve({ id: VALID_DOMAIN_ID }),
+    });
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({ error: "Not found" });
   });
 
   it("returns 422 for invalid domain verify params", async () => {

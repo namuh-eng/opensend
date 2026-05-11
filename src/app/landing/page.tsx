@@ -1,4 +1,5 @@
 import { LandingPage } from "@/components/landing/landing-page";
+import { getOpenSendGithubStars } from "@/lib/github-stars";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -24,6 +25,8 @@ export const metadata: Metadata = {
   },
 };
 
-export default function LandingRoute() {
-  return <LandingPage />;
+export default async function LandingRoute() {
+  const githubStars = await getOpenSendGithubStars();
+
+  return <LandingPage githubStars={githubStars} />;
 }

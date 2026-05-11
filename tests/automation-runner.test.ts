@@ -182,6 +182,33 @@ function deps(overrides: Partial<AutomationRunnerDeps> = {}) {
 }
 
 describe("automation runner", () => {
+  it("does not resume cancelled runs even if a step would otherwise be due", async () => {
+    const setup = deps();
+
+    const result = await processAutomationRunStep(
+      run({
+        status: "cancelled",
+        currentStepKey: "delay",
+        stepStates: {
+          delay: {
+            status: "cancelled",
+            completedAt: now.toISOString(),
+            output: { cancellation_reason: "operator stopped it" },
+          },
+        },
+        completedAt: now,
+        nextStepAt: null,
+        failureReason: "operator stopped it",
+      }),
+      setup.deps,
+    );
+
+    expect(result?.status).toBe("cancelled");
+    expect(setup.deps.getAutomation).not.toHaveBeenCalled();
+    expect(setup.updates).toHaveLength(0);
+    expect(setup.sendEmail).not.toHaveBeenCalled();
+  });
+
   it("advances trigger then schedules delay next_step_at without sleeping", async () => {
     const setup = deps();
 

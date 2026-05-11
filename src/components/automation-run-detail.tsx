@@ -3,7 +3,7 @@
 import { formatDuration } from "@/components/automation-runs-list";
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface RunStepState {
   status: string;
@@ -37,13 +37,22 @@ interface Props {
   runId: string;
 }
 
-function getApiKey(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage?.getItem?.("api_key") ?? null;
-  } catch {
-    return null;
-  }
+const CANCELLABLE_RUN_STATUSES = new Set(["queued", "waiting"]);
+const SENSITIVE_OUTPUT_KEYS = [
+  "payload",
+  "email",
+  "token",
+  "secret",
+  "password",
+  "authorization",
+  "headers",
+  "body",
+];
+
+function apiHeaders(contentType = false): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (contentType) headers["Content-Type"] = "application/json";
+  return headers;
 }
 
 function capitalize(value: string): string {
@@ -55,12 +64,57 @@ function formatDate(value: string | null | undefined): string {
   return `${formatRelativeTime(value)} · ${new Date(value).toLocaleString()}`;
 }
 
-function JsonBlock({ value }: { value: Record<string, unknown> | undefined }) {
-  if (!value || Object.keys(value).length === 0) return <span>—</span>;
+function isSensitiveOutputKey(key: string): boolean {
+  const lowered = key.toLowerCase();
+  return SENSITIVE_OUTPUT_KEYS.some((token) => lowered.includes(token));
+}
+
+function summarizeUnknown(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value))
+    return `${value.length} item${value.length === 1 ? "" : "s"}`;
+  if (typeof value === "object") {
+    const keyCount = Object.keys(value as Record<string, unknown>).length;
+    return `${keyCount} key${keyCount === 1 ? "" : "s"}`;
+  }
+  return "—";
+}
+
+function outputSummaryRows(output: Record<string, unknown> | undefined) {
+  if (!output || Object.keys(output).length === 0) return [];
+  return Object.entries(output).map(([key, value]) => {
+    if (key === "payload" && typeof value === "object" && value !== null) {
+      const keys = Object.keys(value as Record<string, unknown>);
+      return {
+        key,
+        value: `Hidden event payload (${keys.length} key${keys.length === 1 ? "" : "s"})`,
+      };
+    }
+    if (isSensitiveOutputKey(key)) {
+      return { key, value: "Redacted" };
+    }
+    return { key, value: summarizeUnknown(value) };
+  });
+}
+
+function OutputSummary({
+  value,
+}: { value: Record<string, unknown> | undefined }) {
+  const rows = outputSummaryRows(value);
+  if (rows.length === 0) return <span>—</span>;
   return (
-    <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-[rgba(176,199,217,0.145)] bg-black/30 p-3 text-[12px] text-[#A1A4A5]">
-      {JSON.stringify(value, null, 2)}
-    </pre>
+    <dl className="mt-3 grid grid-cols-1 gap-2 rounded-md border border-[rgba(176,199,217,0.145)] bg-black/20 p-3 text-[12px] md:grid-cols-2">
+      {rows.map((row) => (
+        <div key={row.key}>
+          <dt className="text-[#666]">{row.key}</dt>
+          <dd className="break-words text-[#A1A4A5]">{row.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
@@ -69,48 +123,71 @@ export function AutomationRunDetail({ automationId, runId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  const loadRun = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setNotFound(false);
+    try {
+      const res = await fetch(
+        `/api/automations/${automationId}/runs/${runId}`,
+        {
+          headers: apiHeaders(),
+        },
+      );
+      if (res.status === 404) {
+        setNotFound(true);
+        return;
+      }
+      if (!res.ok) {
+        setError("Failed to load run.");
+        return;
+      }
+      setRun((await res.json()) as AutomationRunDetailPayload);
+    } catch {
+      setError("Failed to load run.");
+    } finally {
+      setLoading(false);
+    }
+  }, [automationId, runId]);
 
   useEffect(() => {
     let cancelled = false;
-    async function loadRun() {
-      setLoading(true);
-      setError(null);
-      setNotFound(false);
-      try {
-        const apiKey = getApiKey();
-        const headers: Record<string, string> = {};
-        if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-        const res = await fetch(
-          `/api/automations/${automationId}/runs/${runId}`,
-          {
-            headers,
-          },
-        );
-        if (cancelled) return;
-        if (res.status === 404) {
-          setNotFound(true);
-          return;
-        }
-        if (!res.ok) {
-          setError(
-            res.status === 401
-              ? "Set an API key to view this run."
-              : "Failed to load run.",
-          );
-          return;
-        }
-        setRun((await res.json()) as AutomationRunDetailPayload);
-      } catch {
-        if (!cancelled) setError("Failed to load run.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+    async function guardedLoadRun() {
+      await loadRun();
+      if (cancelled) return;
     }
-    loadRun();
+    guardedLoadRun();
     return () => {
       cancelled = true;
     };
-  }, [automationId, runId]);
+  }, [loadRun]);
+
+  const cancelRun = async () => {
+    setCancelling(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/automations/${automationId}/runs/${runId}/cancel`,
+        {
+          method: "POST",
+          headers: apiHeaders(true),
+          body: JSON.stringify({ reason: "cancelled_from_dashboard" }),
+        },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body?.error ?? "Could not cancel run.");
+        return;
+      }
+      setRun((await res.json()) as AutomationRunDetailPayload);
+    } catch {
+      setError("Could not cancel run.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -136,37 +213,63 @@ export function AutomationRunDetail({ automationId, runId }: Props) {
     );
   }
 
-  if (error || !run) {
+  if (error && !run) {
     return (
       <div className="mx-auto max-w-3xl py-16">
         <p
           role="alert"
           className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-300"
         >
-          {error ?? "Failed to load run."}
+          {error}
         </p>
       </div>
     );
   }
 
+  if (!run) {
+    return null;
+  }
+
   const stepEntries = Object.entries(run.step_states);
+  const canCancel = CANCELLABLE_RUN_STATUSES.has(run.status);
 
   return (
     <div className="mx-auto max-w-4xl">
-      <div className="mb-6">
-        <Link
-          href={`/automations/${automationId}`}
-          className="text-[12px] text-[#A1A4A5] hover:text-[#F0F0F0]"
-        >
-          &larr; Back to automation
-        </Link>
-        <h1 className="mt-2 text-2xl font-semibold text-[#F0F0F0]">
-          Run {run.id}
-        </h1>
-        <p className="mt-1 text-[13px] text-[#A1A4A5]">
-          {capitalize(run.status)} · {formatDuration(run.duration_ms)}
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div>
+          <Link
+            href={`/automations/${automationId}`}
+            className="text-[12px] text-[#A1A4A5] hover:text-[#F0F0F0]"
+          >
+            &larr; Back to automation
+          </Link>
+          <h1 className="mt-2 text-2xl font-semibold text-[#F0F0F0]">
+            Run {run.id}
+          </h1>
+          <p className="mt-1 text-[13px] text-[#A1A4A5]">
+            {capitalize(run.status)} · {formatDuration(run.duration_ms)}
+          </p>
+        </div>
+        {canCancel ? (
+          <button
+            type="button"
+            disabled={cancelling}
+            onClick={cancelRun}
+            className="h-9 rounded-md border border-red-500/30 px-3 text-[13px] font-medium text-red-200 transition-colors hover:border-red-400 hover:text-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {cancelling ? "Cancelling..." : "Cancel run"}
+          </button>
+        ) : null}
       </div>
+
+      {error ? (
+        <p
+          role="alert"
+          className="mb-4 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-[13px] text-red-300"
+        >
+          {error}
+        </p>
+      ) : null}
 
       <section className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-2">
         {[
@@ -196,6 +299,10 @@ export function AutomationRunDetail({ automationId, runId }: Props) {
           <h2 className="text-[14px] font-semibold text-[#F0F0F0]">
             Step states
           </h2>
+          <p className="mt-1 text-[12px] text-[#A1A4A5]">
+            Outputs are summarized and sensitive payload-like fields are
+            redacted.
+          </p>
         </div>
         {stepEntries.length === 0 ? (
           <p className="px-4 py-8 text-center text-[13px] text-[#A1A4A5]">
@@ -236,7 +343,7 @@ export function AutomationRunDetail({ automationId, runId }: Props) {
                 {state.error ? (
                   <p className="mt-3 text-[13px] text-red-300">{state.error}</p>
                 ) : null}
-                <JsonBlock value={state.output} />
+                <OutputSummary value={state.output} />
               </div>
             ))}
           </div>

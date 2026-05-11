@@ -11,6 +11,57 @@ const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
 const mockReserveEmailQuota = vi.hoisted(() => vi.fn());
 const mockReleaseEmailQuota = vi.hoisted(() => vi.fn());
+const mockEmailReadService = vi.hoisted(() => ({
+  listEmails: vi.fn(),
+  getEmail: vi.fn(),
+  deleteEmail: vi.fn(),
+}));
+const mockEmailDetailService = vi.hoisted(() => ({
+  getEmail: vi.fn(),
+  updateEmail: vi.fn(),
+}));
+const mockEmailLifecycleService = vi.hoisted(() => ({
+  listAttachments: vi.fn(),
+  getAttachment: vi.fn(),
+  cancelEmail: vi.fn(),
+  listEvents: vi.fn(),
+}));
+const MockEmailDetailServiceError = vi.hoisted(
+  () =>
+    class EmailDetailServiceError extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+      ) {
+        super(message);
+        this.name = "EmailDetailServiceError";
+      }
+    },
+);
+const MockEmailReadServiceError = vi.hoisted(
+  () =>
+    class EmailReadServiceError extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+      ) {
+        super(message);
+        this.name = "EmailReadServiceError";
+      }
+    },
+);
+const MockEmailLifecycleServiceError = vi.hoisted(
+  () =>
+    class EmailLifecycleServiceError extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+      ) {
+        super(message);
+        this.name = "EmailLifecycleServiceError";
+      }
+    },
+);
 const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
   select: vi.fn(),
@@ -44,10 +95,16 @@ vi.mock("@opensend/core", () => {
   };
 
   return {
+    EmailDetailServiceError: MockEmailDetailServiceError,
+    EmailReadServiceError: MockEmailReadServiceError,
+    EmailLifecycleServiceError: MockEmailLifecycleServiceError,
     createBackgroundJob: (job: Record<string, unknown>) => ({
       ...job,
       requestedAt: "2026-04-28T00:00:00.000Z",
     }),
+    createEmailDetailService: () => mockEmailDetailService,
+    createEmailLifecycleService: () => mockEmailLifecycleService,
+    createEmailReadService: () => mockEmailReadService,
     detectSandboxTestRecipient: (recipient: string) => {
       const normalized = recipient.trim().toLowerCase();
       const [local, domain] = normalized.split("@");
@@ -293,6 +350,7 @@ describe("POST /api/emails", () => {
     Object.assign(mockDb.query, {
       emails: { findFirst: vi.fn().mockResolvedValue(null) },
       contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: { findFirst: vi.fn().mockResolvedValue(null) },
     });
     mockDb.insert = vi.fn().mockReturnValue({
       values: vi.fn().mockResolvedValue(undefined),
@@ -450,6 +508,185 @@ describe("POST /api/emails", () => {
         groupId: "email.send",
       }),
     );
+  });
+
+  it("renders template triple-brace placeholders with fallback values", async () => {
+    const emailId = "templated-email-uuid";
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: emailId }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          userId: AUTH_RESULT.userId,
+          subject: "Receipt for {{{PRODUCT}}}",
+          html: "<p>{{{PRODUCT}}}</p><p>{{ PRICE }}</p>",
+          text: "Text {{{PRODUCT}}} {{ PRICE }}",
+          variables: [
+            {
+              name: "PRODUCT",
+              key: "PRODUCT",
+              type: "string",
+              required: false,
+              fallbackValue: "item",
+            },
+            {
+              name: "PRICE",
+              key: "PRICE",
+              type: "number",
+              required: false,
+              fallbackValue: 25,
+            },
+          ],
+        }),
+      },
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Ignored when template has subject",
+          template: {
+            id: "11111111-1111-4111-8111-111111111111",
+            variables: {},
+          },
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect(valuesMock.mock.calls[0][0]).toMatchObject({
+      subject: "Receipt for item",
+      html: "<p>item</p><p>25</p>",
+      text: "Text item 25",
+      status: "queued",
+    });
+  });
+
+  it("renders provided template variables over fallbacks across triple and double braces", async () => {
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "templated-email-2" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          userId: AUTH_RESULT.userId,
+          subject: "Receipt for {{ PRODUCT }}",
+          html: "<p>{{{PRODUCT}}}</p><p>{{{PRICE}}}</p>",
+          text: null,
+          variables: [
+            {
+              name: "PRODUCT",
+              key: "PRODUCT",
+              type: "string",
+              required: true,
+              fallbackValue: null,
+            },
+            {
+              name: "PRICE",
+              key: "PRICE",
+              type: "number",
+              required: false,
+              fallbackValue: 25,
+            },
+          ],
+        }),
+      },
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Ignored when template has subject",
+          template: {
+            id: "11111111-1111-4111-8111-111111111111",
+            variables: { PRODUCT: "Widget" },
+          },
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect(valuesMock.mock.calls[0][0]).toMatchObject({
+      subject: "Receipt for Widget",
+      html: "<p>Widget</p><p>25</p>",
+      text: "",
+    });
+  });
+
+  it("keeps the public validation_error envelope for missing template variables without fallbacks", async () => {
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          userId: AUTH_RESULT.userId,
+          subject: "Receipt for {{{PRODUCT}}}",
+          html: "<p>{{{PRODUCT}}}</p>",
+          text: null,
+          variables: [
+            {
+              name: "PRODUCT",
+              key: "PRODUCT",
+              type: "string",
+              required: true,
+              fallbackValue: null,
+            },
+          ],
+        }),
+      },
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Ignored when template has subject",
+          template: {
+            id: "11111111-1111-4111-8111-111111111111",
+            variables: {},
+          },
+        },
+        { Authorization: "Bearer re_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      code: "validation_error",
+      statusCode: 422,
+      message: "Missing required template variable: PRODUCT",
+      details: {
+        fieldErrors: {
+          template: ["Missing required variable: PRODUCT"],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
   });
 
   it("audits queue publish failures before returning 500 and releasing quota", async () => {
@@ -1974,34 +2211,35 @@ describe("services/api transactional email routes", () => {
 describe("GET /api/emails", () => {
   beforeEach(() => {
     vi.resetModules();
+    mockEmailReadService.listEmails.mockReset();
     mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
   });
 
   it("returns paginated list of emails", async () => {
-    const mockEmails = [
-      {
-        id: "email-1",
-        from: "sender@domain.com",
-        to: ["user@test.com"],
-        subject: "Test",
-        createdAt: new Date("2024-01-01"),
-        status: "delivered",
-        cc: null,
-        bcc: null,
-        replyTo: null,
-        scheduledAt: null,
-        sentAt: new Date("2024-01-01T00:00:05Z"),
-      },
-    ];
-
-    const mockLimit = vi.fn().mockResolvedValue(mockEmails);
-    const mockOrderBy = vi.fn().mockReturnValue({ limit: mockLimit });
-    const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy });
-    const mockFrom = vi.fn().mockReturnValue({
-      orderBy: mockOrderBy,
-      where: mockWhere,
+    mockEmailReadService.listEmails.mockResolvedValueOnce({
+      object: "list",
+      has_more: false,
+      data: [
+        {
+          id: "email-1",
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Test",
+          created_at: new Date("2024-01-01"),
+          last_event: "delivered",
+          cc: null,
+          bcc: null,
+          reply_to: null,
+          provider_retry_count: 0,
+          provider_last_attempted_at: null,
+          provider_next_retry_at: null,
+          provider_last_error: null,
+          provider_dead_lettered_at: null,
+          scheduled_at: null,
+          sent_at: new Date("2024-01-01T00:00:05Z"),
+        },
+      ],
     });
-    mockDb.select = vi.fn().mockReturnValue({ from: mockFrom });
 
     const { GET } = await import("@/app/api/emails/route");
     const req = new Request("http://localhost:3015/api/emails?limit=20", {
@@ -2014,28 +2252,40 @@ describe("GET /api/emails", () => {
     expect(json).toHaveProperty("data");
     expect(Array.isArray(json.data)).toBe(true);
     expect(json.data[0]).toHaveProperty("sent_at", "2024-01-01T00:00:05.000Z");
-    expect(mockWhere).toHaveBeenCalledWith(
-      expect.objectContaining({
-        op: "and",
-        args: [
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining([AUTH_RESULT.userId]),
-          }),
-        ],
-      }),
-    );
+    expect(mockEmailReadService.listEmails).toHaveBeenCalledWith({
+      userId: AUTH_RESULT.userId,
+      limit: 20,
+      after: undefined,
+      before: undefined,
+      status: "",
+    });
   });
 
-  it("applies status filter so queued dashboard/API views return queued rows", async () => {
-    const mockLimit = vi.fn().mockResolvedValue([]);
-    const mockOrderBy = vi.fn().mockReturnValue({ limit: mockLimit });
-    const mockWhere = vi.fn().mockReturnValue({ orderBy: mockOrderBy });
-    const mockFrom = vi.fn().mockReturnValue({
-      orderBy: mockOrderBy,
-      where: mockWhere,
+  it("passes status filter so queued dashboard/API views return queued rows", async () => {
+    mockEmailReadService.listEmails.mockResolvedValueOnce({
+      object: "list",
+      has_more: false,
+      data: [
+        {
+          id: "email-1",
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Test",
+          created_at: new Date("2024-01-01"),
+          last_event: "queued",
+          cc: null,
+          bcc: null,
+          reply_to: null,
+          provider_retry_count: 0,
+          provider_last_attempted_at: null,
+          provider_next_retry_at: null,
+          provider_last_error: null,
+          provider_dead_lettered_at: null,
+          sent_at: null,
+          scheduled_at: null,
+        },
+      ],
     });
-    mockDb.select = vi.fn().mockReturnValue({ from: mockFrom });
 
     const { GET } = await import("@/app/api/emails/route");
     const req = new Request("http://localhost:3015/api/emails?status=queued", {
@@ -2045,21 +2295,16 @@ describe("GET /api/emails", () => {
     const res = await GET(req);
 
     expect(res.status).toBe(200);
-    expect(mockWhere).toHaveBeenCalledWith(
-      expect.objectContaining({
-        op: "and",
-        args: [
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining([AUTH_RESULT.userId]),
-          }),
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining(["queued"]),
-          }),
-        ],
-      }),
-    );
+    await expect(res.json()).resolves.toMatchObject({
+      data: [{ last_event: "queued" }],
+    });
+    expect(mockEmailReadService.listEmails).toHaveBeenCalledWith({
+      userId: AUTH_RESULT.userId,
+      limit: 20,
+      after: undefined,
+      before: undefined,
+      status: "queued",
+    });
   });
 });
 
@@ -2068,11 +2313,13 @@ describe("GET /api/emails", () => {
 describe("GET /api/emails/:id", () => {
   beforeEach(() => {
     vi.resetModules();
+    mockEmailDetailService.getEmail.mockReset();
     mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
   });
 
-  it("returns email with events", async () => {
-    const mockEmail = {
+  it("returns email detail from the detail service", async () => {
+    mockEmailDetailService.getEmail.mockResolvedValueOnce({
+      object: "email",
       id: "email-uuid",
       from: "sender@domain.com",
       to: ["user@test.com"],
@@ -2081,27 +2328,18 @@ describe("GET /api/emails/:id", () => {
       text: null,
       cc: null,
       bcc: null,
-      replyTo: null,
-      status: "delivered",
-      scheduledAt: null,
-      sentAt: new Date("2024-01-01T00:00:05Z"),
+      reply_to: null,
+      last_event: "delivered",
+      provider_retry_count: 0,
+      provider_last_attempted_at: null,
+      provider_next_retry_at: null,
+      provider_last_error: null,
+      provider_dead_lettered_at: null,
+      scheduled_at: null,
+      sent_at: new Date("2024-01-01T00:00:05Z"),
       tags: null,
-      createdAt: new Date("2024-01-01"),
-      events: [
-        {
-          type: "sent",
-          timestamp: new Date("2024-01-01"),
-          data: null,
-        },
-      ],
-    };
-
-    const findFirst = vi.fn().mockResolvedValue(mockEmail);
-    mockDb.query = {
-      emails: {
-        findFirst,
-      },
-    } as unknown as ReturnType<typeof vi.fn>;
+      created_at: new Date("2024-01-01"),
+    });
 
     const { GET } = await import("@/app/api/emails/[id]/route");
     const req = new Request("http://localhost:3015/api/emails/email-uuid", {
@@ -2116,30 +2354,16 @@ describe("GET /api/emails/:id", () => {
     expect(json).toHaveProperty("id", "email-uuid");
     expect(json).toHaveProperty("last_event", "delivered");
     expect(json).toHaveProperty("sent_at", "2024-01-01T00:00:05.000Z");
-    expect(findFirst).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        op: "and",
-        args: [
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining(["email-uuid"]),
-          }),
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining([AUTH_RESULT.userId]),
-          }),
-        ],
-      }),
+    expect(mockEmailDetailService.getEmail).toHaveBeenCalledWith({
+      userId: AUTH_RESULT.userId,
+      id: "email-uuid",
     });
   });
 
   it("returns 404 for non-existent email", async () => {
-    const findFirst = vi.fn().mockResolvedValue(null);
-    mockDb.query = {
-      emails: {
-        findFirst,
-      },
-    } as unknown as ReturnType<typeof vi.fn>;
+    mockEmailDetailService.getEmail.mockRejectedValueOnce(
+      new MockEmailDetailServiceError("not_found", "Email not found"),
+    );
 
     const { GET } = await import("@/app/api/emails/[id]/route");
     const req = new Request("http://localhost:3015/api/emails/nonexistent", {
@@ -2149,20 +2373,10 @@ describe("GET /api/emails/:id", () => {
       params: Promise.resolve({ id: "nonexistent" }),
     });
     expect(res.status).toBe(404);
-    expect(findFirst).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        op: "and",
-        args: [
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining(["nonexistent"]),
-          }),
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining([AUTH_RESULT.userId]),
-          }),
-        ],
-      }),
+    await expect(res.json()).resolves.toEqual({ error: "Email not found" });
+    expect(mockEmailDetailService.getEmail).toHaveBeenCalledWith({
+      userId: AUTH_RESULT.userId,
+      id: "nonexistent",
     });
   });
 });
@@ -2170,96 +2384,18 @@ describe("GET /api/emails/:id", () => {
 describe("PATCH /api/emails/:id", () => {
   beforeEach(() => {
     vi.resetModules();
+    mockEmailDetailService.updateEmail.mockReset();
     mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
   });
 
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it("scopes scheduled email updates to the authenticated user", async () => {
-    // Freeze time so the hardcoded `scheduled_at` stays a valid future moment
-    // regardless of when CI runs the suite.
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
-
-    const findFirst = vi.fn().mockResolvedValue({
+  it("delegates parsed JSON bodies to the detail service with auth scope", async () => {
+    mockEmailDetailService.updateEmail.mockResolvedValueOnce({
+      object: "email",
       id: "email-uuid",
-      status: "scheduled",
     });
-    mockDb.query = {
-      emails: {
-        findFirst,
-      },
-    } as unknown as ReturnType<typeof vi.fn>;
-    const returning = vi.fn().mockResolvedValue([{ id: "email-uuid" }]);
-    const where = vi.fn().mockReturnValue({ returning });
-    const set = vi.fn().mockReturnValue({ where });
-    mockDb.update = vi.fn().mockReturnValue({ set });
 
-    const scheduledAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const { PATCH } = await import("@/app/api/emails/[id]/route");
     const res = await PATCH(
-      new Request("http://localhost:3015/api/emails/email-uuid", {
-        method: "PATCH",
-        headers: { Authorization: "Bearer re_test123" },
-        body: JSON.stringify({ scheduled_at: scheduledAt }),
-      }),
-      { params: Promise.resolve({ id: "email-uuid" }) },
-    );
-
-    expect(res.status).toBe(200);
-    expect(findFirst).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        op: "and",
-        args: expect.arrayContaining([
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining(["email-uuid"]),
-          }),
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining([AUTH_RESULT.userId]),
-          }),
-        ]),
-      }),
-    });
-    expect(where).toHaveBeenCalledWith(
-      expect.objectContaining({
-        op: "and",
-        args: expect.arrayContaining([
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining(["email-uuid"]),
-          }),
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining([AUTH_RESULT.userId]),
-          }),
-        ]),
-      }),
-    );
-  });
-
-  it("normalizes ISO and natural-language scheduled_at updates", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
-
-    const findFirst = vi.fn().mockResolvedValue({
-      id: "email-uuid",
-      status: "scheduled",
-    });
-    mockDb.query = {
-      emails: { findFirst },
-    } as unknown as ReturnType<typeof vi.fn>;
-
-    const returning = vi.fn().mockResolvedValue([{ id: "email-uuid" }]);
-    const where = vi.fn().mockReturnValue({ returning });
-    const set = vi.fn().mockReturnValue({ where });
-    mockDb.update = vi.fn().mockReturnValue({ set });
-
-    const { PATCH } = await import("@/app/api/emails/[id]/route");
-    const isoRes = await PATCH(
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
         headers: { Authorization: "Bearer re_test123" },
@@ -2267,79 +2403,111 @@ describe("PATCH /api/emails/:id", () => {
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
-    const naturalRes = await PATCH(
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      object: "email",
+      id: "email-uuid",
+    });
+    expect(mockEmailDetailService.updateEmail).toHaveBeenCalledWith({
+      userId: AUTH_RESULT.userId,
+      id: "email-uuid",
+      body: { scheduled_at: "2026-05-08T00:00:00.000Z" },
+    });
+  });
+
+  it("returns 400 for invalid JSON before calling the service", async () => {
+    const { PATCH } = await import("@/app/api/emails/[id]/route");
+    const res = await PATCH(
       new Request("http://localhost:3015/api/emails/email-uuid", {
         method: "PATCH",
         headers: { Authorization: "Bearer re_test123" },
-        body: JSON.stringify({ scheduled_at: "in 1 day" }),
+        body: "{invalid",
       }),
       { params: Promise.resolve({ id: "email-uuid" }) },
     );
 
-    expect(isoRes.status).toBe(200);
-    expect(naturalRes.status).toBe(200);
-    expect(set).toHaveBeenNthCalledWith(1, {
-      scheduledAt: new Date("2026-05-08T00:00:00.000Z"),
-    });
-    expect(set).toHaveBeenNthCalledWith(2, {
-      scheduledAt: new Date("2026-05-08T00:00:00.000Z"),
-    });
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({ error: "Invalid JSON body" });
+    expect(mockEmailDetailService.updateEmail).not.toHaveBeenCalled();
   });
 
-  it("rejects invalid, past, and out-of-policy scheduled_at updates before writing", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
-
-    const findFirst = vi.fn().mockResolvedValue({
-      id: "email-uuid",
-      status: "scheduled",
-    });
-    mockDb.query = {
-      emails: { findFirst },
-    } as unknown as ReturnType<typeof vi.fn>;
-    const set = vi.fn();
-    mockDb.update = vi.fn().mockReturnValue({ set });
-
+  it("maps detail service update errors to legacy responses", async () => {
     const { PATCH } = await import("@/app/api/emails/[id]/route");
 
-    for (const scheduled_at of [
-      "later today",
-      "2026-05-06T23:59:00.000Z",
-      "in 31 days",
-    ]) {
+    for (const [error, status, expected] of [
+      [
+        new MockEmailDetailServiceError("not_found", "Email not found"),
+        404,
+        { error: "Email not found" },
+      ],
+      [
+        new MockEmailDetailServiceError(
+          "invalid_state",
+          "Cannot update a delivered email",
+        ),
+        400,
+        { error: "Cannot update a delivered email" },
+      ],
+      [
+        new MockEmailDetailServiceError("no_fields", "No fields to update"),
+        400,
+        { error: "No fields to update" },
+      ],
+    ] as const) {
+      mockEmailDetailService.updateEmail.mockRejectedValueOnce(error);
       const res = await PATCH(
         new Request("http://localhost:3015/api/emails/email-uuid", {
           method: "PATCH",
           headers: { Authorization: "Bearer re_test123" },
-          body: JSON.stringify({ scheduled_at }),
+          body: JSON.stringify({ scheduled_at: null }),
         }),
         { params: Promise.resolve({ id: "email-uuid" }) },
       );
-      expect(res.status).toBe(422);
-      await expect(res.json()).resolves.toMatchObject({
-        name: "validation_error",
-        details: {
-          fieldErrors: {
-            scheduled_at: [expect.stringContaining("future ISO 8601")],
-          },
-        },
-      });
+      expect(res.status).toBe(status);
+      await expect(res.json()).resolves.toEqual(expected);
     }
+  });
 
-    expect(mockDb.update).not.toHaveBeenCalled();
-    expect(set).not.toHaveBeenCalled();
+  it("maps invalid scheduled_at service errors to the existing validation envelope", async () => {
+    mockEmailDetailService.updateEmail.mockRejectedValueOnce(
+      new MockEmailDetailServiceError(
+        "invalid_scheduled_at",
+        "Invalid scheduled_at",
+      ),
+    );
+
+    const { PATCH } = await import("@/app/api/emails/[id]/route");
+    const res = await PATCH(
+      new Request("http://localhost:3015/api/emails/email-uuid", {
+        method: "PATCH",
+        headers: { Authorization: "Bearer re_test123" },
+        body: JSON.stringify([]),
+      }),
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      details: {
+        fieldErrors: {
+          scheduled_at: [expect.stringContaining("future ISO 8601")],
+        },
+      },
+    });
   });
 });
 
 describe("DELETE /api/emails", () => {
   beforeEach(() => {
     vi.resetModules();
+    mockEmailReadService.deleteEmail.mockReset();
     mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
   });
 
   it("scopes deletes to the authenticated user", async () => {
-    const where = vi.fn().mockResolvedValue(undefined);
-    mockDb.delete = vi.fn().mockReturnValue({ where });
+    mockEmailReadService.deleteEmail.mockResolvedValueOnce({ success: true });
 
     const { DELETE } = await import("@/app/api/emails/route");
     const res = await DELETE(
@@ -2350,39 +2518,184 @@ describe("DELETE /api/emails", () => {
     );
 
     expect(res.status).toBe(200);
-    expect(where).toHaveBeenCalledWith(
-      expect.objectContaining({
-        op: "and",
-        args: expect.arrayContaining([
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining(["email-uuid"]),
-          }),
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining([AUTH_RESULT.userId]),
-          }),
-        ]),
-      }),
+    await expect(res.json()).resolves.toEqual({ success: true });
+    expect(mockEmailReadService.deleteEmail).toHaveBeenCalledWith(
+      AUTH_RESULT.userId,
+      "email-uuid",
     );
+  });
+});
+
+describe("GET /api/emails/:id/attachments", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockEmailLifecycleService.listAttachments.mockReset();
+    mockEmailLifecycleService.getAttachment.mockReset();
+    mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
+  });
+
+  it("returns the service attachment list response unchanged", async () => {
+    mockEmailLifecycleService.listAttachments.mockResolvedValueOnce({
+      object: "list",
+      data: [
+        {
+          id: "att-0",
+          filename: "receipt.txt",
+          content_type: "application/octet-stream",
+        },
+      ],
+    });
+
+    const { GET } = await import("@/app/api/emails/[id]/attachments/route");
+    const res = await GET(
+      new Request("http://localhost:3015/api/emails/email-uuid/attachments", {
+        headers: { Authorization: "Bearer re_test123" },
+      }) as never,
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      object: "list",
+      data: [
+        {
+          id: "att-0",
+          filename: "receipt.txt",
+          content_type: "application/octet-stream",
+        },
+      ],
+    });
+    expect(mockEmailLifecycleService.listAttachments).toHaveBeenCalledWith(
+      AUTH_RESULT.userId,
+      "email-uuid",
+    );
+  });
+
+  it("preserves the list route email-not-found response", async () => {
+    mockEmailLifecycleService.listAttachments.mockRejectedValueOnce(
+      new MockEmailLifecycleServiceError("email_not_found", "Email not found"),
+    );
+
+    const { GET } = await import("@/app/api/emails/[id]/attachments/route");
+    const res = await GET(
+      new Request("http://localhost:3015/api/emails/email-uuid/attachments", {
+        headers: { Authorization: "Bearer re_test123" },
+      }) as never,
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({ error: "Email not found" });
+  });
+
+  it("preserves the detail route attachment-not-found response", async () => {
+    mockEmailLifecycleService.getAttachment.mockRejectedValueOnce(
+      new MockEmailLifecycleServiceError(
+        "attachment_not_found",
+        "Attachment not found",
+      ),
+    );
+
+    const { GET } = await import(
+      "@/app/api/emails/[id]/attachments/[attachmentId]/route"
+    );
+    const res = await GET(
+      new Request(
+        "http://localhost:3015/api/emails/email-uuid/attachments/missing",
+        {
+          headers: { Authorization: "Bearer re_test123" },
+        },
+      ) as never,
+      {
+        params: Promise.resolve({
+          id: "email-uuid",
+          attachmentId: "missing",
+        }),
+      },
+    );
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({
+      error: "Attachment not found",
+    });
+    expect(mockEmailLifecycleService.getAttachment).toHaveBeenCalledWith(
+      AUTH_RESULT.userId,
+      "email-uuid",
+      "missing",
+    );
+  });
+});
+
+describe("POST /api/emails/:id/cancel", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockEmailLifecycleService.cancelEmail.mockReset();
+    mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
+  });
+
+  it("returns the canceled email response from the lifecycle service", async () => {
+    mockEmailLifecycleService.cancelEmail.mockResolvedValueOnce({
+      object: "email",
+      id: "email-uuid",
+      status: "canceled",
+    });
+
+    const { POST } = await import("@/app/api/emails/[id]/cancel/route");
+    const res = await POST(
+      new Request("http://localhost:3015/api/emails/email-uuid/cancel", {
+        method: "POST",
+        headers: { Authorization: "Bearer re_test123" },
+      }) as never,
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      object: "email",
+      id: "email-uuid",
+      status: "canceled",
+    });
+    expect(mockEmailLifecycleService.cancelEmail).toHaveBeenCalledWith(
+      AUTH_RESULT.userId,
+      "email-uuid",
+    );
+  });
+
+  it("preserves the non-scheduled cancel response", async () => {
+    mockEmailLifecycleService.cancelEmail.mockRejectedValueOnce(
+      new MockEmailLifecycleServiceError(
+        "invalid_state",
+        "Cannot cancel a delivered email",
+      ),
+    );
+
+    const { POST } = await import("@/app/api/emails/[id]/cancel/route");
+    const res = await POST(
+      new Request("http://localhost:3015/api/emails/email-uuid/cancel", {
+        method: "POST",
+        headers: { Authorization: "Bearer re_test123" },
+      }) as never,
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "Cannot cancel a delivered email",
+    });
   });
 });
 
 describe("GET /api/emails/:id/events", () => {
   beforeEach(() => {
     vi.resetModules();
+    mockEmailLifecycleService.listEvents.mockReset();
     mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
   });
 
   it("does not list events for an email outside the authenticated user scope", async () => {
-    const findFirst = vi.fn().mockResolvedValue(null);
-    mockDb.query = {
-      emails: {
-        findFirst,
-      },
-    } as unknown as ReturnType<typeof vi.fn>;
-    const select = vi.fn();
-    mockDb.select = select;
+    mockEmailLifecycleService.listEvents.mockRejectedValueOnce(
+      new MockEmailLifecycleServiceError("email_not_found", "Email not found"),
+    );
 
     const { GET } = await import("@/app/api/emails/[id]/events/route");
     const res = await GET(
@@ -2393,21 +2706,47 @@ describe("GET /api/emails/:id/events", () => {
     );
 
     expect(res.status).toBe(404);
-    expect(select).not.toHaveBeenCalled();
-    expect(findFirst).toHaveBeenCalledWith({
-      where: expect.objectContaining({
-        op: "and",
-        args: expect.arrayContaining([
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining(["email-uuid"]),
-          }),
-          expect.objectContaining({
-            op: "eq",
-            args: expect.arrayContaining([AUTH_RESULT.userId]),
-          }),
-        ]),
-      }),
+    await expect(res.json()).resolves.toEqual({ error: "Email not found" });
+    expect(mockEmailLifecycleService.listEvents).toHaveBeenCalledWith(
+      AUTH_RESULT.userId,
+      "email-uuid",
+    );
+  });
+
+  it("returns ordered event DTOs from the lifecycle service unchanged", async () => {
+    mockEmailLifecycleService.listEvents.mockResolvedValueOnce({
+      object: "list",
+      data: [
+        {
+          object: "email_event",
+          id: "event-1",
+          type: "queued",
+          payload: { message: "queued" },
+          created_at: new Date("2026-05-01T00:00:00.000Z"),
+        },
+      ],
+    });
+
+    const { GET } = await import("@/app/api/emails/[id]/events/route");
+    const res = await GET(
+      new Request("http://localhost:3015/api/emails/email-uuid/events", {
+        headers: { Authorization: "Bearer re_test123" },
+      }) as never,
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      object: "list",
+      data: [
+        {
+          object: "email_event",
+          id: "event-1",
+          type: "queued",
+          payload: { message: "queued" },
+          created_at: "2026-05-01T00:00:00.000Z",
+        },
+      ],
     });
   });
 });

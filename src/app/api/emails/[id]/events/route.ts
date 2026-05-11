@@ -1,9 +1,12 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { emailEvents, emails } from "@/lib/db/schema";
-import { and, asc, eq } from "drizzle-orm";
+import {
+  EmailLifecycleServiceError,
+  createEmailLifecycleService,
+} from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
+
+const emailLifecycleService = createEmailLifecycleService();
 
 export async function GET(
   _request: NextRequest,
@@ -16,31 +19,16 @@ export async function GET(
 
   try {
     const { id: emailId } = await params;
-    const email = await db.query.emails.findFirst({
-      where: and(eq(emails.id, emailId), eq(emails.userId, auth.userId)),
-    });
-
-    if (!email) {
+    const result = await emailLifecycleService.listEvents(auth.userId, emailId);
+    return NextResponse.json(result);
+  } catch (error) {
+    if (
+      error instanceof EmailLifecycleServiceError &&
+      error.code === "email_not_found"
+    ) {
       return NextResponse.json({ error: "Email not found" }, { status: 404 });
     }
 
-    const results = await db
-      .select()
-      .from(emailEvents)
-      .where(eq(emailEvents.emailId, emailId))
-      .orderBy(asc(emailEvents.receivedAt));
-
-    return NextResponse.json({
-      object: "list",
-      data: results.map((e) => ({
-        object: "email_event",
-        id: e.id,
-        type: e.type,
-        payload: e.payload,
-        created_at: e.receivedAt,
-      })),
-    });
-  } catch (error) {
     console.error("Failed to fetch email events:", error);
     return NextResponse.json(
       { error: "Failed to fetch email events" },

@@ -25,6 +25,8 @@ type Plan = {
   perks: string[];
 };
 
+export type BillingPeriod = "monthly" | "yearly";
+
 const PLANS: Plan[] = [
   {
     slug: "free",
@@ -301,7 +303,7 @@ function PlanCard({
   billing,
 }: {
   plan: Plan;
-  billing: "monthly" | "yearly";
+  billing: BillingPeriod;
 }) {
   const isCustom = typeof plan.monthly === "string";
   const eff =
@@ -916,9 +918,9 @@ function MiniFooter() {
   );
 }
 
-export function PricingPage() {
-  const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
-
+export function PricingPage({
+  billing = "monthly",
+}: { billing?: BillingPeriod }) {
   return (
     <div className="landing-root">
       <div className="grain" aria-hidden="true" />
@@ -967,8 +969,10 @@ export function PricingPage() {
               source for free forever — opensend is ELv2 either way.
             </p>
 
-            <fieldset
+            <form
               aria-label="Billing period"
+              action="/pricing"
+              method="get"
               style={{
                 display: "inline-flex",
                 padding: 4,
@@ -990,8 +994,9 @@ export function PricingPage() {
                 return (
                   <button
                     key={k}
-                    type="button"
-                    onClick={() => setBilling(k)}
+                    type="submit"
+                    name="billing"
+                    value={k}
                     aria-pressed={active}
                     data-testid={`billing-${k}`}
                     style={{
@@ -1010,7 +1015,7 @@ export function PricingPage() {
                   </button>
                 );
               })}
-            </fieldset>
+            </form>
           </div>
         </section>
 

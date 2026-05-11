@@ -1,9 +1,26 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { segments } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  AudienceMetadataServiceError,
+  createAudienceMetadataService,
+} from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
+
+function audienceMetadataService() {
+  return createAudienceMetadataService();
+}
+
+function mapServiceError(error: unknown, fallback: string) {
+  if (error instanceof AudienceMetadataServiceError) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: error.status },
+    );
+  }
+
+  console.error(`${fallback}:`, error);
+  return NextResponse.json({ error: fallback }, { status: 500 });
+}
 
 export async function GET(
   _request: NextRequest,
@@ -13,30 +30,18 @@ export async function GET(
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessApiKey(auth);
   if (permissionError) return permissionError;
+  if (!auth.userId) return unauthorizedResponse();
 
   try {
     const { id } = await params;
-    const [segment] = await db
-      .select()
-      .from(segments)
-      .where(eq(segments.id, id));
-
-    if (!segment) {
-      return NextResponse.json({ error: "Segment not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({
-      object: "segment",
-      id: segment.id,
-      name: segment.name,
-      created_at: segment.createdAt,
+    const result = await audienceMetadataService().getSegment({
+      userId: auth.userId,
+      id,
     });
+
+    return NextResponse.json(result);
   } catch (error) {
-    console.error("Failed to fetch segment:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch segment" },
-      { status: 500 },
-    );
+    return mapServiceError(error, "Failed to fetch segment");
   }
 }
 
@@ -48,24 +53,17 @@ export async function DELETE(
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessApiKey(auth);
   if (permissionError) return permissionError;
+  if (!auth.userId) return unauthorizedResponse();
 
   try {
     const { id } = await params;
-    const [deleted] = await db
-      .delete(segments)
-      .where(eq(segments.id, id))
-      .returning();
-
-    if (!deleted) {
-      return NextResponse.json({ error: "Segment not found" }, { status: 404 });
-    }
+    await audienceMetadataService().deleteSegment({
+      userId: auth.userId,
+      id,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Failed to delete segment:", error);
-    return NextResponse.json(
-      { error: "Failed to delete segment" },
-      { status: 500 },
-    );
+    return mapServiceError(error, "Failed to delete segment");
   }
 }

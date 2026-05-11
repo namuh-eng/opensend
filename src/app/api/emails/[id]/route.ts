@@ -1,13 +1,16 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { publicApiError } from "@/lib/api-errors";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { emails } from "@/lib/db/schema";
 import {
   parseScheduledAt,
   scheduledAtValidationMessage,
 } from "@/lib/validation/emails";
-import { and, eq } from "drizzle-orm";
+import {
+  EmailDetailServiceError,
+  createEmailDetailService,
+} from "@opensend/core";
+
+const emailDetailService = createEmailDetailService({ parseScheduledAt });
 
 export async function GET(
   request: Request,
@@ -21,42 +24,16 @@ export async function GET(
   const { id } = await params;
 
   try {
-    const email = await db.query.emails.findFirst({
-      where: and(eq(emails.id, id), eq(emails.userId, auth.userId)),
+    const email = await emailDetailService.getEmail({
+      userId: auth.userId,
+      id,
     });
-
-    if (!email) {
+    return Response.json(email);
+  } catch (err) {
+    if (err instanceof EmailDetailServiceError && err.code === "not_found") {
       return Response.json({ error: "Email not found" }, { status: 404 });
     }
 
-    return Response.json({
-      object: "email",
-      id: email.id,
-      from: email.from,
-      to: email.to,
-      subject: email.subject,
-      html: email.html,
-      text: email.text,
-      cc: email.cc,
-      bcc: email.bcc,
-      reply_to: email.replyTo,
-      last_event: email.status,
-      provider_retry_count: email.providerRetryCount,
-      provider_last_attempted_at: email.providerLastAttemptedAt,
-      provider_next_retry_at: email.providerNextRetryAt,
-      provider_last_error: email.providerLastErrorCode
-        ? {
-            code: email.providerLastErrorCode,
-            message: email.providerLastErrorMessage ?? "Provider send failed.",
-          }
-        : null,
-      provider_dead_lettered_at: email.providerDeadLetteredAt,
-      scheduled_at: email.scheduledAt,
-      sent_at: email.sentAt,
-      tags: email.tags,
-      created_at: email.createdAt,
-    });
-  } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to retrieve email";
     return Response.json({ error: message }, { status: 500 });
@@ -73,10 +50,6 @@ function scheduledAtValidationResponse(): Response {
     }),
     { status: 422 },
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export async function PATCH(
@@ -97,55 +70,32 @@ export async function PATCH(
     return Response.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  if (!isRecord(body)) {
-    return scheduledAtValidationResponse();
-  }
-
   try {
-    const existing = await db.query.emails.findFirst({
-      where: and(eq(emails.id, id), eq(emails.userId, auth.userId)),
+    const updated = await emailDetailService.updateEmail({
+      userId: auth.userId,
+      id,
+      body,
     });
+    return Response.json(updated);
+  } catch (err) {
+    if (err instanceof EmailDetailServiceError) {
+      if (err.code === "not_found") {
+        return Response.json({ error: "Email not found" }, { status: 404 });
+      }
 
-    if (!existing) {
-      return Response.json({ error: "Email not found" }, { status: 404 });
-    }
+      if (err.code === "invalid_state") {
+        return Response.json({ error: err.message }, { status: 400 });
+      }
 
-    if (existing.status !== "scheduled") {
-      return Response.json(
-        { error: `Cannot update a ${existing.status} email` },
-        { status: 400 },
-      );
-    }
-
-    const updates: { scheduledAt?: Date | null } = {};
-    if ("scheduled_at" in body) {
-      const scheduledAt = body.scheduled_at;
-      if (scheduledAt === null) {
-        updates.scheduledAt = null;
-      } else if (typeof scheduledAt === "string") {
-        const parsed = parseScheduledAt(scheduledAt);
-        if (!parsed.ok) return scheduledAtValidationResponse();
-        updates.scheduledAt = parsed.date;
-      } else {
+      if (err.code === "invalid_scheduled_at") {
         return scheduledAtValidationResponse();
+      }
+
+      if (err.code === "no_fields") {
+        return Response.json({ error: "No fields to update" }, { status: 400 });
       }
     }
 
-    if (Object.keys(updates).length === 0) {
-      return Response.json({ error: "No fields to update" }, { status: 400 });
-    }
-
-    const [updated] = await db
-      .update(emails)
-      .set(updates)
-      .where(and(eq(emails.id, id), eq(emails.userId, auth.userId)))
-      .returning();
-
-    return Response.json({
-      object: "email",
-      id: updated.id,
-    });
-  } catch (err) {
     const message =
       err instanceof Error ? err.message : "Failed to update email";
     return Response.json({ error: message }, { status: 500 });

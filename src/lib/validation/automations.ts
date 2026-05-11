@@ -260,5 +260,27 @@ export const listRunsQuerySchema = z.object({
   after: z.string().min(1).optional(),
 });
 
+export const cancelAutomationRunSchema = z
+  .object({
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict();
+
+export const automationRunMetricsQuerySchema = z
+  .object({
+    from: z.string().datetime({ offset: true }).optional(),
+    to: z.string().datetime({ offset: true }).optional(),
+  })
+  .superRefine((query, ctx) => {
+    if (!query.from || !query.to) return;
+    if (new Date(query.from).getTime() > new Date(query.to).getTime()) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["from"],
+        message: "from must be before to",
+      });
+    }
+  });
+
 export type CreateAutomationRequest = z.infer<typeof createAutomationSchema>;
 export type UpdateAutomationRequest = z.infer<typeof updateAutomationSchema>;

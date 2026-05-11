@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, lt, lte } from "drizzle-orm";
+import { type SQL, and, desc, eq, gt, lt, lte } from "drizzle-orm";
 import { db } from "../client";
 import { emails } from "../schema";
 
@@ -8,6 +8,12 @@ export const emailRepo = {
       where: userId
         ? and(eq(emails.id, id), eq(emails.userId, userId))
         : eq(emails.id, id),
+    });
+  },
+
+  async findByIdForUser(id: string, userId: string) {
+    return await db.query.emails.findFirst({
+      where: and(eq(emails.id, id), eq(emails.userId, userId)),
     });
   },
 
@@ -46,6 +52,61 @@ export const emailRepo = {
       .from(emails)
       .where(and(eq(emails.status, "scheduled"), lte(emails.scheduledAt, now)))
       .limit(limit);
+  },
+
+  async deleteForUser(id: string, userId: string) {
+    await db
+      .delete(emails)
+      .where(and(eq(emails.id, id), eq(emails.userId, userId)));
+  },
+
+  async listForApi(options: {
+    userId: string;
+    limit: number;
+    after?: string;
+    before?: string;
+    status?: string;
+  }) {
+    const conditions: SQL[] = [eq(emails.userId, options.userId)];
+
+    if (options.status && options.status !== "all") {
+      conditions.push(eq(emails.status, options.status));
+    }
+    if (options.after) {
+      conditions.push(gt(emails.id, options.after));
+    } else if (options.before) {
+      conditions.push(lt(emails.id, options.before));
+    }
+
+    const results = await db
+      .select({
+        id: emails.id,
+        from: emails.from,
+        to: emails.to,
+        subject: emails.subject,
+        cc: emails.cc,
+        bcc: emails.bcc,
+        replyTo: emails.replyTo,
+        status: emails.status,
+        providerRetryCount: emails.providerRetryCount,
+        providerLastAttemptedAt: emails.providerLastAttemptedAt,
+        providerNextRetryAt: emails.providerNextRetryAt,
+        providerLastErrorCode: emails.providerLastErrorCode,
+        providerLastErrorMessage: emails.providerLastErrorMessage,
+        providerDeadLetteredAt: emails.providerDeadLetteredAt,
+        scheduledAt: emails.scheduledAt,
+        sentAt: emails.sentAt,
+        createdAt: emails.createdAt,
+      })
+      .from(emails)
+      .where(and(...conditions))
+      .orderBy(desc(emails.createdAt))
+      .limit(options.limit + 1);
+
+    const hasMore = results.length > options.limit;
+    const data = hasMore ? results.slice(0, options.limit) : results;
+
+    return { data, hasMore };
   },
 
   async list(

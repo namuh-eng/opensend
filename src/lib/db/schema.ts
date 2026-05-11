@@ -328,7 +328,16 @@ export const templates = pgTable("templates", {
   html: text("html"),
   text: text("text"),
   variables:
-    jsonb("variables").$type<Array<{ name: string; required: boolean }>>(),
+    jsonb("variables").$type<
+      Array<{
+        name: string;
+        key?: string;
+        type?: "string" | "number";
+        required: boolean;
+        fallbackValue?: string | number | null;
+        fallback_value?: string | number | null;
+      }>
+    >(),
   currentVersionId: uuid("current_version_id"),
   publishedAt: timestamp("published_at", { withTimezone: true }),
   hasUnpublishedVersions: boolean("has_unpublished_versions")
@@ -485,6 +494,7 @@ export type AutomationStepStateEntry = {
     | "waiting"
     | "completed"
     | "failed"
+    | "cancelled"
     | "skipped";
   startedAt?: string;
   completedAt?: string;

@@ -4,7 +4,7 @@ The production ingester is the Bun/Hono service in `packages/ingester`. It is a 
 
 1. SES/SNS event ingestion at `POST /events/ses`
 2. Background job execution (queued email sends, scheduled-email scans,
-   webhook dispatch, webhook retry scans)
+   webhook dispatch, webhook retry scans, and domain verification reconciliation)
 
 A separate Go skeleton now exists at `services/ingester-go` for the planned issue #71 data-plane migration. It is experimental and shadow-only: it exposes static `GET /health` and `GET /readyz` endpoints on local port `3027` by default, but it does **not** process SES/SNS events, jobs, Stripe webhooks, or webhook fan-out. Keep production traffic on `packages/ingester` until future parity and cutover slices explicitly change this.
 
@@ -27,6 +27,7 @@ Endpoints:
 - App: `http://localhost:${PORT:-3015}`
 - Ingester health: `http://localhost:${INGESTER_PORT:-3016}/health`
 - SES SNS webhook target: `http://localhost:${INGESTER_PORT:-3016}/events/ses`
+- Stripe billing webhook target: `http://localhost:${INGESTER_PORT:-3016}/webhooks/stripe`
 - Experimental Go ingester health, when run separately: `http://localhost:3027/health`
 
 ```bash
@@ -103,11 +104,38 @@ BACKGROUND_JOBS_EVENT_BUS_NAME=<event-bus-name>   # optional lifecycle bus
 CLOUDWATCH_METRICS_NAMESPACE=Opensend             # optional EMF namespace
 ```
 
-Set this **only** on the ingester service:
+Set these on the ingester service:
 
 ```bash
 BACKGROUND_WORKER_POLL=true
 INGESTER_JOB_TOKEN=<random-bearer-token>
+```
+
+For hosted Stripe billing cutover, also set these on the ingester service from
+the deployment secret manager:
+
+```bash
+BILLING_BACKEND=stripe
+STRIPE_SECRET_KEY=<from-secret-manager>
+STRIPE_WEBHOOK_SECRET=<stripe-webhook-signing-secret>
+BILLING_NOTIFICATION_FROM_EMAIL=billing@yourdomain.com # optional
+```
+
+The Stripe webhook endpoint is:
+
+```text
+https://events.yourdomain.com/webhooks/stripe
+```
+
+Run `bun run billing:preflight -- --service ingester` in the release
+environment before sending Stripe traffic to the endpoint. See
+[`hosted-stripe-cutover.md`](hosted-stripe-cutover.md) for the full validation
+checklist.
+
+Set the same `INGESTER_JOB_TOKEN` on any scheduler that calls `/jobs/*`. Compose also accepts an optional scheduler cadence override:
+
+```bash
+INGESTER_SCHEDULER_INTERVAL_SECONDS=60
 ```
 
 ### SQS requirements
@@ -121,7 +149,7 @@ INGESTER_JOB_TOKEN=<random-bearer-token>
 
 ### Periodic scans
 
-Two scans need to run every minute. Either pattern works:
+Three scans need to run every minute: `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify`. The Docker Compose `scheduler` sidecar runs all three by default. For managed production, use one of these patterns:
 
 **HTTP-driven** (e.g. AWS EventBridge schedule rule with HTTP target, or any
 cron driver that can issue authenticated POSTs):
@@ -132,17 +160,21 @@ curl -i -X POST "${INGESTER_URL}/jobs/scheduled-emails" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 curl -i -X POST "${INGESTER_URL}/jobs/webhooks" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
+curl -i -X POST "${INGESTER_URL}/jobs/domain-verify" \
+  -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 ```
 
 **Queue-driven**: publish `scheduled-email.scan` and `webhook-delivery.scan`
 SQS messages on the same minute cadence; the ingester picks them up via the
-normal long-poll loop.
+normal long-poll loop. Domain verification is HTTP-only today, so keep an HTTP schedule for `/jobs/domain-verify`.
 
 Manual probes during a deploy:
 
 ```bash
 INGESTER_URL="https://events.yourdomain.com"
 curl -i -X POST "${INGESTER_URL}/jobs/poll" \
+  -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
+curl -i -X POST "${INGESTER_URL}/jobs/domain-verify" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 ```
 
@@ -203,9 +235,12 @@ Before pointing production SES SNS at a freshly stood-up ingester, verify:
   config, Redis URL, and `INGESTER_JOB_TOKEN` as the app.
 - The events host (`events.<your-domain>`) resolves and serves a 200 on
   `/health`.
+- If hosted billing is enabled, Stripe Dashboard points to
+  `https://events.<your-domain>/webhooks/stripe` and the ingester has
+  `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`.
 - The SQS queue exists with a redrive policy + DLQ.
-- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`) are
-  scheduled on a 1-minute cadence.
+- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when the token is configured.
+- Domain verification runbook passed: create/use a pending domain, confirm SES is verified, do not click **Verify DNS Records**, wait for the scheduler, and confirm the OpenSend DB/dashboard flips to `verified`.
 - Migrations ran successfully against the production database before the new
   image started.
 - Rolling back is possible: keep the previous image tag pinned somewhere you

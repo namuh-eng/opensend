@@ -22,15 +22,6 @@ function capitalize(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
-function getApiKey(): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage?.getItem?.("api_key") ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export function AutomationsList() {
   const router = useRouter();
   const [automations, setAutomations] = useState<AutomationListItem[]>([]);
@@ -52,20 +43,12 @@ export function AutomationsList() {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (statusFilter) params.set("status", statusFilter);
-      const apiKey = getApiKey();
-      const headers: Record<string, string> = {};
-      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-      const res = await fetch(`/api/automations?${params.toString()}`, {
-        headers,
-      });
+      const query = params.toString();
+      const res = await fetch(`/api/automations${query ? `?${query}` : ""}`);
       if (!res.ok) {
         setAutomations([]);
         setTotal(0);
-        if (res.status === 401) {
-          setError("Unauthorized — set an API key to view automations.");
-        } else {
-          setError("Failed to load automations.");
-        }
+        setError("Failed to load automations.");
         return;
       }
       const data = await res.json();
@@ -108,12 +91,8 @@ export function AutomationsList() {
   const handleDelete = async (item: AutomationListItem) => {
     setActionMenuId(null);
     try {
-      const apiKey = getApiKey();
-      const headers: Record<string, string> = {};
-      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
       await fetch(`/api/automations/${item.id}`, {
         method: "DELETE",
-        headers,
       });
       fetchAutomations();
     } catch {
@@ -125,11 +104,9 @@ export function AutomationsList() {
     setActionMenuId(null);
     const nextStatus = item.status === "enabled" ? "disabled" : "enabled";
     try {
-      const apiKey = getApiKey();
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
-      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
       const res = await fetch(`/api/automations/${item.id}`, {
         method: "PATCH",
         headers,

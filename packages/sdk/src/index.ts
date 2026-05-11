@@ -2,6 +2,9 @@ import type {
   ApiKeyListItem,
   ApiKeyListResponse,
   ApiKeyResponse,
+  AudienceListItem,
+  AudienceListResponse,
+  AudienceResponse,
   BatchEmailItemError,
   BatchEmailItemResponse,
   BatchEmailResponse,
@@ -10,8 +13,10 @@ import type {
   ContactResponse,
   ContactTopicPreference,
   CreateApiKeyPayload,
+  CreateAudiencePayload,
   CreateContactPayload,
   CreateContactResponse,
+  DeleteAudienceResponse,
   DeleteContactResponse,
   DomainCapability,
   DomainListItem,
@@ -72,7 +77,8 @@ export interface AutomationStepPayload {
     | "condition"
     | "wait_for_event"
     | "contact_update"
-    | "contact_delete";
+    | "contact_delete"
+    | "add_to_segment";
   config?: Record<string, unknown>;
   position?: number;
 }
@@ -80,6 +86,7 @@ export interface AutomationStepPayload {
 export interface AutomationConnectionPayload {
   from: string;
   to: string;
+  type?: "default" | "condition_met" | "condition_not_met";
 }
 
 export interface CreateAutomationPayload {
@@ -111,8 +118,21 @@ export interface ListOptions {
   after?: string;
 }
 
+export interface AudienceListOptions extends ListOptions {
+  search?: string;
+}
+
 export interface AutomationRunListOptions extends ListOptions {
   status?: string;
+}
+
+export interface CancelAutomationRunPayload {
+  reason?: string;
+}
+
+export interface AutomationRunMetricsOptions {
+  from?: string;
+  to?: string;
 }
 
 function normalizeBaseUrl(baseUrl: string = DEFAULT_BASE_URL): string {
@@ -398,6 +418,42 @@ class Contacts {
   }
 }
 
+class Audiences {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(
+    payload: CreateAudiencePayload,
+  ): Promise<ApiResponse<AudienceResponse>> {
+    return this.http.request<AudienceResponse>("POST", "/audiences", payload);
+  }
+
+  async list(
+    options: AudienceListOptions = {},
+  ): Promise<ApiResponse<AudienceListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.search) params.set("search", options.search);
+
+    const query = params.toString();
+    return this.http.request<AudienceListResponse>(
+      "GET",
+      query ? `/audiences?${query}` : "/audiences",
+    );
+  }
+
+  async get(id: string): Promise<ApiResponse<AudienceResponse>> {
+    return this.http.request<AudienceResponse>("GET", `/audiences/${id}`);
+  }
+
+  async delete(id: string): Promise<ApiResponse<DeleteAudienceResponse>> {
+    return this.http.request<DeleteAudienceResponse>(
+      "DELETE",
+      `/audiences/${id}`,
+    );
+  }
+}
+
 class Automations {
   constructor(private readonly http: HttpClient) {}
 
@@ -463,6 +519,34 @@ class Automations {
       `/api/automations/${id}/runs/${runId}`,
     );
   }
+
+  async cancelRun(
+    id: string,
+    runId: string,
+    payload: CancelAutomationRunPayload = {},
+  ): Promise<ApiResponse<unknown>> {
+    return this.http.request<unknown>(
+      "POST",
+      `/api/automations/${id}/runs/${runId}/cancel`,
+      payload,
+    );
+  }
+
+  async getRunMetrics(
+    id: string,
+    options: AutomationRunMetricsOptions = {},
+  ): Promise<ApiResponse<unknown>> {
+    const params = new URLSearchParams();
+    if (options.from) params.set("from", options.from);
+    if (options.to) params.set("to", options.to);
+    const query = params.toString();
+    return this.http.request<unknown>(
+      "GET",
+      query
+        ? `/api/automations/${id}/runs/metrics?${query}`
+        : `/api/automations/${id}/runs/metrics`,
+    );
+  }
 }
 
 class Events {
@@ -493,6 +577,7 @@ class Opensend {
   public readonly domains: Domains;
   public readonly apiKeys: ApiKeys;
   public readonly contacts: Contacts;
+  public readonly audiences: Audiences;
   public readonly automations: Automations;
   public readonly events: Events;
 
@@ -507,6 +592,7 @@ class Opensend {
     this.domains = new Domains(http);
     this.apiKeys = new ApiKeys(http);
     this.contacts = new Contacts(http);
+    this.audiences = new Audiences(http);
     this.automations = new Automations(http);
     this.events = new Events(http);
   }
@@ -544,6 +630,11 @@ export type {
   ApiKeyResponse,
   ApiKeyListItem,
   ApiKeyListResponse,
+  CreateAudiencePayload,
+  AudienceResponse,
+  AudienceListItem,
+  AudienceListResponse,
+  DeleteAudienceResponse,
   CreateContactPayload,
   CreateContactResponse,
   UpdateContactPayload,

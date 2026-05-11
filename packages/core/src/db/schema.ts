@@ -326,7 +326,21 @@ export const templates = pgTable("templates", {
   html: text("html"),
   text: text("text"),
   variables:
-    jsonb("variables").$type<Array<{ name: string; required: boolean }>>(),
+    jsonb("variables").$type<
+      Array<{
+        name: string;
+        key?: string;
+        type?: "string" | "number";
+        required: boolean;
+        fallbackValue?: string | number | null;
+        fallback_value?: string | number | null;
+      }>
+    >(),
+  currentVersionId: uuid("current_version_id"),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
+  hasUnpublishedVersions: boolean("has_unpublished_versions")
+    .notNull()
+    .default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -347,6 +361,7 @@ export const logs = pgTable("logs", {
     .defaultNow(),
   document: jsonb("document"),
   userId: text("user_id"),
+  apiKeyId: uuid("api_key_id"),
 });
 
 export const contactProperties = pgTable(
@@ -443,6 +458,25 @@ export const webhookDeliveries = pgTable(
   ],
 );
 
+export const contactsToSegments = pgTable(
+  "contacts_to_segments",
+  {
+    contactId: uuid("contact_id")
+      .notNull()
+      .references(() => contacts.id, { onDelete: "cascade" }),
+    segmentId: uuid("segment_id")
+      .notNull()
+      .references(() => segments.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("contacts_to_segments_idx").on(t.contactId, t.segmentId),
+    index("contacts_to_segments_segment_id_idx").on(t.segmentId),
+  ],
+);
+
 // ── Automations ─────────────────────────────────────────────────────
 
 export type AutomationConnection = {
@@ -458,6 +492,7 @@ export type AutomationStepStateEntry = {
     | "waiting"
     | "completed"
     | "failed"
+    | "cancelled"
     | "skipped";
   startedAt?: string;
   completedAt?: string;

@@ -1,7 +1,22 @@
 # Stripe webhook runbook
 
 OpenSend processes Stripe subscription and invoice lifecycle events on the
-ingester service at `POST /webhooks/stripe`.
+ingester service at `POST /webhooks/stripe`. Hosted cutover details live in
+[`hosted-stripe-cutover.md`](hosted-stripe-cutover.md).
+
+Required ingester env for hosted Stripe webhooks:
+
+```bash
+BILLING_BACKEND=stripe
+STRIPE_SECRET_KEY=<from-secret-manager>
+STRIPE_WEBHOOK_SECRET=<stripe-webhook-signing-secret>
+```
+
+Run the non-secret preflight before pointing Stripe at the endpoint:
+
+```bash
+bun run billing:preflight -- --service ingester
+```
 
 ## Replay an event from Stripe
 

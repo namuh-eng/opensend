@@ -1,24 +1,22 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { contacts, segments } from "@/lib/db/schema";
-import { and, eq, or } from "drizzle-orm";
+import { ContactServiceError, createContactService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 
-async function findContact(idOrEmail: string, userId: string) {
-  const isUuid =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      idOrEmail,
-    );
+function contactService() {
+  return createContactService();
+}
 
-  return await db.query.contacts.findFirst({
-    where: and(
-      isUuid
-        ? or(eq(contacts.id, idOrEmail), eq(contacts.email, idOrEmail))
-        : eq(contacts.email, idOrEmail),
-      eq(contacts.userId, userId),
-    ),
-  });
+function mapContactServiceError(error: unknown) {
+  if (error instanceof ContactServiceError) {
+    return NextResponse.json({ error: error.message }, { status: 404 });
+  }
+
+  console.error("Failed to fetch contact segments:", error);
+  return NextResponse.json(
+    { error: "Failed to fetch contact segments" },
+    { status: 500 },
+  );
 }
 
 export async function GET(
@@ -34,31 +32,7 @@ export async function GET(
 
   try {
     const { id: idOrEmail } = await params;
-    const contact = await findContact(idOrEmail, userId);
-
-    if (!contact) {
-      return NextResponse.json({ error: "Contact not found" }, { status: 404 });
-    }
-
-    const contactSegments = (contact.segments as string[]) ?? [];
-
-    // Fetch segment details for the names in the contact's segments array
-    const data = await Promise.all(
-      contactSegments.map(async (name) => {
-        const [seg] = await db
-          .select({
-            id: segments.id,
-            name: segments.name,
-            createdAt: segments.createdAt,
-          })
-          .from(segments)
-          .where(and(eq(segments.name, name), eq(segments.userId, userId)))
-          .limit(1);
-        return seg
-          ? { id: seg.id, name: seg.name, created_at: seg.createdAt }
-          : null;
-      }),
-    ).then((results) => results.filter((r) => r !== null));
+    const data = await contactService().listContactSegments(idOrEmail, userId);
 
     return NextResponse.json({
       object: "list",
@@ -66,10 +40,6 @@ export async function GET(
       has_more: false,
     });
   } catch (error) {
-    console.error("Failed to fetch contact segments:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch contact segments" },
-      { status: 500 },
-    );
+    return mapContactServiceError(error);
   }
 }

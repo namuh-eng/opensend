@@ -24,6 +24,7 @@ there. This document is for production deployments.
 - [Shared rate limiting (Redis)](#shared-rate-limiting-redis)
 - [Splitting the ingester service](#splitting-the-ingester-service)
 - [Observability](#observability)
+- [Hosted Stripe billing](#hosted-stripe-billing)
 - [Upgrades & migrations](#upgrades--migrations)
 - [Troubleshooting](#troubleshooting)
 
@@ -120,10 +121,32 @@ contributor-facing set; the table below adds the production-only entries.
 | `BACKGROUND_JOBS_REQUIRE_QUEUE=true` | Fail API publish when the queue URL is missing instead of silently skipping. Required in production. |
 | `BACKGROUND_JOBS_EVENT_BUS_NAME` | Optional EventBridge bus for job lifecycle events. |
 | `BACKGROUND_WORKER_POLL=true` | Set on the **ingester** service only. Enables long-poll SQS consumer. |
-| `INGESTER_JOB_TOKEN` | Bearer token required for `/jobs/*` endpoints when EventBridge invokes them over HTTP. |
+| `INGESTER_JOB_TOKEN` | Bearer token required for `/jobs/*` endpoints when the scheduler/EventBridge invokes them over HTTP. |
+| `INGESTER_SCHEDULER_INTERVAL_SECONDS` | Compose scheduler cadence for `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify`. Default `60`; minimum `10`. |
 | `RATE_LIMIT_BACKEND` | `disabled` (single-process dev), or `redis` (production). |
 | `REDIS_URL` | TLS Redis endpoint, e.g. `rediss://default:<password>@<endpoint>:6379`. Used for rate limiting AND auth/domain metadata cache. |
 | `CLOUDWATCH_METRICS_NAMESPACE` | Override the default `Opensend` EMF metrics namespace. |
+
+### Hosted Stripe billing
+
+Billing is disabled by default for self-host/local OSS deploys. Leave
+`BILLING_BACKEND` unset or set it to `disabled` to keep sends unmetered by
+OpenSend plan quotas. The hosted namuh.co deployment sets billing env from its
+secret manager instead of committing secrets.
+
+| Variable | Service | Purpose |
+| --- | --- | --- |
+| `BILLING_BACKEND=stripe` | App + ingester | Enables hosted Stripe/paywall behavior. Any other value is treated as disabled. |
+| `STRIPE_SECRET_KEY` | App + ingester | Stripe API key for hosted billing. Required before the app exposes Checkout/Portal behavior. |
+| `STRIPE_WEBHOOK_SECRET` | Ingester | Signing secret for the Stripe webhook endpoint at `/webhooks/stripe`. |
+| `BILLING_NOTIFICATION_FROM_EMAIL` | Ingester, optional | Sender used for payment-failed notifications. |
+
+Before enabling hosted billing, read the full cutover checklist in
+[`hosted-stripe-cutover.md`](hosted-stripe-cutover.md) and run:
+
+```bash
+bun run billing:preflight -- --service all --check-db --strict
+```
 
 ## Database
 
@@ -290,13 +313,17 @@ This means **you need SQS in production**. Without it, sends never leave
 
 ### Scheduled jobs
 
-Two periodic scans need to run every minute:
+Three periodic scans need to run every minute:
 
 - **Scheduled emails**: enqueue due `email.send` jobs.
 - **Webhook retry**: re-attempt failed webhook deliveries whose
   `next_retry_at` has arrived.
+- **Domain verification**: reconcile SES-verified domains and flip OpenSend
+  domain/record status to `verified` without clicking **Verify DNS Records**.
 
-Two ways to drive them:
+Docker Compose runs the durable `scheduler` sidecar by default. It posts to all three ingester job endpoints every `INGESTER_SCHEDULER_INTERVAL_SECONDS` seconds and includes `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when the token is configured.
+
+Two other production patterns can drive the same endpoints:
 
 **Option 1: EventBridge → HTTP**. Schedule rules that POST to the ingester
 with the `INGESTER_JOB_TOKEN` bearer:
@@ -307,11 +334,24 @@ curl -i -X POST "${INGESTER_URL}/jobs/scheduled-emails" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 curl -i -X POST "${INGESTER_URL}/jobs/webhooks" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
+curl -i -X POST "${INGESTER_URL}/jobs/domain-verify" \
+  -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 ```
 
 **Option 2: SQS scan jobs**. Publish `scheduled-email.scan` and
-`webhook-delivery.scan` messages on a schedule. The ingester picks them up via
-the same long-poll loop.
+`webhook-delivery.scan` messages on a schedule. Domain verification is HTTP-only today, so keep an HTTP schedule for `/jobs/domain-verify` even if scheduled emails and webhook retries are queue-driven.
+
+
+### Domain verification scheduler runbook
+
+To verify the automatic domain reconciler in a deployment:
+
+1. Create a new domain from the dashboard/API, or use an existing domain whose OpenSend status is `not_started` or `pending`.
+2. Publish the DKIM/SPF/DMARC records and confirm AWS SES reports the identity as verified (`VerifiedForSendingStatus=true` and DKIM `SUCCESS`).
+3. Do **not** click **Verify DNS Records** in OpenSend.
+4. Wait one scheduler interval plus SES/API latency (normally 1-2 minutes with the default 60-second cadence).
+5. Confirm the OpenSend dashboard or database now shows the domain status and DNS record badges as `verified`.
+6. If it does not flip, inspect the scheduler and ingester logs for `/jobs/domain-verify` responses and verify the scheduler is sending `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when `INGESTER_JOB_TOKEN` is set on the ingester.
 
 ### Local dev fallback
 

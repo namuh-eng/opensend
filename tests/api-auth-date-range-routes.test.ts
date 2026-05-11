@@ -12,6 +12,22 @@ const mockCountFn = vi.hoisted(() => vi.fn());
 const mockCreateWebhookService = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
+const mockContactService = vi.hoisted(() => ({
+  createContact: vi.fn(),
+  listContacts: vi.fn(),
+  getContact: vi.fn(),
+  updateContact: vi.fn(),
+  deleteContact: vi.fn(),
+  listContactSegments: vi.fn(),
+  addContactToSegment: vi.fn(),
+  removeContactFromSegment: vi.fn(),
+}));
+const mockContactOperationsService = vi.hoisted(() => ({
+  bulkAction: vi.fn(),
+  importContacts: vi.fn(),
+  listContactTopics: vi.fn(),
+  updateContactTopics: vi.fn(),
+}));
 
 function makeChain<T>(rows: T[]) {
   return {
@@ -193,15 +209,589 @@ describe("route smoke coverage", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
-    vi.doMock("@opensend/core", () => ({
-      createWebhookService: mockCreateWebhookService,
-    }));
+    vi.doMock("@opensend/core", () => {
+      class TemplateServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+        ) {
+          super(message);
+          this.name = "TemplateServiceError";
+        }
+      }
+      class ContactServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+        ) {
+          super(message);
+          this.name = "ContactServiceError";
+        }
+      }
+      class ContactOperationsServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+          readonly status: number,
+        ) {
+          super(message);
+          this.name = "ContactOperationsServiceError";
+        }
+      }
+      class BroadcastServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+        ) {
+          super(message);
+          this.name = "BroadcastServiceError";
+        }
+      }
+      class AudienceMetadataServiceError extends Error {
+        constructor(
+          readonly code: string,
+          message: string,
+          readonly status: number,
+        ) {
+          super(message);
+          this.name = "AudienceMetadataServiceError";
+        }
+      }
+
+      const notFound = (message: string) =>
+        new AudienceMetadataServiceError("not_found", message, 404);
+      const invalidInput = (message: string, status = 400) =>
+        new AudienceMetadataServiceError("invalid_input", message, status);
+
+      return {
+        createWebhookService: mockCreateWebhookService,
+        TemplateServiceError,
+        ContactServiceError,
+        ContactOperationsServiceError,
+        BroadcastServiceError,
+        AudienceMetadataServiceError,
+        createDashboardAggregateService: () => ({
+          async getMetrics() {
+            await mockSelect().from().where();
+            await mockSelect().from().where().groupBy().orderBy();
+            await mockSelect().from().where().groupBy().orderBy();
+            await mockSelect().from().where().groupBy().orderBy();
+            await mockSelect().from().where().groupBy().orderBy();
+            return {
+              totalEmails: 10,
+              deliverabilityRate: 70,
+              bounceRate: 20,
+              complainRate: 10,
+              domains: ["example.com"],
+              dailyData: [{ date: "2026-04-23", count: 7 }],
+              domainBreakdown: [{ domain: "example.com", count: 10, rate: 70 }],
+              bounceBreakdown: {
+                permanent: 1,
+                transient: 1,
+                undetermined: 0,
+              },
+              dailyBounceData: [{ date: "2026-04-23", rate: 20 }],
+              complained: 1,
+              dailyComplainData: [{ date: "2026-04-23", rate: 10 }],
+              lastUpdated: new Date().toISOString(),
+            };
+          },
+          async getUsage() {
+            const [
+              monthlyEmails,
+              dailyEmails,
+              contactCount,
+              segmentCount,
+              domainCount,
+            ] = await Promise.all([
+              mockCountFn(),
+              mockCountFn(),
+              mockCountFn(),
+              mockCountFn(),
+              mockCountFn(),
+            ]);
+            return {
+              transactional: {
+                monthlyUsed: Number(monthlyEmails),
+                monthlyLimit: 3000,
+                dailyUsed: Number(dailyEmails),
+                dailyLimit: 100,
+              },
+              marketing: {
+                contactsUsed: Number(contactCount),
+                contactsLimit: 1000,
+                segmentsUsed: Number(segmentCount),
+                segmentsLimit: 3,
+                broadcastsLimit: "Unlimited",
+              },
+              team: {
+                domainsUsed: Number(domainCount),
+                domainsLimit: 3,
+                rateLimit: 2,
+              },
+            };
+          },
+        }),
+        createBroadcastService: () => ({
+          async listBroadcasts() {
+            const rows = await mockSelect().from().where().orderBy().limit();
+            return { data: rows, hasMore: false };
+          },
+          async createBroadcast(input: { body: Record<string, unknown> }) {
+            const [broadcast] = await mockInsert()
+              .values(input.body)
+              .returning();
+            return broadcast;
+          },
+          async getBroadcast(_userId: string, id: string) {
+            const [broadcast] = await mockSelect()
+              .from()
+              .where({ id })
+              .limit(1);
+            if (!broadcast) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            return broadcast;
+          },
+          async updateBroadcast(input: {
+            id: string;
+            body: Record<string, unknown>;
+          }) {
+            const [broadcast] = await mockUpdate()
+              .set(input.body)
+              .where({ id: input.id })
+              .returning();
+            if (!broadcast) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            return broadcast;
+          },
+          async deleteBroadcast(_userId: string, id: string) {
+            const [existing] = await mockSelect().from().where({ id }).limit(1);
+            if (!existing) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            if (
+              existing.status !== "draft" &&
+              existing.status !== "scheduled"
+            ) {
+              throw new BroadcastServiceError(
+                "delete_forbidden",
+                "Cannot delete a broadcast that is already sent or queued",
+              );
+            }
+            const [broadcast] = await mockDelete().where({ id }).returning();
+            if (!broadcast) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            return broadcast;
+          },
+          async sendBroadcast(input: {
+            id: string;
+            body: Record<string, unknown>;
+          }) {
+            const [existing] = await mockSelect()
+              .from()
+              .where({ id: input.id })
+              .limit(1);
+            if (!existing) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            if (existing.status !== "draft") {
+              throw new BroadcastServiceError(
+                "send_forbidden",
+                `Cannot send a broadcast in ${existing.status} status`,
+              );
+            }
+            const scheduledAt = input.body.scheduled_at
+              ? new Date(String(input.body.scheduled_at))
+              : null;
+            const [broadcast] = await mockUpdate()
+              .set({
+                status: scheduledAt ? "scheduled" : "queued",
+                scheduledAt,
+              })
+              .where({ id: input.id })
+              .returning();
+            return {
+              id: broadcast.id,
+              status: broadcast.status,
+              scheduledAt: broadcast.scheduledAt ?? null,
+            };
+          },
+          async getBroadcastMetrics(_input: { userId: string; id: string }) {
+            const [broadcast] = await mockSelect().from().where().limit(1);
+            if (!broadcast) {
+              throw new BroadcastServiceError(
+                "not_found",
+                "Broadcast not found",
+              );
+            }
+            const [stats] = await mockSelect().from().where();
+            const total = Number(stats?.total ?? 0);
+            const delivered = Number(stats?.delivered ?? 0);
+            const bounced = Number(stats?.bounced ?? 0);
+            const complained = Number(stats?.complained ?? 0);
+            const opened = Number(stats?.opened ?? 0);
+            const clicked = Number(stats?.clicked ?? 0);
+            return {
+              cacheStatus: "miss",
+              payload: {
+                object: "broadcast_metrics",
+                broadcast_id: _input.id,
+                total,
+                delivered,
+                bounced,
+                complained,
+                opened,
+                clicked,
+                delivery_rate: total > 0 ? (delivered / total) * 100 : 0,
+                open_rate: total > 0 ? (opened / total) * 100 : 0,
+                click_rate: total > 0 ? (clicked / total) * 100 : 0,
+                bounce_rate: total > 0 ? (bounced / total) * 100 : 0,
+              },
+            };
+          },
+        }),
+        createAudienceMetadataService: () => ({
+          async listSegments() {
+            const rows = await mockSelect().from().where().orderBy().limit();
+            const total = await mockCountFn();
+            return {
+              object: "list",
+              data: rows.map((row: Record<string, unknown>) => ({
+                id: row.id,
+                name: row.name,
+                created_at: row.createdAt,
+              })),
+              has_more: false,
+              total: Number(total),
+            };
+          },
+          async createSegment(input: { body: Record<string, unknown> }) {
+            const name =
+              typeof input.body.name === "string" ? input.body.name.trim() : "";
+            if (!name) throw invalidInput("Name is required");
+            const [segment] = await mockInsert().values({ name }).returning();
+            return { object: "segment", id: segment.id, name: segment.name };
+          },
+          async getSegment() {
+            const [segment] = await mockSelect().from().where();
+            if (!segment) throw notFound("Segment not found");
+            return {
+              object: "segment",
+              id: segment.id,
+              name: segment.name,
+              created_at: segment.createdAt,
+            };
+          },
+          async deleteSegment() {
+            const [deleted] = await mockDelete().where().returning();
+            if (!deleted) throw notFound("Segment not found");
+          },
+          async listSegmentContacts() {
+            const [segment] = await mockSelect().from().where();
+            if (!segment) throw notFound("Segment not found");
+            const rows = await mockSelect()
+              .from()
+              .innerJoin()
+              .where()
+              .orderBy()
+              .limit();
+            return {
+              object: "list",
+              data: rows.map((row: Record<string, unknown>) => ({
+                id: row.id,
+                email: row.email,
+                firstName: row.firstName,
+                lastName: row.lastName,
+                status: row.unsubscribed ? "unsubscribed" : "subscribed",
+                created_at: row.createdAt,
+              })),
+              has_more: false,
+            };
+          },
+          async listTopics() {
+            const rows = await mockSelect().from().where().orderBy().limit();
+            const total = await mockCountFn();
+            return {
+              object: "list",
+              data: rows.map((row: Record<string, unknown>) => ({
+                id: row.id,
+                name: row.name,
+                description: row.description,
+                default_subscription: row.defaultSubscription,
+                visibility: row.visibility,
+                created_at: row.createdAt,
+              })),
+              has_more: false,
+              total: Number(total),
+            };
+          },
+          async createTopic(input: { body: Record<string, unknown> }) {
+            const name =
+              typeof input.body.name === "string" ? input.body.name.trim() : "";
+            if (!name) throw invalidInput("Name is required");
+            const description =
+              typeof input.body.description === "string"
+                ? input.body.description.trim() || null
+                : null;
+            if (description && description.length > 200) {
+              throw invalidInput(
+                "Description must be 200 characters or less",
+                422,
+              );
+            }
+            const [topic] = await mockInsert()
+              .values({ name, description })
+              .returning();
+            return {
+              object: "topic",
+              id: topic.id,
+              name: topic.name,
+              description: topic.description,
+              defaultSubscription: topic.defaultSubscription,
+              visibility: topic.visibility,
+              createdAt: topic.createdAt,
+            };
+          },
+          async getTopic() {
+            const [topic] = await mockSelect().from().where().limit();
+            if (!topic) throw notFound("Topic not found");
+            return {
+              object: "topic",
+              id: topic.id,
+              name: topic.name,
+              description: topic.description,
+              default_subscription: topic.defaultSubscription,
+              visibility: topic.visibility,
+              created_at: topic.createdAt,
+            };
+          },
+          async updateTopic(input: { body: Record<string, unknown> }) {
+            if (Object.keys(input.body).length === 0) {
+              throw invalidInput("No fields to update");
+            }
+            const [topic] = await mockUpdate()
+              .set(input.body)
+              .where()
+              .returning();
+            if (!topic) throw notFound("Topic not found");
+            return topic;
+          },
+          async deleteTopic() {
+            const [deleted] = await mockDelete().where().returning();
+            if (!deleted) throw notFound("Topic not found");
+          },
+          async listProperties() {
+            const total = await mockCountFn();
+            const rows = await mockSelect().from().orderBy().limit().offset();
+            return {
+              data: rows.map((row: Record<string, unknown>) => ({
+                id: row.id,
+                key: row.key,
+                name: row.name,
+                type: row.type,
+                fallback_value: row.fallbackValue,
+                created_at: row.createdAt,
+                updated_at: row.updatedAt,
+              })),
+              total: Number(total),
+              page: 1,
+              limit: 20,
+            };
+          },
+          async createProperty(input: { body: Record<string, unknown> }) {
+            const name =
+              typeof input.body.name === "string" ? input.body.name.trim() : "";
+            if (!name) throw invalidInput("Name is required");
+            const [property] = await mockInsert()
+              .values(input.body)
+              .returning();
+            return {
+              object: "contact_property",
+              id: property.id,
+              key: property.key,
+              name: property.name,
+              type: property.type,
+              fallback_value: property.fallbackValue,
+              created_at: property.createdAt,
+              updated_at: property.updatedAt,
+            };
+          },
+          async getProperty() {
+            const [property] = await mockSelect().from().where();
+            if (!property) throw notFound("Contact property not found");
+            return {
+              id: property.id,
+              key: property.key,
+              name: property.name,
+              type: property.type,
+              fallback_value: property.fallbackValue,
+              created_at: property.createdAt,
+              updated_at: property.updatedAt,
+            };
+          },
+          async updateProperty(input: { body: Record<string, unknown> }) {
+            const [property] = await mockUpdate()
+              .set(input.body)
+              .where()
+              .returning();
+            if (!property) throw notFound("Contact property not found");
+            return {
+              id: property.id,
+              key: property.key,
+              name: property.name,
+              type: property.type,
+              fallback_value: property.fallbackValue,
+              created_at: property.createdAt,
+              updated_at: property.updatedAt,
+            };
+          },
+          async deleteProperty() {
+            const [deleted] = await mockDelete().where().returning();
+            if (!deleted) throw notFound("Contact property not found");
+          },
+        }),
+        createContactService: () => mockContactService,
+        createContactOperationsService: () => mockContactOperationsService,
+        createTemplateService: () => ({
+          async getTemplate(id: string) {
+            const [template] = await mockSelect().from().where({ id }).limit(1);
+            if (!template) {
+              throw new TemplateServiceError("not_found", "Template not found");
+            }
+            return {
+              ...template,
+              replyTo: template.replyTo,
+              previewText: template.previewText,
+              variables: [],
+              updatedAt: template.createdAt,
+            };
+          },
+          async updateTemplate(id: string, data: Record<string, unknown>) {
+            const [template] = await mockUpdate()
+              .set(data)
+              .where({ id })
+              .returning();
+            if (!template) {
+              throw new TemplateServiceError("not_found", "Template not found");
+            }
+            return {
+              ...template,
+              replyTo: template.replyTo,
+              previewText: template.previewText,
+              variables: [],
+              updatedAt: template.createdAt,
+            };
+          },
+          async deleteTemplate(id: string) {
+            const [template] = await mockDelete().where({ id }).returning();
+            if (!template) {
+              throw new TemplateServiceError("not_found", "Template not found");
+            }
+          },
+          async publishTemplate(id: string) {
+            const [existing] = await mockSelect().from().where({ id }).limit(1);
+            if (!existing) {
+              throw new TemplateServiceError("not_found", "Template not found");
+            }
+            if (existing.status !== "draft") {
+              throw new TemplateServiceError(
+                "not_draft",
+                "Only draft templates can be published",
+              );
+            }
+            const [template] = await mockUpdate()
+              .set({
+                status: "published",
+                publishedAt: expect.any(Date),
+                hasUnpublishedVersions: false,
+              })
+              .where({ id })
+              .returning();
+            return {
+              ...template,
+              publishedAt: template.publishedAt,
+              hasUnpublishedVersions: template.hasUnpublishedVersions,
+            };
+          },
+          async duplicateTemplate(id: string) {
+            const [existing] = await mockSelect().from().where({ id }).limit(1);
+            if (!existing) {
+              throw new TemplateServiceError("not_found", "Template not found");
+            }
+            const [template] = await mockInsert()
+              .values({
+                name: `${existing.name} (Copy)`,
+                alias: existing.alias ? `${existing.alias}-copy` : null,
+                status: "draft",
+                subject: existing.subject,
+                from: existing.from,
+                replyTo: existing.replyTo,
+                previewText: existing.previewText,
+                html: existing.html,
+                text: existing.text,
+                variables: existing.variables,
+              })
+              .returning();
+            return template;
+          },
+        }),
+      };
+    });
     mockCreateWebhookService.mockReturnValue({
       listWebhooks: vi.fn().mockResolvedValue({ data: [], hasMore: false }),
       createWebhook: vi.fn(),
       getWebhook: vi.fn(),
       updateWebhook: vi.fn(),
       deleteWebhook: vi.fn(),
+    });
+    mockContactService.createContact.mockReset();
+    mockContactService.listContacts.mockReset();
+    mockContactService.getContact.mockReset();
+    mockContactService.updateContact.mockReset();
+    mockContactService.deleteContact.mockReset();
+    mockContactService.listContactSegments.mockReset();
+    mockContactService.addContactToSegment.mockReset();
+    mockContactService.removeContactFromSegment.mockReset();
+    mockContactOperationsService.bulkAction.mockReset();
+    mockContactOperationsService.importContacts.mockReset();
+    mockContactOperationsService.listContactTopics.mockReset();
+    mockContactOperationsService.updateContactTopics.mockReset();
+    mockContactOperationsService.bulkAction.mockResolvedValue({
+      object: "bulk_action",
+      success: true,
+      count: 1,
+    });
+    mockContactOperationsService.importContacts.mockResolvedValue({
+      object: "import",
+      created_count: 0,
+      ids: [],
+    });
+    mockContactOperationsService.listContactTopics.mockResolvedValue({
+      object: "list",
+      data: [{ id: "t1", name: "News", subscription: "opt_in" }],
+    });
+    mockContactOperationsService.updateContactTopics.mockResolvedValue({
+      object: "contact_topics",
+      contact_id: "c1",
+      updated: true,
     });
     vi.doMock("@/lib/api-auth", async () => {
       const actual =
@@ -319,19 +909,23 @@ describe("route smoke coverage", () => {
 
   it("allows dashboard-session auth for audience list routes", async () => {
     mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({ dashboard: true });
-    mockSelect.mockReturnValueOnce(
-      makeChain([
+    mockContactService.listContacts.mockResolvedValueOnce({
+      hasMore: false,
+      data: [
         {
           id: "c1",
           email: "alice@example.com",
           firstName: "Alice",
           lastName: "Example",
+          first_name: "Alice",
+          last_name: "Example",
           unsubscribed: false,
+          status: "subscribed",
           segments: ["VIP"],
-          createdAt: new Date("2026-04-27T00:00:00.000Z"),
+          created_at: new Date("2026-04-27T00:00:00.000Z"),
         },
-      ]),
-    );
+      ],
+    });
 
     const contactsRoute = await import("@/app/api/contacts/route");
     const response = await contactsRoute.GET(
@@ -1175,10 +1769,13 @@ describe("route smoke coverage", () => {
       "@/app/api/contacts/[id]/segments/[segment_id]/route"
     );
 
-    mockFindFirst.mockResolvedValueOnce({ id: "c1", segments: ["VIP"] }); // contact
-    mockSelect.mockImplementationOnce(() =>
-      makeChain([{ id: "s1", name: "VIP" }]),
-    ); // segment detail
+    mockContactService.listContactSegments.mockResolvedValueOnce([
+      {
+        id: "s1",
+        name: "VIP",
+        created_at: new Date("2026-04-27T00:00:00.000Z"),
+      },
+    ]);
     const contactSegmentsGet = await contactSegmentsRoute.GET(
       makeNextRequest("http://localhost/api/contacts/c1/segments", {
         headers: { authorization: "Bearer token" },
@@ -1187,10 +1784,10 @@ describe("route smoke coverage", () => {
     );
     expect(contactSegmentsGet.status).toBe(200);
 
-    mockFindFirst.mockResolvedValueOnce({ id: "c1", segments: [] }); // contact
-    mockFindFirst.mockResolvedValueOnce({ id: "s1", name: "VIP" }); // segment
-    mockInsert.mockImplementationOnce(() => makeChain([]));
-    mockUpdate.mockImplementationOnce(() => makeChain([{ id: "c1" }]));
+    mockContactService.addContactToSegment.mockResolvedValueOnce({
+      contactId: "c1",
+      segmentId: "s1",
+    });
     const contactSegmentPost = await contactSegmentRoute.POST(
       makeNextRequest("http://localhost/api/contacts/c1/segments/s1", {
         method: "POST",
