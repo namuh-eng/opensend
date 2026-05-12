@@ -106,6 +106,14 @@ const idPathParameter: ParameterObject = {
   schema: { type: "string", format: "uuid" },
 };
 
+const emailIdPathParameter: ParameterObject = {
+  name: "email_id",
+  in: "path",
+  required: true,
+  description: "Scheduled email ID to cancel.",
+  schema: { type: "string", format: "uuid" },
+};
+
 const paginationParameters: readonly ReferenceObject[] = [
   { $ref: "#/components/parameters/Limit" },
   { $ref: "#/components/parameters/After" },
@@ -178,6 +186,22 @@ export const openApiDocument = {
         responses: {
           "200": { $ref: "#/components/responses/BatchEmailAccepted" },
           "202": { $ref: "#/components/responses/BatchEmailAccepted" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/emails/{email_id}/cancel": {
+      post: {
+        tags: ["Emails"],
+        summary: "Cancel a scheduled email",
+        description:
+          "Resend-compatible endpoint to cancel a scheduled email before it is sent.",
+        operationId: "cancelEmailAlias",
+        security: bearerSecurity,
+        parameters: [emailIdPathParameter],
+        responses: {
+          "200": { $ref: "#/components/responses/EmailCanceled" },
+          "404": { $ref: "#/components/responses/NotFound" },
           ...errorResponses,
         },
       },
@@ -500,6 +524,14 @@ export const openApiDocument = {
           },
         },
       },
+      EmailCanceled: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["email"] },
+          id: { type: "string", format: "uuid" },
+        },
+        required: ["object", "id"],
+      },
       Email: {
         type: "object",
         properties: {
@@ -686,6 +718,12 @@ export const openApiDocument = {
         description: "Batch accepted for delivery or scheduling.",
         content: jsonContent({
           $ref: "#/components/schemas/BatchEmailAccepted",
+        }),
+      },
+      EmailCanceled: {
+        description: "Scheduled email canceled.",
+        content: jsonContent({
+          $ref: "#/components/schemas/EmailCanceled",
         }),
       },
       BadRequest: {

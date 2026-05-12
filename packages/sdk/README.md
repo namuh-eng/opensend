@@ -151,6 +151,14 @@ Resend-compatible natural-language form `in <positive integer>
 within 30 days; unparseable, past, or out-of-policy values return
 `validation_error`.
 
+Cancel a scheduled email before it is sent with the Resend-compatible cancel
+surface:
+
+```typescript
+const { data, error } = await resend.emails.cancel("email-id");
+// data: { object: "email", id: "email-id" }
+```
+
 ## Idempotency Keys
 
 Pass a per-request `idempotencyKey` option to prevent accidental duplicate

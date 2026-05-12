@@ -50,6 +50,13 @@ const API_GROUPS: EndpointGroup[] = [
       },
       {
         method: "POST",
+        path: "/emails/:email_id/cancel",
+        description: "Cancel a scheduled email.",
+        curl: `curl -X POST https://api.opensend.com/emails/EMAIL_ID/cancel \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "POST",
         path: "/api/emails/batch",
         description:
           "Send a batch of emails with one Idempotency-Key for the whole batch. Reusing the same key within 24 hours returns the original accepted { data: [{ id }] } envelope without reserving quota, creating rows, or publishing queue jobs again; after 24 hours the same key is accepted as a new batch.",

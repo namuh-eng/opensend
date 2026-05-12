@@ -75,6 +75,11 @@ export type SendEmailPayload = EmailOptions & {
 };
 export type CreateDomainPayload = DomainOptions;
 
+interface CancelEmailResponse {
+  object: "email";
+  id: string;
+}
+
 export interface AutomationStepPayload {
   key: string;
   type:
@@ -482,6 +487,13 @@ class Emails {
 
   async get(id: string): Promise<ApiResponse<EmailDetailResponse>> {
     return this.http.request<EmailDetailResponse>("GET", `/api/emails/${id}`);
+  }
+
+  async cancel(id: string): Promise<ApiResponse<CancelEmailResponse>> {
+    return this.http.request<CancelEmailResponse>(
+      "POST",
+      `/emails/${id}/cancel`,
+    );
   }
 }
 
@@ -891,6 +903,7 @@ export type {
   EmailOptions,
   EmailResponse,
   SendEmailResponse,
+  CancelEmailResponse,
   EmailStatus,
   EmailListOptions,
   BatchEmailItemError,

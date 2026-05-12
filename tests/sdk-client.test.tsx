@@ -9,6 +9,7 @@ import type {
   BatchEmailResponse,
   BroadcastListResponse,
   BroadcastResponse,
+  CancelEmailResponse,
   ContactListResponse,
   ContactResponse,
   CreateBroadcastPayload,
@@ -208,6 +209,10 @@ describe("Opensend SDK", () => {
     >();
     expectTypeOf<ApiResponse<EmailResponse>>().toEqualTypeOf<{
       data: EmailResponse | null;
+      error: ApiError | null;
+    }>();
+    expectTypeOf<ApiResponse<CancelEmailResponse>>().toEqualTypeOf<{
+      data: CancelEmailResponse | null;
       error: ApiError | null;
     }>();
     expectTypeOf<BatchEmailResponse>().toMatchTypeOf<{ data: unknown[] }>();
@@ -467,6 +472,32 @@ describe("Opensend SDK", () => {
       object: "email",
       id: "email_123",
       last_event: "delivered",
+    });
+  });
+
+  it("cancels scheduled emails through the Resend-compatible root endpoint", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "email", id: "email_123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Resend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    const response = await client.emails.cancel("email_123");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/emails/email_123/cancel",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(response).toEqual({
+      data: { object: "email", id: "email_123" },
+      error: null,
     });
   });
 
