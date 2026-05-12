@@ -104,6 +104,17 @@ function isAudiencesAlias(pathname: string, method: string): boolean {
   return false;
 }
 
+function isSegmentsAlias(pathname: string, method: string): boolean {
+  if (pathname === "/segments") return ["GET", "POST"].includes(method);
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "segments") return false;
+  if (parts.length === 2) return ["GET", "DELETE"].includes(method);
+  if (parts.length === 3 && parts[2] === "contacts") return method === "GET";
+
+  return false;
+}
+
 function isBroadcastsAlias(pathname: string, method: string): boolean {
   if (pathname === "/broadcasts") return ["GET", "POST"].includes(method);
   const parts = pathname.split("/").filter(Boolean);
@@ -180,6 +191,11 @@ function getRateLimitPathname(pathname: string, method: string): string {
       ? "/api/segments"
       : pathname.replace(/^\/audiences/, "/api/segments");
   }
+  if (isSegmentsAlias(pathname, method)) {
+    return pathname === "/segments"
+      ? "/api/segments"
+      : pathname.replace(/^\/segments/, "/api/segments");
+  }
   if (isBroadcastsAlias(pathname, method)) {
     return pathname === "/broadcasts"
       ? "/api/broadcasts"
@@ -235,12 +251,14 @@ export async function middleware(request: NextRequest) {
   const isSendAlias = isSendPostAlias(pathname, request.method);
   const isContactAlias = isContactsAlias(pathname, request.method);
   const isAudienceAlias = isAudiencesAlias(pathname, request.method);
+  const isSegmentAlias = isSegmentsAlias(pathname, request.method);
   const isBroadcastAlias = shouldHandleBroadcastsAlias(request);
   if (
     !pathname.startsWith("/api/") &&
     !isSendAlias &&
     !isContactAlias &&
     !isAudienceAlias &&
+    !isSegmentAlias &&
     !isBroadcastAlias
   ) {
     // Allow auth page, public landing page, and static assets

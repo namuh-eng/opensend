@@ -17,8 +17,10 @@ import type {
   CreateAudiencePayload,
   CreateContactPayload,
   CreateContactResponse,
+  CreateSegmentPayload,
   DeleteAudienceResponse,
   DeleteContactResponse,
+  DeleteSegmentResponse,
   DomainCapability,
   DomainListItem,
   DomainListResponse,
@@ -35,6 +37,11 @@ import type {
   EmailStatus,
   EmailTag,
   EmailTemplateReference,
+  SegmentContactListItem,
+  SegmentContactListResponse,
+  SegmentListItem,
+  SegmentListResponse,
+  SegmentResponse,
   SendEmailResponse,
   UpdateContactPayload,
   UpdateDomainPayload,
@@ -120,6 +127,10 @@ export interface ListOptions {
 }
 
 export interface AudienceListOptions extends ListOptions {
+  search?: string;
+}
+
+export interface SegmentListOptions extends ListOptions {
   search?: string;
 }
 
@@ -566,6 +577,57 @@ class Contacts {
   }
 }
 
+class Segments {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(
+    payload: CreateSegmentPayload,
+  ): Promise<ApiResponse<SegmentResponse>> {
+    return this.http.request<SegmentResponse>("POST", "/segments", payload);
+  }
+
+  async list(
+    options: SegmentListOptions = {},
+  ): Promise<ApiResponse<SegmentListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.search) params.set("search", options.search);
+
+    const query = params.toString();
+    return this.http.request<SegmentListResponse>(
+      "GET",
+      query ? `/segments?${query}` : "/segments",
+    );
+  }
+
+  async get(id: string): Promise<ApiResponse<SegmentResponse>> {
+    return this.http.request<SegmentResponse>("GET", `/segments/${id}`);
+  }
+
+  async delete(id: string): Promise<ApiResponse<DeleteSegmentResponse>> {
+    return this.http.request<DeleteSegmentResponse>(
+      "DELETE",
+      `/segments/${id}`,
+    );
+  }
+
+  async listContacts(
+    id: string,
+    options: ListOptions = {},
+  ): Promise<ApiResponse<SegmentContactListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+
+    const query = params.toString();
+    return this.http.request<SegmentContactListResponse>(
+      "GET",
+      query ? `/segments/${id}/contacts?${query}` : `/segments/${id}/contacts`,
+    );
+  }
+}
+
 class Audiences {
   constructor(private readonly http: HttpClient) {}
 
@@ -793,6 +855,7 @@ class Opensend {
   public readonly domains: Domains;
   public readonly apiKeys: ApiKeys;
   public readonly contacts: Contacts;
+  public readonly segments: Segments;
   public readonly audiences: Audiences;
   public readonly broadcasts: Broadcasts;
   public readonly automations: Automations;
@@ -809,6 +872,7 @@ class Opensend {
     this.domains = new Domains(http);
     this.apiKeys = new ApiKeys(http);
     this.contacts = new Contacts(http);
+    this.segments = new Segments(http);
     this.audiences = new Audiences(http);
     this.broadcasts = new Broadcasts(http);
     this.automations = new Automations(http);
@@ -853,6 +917,13 @@ export type {
   AudienceListItem,
   AudienceListResponse,
   DeleteAudienceResponse,
+  CreateSegmentPayload,
+  SegmentResponse,
+  SegmentListItem,
+  SegmentListResponse,
+  DeleteSegmentResponse,
+  SegmentContactListItem,
+  SegmentContactListResponse,
   BroadcastStatus,
   CreateBroadcastPayload,
   UpdateBroadcastPayload,

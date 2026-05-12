@@ -293,6 +293,49 @@ export interface ContactListResponse {
   has_more: boolean;
 }
 
+export interface CreateSegmentPayload {
+  name: string;
+}
+
+export interface SegmentResponse {
+  object: "segment";
+  id: string;
+  name: string;
+  created_at?: string;
+}
+
+export interface SegmentListItem {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface SegmentListResponse {
+  object: "list";
+  data: SegmentListItem[];
+  has_more: boolean;
+  total?: number;
+}
+
+export interface DeleteSegmentResponse {
+  success: true;
+}
+
+export interface SegmentContactListItem {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  status: "subscribed" | "unsubscribed";
+  created_at: string;
+}
+
+export interface SegmentContactListResponse {
+  object: "list";
+  data: SegmentContactListItem[];
+  has_more: boolean;
+}
+
 export interface CreateAudiencePayload {
   name: string;
 }

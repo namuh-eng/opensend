@@ -19,6 +19,9 @@ import type {
   EmailResponse,
   RequestOptions,
   SDKOptions,
+  SegmentContactListResponse,
+  SegmentListResponse,
+  SegmentResponse,
   SendBroadcastPayload,
   SendEmailPayload,
   UpdateBroadcastPayload,
@@ -150,6 +153,53 @@ describe("Opensend SDK", () => {
     );
   });
 
+  it("builds Resend-compatible root segments API requests", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "segment", id: "seg_123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Resend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.segments.create({ name: "Registered Users" });
+    await client.segments.list({ limit: 10, after: "seg_1", search: "vip" });
+    await client.segments.get("seg_123");
+    await client.segments.delete("seg_123");
+    await client.segments.listContacts("seg_123", { limit: 5, after: "c_1" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/segments",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/segments?limit=10&after=seg_1&search=vip",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/segments/seg_123",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "https://api.example.com/segments/seg_123",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "https://api.example.com/segments/seg_123/contacts?limit=5&after=c_1",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("keeps SDK public type exports available from the entrypoint", () => {
     expectTypeOf<SDKOptions>().toMatchTypeOf<{ baseUrl?: string }>();
     expectTypeOf<RequestOptions>().toMatchTypeOf<{ idempotencyKey?: string }>();
@@ -178,6 +228,21 @@ describe("Opensend SDK", () => {
     expectTypeOf<DeleteAudienceResponse>().toMatchTypeOf<{
       object: "audience";
       deleted: true;
+    }>();
+    expectTypeOf<SegmentResponse>().toMatchTypeOf<{
+      object: "segment";
+      id: string;
+      name: string;
+    }>();
+    expectTypeOf<SegmentListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ id: string; name: string; created_at: string }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<SegmentContactListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ email: string; status: "subscribed" | "unsubscribed" }>;
+      has_more: boolean;
     }>();
     expectTypeOf<CreateBroadcastPayload>().toMatchTypeOf<{
       from: string;
