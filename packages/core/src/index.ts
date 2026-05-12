@@ -60,6 +60,7 @@ export * from "./services/trackingRoute";
 export * from "./services/sandboxTestRecipients";
 export * from "./services/storage";
 export * from "./services/template";
+export * from "./services/template-renderer";
 export * from "./services/broadcast";
 export * from "./services/audience-metadata";
 export * from "./services/automations";
