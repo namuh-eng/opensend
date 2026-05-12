@@ -219,6 +219,64 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("x-ratelimit-backend")).toBe("disabled");
   });
 
+  it("preserves browser/RSC dashboard GET /api-keys instead of rewriting the root API alias", async () => {
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/api-keys", {
+        method: "GET",
+        headers: {
+          accept: "*/*",
+          rsc: "1",
+          "next-router-state-tree": encodeURIComponent("[]"),
+          "next-url": "/api-keys",
+        },
+      }),
+    );
+
+    expect(mockGetSessionCookie).toHaveBeenCalled();
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("rewrites root /api-keys API clients to the existing API key routes", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const list = await middleware(
+      makeRequest("https://example.com/api-keys", {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+    const create = await middleware(
+      makeRequest("https://example.com/api-keys", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const deleteResponse = await middleware(
+      makeRequest("https://example.com/api-keys/key_123", {
+        method: "DELETE",
+        headers: { authorization: "Bearer test-api-key" },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(list.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/api-keys",
+    );
+    expect(create.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/api-keys",
+    );
+    expect(deleteResponse.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/api-keys/key_123",
+    );
+  });
+
   it("preserves browser/RSC dashboard GET /templates instead of rewriting the root API alias", async () => {
     const { middleware } = await import("@/middleware");
 
@@ -515,6 +573,33 @@ describe("middleware rate limiting", () => {
       60,
     );
     expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
+  });
+
+  it("shares tight rate-limit buckets between root API-key aliases and /api/api-keys", async () => {
+    process.env.RATE_LIMIT_BACKEND = "redis";
+    mockGetSessionCookie.mockReturnValue(null);
+    mockIncrCache.mockResolvedValue(1);
+
+    const { middleware } = await import("@/middleware");
+    const response = await middleware(
+      makeRequest("https://example.com/api-keys/key_123", {
+        method: "DELETE",
+        headers: {
+          "x-forwarded-for": "203.0.113.10",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(mockIncrCache).toHaveBeenCalledWith(
+      "ratelimit:203.0.113.10:Bearer test-api-key:/api/api-keys/key_123",
+      60,
+    );
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/api-keys/key_123",
+    );
     expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
   });
 

@@ -277,6 +277,44 @@ describe("Opensend SDK", () => {
     );
   });
 
+  it("uses Resend-compatible root API key management endpoints", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ id: "key_123", token: "re_test" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Resend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.apiKeys.create({
+      name: "Production",
+      permission: "full_access",
+    });
+    await client.apiKeys.list();
+    await client.apiKeys.delete("key_123");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/api-keys",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/api-keys",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/api-keys/key_123",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
   it("keeps SDK public type exports available from the entrypoint", () => {
     expectTypeOf<SDKOptions>().toMatchTypeOf<{ baseUrl?: string }>();
     expectTypeOf<RequestOptions>().toMatchTypeOf<{ idempotencyKey?: string }>();

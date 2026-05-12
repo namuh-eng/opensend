@@ -135,6 +135,13 @@ function isBroadcastsAlias(pathname: string, method: string): boolean {
   return false;
 }
 
+function isApiKeysAlias(pathname: string, method: string): boolean {
+  if (pathname === "/api-keys") return ["GET", "POST"].includes(method);
+
+  const parts = pathname.split("/").filter(Boolean);
+  return parts[0] === "api-keys" && parts.length === 2 && method === "DELETE";
+}
+
 function isTemplatesAlias(pathname: string, method: string): boolean {
   if (pathname === "/templates") return ["GET", "POST"].includes(method);
 
@@ -196,6 +203,15 @@ function shouldHandleBroadcastsAlias(request: NextRequest): boolean {
   return true;
 }
 
+function shouldHandleApiKeysAlias(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl;
+  if (!isApiKeysAlias(pathname, request.method)) return false;
+  if (pathname === "/api-keys" && request.method === "GET") {
+    return isApiLikeRequest(request);
+  }
+  return true;
+}
+
 function shouldHandleTemplatesAlias(request: NextRequest): boolean {
   const { pathname } = request.nextUrl;
   if (!isTemplatesAlias(pathname, request.method)) return false;
@@ -209,6 +225,12 @@ function toPublicTemplatesPath(pathname: string): string {
   return pathname === "/templates"
     ? "/api/public/templates"
     : pathname.replace(/^\/templates/, "/api/public/templates");
+}
+
+function toApiKeysPath(pathname: string): string {
+  return pathname === "/api-keys"
+    ? "/api/api-keys"
+    : pathname.replace(/^\/api-keys/, "/api/api-keys");
 }
 
 function isSendApiPost(pathname: string, method: string): boolean {
@@ -247,6 +269,9 @@ function getRateLimitPathname(pathname: string, method: string): string {
       ? "/api/broadcasts"
       : pathname.replace(/^\/broadcasts/, "/api/broadcasts");
   }
+  if (isApiKeysAlias(pathname, method)) {
+    return toApiKeysPath(pathname);
+  }
   if (isTemplatesAlias(pathname, method)) {
     return pathname === "/templates"
       ? "/api/templates"
@@ -273,7 +298,12 @@ function getLimits(
     return { max: 5, windowMs: 60_000 };
   }
   // API key management — tight limit
-  if (pathname.startsWith("/api/api-keys") && method !== "GET") {
+  if (
+    (pathname.startsWith("/api/api-keys") ||
+      pathname === "/api-keys" ||
+      pathname.startsWith("/api-keys/")) &&
+    method !== "GET"
+  ) {
     return { max: 10, windowMs: 60_000 };
   }
   // Domain operations
@@ -305,6 +335,7 @@ export async function middleware(request: NextRequest) {
   const isAudienceAlias = isAudiencesAlias(pathname, request.method);
   const isSegmentAlias = isSegmentsAlias(pathname, request.method);
   const isBroadcastAlias = shouldHandleBroadcastsAlias(request);
+  const isApiKeyAlias = shouldHandleApiKeysAlias(request);
   const isTemplateAlias = shouldHandleTemplatesAlias(request);
   if (
     !pathname.startsWith("/api/") &&
@@ -314,6 +345,7 @@ export async function middleware(request: NextRequest) {
     !isAudienceAlias &&
     !isSegmentAlias &&
     !isBroadcastAlias &&
+    !isApiKeyAlias &&
     !isTemplateAlias
   ) {
     // Allow auth page, public landing page, and static assets
@@ -362,6 +394,14 @@ export async function middleware(request: NextRequest) {
       return NextResponse.rewrite(new URL("/api/broadcasts", request.url), {
         headers: responseHeaders,
       });
+    }
+    if (isApiKeyAlias) {
+      return NextResponse.rewrite(
+        new URL(toApiKeysPath(pathname), request.url),
+        {
+          headers: responseHeaders,
+        },
+      );
     }
     if (isTemplateAlias) {
       return NextResponse.rewrite(
@@ -429,6 +469,11 @@ export async function middleware(request: NextRequest) {
   }
   if (isBroadcastsCollectionAlias(pathname, request.method)) {
     return NextResponse.rewrite(new URL("/api/broadcasts", request.url), {
+      headers: responseHeaders,
+    });
+  }
+  if (isApiKeyAlias) {
+    return NextResponse.rewrite(new URL(toApiKeysPath(pathname), request.url), {
       headers: responseHeaders,
     });
   }

@@ -2,7 +2,7 @@ import { POST as cancelEmail } from "@/app/api/emails/[id]/cancel/route";
 import type { NextRequest } from "next/server";
 
 type CancelEmailAliasContext = {
-  params: Promise<{ email_id: string }>;
+  params: Promise<{ id: string }>;
 };
 
 function getCanceledEmailId(body: unknown): string | null {
@@ -18,19 +18,19 @@ export async function POST(
   request: NextRequest,
   context: CancelEmailAliasContext,
 ): Promise<Response> {
-  const { email_id } = await context.params;
+  const { id } = await context.params;
   const response = await cancelEmail(request, {
-    params: Promise.resolve({ id: email_id }),
+    params: Promise.resolve({ id }),
   });
 
   if (!response.ok) {
     return response;
   }
 
-  const id = getCanceledEmailId((await response.json()) as unknown);
-  if (!id) {
+  const canceledId = getCanceledEmailId((await response.json()) as unknown);
+  if (!canceledId) {
     return Response.json({ error: "Failed to cancel email" }, { status: 500 });
   }
 
-  return Response.json({ object: "email", id });
+  return Response.json({ object: "email", id: canceledId });
 }
