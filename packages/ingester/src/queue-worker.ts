@@ -46,6 +46,7 @@ const MAX_EMAIL_ATTACHMENT_RAW_BYTES = Math.floor(
   (MAX_EMAIL_ATTACHMENT_BASE64_BYTES / 4) * 3,
 );
 const ATTACHMENT_FETCH_TIMEOUT_MS = 10_000;
+const DEFAULT_SES_REGION = "us-east-1";
 
 type QueueWorkerOptions = {
   queueUrl?: string | null;
@@ -427,16 +428,21 @@ export class QueueWorker {
       });
     }
 
+    const deliveryDomain = await resolveDeliveryDomainForEmail(email);
+    const sesRegion = deliveryDomain?.region ?? DEFAULT_SES_REGION;
     const sesSpan = startTelemetrySpan(telemetry, {
       operation: "ses.send",
-      attributes: { email_id: email.id },
+      attributes: { email_id: email.id, ses_region: sesRegion },
     });
     try {
       // Tracking is intentionally rendered at worker-time: validation, template,
       // and managed-unsubscribe rendering already happened when the email row was
       // accepted, while stored bodies remain unchanged for disabled parity and
       // auditability. The provider payload is the only mutated boundary.
-      const trackedHtml = await renderTrackedHtmlForDelivery(email);
+      const trackedHtml = await renderTrackedHtmlForDelivery(
+        email,
+        deliveryDomain,
+      );
 
       await emailProvider.sendEmail({
         from: email.from,
@@ -449,6 +455,7 @@ export class QueueWorker {
         replyTo: email.replyTo ?? undefined,
         headers: email.headers ?? undefined,
         attachments: await normalizeAttachmentsForSend(email.attachments),
+        region: sesRegion,
       });
       const sendDurationMs = finishTelemetrySpan(sesSpan, { status: "ok" });
 
@@ -461,6 +468,7 @@ export class QueueWorker {
       emitSendMetric(telemetry, {
         durationMs: sendDurationMs,
         outcome: "sent",
+        sesRegion,
       });
       return { status: "sent" };
     } catch (error) {
@@ -505,10 +513,12 @@ export class QueueWorker {
         email_id: email.id,
         provider_attempt_count: attemptCount,
         provider_retries_exhausted: exhausted,
+        ses_region: sesRegion,
       });
       emitSendMetric(telemetry, {
         durationMs: 0,
         outcome: "failed",
+        sesRegion,
       });
 
       if (exhausted) {
@@ -522,14 +532,11 @@ export class QueueWorker {
 
 async function renderTrackedHtmlForDelivery(
   email: SandboxEmailRecord,
+  domain: SenderDomainRecord | null,
 ): Promise<string | null | undefined> {
   if (!email.html || !email.userId) return email.html;
 
   const userId = email.userId;
-  const fromDomain = getEmailAddressDomain(email.from);
-  if (!fromDomain) return email.html;
-
-  const domain = await domainRepo.findByNameForUser(fromDomain, userId);
   if (!domain || (!domain.trackClicks && !domain.trackOpens)) {
     return email.html;
   }
@@ -585,6 +592,20 @@ function getTerminalEmailSkipReason(status: string): string | null {
 type SandboxEmailRecord = NonNullable<
   Awaited<ReturnType<typeof emailRepo.findById>>
 >;
+type SenderDomainRecord = NonNullable<
+  Awaited<ReturnType<typeof domainRepo.findByNameForUser>>
+>;
+
+async function resolveDeliveryDomainForEmail(
+  email: SandboxEmailRecord,
+): Promise<SenderDomainRecord | null> {
+  if (!email.userId) return null;
+
+  const fromDomain = getEmailAddressDomain(email.from);
+  if (!fromDomain) return null;
+
+  return (await domainRepo.findByNameForUser(fromDomain, email.userId)) ?? null;
+}
 
 async function simulateSandboxTestOutcome(input: {
   email: SandboxEmailRecord;
@@ -816,7 +837,7 @@ function emitWorkerJobMetric(
 
 function emitSendMetric(
   telemetry: TelemetryContext,
-  input: { durationMs: number; outcome: "sent" | "failed" },
+  input: { durationMs: number; outcome: "sent" | "failed"; sesRegion?: string },
 ): void {
   emitCloudWatchMetric(telemetry, {
     metrics: [
@@ -831,6 +852,7 @@ function emitSendMetric(
       Service: "worker",
       Operation: "ses.send",
       Outcome: input.outcome,
+      ...(input.sesRegion ? { SesRegion: input.sesRegion } : {}),
     },
   });
 }

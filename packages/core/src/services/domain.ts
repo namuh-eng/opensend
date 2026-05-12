@@ -210,13 +210,20 @@ export type DomainServiceDependencies = {
   repository?: DomainRepository;
   createDomainIdentity?: (
     domain: string,
-    options?: { userId?: string },
+    options?: { userId?: string; region?: string },
   ) => Promise<CreateDomainIdentityResult>;
-  getDomainIdentity?: (domain: string) => Promise<{ verified?: boolean }>;
-  deleteDomainIdentity?: (domain: string) => Promise<void>;
+  getDomainIdentity?: (
+    domain: string,
+    options?: { region?: string },
+  ) => Promise<{ verified?: boolean }>;
+  deleteDomainIdentity?: (
+    domain: string,
+    options?: { region?: string },
+  ) => Promise<void>;
   invalidateDomainCaches?: (domain: {
     id: string;
     name: string;
+    region?: string | null;
   }) => Promise<void>;
 };
 
@@ -331,12 +338,14 @@ function toDomainServiceListItem(row: DomainRow): DomainServiceListItem {
 
 export function createDomainService({
   repository = domainRepo,
-  createDomainIdentity = (domain: string, options?: { userId?: string }) =>
-    domainIdentityProvider.createDomainIdentity(domain, options),
-  getDomainIdentity = (domain: string) =>
-    domainIdentityProvider.getDomainIdentity(domain),
-  deleteDomainIdentity = (domain: string) =>
-    domainIdentityProvider.deleteDomainIdentity(domain),
+  createDomainIdentity = (
+    domain: string,
+    options?: { userId?: string; region?: string },
+  ) => domainIdentityProvider.createDomainIdentity(domain, options),
+  getDomainIdentity = (domain: string, options?: { region?: string }) =>
+    domainIdentityProvider.getDomainIdentity(domain, options),
+  deleteDomainIdentity = (domain: string, options?: { region?: string }) =>
+    domainIdentityProvider.deleteDomainIdentity(domain, options),
   invalidateDomainCaches = async () => {},
 }: DomainServiceDependencies = {}) {
   return {
@@ -362,6 +371,7 @@ export function createDomainService({
       const region = input.region ?? "us-east-1";
       const identity = await createDomainIdentity(domainName, {
         userId: input.userId ?? undefined,
+        region,
       });
       const records = buildDomainRecords(
         domainName,
@@ -395,7 +405,11 @@ export function createDomainService({
         dkimPrivateKeyIv: identity.dkimPrivateKeyEnc?.iv ?? null,
       });
 
-      await invalidateDomainCaches({ id: row.id, name: row.name });
+      await invalidateDomainCaches({
+        id: row.id,
+        name: row.name,
+        region: row.region,
+      });
 
       return toDomainDetail(row);
     },
@@ -404,7 +418,9 @@ export function createDomainService({
       const domain = await repository.findById(id);
       if (!domain) return { status: "not_found" };
 
-      const identity = await getDomainIdentity(domain.name);
+      const identity = await getDomainIdentity(domain.name, {
+        region: domain.region,
+      });
       const nextStatus: "pending" | "verified" = identity.verified
         ? "verified"
         : "pending";
@@ -435,11 +451,19 @@ export function createDomainService({
       });
 
       if (!updated) {
-        await invalidateDomainCaches({ id, name: domain.name });
+        await invalidateDomainCaches({
+          id,
+          name: domain.name,
+          region: domain.region,
+        });
         return { status: "not_found" };
       }
 
-      await invalidateDomainCaches({ id: updated.id, name: updated.name });
+      await invalidateDomainCaches({
+        id: updated.id,
+        name: updated.name,
+        region: updated.region,
+      });
 
       if (!statusChanged) {
         return { status: "unchanged", domain: updated };
@@ -505,7 +529,7 @@ export function createDomainService({
     async delete(id: string) {
       const domain = await repository.findById(id);
       if (domain) {
-        await deleteDomainIdentity(domain.name);
+        await deleteDomainIdentity(domain.name, { region: domain.region });
       }
       return await repository.delete(id);
     },
