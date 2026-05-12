@@ -8,6 +8,10 @@ import { ExportButton } from "@/components/export-button";
 import { Modal } from "@/components/modal";
 import { Pagination } from "@/components/pagination";
 import { SearchInput } from "@/components/search-input";
+import {
+  ExportStatusMessage,
+  useDashboardCsvExport,
+} from "@/components/use-dashboard-csv-export";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
@@ -81,6 +85,8 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
   const [newDomainId, setNewDomainId] = useState("");
   const [creating, setCreating] = useState(false);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
+
+  const { exportState, exportCsv } = useDashboardCsvExport("api-keys");
 
   // Filter keys
   const filtered = keys.filter((k) => {
@@ -192,43 +198,40 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
   }, [newName, newPermission, newDomainId, creating]);
 
   const handleExport = useCallback(() => {
-    const csv = [
-      "Name,Token,Permission,Last Used,Created",
-      ...filtered.map(
-        (k) =>
-          `${k.name},${k.tokenPreview},${formatPermission(k.permission)},${k.lastUsedAt ?? "Never"},${k.createdAt}`,
-      ),
-    ].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "api-keys.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [filtered]);
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("search", search.trim());
+    if (permFilter !== "all") params.set("permission", permFilter);
+    void exportCsv(params);
+  }, [exportCsv, permFilter, search]);
 
   if (keys.length === 0) {
     return (
       <div>
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-semibold text-[#F0F0F0]">API Keys</h1>
-          <button
-            type="button"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-white text-black hover:bg-gray-200 transition-colors"
-            onClick={() => setCreateOpen(true)}
-          >
-            <svg
-              aria-hidden="true"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="currentColor"
+          <div className="flex items-center gap-3">
+            <ExportStatusMessage state={exportState} />
+            <ExportButton
+              onClick={handleExport}
+              disabled={exportState.type === "loading"}
+            />
+            <button
+              type="button"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-white text-black hover:bg-gray-200 transition-colors"
+              onClick={() => setCreateOpen(true)}
             >
-              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-            </svg>
-            Create API Key
-          </button>
+              <svg
+                aria-hidden="true"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+              </svg>
+              Create API Key
+            </button>
+          </div>
         </div>
         <EmptyState
           title="No API keys yet"
@@ -382,7 +385,11 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
           value={permFilter}
           onChange={setPermFilter}
         />
-        <ExportButton onClick={handleExport} />
+        <ExportStatusMessage state={exportState} />
+        <ExportButton
+          onClick={handleExport}
+          disabled={exportState.type === "loading"}
+        />
       </div>
 
       {/* Data table */}

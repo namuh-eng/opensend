@@ -6,6 +6,10 @@ import { ExportButton } from "@/components/export-button";
 import { Modal } from "@/components/modal";
 import { SearchInput } from "@/components/search-input";
 import { StatusBadge } from "@/components/status-badge";
+import {
+  ExportStatusMessage,
+  useDashboardCsvExport,
+} from "@/components/use-dashboard-csv-export";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -84,6 +88,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
   const [regionFilter, setRegionFilter] = useState("");
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(40);
+  const { exportState, exportCsv } = useDashboardCsvExport("domains");
 
   const filteredDomains = useMemo(() => {
     let result = domains;
@@ -99,6 +104,14 @@ export function DomainsPage({ domains }: DomainsPageProps) {
     }
     return result;
   }, [domains, search, statusFilter, regionFilter]);
+
+  const handleExport = () => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("search", search.trim());
+    if (statusFilter) params.set("status", statusFilter);
+    if (regionFilter) params.set("region", regionFilter);
+    void exportCsv(params);
+  };
 
   const totalPages = Math.max(
     1,
@@ -142,8 +155,12 @@ export function DomainsPage({ domains }: DomainsPageProps) {
             setPage(1);
           }}
         />
-        <div className="ml-auto">
-          <ExportButton onClick={() => {}} />
+        <div className="ml-auto flex items-center gap-3">
+          <ExportStatusMessage state={exportState} />
+          <ExportButton
+            onClick={handleExport}
+            disabled={exportState.type === "loading"}
+          />
         </div>
       </div>
 

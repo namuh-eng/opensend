@@ -1,6 +1,10 @@
 "use client";
 
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
+import {
+  ExportStatusMessage,
+  useDashboardCsvExport,
+} from "@/components/use-dashboard-csv-export";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -162,6 +166,7 @@ export function BroadcastsList({
   const statusDropdownRef = useRef<HTMLDivElement>(null);
   const audienceDropdownRef = useRef<HTMLDivElement>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+  const { exportState, exportCsv } = useDashboardCsvExport("broadcasts");
 
   const fetchBroadcasts = useCallback(async () => {
     setLoading(true);
@@ -401,6 +406,14 @@ export function BroadcastsList({
     });
   };
 
+  const handleExport = () => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("search", search.trim());
+    if (statusFilter) params.set("status", statusFilter);
+    if (audienceFilter) params.set("segmentId", audienceFilter);
+    void exportCsv(params);
+  };
+
   const totalPages = Math.ceil(total / limit);
   const start = total === 0 ? 0 : (page - 1) * limit + 1;
 
@@ -543,9 +556,12 @@ export function BroadcastsList({
         </div>
 
         {/* Export button */}
+        <ExportStatusMessage state={exportState} />
         <button
           type="button"
-          className="h-9 w-9 flex items-center justify-center border border-[rgba(176,199,217,0.145)] rounded-md text-[#A1A4A5] hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors"
+          onClick={handleExport}
+          disabled={exportState.type === "loading"}
+          className="h-9 w-9 flex items-center justify-center border border-[rgba(176,199,217,0.145)] rounded-md text-[#A1A4A5] hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Export"
         >
           <svg
