@@ -19,9 +19,11 @@ import {
   suppressedRecipientError,
 } from "@/lib/suppressions";
 import {
-  interpolateTemplateVariables,
-  normalizeStoredTemplateVariables,
-} from "@/lib/templates/variables";
+  StoredTemplateRendererConfigError,
+  getStoredTemplateRendererConfig,
+  renderStoredTemplateContent,
+} from "@/lib/templates/stored-renderer";
+import { normalizeStoredTemplateVariables } from "@/lib/templates/variables";
 import {
   buildOneClickUnsubscribeHeaders,
   createUnsubscribeUrl,
@@ -30,6 +32,7 @@ import {
   replaceUnsubscribePlaceholder,
 } from "@/lib/unsubscribe";
 import {
+  TemplateRendererError,
   createBackgroundJob,
   createTelemetryContext,
   detectSandboxTestRecipient,
@@ -82,6 +85,16 @@ function recordAcceptMetric(
       Outcome: input.outcome,
     },
   });
+}
+
+function templateRenderApiFailureMessage(error: unknown): string | null {
+  if (error instanceof TemplateRendererError) {
+    return error.message;
+  }
+  if (error instanceof StoredTemplateRendererConfigError) {
+    return error.message;
+  }
+  return null;
 }
 
 function summarizeQueuePublishError(error: unknown): {
@@ -526,13 +539,43 @@ export async function handlePostEmailRequest(
         }
       }
 
-      finalHtml = template.html || "";
-      if (template.subject) finalSubject = template.subject;
-      if (template.text !== null) finalText = template.text ?? "";
+      try {
+        const rendererConfig = getStoredTemplateRendererConfig(
+          template.document,
+        );
+        const storedSubject =
+          typeof template.subject === "string" && template.subject.length > 0
+            ? template.subject
+            : null;
+        const renderedTemplate = await renderStoredTemplateContent({
+          template,
+          subject:
+            storedSubject ??
+            (rendererConfig.kind === "legacy" ? finalSubject : undefined),
+          variables: renderVars,
+        });
+        finalHtml = renderedTemplate.html;
+        finalText = renderedTemplate.text;
+        finalSubject = renderedTemplate.subject;
+      } catch (error) {
+        const message = templateRenderApiFailureMessage(error);
+        if (!message) throw error;
 
-      finalHtml = interpolateTemplateVariables(finalHtml, renderVars);
-      finalText = interpolateTemplateVariables(finalText, renderVars);
-      finalSubject = interpolateTemplateVariables(finalSubject, renderVars);
+        recordAcceptMetric(telemetry, {
+          durationMs: performance.now() - startedAt,
+          outcome: "invalid",
+        });
+        return await logResponse(
+          jsonWithTelemetry(
+            publicApiError("validation_error", message, 422, {
+              formErrors: [],
+              fieldErrors: { template: [message] },
+            }),
+            telemetry,
+            { status: 422 },
+          ),
+        );
+      }
     }
 
     const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();
