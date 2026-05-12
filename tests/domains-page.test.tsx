@@ -149,4 +149,39 @@ describe("Domains Page", () => {
     render(<DomainsPage domains={mockDomains} />);
     expect(screen.getByLabelText("Export")).toBeDefined();
   });
+
+  it("submits an advanced tracking subdomain label when adding a domain", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "domain-new" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    render(<DomainsPage domains={mockDomains} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add domain" }));
+    fireEvent.change(screen.getByPlaceholderText("yourdomain.com"), {
+      target: { value: "example.com" },
+    });
+    fireEvent.click(screen.getByText("Advanced options"));
+    fireEvent.change(screen.getByPlaceholderText("links"), {
+      target: { value: "links" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    await vi.waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/domains",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            name: "example.com",
+            tracking_subdomain: "links",
+          }),
+        }),
+      );
+    });
+
+    fetchSpy.mockRestore();
+  });
 });

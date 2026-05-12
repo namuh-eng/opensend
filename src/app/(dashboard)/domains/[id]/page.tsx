@@ -77,6 +77,7 @@ export default async function DomainDetailPage({
         createdAt: domain.createdAt.toISOString(),
         clickTracking: domain.trackClicks,
         openTracking: domain.trackOpens,
+        trackingSubdomain: domain.trackingSubdomain,
         tls: domain.tls,
         sendingEnabled: true,
         receivingEnabled: false,

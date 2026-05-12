@@ -10,6 +10,7 @@ type DomainCapability = NonNullable<DomainRow["capabilities"]>[number];
 
 export const DEFAULT_RETURN_PATH = "send";
 export const DMARC_RECORD_VALUE = "v=DMARC1; p=none;";
+export const DEFAULT_TRACKING_CNAME_TARGET = "localhost";
 
 export function buildDmarcRecordName(domainName: string): string {
   return `_dmarc.${domainName}`;
@@ -26,6 +27,90 @@ export function buildReturnPathRecordName(
   customReturnPath: string | null | undefined,
 ): string {
   return `${getEffectiveReturnPathLabel(customReturnPath)}.${domainName}`;
+}
+
+function normalizeHostnameFromUrlish(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  if (!trimmed) return "";
+
+  try {
+    return new URL(trimmed).hostname;
+  } catch {
+    try {
+      return new URL(`https://${trimmed}`).hostname;
+    } catch {
+      return "";
+    }
+  }
+}
+
+export function getTrackingCnameTarget(): string {
+  return (
+    normalizeHostnameFromUrlish(process.env.TRACKING_CNAME_TARGET) ||
+    normalizeHostnameFromUrlish(process.env.TRACKING_BASE_URL) ||
+    normalizeHostnameFromUrlish(process.env.NEXT_PUBLIC_APP_URL) ||
+    normalizeHostnameFromUrlish(process.env.APP_URL) ||
+    normalizeHostnameFromUrlish(
+      process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+    ) ||
+    DEFAULT_TRACKING_CNAME_TARGET
+  );
+}
+
+export function buildTrackingSubdomainRecordName(
+  domainName: string,
+  trackingSubdomain: string | null | undefined,
+): string | null {
+  const label = trackingSubdomain?.trim().toLowerCase();
+  if (!label) return null;
+
+  // Historical rows may contain the full host. New Resend-compatible writes are
+  // validated as a single DNS label, but preserving full-host reads avoids
+  // breaking already-configured tracking links.
+  if (label.includes(".")) return label;
+
+  return `${label}.${domainName}`;
+}
+
+export function buildTrackingCnameRecord(
+  domainName: string,
+  trackingSubdomain: string | null | undefined,
+  target = getTrackingCnameTarget(),
+): DomainRecord | null {
+  const name = buildTrackingSubdomainRecordName(domainName, trackingSubdomain);
+  if (!name) return null;
+
+  return {
+    type: "CNAME",
+    name,
+    value: target,
+    status: "pending",
+    ttl: "Auto",
+  };
+}
+
+export function syncTrackingCnameRecord(input: {
+  records: DomainRecord[];
+  domainName: string;
+  previousTrackingSubdomain: string | null | undefined;
+  nextTrackingSubdomain: string | null | undefined;
+}): DomainRecord[] {
+  const previousName = buildTrackingSubdomainRecordName(
+    input.domainName,
+    input.previousTrackingSubdomain,
+  );
+  const nextRecord = buildTrackingCnameRecord(
+    input.domainName,
+    input.nextTrackingSubdomain,
+  );
+  const nextName = nextRecord?.name ?? null;
+
+  const retainedRecords = input.records.filter((record) => {
+    if (record.type !== "CNAME") return true;
+    return record.name !== previousName && record.name !== nextName;
+  });
+
+  return nextRecord ? [...retainedRecords, nextRecord] : retainedRecords;
 }
 
 export type CreateDomainIdentityResult = {
@@ -149,6 +234,7 @@ function buildDomainRecords(
   region: string,
   identity: CreateDomainIdentityResult,
   customReturnPath: string | null | undefined,
+  trackingSubdomain: string | null | undefined,
 ): DomainRecord[] {
   const dkimRecords: DomainRecord[] =
     identity.dkimOrigin === "EXTERNAL" &&
@@ -201,7 +287,18 @@ function buildDomainRecords(
     ttl: "Auto",
   };
 
-  return [...dkimRecords, spfRecord, mxRecord, dmarcRecord];
+  const trackingCnameRecord = buildTrackingCnameRecord(
+    domainName,
+    trackingSubdomain,
+  );
+
+  return [
+    ...dkimRecords,
+    spfRecord,
+    mxRecord,
+    dmarcRecord,
+    ...(trackingCnameRecord ? [trackingCnameRecord] : []),
+  ];
 }
 
 function toDomainDetail(row: DomainRow): DomainDetail {
@@ -271,6 +368,7 @@ export function createDomainService({
         region,
         identity,
         input.customReturnPath,
+        input.trackingSubdomain,
       );
 
       const dkimOrigin = identity.dkimOrigin ?? "AWS_SES";

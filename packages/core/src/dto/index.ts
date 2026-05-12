@@ -170,7 +170,7 @@ export interface DomainOptions {
 export interface UpdateDomainPayload {
   click_tracking?: boolean;
   open_tracking?: boolean;
-  tracking_subdomain?: string;
+  tracking_subdomain?: string | null;
   capabilities?: DomainCapability[];
   sending_enabled?: boolean;
   receiving_enabled?: boolean;

@@ -37,6 +37,7 @@ function makeDomain(
     createdAt: "2026-01-01T00:00:00.000Z",
     clickTracking: false,
     openTracking: false,
+    trackingSubdomain: null,
     tls: "opportunistic",
     sendingEnabled: true,
     receivingEnabled: false,
@@ -159,5 +160,28 @@ describe("Domain Configuration Tab", () => {
     const openToggle = screen.getByRole("switch", { name: /open tracking/i });
     expect(clickToggle.getAttribute("data-state")).toBe("checked");
     expect(openToggle.getAttribute("data-state")).toBe("checked");
+  });
+
+  it("renders and saves the custom tracking subdomain label", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+    renderConfigTab({ trackingSubdomain: "links" });
+    const input = screen.getByLabelText(
+      "Custom tracking subdomain",
+    ) as HTMLInputElement;
+
+    expect(input.value).toBe("links");
+    fireEvent.change(input, { target: { value: "clicks" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/domains/d-1",
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({ tracking_subdomain: "clicks" }),
+      }),
+    );
+    fetchSpy.mockRestore();
   });
 });

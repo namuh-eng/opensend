@@ -63,7 +63,7 @@ describe("domain detail service", () => {
           customReturnPath: "outbound",
           trackOpens: true,
           trackClicks: true,
-          trackingSubdomain: "track.example.com",
+          trackingSubdomain: "links",
           tls: "enforced",
         }),
     });
@@ -92,7 +92,7 @@ describe("domain detail service", () => {
       return_path: "outbound",
       open_tracking: true,
       click_tracking: true,
-      tracking_subdomain: "track.example.com",
+      tracking_subdomain: "links",
       tls: "enforced",
       capabilities: [
         { name: "sending", enabled: true },
@@ -235,6 +235,72 @@ describe("domain detail service", () => {
         },
       },
     });
+  });
+
+  it("updates tracking subdomain and reconciles the pending CNAME record", async () => {
+    const previousTrackingTarget = process.env.TRACKING_CNAME_TARGET;
+    process.env.TRACKING_CNAME_TARGET = "track.opensend.example";
+    const existing = domainRow({
+      trackingSubdomain: null,
+      records: [
+        {
+          type: "TXT",
+          name: "send.example.com",
+          value: "v=spf1 include:amazonses.com ~all",
+          status: "pending",
+          ttl: "Auto",
+        },
+      ],
+    });
+    const updateCalls: DomainUpdateInput[] = [];
+    const service = createDomainDetailService({
+      getDomainById: async () => existing,
+      updateDomainForUser: async (input) => {
+        updateCalls.push(input);
+        return domainRow({ ...existing, ...input.updates });
+      },
+    });
+
+    try {
+      const result = await service.updateDomainDetail({
+        id: existing.id,
+        userId: "user-1",
+        updates: { tracking_subdomain: "links" },
+      });
+
+      expect(result.changedFields).toEqual(["tracking_subdomain"]);
+      expect(updateCalls).toEqual([
+        {
+          id: existing.id,
+          userId: "user-1",
+          updates: {
+            trackingSubdomain: "links",
+            records: [
+              {
+                type: "TXT",
+                name: "send.example.com",
+                value: "v=spf1 include:amazonses.com ~all",
+                status: "pending",
+                ttl: "Auto",
+              },
+              {
+                type: "CNAME",
+                name: "links.example.com",
+                value: "track.opensend.example",
+                status: "pending",
+                ttl: "Auto",
+              },
+            ],
+          },
+        },
+      ]);
+    } finally {
+      if (previousTrackingTarget === undefined) {
+        process.env.TRACKING_CNAME_TARGET = undefined;
+      } else {
+        process.env.TRACKING_CNAME_TARGET = previousTrackingTarget;
+      }
+    }
   });
 
   it("invalidates stale caches when a user-scoped update races with deletion", async () => {
