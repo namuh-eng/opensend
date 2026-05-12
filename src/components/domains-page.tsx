@@ -6,6 +6,10 @@ import { ExportButton } from "@/components/export-button";
 import { Modal } from "@/components/modal";
 import { SearchInput } from "@/components/search-input";
 import { StatusBadge } from "@/components/status-badge";
+import {
+  ExportStatusMessage,
+  useDashboardCsvExport,
+} from "@/components/use-dashboard-csv-export";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -80,10 +84,13 @@ export function DomainsPage({ domains }: DomainsPageProps) {
   const [statusFilter, setStatusFilter] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [newDomain, setNewDomain] = useState("");
+  const [trackingSubdomain, setTrackingSubdomain] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [adding, setAdding] = useState(false);
   const [regionFilter, setRegionFilter] = useState("");
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(40);
+  const { exportState, exportCsv } = useDashboardCsvExport("domains");
 
   const filteredDomains = useMemo(() => {
     let result = domains;
@@ -99,6 +106,14 @@ export function DomainsPage({ domains }: DomainsPageProps) {
     }
     return result;
   }, [domains, search, statusFilter, regionFilter]);
+
+  const handleExport = () => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("search", search.trim());
+    if (statusFilter) params.set("status", statusFilter);
+    if (regionFilter) params.set("region", regionFilter);
+    void exportCsv(params);
+  };
 
   const totalPages = Math.max(
     1,
@@ -142,8 +157,12 @@ export function DomainsPage({ domains }: DomainsPageProps) {
             setPage(1);
           }}
         />
-        <div className="ml-auto">
-          <ExportButton onClick={() => {}} />
+        <div className="ml-auto flex items-center gap-3">
+          <ExportStatusMessage state={exportState} />
+          <ExportButton
+            onClick={handleExport}
+            disabled={exportState.type === "loading"}
+          />
         </div>
       </div>
 
@@ -228,6 +247,8 @@ export function DomainsPage({ domains }: DomainsPageProps) {
           onClose={() => {
             setShowAddModal(false);
             setNewDomain("");
+            setTrackingSubdomain("");
+            setShowAdvanced(false);
           }}
           title="Add domain"
           actionLabel={adding ? "Adding..." : "Add"}
@@ -238,12 +259,19 @@ export function DomainsPage({ domains }: DomainsPageProps) {
               const res = await fetch("/api/domains", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: newDomain.trim() }),
+                body: JSON.stringify({
+                  name: newDomain.trim(),
+                  ...(trackingSubdomain.trim()
+                    ? { tracking_subdomain: trackingSubdomain.trim() }
+                    : {}),
+                }),
               });
               if (res.ok) {
                 const data = await res.json();
                 setShowAddModal(false);
                 setNewDomain("");
+                setTrackingSubdomain("");
+                setShowAdvanced(false);
                 router.push(`/domains/${data.id}`);
                 router.refresh();
               }
@@ -262,6 +290,38 @@ export function DomainsPage({ domains }: DomainsPageProps) {
             placeholder="yourdomain.com"
             className="w-full px-3 py-2 bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg text-[#F0F0F0] text-[14px] placeholder:text-[#52525b] focus:outline-none focus:border-[#3b82f6]"
           />
+          <button
+            type="button"
+            className="mt-4 text-[13px] text-blue-400 hover:text-blue-300"
+            onClick={() => setShowAdvanced((value) => !value)}
+          >
+            {showAdvanced ? "Hide advanced options" : "Advanced options"}
+          </button>
+          {showAdvanced && (
+            <div className="mt-3 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(10,10,10,0.35)] p-3">
+              <label
+                htmlFor="tracking-subdomain"
+                className="block text-[13px] font-medium text-[#F0F0F0] mb-1"
+              >
+                Custom tracking subdomain
+              </label>
+              <p className="text-[12px] text-[#A1A4A5] mb-2">
+                Optional. OpenSend will add a CNAME like{" "}
+                <span className="font-mono text-[#F0F0F0]">
+                  links.yourdomain.com
+                </span>{" "}
+                so tracked clicks and opens can use your branded domain.
+              </p>
+              <input
+                id="tracking-subdomain"
+                type="text"
+                value={trackingSubdomain}
+                onChange={(e) => setTrackingSubdomain(e.target.value)}
+                placeholder="links"
+                className="w-full px-3 py-2 bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg text-[#F0F0F0] text-[14px] placeholder:text-[#52525b] focus:outline-none focus:border-[#3b82f6]"
+              />
+            </div>
+          )}
         </Modal>
       )}
     </div>

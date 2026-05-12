@@ -10,9 +10,12 @@ vi.stubEnv("CLOUDFLARE_ZONE_ID", "test-zone-id-456");
 
 import {
   type DNSRecord,
+  configureDNSRecords,
   createDNSRecord,
   deleteDNSRecord,
   listDNSRecords,
+  mapDomainRecordToDNSRecord,
+  upsertDNSRecord,
 } from "@/lib/cloudflare";
 
 describe("Cloudflare DNS Client", () => {
@@ -315,6 +318,139 @@ describe("Cloudflare DNS Client", () => {
       await expect(deleteDNSRecord("nonexistent")).rejects.toThrow(
         "Cloudflare API error: Record not found",
       );
+    });
+  });
+
+  describe("domain DNS record mapping", () => {
+    it("maps tracking CNAME guidance to Cloudflare's DNS record shape", () => {
+      expect(
+        mapDomainRecordToDNSRecord({
+          type: "CNAME",
+          name: "links.example.com",
+          value: "track.opensend.example",
+          ttl: "Auto",
+        }),
+      ).toEqual({
+        type: "CNAME",
+        name: "links.example.com",
+        content: "track.opensend.example",
+        ttl: 1,
+      });
+    });
+
+    it("maps MX priority and ignores unsupported record types", () => {
+      expect(
+        mapDomainRecordToDNSRecord({
+          type: "MX",
+          name: "send.example.com",
+          value: "feedback-smtp.us-east-1.amazonses.com",
+          ttl: "300",
+          priority: 10,
+        }),
+      ).toEqual({
+        type: "MX",
+        name: "send.example.com",
+        content: "feedback-smtp.us-east-1.amazonses.com",
+        ttl: 300,
+        priority: 10,
+      });
+      expect(
+        mapDomainRecordToDNSRecord({
+          type: "CAA",
+          name: "example.com",
+          value: "0 issue amazon.com",
+        }),
+      ).toBeNull();
+    });
+  });
+
+  describe("upsertDNSRecord", () => {
+    it("updates an existing tracking CNAME when the target drifts", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            success: true,
+            result: [
+              {
+                id: "dns-track",
+                type: "CNAME",
+                name: "links.example.com",
+                content: "old.example",
+                ttl: 1,
+              },
+            ],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            success: true,
+            result: {
+              id: "dns-track",
+              type: "CNAME",
+              name: "links.example.com",
+              content: "track.opensend.example",
+              ttl: 1,
+            },
+          }),
+        });
+
+      await expect(
+        upsertDNSRecord({
+          type: "CNAME",
+          name: "links.example.com",
+          content: "track.opensend.example",
+          ttl: 1,
+        }),
+      ).resolves.toMatchObject({
+        action: "updated",
+        name: "links.example.com",
+        type: "CNAME",
+      });
+
+      expect(mockFetch).toHaveBeenLastCalledWith(
+        "https://api.cloudflare.com/client/v4/zones/test-zone-id-456/dns_records/dns-track",
+        expect.objectContaining({ method: "PUT" }),
+      );
+    });
+
+    it("creates the tracking CNAME during batch configure when missing", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ success: true, result: [] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            success: true,
+            result: {
+              id: "dns-created",
+              type: "CNAME",
+              name: "links.example.com",
+              content: "track.opensend.example",
+              ttl: 1,
+            },
+          }),
+        });
+
+      await expect(
+        configureDNSRecords([
+          {
+            type: "CNAME",
+            name: "links.example.com",
+            value: "track.opensend.example",
+            ttl: "Auto",
+          },
+        ]),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          action: "created",
+          name: "links.example.com",
+          type: "CNAME",
+        }),
+      ]);
     });
   });
 });

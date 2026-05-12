@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -18,6 +18,7 @@ const domainWithRecords: DomainDetailData = {
   createdAt: new Date(Date.now() - 20 * 60 * 60 * 1000).toISOString(),
   clickTracking: false,
   openTracking: false,
+  trackingSubdomain: null,
   tls: "opportunistic",
   sendingEnabled: true,
   receivingEnabled: false,
@@ -50,6 +51,13 @@ const domainWithRecords: DomainDetailData = {
       name: "_dmarc.updates.foreverbrowsing.com",
       value: "v=DMARC1; p=none;",
       status: "verified",
+      ttl: "Auto",
+    },
+    {
+      type: "CNAME",
+      name: "links.updates.foreverbrowsing.com",
+      value: "track.opensend.example",
+      status: "pending",
       ttl: "Auto",
     },
   ],
@@ -115,6 +123,28 @@ describe("Domain DNS Records Tab (feature-025)", () => {
     const receivingToggle = screen.getByTestId("receiving-toggle");
     expect(receivingToggle).toBeTruthy();
     expect(receivingToggle.getAttribute("data-state")).toBe("unchecked");
+  });
+
+  it("renders Tracking CNAME as a copyable DNS section", () => {
+    render(<DomainDetail domain={domainWithRecords} />);
+    expect(screen.getByText("Tracking CNAME")).toBeTruthy();
+    expect(screen.getByText("links.updates.foreverbrowsing.com")).toBeTruthy();
+    expect(screen.getByText("track.opensend.example")).toBeTruthy();
+  });
+
+  it("calls the auto-configure API from the records tab", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+
+    render(<DomainDetail domain={domainWithRecords} />);
+    fireEvent.click(screen.getByRole("button", { name: "Auto configure" }));
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/domains/d1/auto-configure",
+      expect.objectContaining({ method: "POST" }),
+    );
+    fetchSpy.mockRestore();
   });
 
   it("renders MX record with priority 10", () => {

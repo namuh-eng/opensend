@@ -2,6 +2,10 @@
 
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
 import { StatusBadge } from "@/components/status-badge";
+import {
+  ExportStatusMessage,
+  useDashboardCsvExport,
+} from "@/components/use-dashboard-csv-export";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -35,6 +39,7 @@ export function ContactsList() {
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>(null);
+  const { exportState, exportCsv } = useDashboardCsvExport("contacts");
 
   const fetchContacts = useCallback(async () => {
     setLoading(true);
@@ -93,6 +98,14 @@ export function ContactsList() {
     });
   };
 
+  const handleExport = () => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("search", search.trim());
+    if (statusFilter) params.set("status", statusFilter);
+    if (segmentFilter) params.set("segment_id", segmentFilter);
+    void exportCsv(params);
+  };
+
   const totalPages = Math.ceil(total / limit);
   const start = total === 0 ? 0 : (page - 1) * limit + 1;
   const end = Math.min(page * limit, total);
@@ -142,9 +155,12 @@ export function ContactsList() {
           <option value="unsubscribed">Unsubscribed</option>
         </select>
 
+        <ExportStatusMessage state={exportState} />
         <button
           type="button"
-          className="h-9 px-3 text-[13px] text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] rounded-md hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors"
+          onClick={handleExport}
+          disabled={exportState.type === "loading"}
+          className="h-9 px-3 text-[13px] text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] rounded-md hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         >
           Export
         </button>

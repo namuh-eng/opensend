@@ -156,6 +156,41 @@ describe("TemplatesList", () => {
     );
   });
 
+  it("creates a React Email starter and navigates to the preview detail", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: mockTemplates, total: 3 }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "starter-template" }),
+      });
+
+    render(<TemplatesList />);
+
+    await screen.findByText("Welcome Email");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Use React Email starter" }),
+    );
+
+    await waitFor(() => {
+      expect(routerMock.push).toHaveBeenCalledWith(
+        "/templates/starter-template",
+      );
+    });
+    expect(mockFetch).toHaveBeenLastCalledWith(
+      "/api/templates",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          name: "Onboarding welcome",
+          react_email_template_key: "onboarding-welcome",
+        }),
+      }),
+    );
+  });
+
   it("shows card action menu with options", async () => {
     render(<TemplatesList />);
 

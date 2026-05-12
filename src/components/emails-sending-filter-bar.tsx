@@ -6,6 +6,10 @@ import { DropdownFilter } from "@/components/dropdown-filter";
 import type { DropdownFilterOption } from "@/components/dropdown-filter";
 import { ExportButton } from "@/components/export-button";
 import { SearchInput } from "@/components/search-input";
+import {
+  ExportStatusMessage,
+  useDashboardCsvExport,
+} from "@/components/use-dashboard-csv-export";
 import { getDateRangeBounds, toIsoDate } from "@/lib/date-range";
 import { useEffect, useRef, useState } from "react";
 
@@ -48,41 +52,21 @@ const STATUS_OPTIONS: DropdownFilterOption[] = [
   { value: "suppressed", label: "Suppressed", color: "#6B7280" },
 ];
 
-const FAILURE_EXPORT_STATUSES = new Set([
-  "bounced",
-  "complained",
-  "suppressed",
-]);
-
-type ExportState =
-  | { type: "idle"; message: string }
-  | { type: "loading"; message: string }
-  | { type: "success"; message: string }
-  | { type: "empty"; message: string }
-  | { type: "error"; message: string };
-
-function downloadCsv(filename: string, blob: Blob) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function buildFailureExportParams(filters: EmailFilters): URLSearchParams {
+function buildEmailExportParams(filters: EmailFilters): URLSearchParams {
   const params = new URLSearchParams();
-  const statuses = FAILURE_EXPORT_STATUSES.has(filters.status)
-    ? filters.status
-    : Array.from(FAILURE_EXPORT_STATUSES).join(",");
   const { start, end } = getDateRangeBounds(filters.dateRange);
 
-  params.set("statuses", statuses);
   params.set("start_date", toIsoDate(start));
   params.set("end_date", toIsoDate(end));
 
   if (filters.search.trim()) {
     params.set("search", filters.search.trim());
+  }
+  if (filters.status) {
+    params.set("status", filters.status);
+  }
+  if (filters.apiKeyId) {
+    params.set("apiKeyId", filters.apiKeyId);
   }
 
   return params;
@@ -96,10 +80,7 @@ export function EmailsSendingFilterBar({
   const [filters, setFilters] = useState<EmailFilters>(
     getFilters(initialFilters),
   );
-  const [exportState, setExportState] = useState<ExportState>({
-    type: "idle",
-    message: "",
-  });
+  const { exportState, exportCsv } = useDashboardCsvExport("emails");
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>(null);
 
   useEffect(() => {
@@ -158,53 +139,7 @@ export function EmailsSendingFilterBar({
   };
 
   const handleExport = () => {
-    setExportState({
-      type: "loading",
-      message: "Preparing delivery failure export…",
-    });
-
-    const exportFailures = async () => {
-      try {
-        const params = buildFailureExportParams(filters);
-        const response = await fetch(
-          `/api/dashboard/delivery-failures/export?${params.toString()}`,
-        );
-
-        if (!response.ok) {
-          throw new Error("Export request failed");
-        }
-
-        const rowCount = Number(
-          response.headers.get("x-opensend-export-rows") ?? "0",
-        );
-
-        if (rowCount === 0) {
-          setExportState({
-            type: "empty",
-            message:
-              "No bounced, complained, or suppressed failures match these filters.",
-          });
-          return;
-        }
-
-        const blob = await response.blob();
-        const timestamp = new Date().toISOString().slice(0, 10);
-        downloadCsv(`delivery-failures-${timestamp}.csv`, blob);
-        setExportState({
-          type: "success",
-          message: `Exported ${rowCount} failure row${
-            rowCount === 1 ? "" : "s"
-          }.`,
-        });
-      } catch {
-        setExportState({
-          type: "error",
-          message: "Delivery failure export failed. Please try again.",
-        });
-      }
-    };
-
-    void exportFailures();
+    void exportCsv(buildEmailExportParams(filters));
   };
 
   const apiKeyOptions = [
@@ -232,17 +167,11 @@ export function EmailsSendingFilterBar({
         onChange={handleApiKeyChange}
       />
       <div className="ml-auto flex items-center gap-3">
-        {exportState.message ? (
-          <p
-            className={`text-[12px] ${
-              exportState.type === "error" ? "text-[#EF4444]" : "text-[#A1A4A5]"
-            }`}
-            role={exportState.type === "error" ? "alert" : "status"}
-          >
-            {exportState.message}
-          </p>
-        ) : null}
-        <ExportButton onClick={handleExport} />
+        <ExportStatusMessage state={exportState} />
+        <ExportButton
+          onClick={handleExport}
+          disabled={exportState.type === "loading"}
+        />
       </div>
     </div>
   );

@@ -17,8 +17,10 @@ import type {
   CreateAudiencePayload,
   CreateContactPayload,
   CreateContactResponse,
+  CreateSegmentPayload,
   DeleteAudienceResponse,
   DeleteContactResponse,
+  DeleteSegmentResponse,
   DomainCapability,
   DomainListItem,
   DomainListResponse,
@@ -35,6 +37,11 @@ import type {
   EmailStatus,
   EmailTag,
   EmailTemplateReference,
+  SegmentContactListItem,
+  SegmentContactListResponse,
+  SegmentListItem,
+  SegmentListResponse,
+  SegmentResponse,
   SendEmailResponse,
   UpdateContactPayload,
   UpdateDomainPayload,
@@ -64,9 +71,15 @@ interface ApiResponse<T> {
 }
 
 export type SendEmailPayload = EmailOptions & {
+  replyTo?: string | string[];
   react?: ReactNode;
 };
 export type CreateDomainPayload = DomainOptions;
+
+interface CancelEmailResponse {
+  object: "email";
+  id: string;
+}
 
 export interface AutomationStepPayload {
   key: string;
@@ -120,6 +133,10 @@ export interface ListOptions {
 }
 
 export interface AudienceListOptions extends ListOptions {
+  search?: string;
+}
+
+export interface SegmentListOptions extends ListOptions {
   search?: string;
 }
 
@@ -218,6 +235,84 @@ type SendBroadcastResponse = Pick<
   "object" | "id" | "status" | "scheduled_at"
 >;
 
+type TemplateStatus = "draft" | "published";
+type TemplateVariableType = "string" | "number";
+
+interface TemplateVariable {
+  key: string;
+  name?: string;
+  type?: TemplateVariableType;
+  required?: boolean;
+  fallback_value?: string | number | null;
+  fallbackValue?: string | number | null;
+}
+
+interface TemplatePayloadAliases {
+  reply_to?: string | string[] | null;
+  replyTo?: string | string[] | null;
+  preview_text?: string | null;
+  previewText?: string | null;
+}
+
+interface CreateTemplatePayload extends TemplatePayloadAliases {
+  name: string;
+  alias?: string | null;
+  from?: string | null;
+  subject?: string | null;
+  html?: string;
+  text?: string | null;
+  variables?: TemplateVariable[];
+}
+
+type UpdateTemplatePayload = Partial<CreateTemplatePayload> & {
+  status?: TemplateStatus;
+};
+
+interface TemplateListOptions extends ListOptions {
+  search?: string;
+  status?: TemplateStatus;
+}
+
+interface TemplateListItem {
+  object: "template";
+  id: string;
+  name: string;
+  alias: string | null;
+  status: TemplateStatus;
+  current_version_id?: string | null;
+  published_at?: string | null;
+  has_unpublished_versions?: boolean;
+  created_at: string;
+}
+
+interface TemplateListResponse {
+  object: "list";
+  data: TemplateListItem[];
+  has_more: boolean;
+}
+
+interface TemplateResponse extends TemplateListItem {
+  subject?: string | null;
+  from?: string | null;
+  reply_to?: string | string[] | null;
+  preview_text?: string | null;
+  html?: string | null;
+  text?: string | null;
+  variables?: TemplateVariable[];
+  updated_at?: string | null;
+}
+
+type CreateTemplateResponse = Pick<TemplateResponse, "object" | "id">;
+type UpdateTemplateResponse = Pick<TemplateResponse, "object" | "id">;
+type PublishTemplateResponse = Pick<TemplateResponse, "object" | "id">;
+type DuplicateTemplateResponse = Pick<TemplateResponse, "object" | "id">;
+
+interface DeleteTemplateResponse {
+  object: "template";
+  id: string;
+  deleted: true;
+}
+
 function normalizeBaseUrl(baseUrl: string = DEFAULT_BASE_URL): string {
   if (!baseUrl.trim()) {
     throw new Error("baseUrl must be a non-empty string when provided");
@@ -310,6 +405,35 @@ function toBroadcastPayload<T extends BroadcastPayloadAliases>(
   }
   if (normalized.scheduled_at === undefined && scheduledAt !== undefined) {
     normalized.scheduled_at = scheduledAt;
+  }
+
+  return normalized;
+}
+
+function toTemplatePayload<T extends TemplatePayloadAliases>(
+  payload: T,
+): Omit<T, "replyTo" | "previewText"> {
+  const { replyTo, previewText, ...rest } = payload;
+  const normalized = { ...rest };
+
+  if (normalized.reply_to === undefined && replyTo !== undefined) {
+    normalized.reply_to = replyTo;
+  }
+  if (normalized.preview_text === undefined && previewText !== undefined) {
+    normalized.preview_text = previewText;
+  }
+
+  return normalized;
+}
+
+type SendEmailRestPayload = Omit<SendEmailPayload, "replyTo">;
+
+function toSendEmailPayload(payload: SendEmailPayload): SendEmailRestPayload {
+  const { replyTo, ...rest } = payload;
+  const normalized: SendEmailRestPayload = { ...rest };
+
+  if (normalized.reply_to === undefined && replyTo !== undefined) {
+    normalized.reply_to = replyTo;
   }
 
   return normalized;
@@ -420,7 +544,7 @@ class Emails {
     payload: SendEmailPayload,
     options: RequestOptions = {},
   ): Promise<ApiResponse<EmailResponse>> {
-    const { react, ...rest } = payload;
+    const { react, ...rest } = toSendEmailPayload(payload);
 
     if (react != null) {
       const rendered = await renderReactToHtml(react);
@@ -440,7 +564,7 @@ class Emails {
     return this.http.request<BatchEmailResponse>(
       "POST",
       "/emails/batch",
-      payload,
+      payload.map(toSendEmailPayload),
       options,
     );
   }
@@ -471,6 +595,13 @@ class Emails {
 
   async get(id: string): Promise<ApiResponse<EmailDetailResponse>> {
     return this.http.request<EmailDetailResponse>("GET", `/api/emails/${id}`);
+  }
+
+  async cancel(id: string): Promise<ApiResponse<CancelEmailResponse>> {
+    return this.http.request<CancelEmailResponse>(
+      "POST",
+      `/emails/${id}/cancel`,
+    );
   }
 }
 
@@ -562,6 +693,57 @@ class Contacts {
     return this.http.request<DeleteContactResponse>(
       "DELETE",
       `/contacts/${id}`,
+    );
+  }
+}
+
+class Segments {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(
+    payload: CreateSegmentPayload,
+  ): Promise<ApiResponse<SegmentResponse>> {
+    return this.http.request<SegmentResponse>("POST", "/segments", payload);
+  }
+
+  async list(
+    options: SegmentListOptions = {},
+  ): Promise<ApiResponse<SegmentListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.search) params.set("search", options.search);
+
+    const query = params.toString();
+    return this.http.request<SegmentListResponse>(
+      "GET",
+      query ? `/segments?${query}` : "/segments",
+    );
+  }
+
+  async get(id: string): Promise<ApiResponse<SegmentResponse>> {
+    return this.http.request<SegmentResponse>("GET", `/segments/${id}`);
+  }
+
+  async delete(id: string): Promise<ApiResponse<DeleteSegmentResponse>> {
+    return this.http.request<DeleteSegmentResponse>(
+      "DELETE",
+      `/segments/${id}`,
+    );
+  }
+
+  async listContacts(
+    id: string,
+    options: ListOptions = {},
+  ): Promise<ApiResponse<SegmentContactListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+
+    const query = params.toString();
+    return this.http.request<SegmentContactListResponse>(
+      "GET",
+      query ? `/segments/${id}/contacts?${query}` : `/segments/${id}/contacts`,
     );
   }
 }
@@ -666,6 +848,81 @@ class Broadcasts {
       `/broadcasts/${id}/send`,
       toBroadcastPayload(payload),
       options,
+    );
+  }
+}
+
+class Templates {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(
+    payload: CreateTemplatePayload,
+  ): Promise<ApiResponse<CreateTemplateResponse>> {
+    return this.http.request<CreateTemplateResponse>(
+      "POST",
+      "/templates",
+      toTemplatePayload(payload),
+    );
+  }
+
+  async list(
+    options: TemplateListOptions = {},
+  ): Promise<ApiResponse<TemplateListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.search) params.set("search", options.search);
+    if (options.status) params.set("status", options.status);
+
+    const query = params.toString();
+    return this.http.request<TemplateListResponse>(
+      "GET",
+      query ? `/templates?${query}` : "/templates",
+    );
+  }
+
+  async get(idOrAlias: string): Promise<ApiResponse<TemplateResponse>> {
+    return this.http.request<TemplateResponse>(
+      "GET",
+      `/templates/${idOrAlias}`,
+    );
+  }
+
+  async update(
+    idOrAlias: string,
+    payload: UpdateTemplatePayload,
+  ): Promise<ApiResponse<UpdateTemplateResponse>> {
+    return this.http.request<UpdateTemplateResponse>(
+      "PATCH",
+      `/templates/${idOrAlias}`,
+      toTemplatePayload(payload),
+    );
+  }
+
+  async delete(
+    idOrAlias: string,
+  ): Promise<ApiResponse<DeleteTemplateResponse>> {
+    return this.http.request<DeleteTemplateResponse>(
+      "DELETE",
+      `/templates/${idOrAlias}`,
+    );
+  }
+
+  async publish(
+    idOrAlias: string,
+  ): Promise<ApiResponse<PublishTemplateResponse>> {
+    return this.http.request<PublishTemplateResponse>(
+      "POST",
+      `/templates/${idOrAlias}/publish`,
+    );
+  }
+
+  async duplicate(
+    idOrAlias: string,
+  ): Promise<ApiResponse<DuplicateTemplateResponse>> {
+    return this.http.request<DuplicateTemplateResponse>(
+      "POST",
+      `/templates/${idOrAlias}/duplicate`,
     );
   }
 }
@@ -793,8 +1050,10 @@ class Opensend {
   public readonly domains: Domains;
   public readonly apiKeys: ApiKeys;
   public readonly contacts: Contacts;
+  public readonly segments: Segments;
   public readonly audiences: Audiences;
   public readonly broadcasts: Broadcasts;
+  public readonly templates: Templates;
   public readonly automations: Automations;
   public readonly events: Events;
 
@@ -809,8 +1068,10 @@ class Opensend {
     this.domains = new Domains(http);
     this.apiKeys = new ApiKeys(http);
     this.contacts = new Contacts(http);
+    this.segments = new Segments(http);
     this.audiences = new Audiences(http);
     this.broadcasts = new Broadcasts(http);
+    this.templates = new Templates(http);
     this.automations = new Automations(http);
     this.events = new Events(http);
   }
@@ -827,6 +1088,7 @@ export type {
   EmailOptions,
   EmailResponse,
   SendEmailResponse,
+  CancelEmailResponse,
   EmailStatus,
   EmailListOptions,
   BatchEmailItemError,
@@ -853,6 +1115,13 @@ export type {
   AudienceListItem,
   AudienceListResponse,
   DeleteAudienceResponse,
+  CreateSegmentPayload,
+  SegmentResponse,
+  SegmentListItem,
+  SegmentListResponse,
+  DeleteSegmentResponse,
+  SegmentContactListItem,
+  SegmentContactListResponse,
   BroadcastStatus,
   CreateBroadcastPayload,
   UpdateBroadcastPayload,
@@ -864,6 +1133,19 @@ export type {
   CreateBroadcastResponse,
   DeleteBroadcastResponse,
   SendBroadcastResponse,
+  TemplateStatus,
+  TemplateVariable,
+  CreateTemplatePayload,
+  UpdateTemplatePayload,
+  TemplateListOptions,
+  TemplateListItem,
+  TemplateListResponse,
+  TemplateResponse,
+  CreateTemplateResponse,
+  UpdateTemplateResponse,
+  DeleteTemplateResponse,
+  PublishTemplateResponse,
+  DuplicateTemplateResponse,
   CreateContactPayload,
   CreateContactResponse,
   UpdateContactPayload,

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { expect, test } from "./fixtures/auth";
 
 test.describe("Templates List Page", () => {
@@ -55,6 +56,79 @@ test.describe("Templates List Page", () => {
       [templateId],
     );
     expect(result.rows[0]?.user_id).toBe(e2eUser.id);
+
+    await e2eDb.query("delete from templates where id = $1 and user_id = $2", [
+      templateId,
+      e2eUser.id,
+    ]);
+  });
+
+  test("renders React Email-backed template preview with text and variable diagnostics", async ({
+    authenticatedPage: page,
+    e2eDb,
+    e2eUser,
+  }) => {
+    const templateId = randomUUID();
+    await e2eDb.query(
+      `insert into templates
+        (id, name, alias, status, html, variables, document, user_id, created_at)
+       values
+        ($1, 'E2E React Email Starter', 'e2e-react-email-starter', 'draft',
+         '<!-- React Email registry template: onboarding-welcome -->',
+         $2::jsonb, $3::jsonb, $4, now())`,
+      [
+        templateId,
+        JSON.stringify([
+          {
+            name: "productName",
+            key: "productName",
+            type: "string",
+            required: false,
+            fallbackValue: "Opensend",
+          },
+          {
+            name: "actionUrl",
+            key: "actionUrl",
+            type: "string",
+            required: true,
+            fallbackValue: null,
+          },
+        ]),
+        JSON.stringify({
+          rendering: {
+            kind: "react_email",
+            templateKey: "onboarding-welcome",
+          },
+        }),
+        e2eUser.id,
+      ],
+    );
+
+    await page.goto(`/templates/${templateId}`);
+    await page.waitForLoadState("networkidle");
+
+    await expect(
+      page.getByRole("heading", { name: "E2E React Email Starter" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("React Email registry template:"),
+    ).toBeVisible();
+    await expect(page.getByText("Variable resolution")).toBeVisible();
+    await expect(page.getByRole("cell", { name: "Fallback" })).toBeVisible();
+    await expect(
+      page.getByRole("cell", { name: "Preview sample" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("cell", { name: "Required before send" }),
+    ).toBeVisible();
+    await expect(page.getByTestId("template-text-preview")).toContainText(
+      "Open the setup checklist",
+    );
+    await expect(
+      page
+        .frameLocator('iframe[title="Template Preview"]')
+        .getByText("Your email workspace is ready"),
+    ).toBeVisible();
 
     await e2eDb.query("delete from templates where id = $1 and user_id = $2", [
       templateId,

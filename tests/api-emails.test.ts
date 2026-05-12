@@ -3151,6 +3151,104 @@ describe("POST /api/emails/:id/cancel", () => {
   });
 });
 
+describe("POST /emails/:email_id/cancel", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mockEmailLifecycleService.cancelEmail.mockReset();
+    mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
+  });
+
+  it("delegates to the scheduled-email cancel route and returns the Resend-compatible success body", async () => {
+    mockEmailLifecycleService.cancelEmail.mockResolvedValueOnce({
+      object: "email",
+      id: "email-uuid",
+      status: "canceled",
+    });
+
+    const { POST } = await import("@/app/emails/[id]/cancel/route");
+    const res = await POST(
+      new Request("http://localhost:3015/emails/email-uuid/cancel", {
+        method: "POST",
+        headers: { Authorization: "Bearer os_test123" },
+      }) as never,
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      object: "email",
+      id: "email-uuid",
+    });
+    expect(mockEmailLifecycleService.cancelEmail).toHaveBeenCalledWith(
+      AUTH_RESULT.userId,
+      "email-uuid",
+    );
+  });
+
+  it("uses the same API-key auth boundary as the internal cancel route", async () => {
+    mockValidateApiKey.mockResolvedValueOnce(null);
+
+    const { POST } = await import("@/app/emails/[id]/cancel/route");
+    const res = await POST(
+      new Request("http://localhost:3015/emails/email-uuid/cancel", {
+        method: "POST",
+      }) as never,
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({
+      error: "Missing or invalid API key",
+    });
+    expect(mockEmailLifecycleService.cancelEmail).not.toHaveBeenCalled();
+  });
+
+  it("preserves invalid-state behavior for non-scheduled emails", async () => {
+    mockEmailLifecycleService.cancelEmail.mockRejectedValueOnce(
+      new MockEmailLifecycleServiceError(
+        "invalid_state",
+        "Cannot cancel a delivered email",
+      ),
+    );
+
+    const { POST } = await import("@/app/emails/[id]/cancel/route");
+    const res = await POST(
+      new Request("http://localhost:3015/emails/email-uuid/cancel", {
+        method: "POST",
+        headers: { Authorization: "Bearer os_test123" },
+      }) as never,
+      { params: Promise.resolve({ id: "email-uuid" }) },
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "Cannot cancel a delivered email",
+    });
+  });
+
+  it("preserves tenant-scoped not-found behavior from the delegated service", async () => {
+    mockEmailLifecycleService.cancelEmail.mockRejectedValueOnce(
+      new MockEmailLifecycleServiceError("email_not_found", "Email not found"),
+    );
+
+    const { POST } = await import("@/app/emails/[id]/cancel/route");
+    const res = await POST(
+      new Request("http://localhost:3015/emails/other-tenant-email/cancel", {
+        method: "POST",
+        headers: { Authorization: "Bearer os_test123" },
+      }) as never,
+      { params: Promise.resolve({ id: "other-tenant-email" }) },
+    );
+
+    expect(res.status).toBe(404);
+    await expect(res.json()).resolves.toEqual({ error: "Email not found" });
+    expect(mockEmailLifecycleService.cancelEmail).toHaveBeenCalledWith(
+      AUTH_RESULT.userId,
+      "other-tenant-email",
+    );
+  });
+});
+
 describe("GET /api/emails/:id/events", () => {
   beforeEach(() => {
     vi.resetModules();

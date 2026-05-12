@@ -50,6 +50,13 @@ const API_GROUPS: EndpointGroup[] = [
       },
       {
         method: "POST",
+        path: "/emails/:email_id/cancel",
+        description: "Cancel a scheduled email.",
+        curl: `curl -X POST https://api.opensend.com/emails/EMAIL_ID/cancel \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "POST",
         path: "/api/emails/batch",
         description:
           "Send a batch of emails with one Idempotency-Key for the whole batch. Reusing the same key within 24 hours returns the original accepted { data: [{ id }] } envelope without reserving quota, creating rows, or publishing queue jobs again; after 24 hours the same key is accepted as a new batch.",
@@ -139,42 +146,77 @@ const API_GROUPS: EndpointGroup[] = [
     endpoints: [
       {
         method: "POST",
-        path: "/api/templates",
-        description: "Create a new template",
-        curl: `curl -X POST https://api.opensend.com/api/templates \\
+        path: "/templates",
+        description:
+          "Create a stored template through the Resend-compatible root API",
+        curl: `curl -X POST https://api.opensend.com/templates \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{ "name": "Welcome Email", "html": "<p>Welcome {{name}}</p>" }'`,
+  -d '{ "name": "Welcome Email", "alias": "welcome", "subject": "Welcome", "html": "<p>Welcome {{name}}</p>" }'
+
+// SDK
+await client.templates.create({
+  name: "Welcome Email",
+  alias: "welcome",
+  subject: "Welcome",
+  html: "<p>Welcome {{name}}</p>",
+});`,
       },
       {
         method: "GET",
-        path: "/api/templates",
-        description: "List all templates",
-        curl: `curl https://api.opensend.com/api/templates \\
+        path: "/templates",
+        description:
+          "List stored templates for the authenticated API-key tenant",
+        curl: `curl https://api.opensend.com/templates \\
   -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "GET",
-        path: "/api/templates/:id",
-        description: "Retrieve a template by ID",
-        curl: `curl https://api.opensend.com/api/templates/TEMPLATE_ID \\
+        path: "/templates/:id",
+        description: "Retrieve a stored template by ID or alias",
+        curl: `curl https://api.opensend.com/templates/TEMPLATE_ID_OR_ALIAS \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "GET",
+        path: "/api/templates/:id/preview",
+        description:
+          "Render a dashboard/API preview through the same stored-template renderer used by sends",
+        curl: `curl https://api.opensend.com/api/templates/TEMPLATE_ID/preview \\
   -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "PATCH",
-        path: "/api/templates/:id",
-        description: "Update a template",
-        curl: `curl -X PATCH https://api.opensend.com/api/templates/TEMPLATE_ID \\
+        path: "/templates/:id",
+        description: "Update a stored template by ID or alias",
+        curl: `curl -X PATCH https://api.opensend.com/templates/TEMPLATE_ID_OR_ALIAS \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{ "name": "Updated Template" }'`,
+  -d '{ "name": "Updated Template", "reply_to": "support@example.com" }'`,
       },
       {
         method: "DELETE",
-        path: "/api/templates/:id",
-        description: "Delete a template",
-        curl: `curl -X DELETE https://api.opensend.com/api/templates/TEMPLATE_ID \\
+        path: "/templates/:id",
+        description: "Delete a stored template by ID or alias",
+        curl: `curl -X DELETE https://api.opensend.com/templates/TEMPLATE_ID_OR_ALIAS \\
   -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "POST",
+        path: "/templates/:id/publish",
+        description: "Publish a draft stored template by ID or alias",
+        curl: `curl -X POST https://api.opensend.com/templates/TEMPLATE_ID_OR_ALIAS/publish \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "POST",
+        path: "/templates/:id/duplicate",
+        description: "Duplicate a stored template by ID or alias",
+        curl: `curl -X POST https://api.opensend.com/templates/TEMPLATE_ID_OR_ALIAS/duplicate \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"
+
+// SDK
+await client.templates.duplicate("TEMPLATE_ID_OR_ALIAS");`,
       },
     ],
   },
@@ -255,18 +297,39 @@ await client.broadcasts.send("BROADCAST_ID", {
     endpoints: [
       {
         method: "POST",
-        path: "/api/segments",
+        path: "/segments",
         description: "Create a new segment",
-        curl: `curl -X POST https://api.opensend.com/api/segments \\
+        curl: `curl -X POST https://api.opensend.com/segments \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Active Users" }'`,
       },
       {
         method: "GET",
-        path: "/api/segments",
+        path: "/segments",
         description: "List all segments",
-        curl: `curl https://api.opensend.com/api/segments \\
+        curl: `curl https://api.opensend.com/segments \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "GET",
+        path: "/segments/:id",
+        description: "Retrieve a segment by ID",
+        curl: `curl https://api.opensend.com/segments/SEGMENT_ID \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "DELETE",
+        path: "/segments/:id",
+        description: "Delete a segment by ID",
+        curl: `curl -X DELETE https://api.opensend.com/segments/SEGMENT_ID \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "GET",
+        path: "/segments/:id/contacts",
+        description: "List contacts in a segment",
+        curl: `curl https://api.opensend.com/segments/SEGMENT_ID/contacts \\
   -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
     ],
@@ -494,6 +557,10 @@ export async function POST() {
               The REST API remains JSON-only: send React components through the
               TypeScript SDK, or send pre-rendered{" "}
               <code className="font-mono text-[#F0F0F0]">html</code> directly.
+              Dashboard React Email starters are registry-controlled and run
+              inside your Opensend app; self-hosted deployments do not call
+              Resend-hosted rendering services, and arbitrary tenant TSX/JS is
+              not executed.
             </p>
           </div>
         </div>

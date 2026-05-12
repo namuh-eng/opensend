@@ -14,6 +14,7 @@ export interface DomainDetailData {
   createdAt: string;
   clickTracking: boolean;
   openTracking: boolean;
+  trackingSubdomain: string | null;
   tls: string;
   sendingEnabled: boolean;
   receivingEnabled: boolean;
@@ -614,6 +615,10 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
   const [receivingEnabled, setReceivingEnabled] = useState(
     domain.receivingEnabled,
   );
+  const [autoConfiguring, setAutoConfiguring] = useState(false);
+  const [autoConfigureError, setAutoConfigureError] = useState<string | null>(
+    null,
+  );
 
   const handleToggle = useCallback(
     async (field: "sending_enabled" | "receiving_enabled", value: boolean) => {
@@ -631,6 +636,24 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
     },
     [domain.id, router],
   );
+
+  const handleAutoConfigure = useCallback(async () => {
+    if (autoConfiguring) return;
+    setAutoConfiguring(true);
+    setAutoConfigureError(null);
+    try {
+      await apiRequest(`/api/domains/${domain.id}/auto-configure`, {
+        method: "POST",
+      });
+      router.refresh();
+    } catch (err) {
+      setAutoConfigureError(
+        err instanceof Error ? err.message : "Failed to auto-configure DNS",
+      );
+    } finally {
+      setAutoConfiguring(false);
+    }
+  }, [autoConfiguring, domain.id, router]);
 
   const records = domain.records || [];
 
@@ -651,11 +674,32 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
     (r) => r.type === "TXT" && r.name.startsWith("_dmarc."),
   );
 
+  const trackingRecords = records.filter(
+    (r) => r.type === "CNAME" && !r.name.includes("_domainkey"),
+  );
+
   return (
     <div className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-6">
-      <h2 className="text-[18px] font-semibold text-[#F0F0F0] mb-6">
-        DNS Records
-      </h2>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-[18px] font-semibold text-[#F0F0F0]">
+            DNS Records
+          </h2>
+          {autoConfigureError && (
+            <p className="mt-2 text-[12px] text-red-400" role="alert">
+              {autoConfigureError}
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={handleAutoConfigure}
+          disabled={autoConfiguring}
+          className="px-3 py-2 rounded-md border border-[rgba(176,199,217,0.145)] text-[13px] font-medium text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {autoConfiguring ? "Configuring…" : "Auto configure"}
+        </button>
+      </div>
 
       {/* Section 1: Domain Verification (DKIM) */}
       <div className="mb-8">
@@ -713,7 +757,21 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
         />
       </div>
 
-      {/* Section 4: Enable Receiving */}
+      {/* Section 4: Tracking CNAME */}
+      <div className="mb-8 border-t border-[rgba(176,199,217,0.145)] pt-6">
+        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-1">
+          Tracking CNAME
+        </h3>
+        <p className="text-[13px] text-[#A1A4A5] mb-4">
+          Point this CNAME at your OpenSend tracking endpoint to use branded
+          click and open tracking URLs.
+        </p>
+        <DNSRecordTable
+          records={trackingRecords.length > 0 ? trackingRecords : null}
+        />
+      </div>
+
+      {/* Section 5: Enable Receiving */}
       <div className="border-t border-[rgba(176,199,217,0.145)] pt-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-[14px] font-semibold text-[#F0F0F0]">
@@ -750,6 +808,13 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
   const router = useRouter();
   const [clickTracking, setClickTracking] = useState(domain.clickTracking);
   const [openTracking, setOpenTracking] = useState(domain.openTracking);
+  const [trackingSubdomain, setTrackingSubdomain] = useState(
+    domain.trackingSubdomain ?? "",
+  );
+  const [savingTrackingSubdomain, setSavingTrackingSubdomain] = useState(false);
+  const [trackingSubdomainError, setTrackingSubdomainError] = useState<
+    string | null
+  >(null);
   const [tls, setTls] = useState(domain.tls || "opportunistic");
 
   const handleToggle = useCallback(
@@ -787,6 +852,39 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
     [domain.id, tls, router],
   );
 
+  const handleTrackingSubdomainSave = useCallback(async () => {
+    if (savingTrackingSubdomain) return;
+    const nextValue = trackingSubdomain.trim();
+    const previousValue = domain.trackingSubdomain ?? "";
+    setSavingTrackingSubdomain(true);
+    setTrackingSubdomainError(null);
+    try {
+      await apiRequest(`/api/domains/${domain.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tracking_subdomain: nextValue || null,
+        }),
+      });
+      router.refresh();
+    } catch (err) {
+      setTrackingSubdomain(previousValue);
+      setTrackingSubdomainError(
+        err instanceof Error
+          ? err.message
+          : "Failed to update tracking subdomain",
+      );
+    } finally {
+      setSavingTrackingSubdomain(false);
+    }
+  }, [
+    domain.id,
+    domain.trackingSubdomain,
+    router,
+    savingTrackingSubdomain,
+    trackingSubdomain,
+  ]);
+
   return (
     <div className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-6">
       <h2 className="text-[18px] font-semibold text-[#F0F0F0] mb-6">
@@ -799,9 +897,9 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
             Click Tracking
           </h3>
           <p className="text-[13px] text-[#A1A4A5] mb-3 max-w-[600px]">
-            To track clicks, Resend modifies each link in the body of the HTML
-            email. When recipients open a link, they are sent to a Resend
-            server, and are immediately redirected to the URL destination.
+            To track clicks, OpenSend rewrites links in your HTML email. When
+            recipients open a link, they visit your OpenSend tracking endpoint
+            and are immediately redirected to the destination URL.
           </p>
           <button
             type="button"
@@ -836,8 +934,8 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
             </span>
           </div>
           <p className="text-[13px] text-[#A1A4A5] mb-3 max-w-[600px]">
-            To track opens, Resend inserts a 1x1 transparent pixel at the end of
-            your email. This is not recommended as it can negatively impact
+            To track opens, OpenSend inserts a 1x1 transparent pixel at the end
+            of your email. This is not recommended as it can negatively impact
             deliverability.
           </p>
           <button
@@ -861,6 +959,45 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
               }`}
             />
           </button>
+        </div>
+
+        <div className="border-t border-[rgba(176,199,217,0.145)] pt-8">
+          <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-2">
+            Custom Tracking Subdomain
+          </h3>
+          <p className="text-[13px] text-[#A1A4A5] mb-3 max-w-[600px]">
+            Optional. Enter a single DNS label such as{" "}
+            <span className="font-mono text-[#F0F0F0]">links</span>. OpenSend
+            will show a CNAME for{" "}
+            <span className="font-mono text-[#F0F0F0]">
+              links.{domain.name}
+            </span>{" "}
+            in DNS Records so your tracking URLs can stay on your branded
+            domain.
+          </p>
+          <div className="flex max-w-[420px] items-center gap-2">
+            <input
+              aria-label="Custom tracking subdomain"
+              type="text"
+              value={trackingSubdomain}
+              onChange={(event) => setTrackingSubdomain(event.target.value)}
+              placeholder="links"
+              className="min-w-0 flex-1 px-3 py-2 bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg text-[#F0F0F0] text-[14px] placeholder:text-[#52525b] focus:outline-none focus:border-[rgba(176,199,217,0.3)]"
+            />
+            <button
+              type="button"
+              onClick={handleTrackingSubdomainSave}
+              disabled={savingTrackingSubdomain}
+              className="px-3 py-2 rounded-lg bg-white text-black text-[13px] font-medium hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingTrackingSubdomain ? "Saving…" : "Save"}
+            </button>
+          </div>
+          {trackingSubdomainError && (
+            <p className="mt-2 text-[12px] text-red-400" role="alert">
+              {trackingSubdomainError}
+            </p>
+          )}
         </div>
 
         <div className="border-t border-[rgba(176,199,217,0.145)] pt-8">

@@ -28,7 +28,10 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const duplicated = await templateService().duplicateTemplate(id);
+    if (!auth.userId) return unauthorizedResponse();
+    const duplicated = await templateService().duplicateTemplate(id, {
+      userId: auth.userId,
+    });
 
     return NextResponse.json({
       object: "template",
