@@ -15,11 +15,17 @@ Current endpoints:
 
 - `POST /emails` — transactional send API. Uses the shared send implementation that also backs the compatibility Next.js adapter at `POST /api/emails`; preserves OpenSend/Resend-compatible auth, validation, idempotency, queueing, response, and error shapes.
 - `POST /emails/batch` — transactional batch send API with the same shared behavior as `POST /api/emails/batch`.
+- `GET /suppressions` — list user-scoped suppression records for a full-access API key or dashboard session. Matches the compatibility Next.js adapter at `GET /api/suppressions`, including `limit`/`after` pagination and response fields.
+- `DELETE /suppressions/:email` — remove a user-scoped suppression for a full-access API key or dashboard session. Matches the compatibility Next.js adapter at `DELETE /api/suppressions/:email`, including `404 { error, code }` not-found behavior.
 - `GET /healthz` — service/version health metadata
 - `GET /readyz` — static readiness response that does not require AWS, database, queue, or other external credentials
 - `POST /mcp` — Streamable HTTP-compatible JSON-RPC MCP endpoint for agent clients. Requires `Authorization: Bearer <opensend_api_key>` and forwards tool calls to the existing public OpenSend API (`OPENSEND_API_BASE_URL`, default `http://localhost:3015`).
 
-The transactional send route family is now owned by shared send handlers consumed by this Hono service. The existing Next.js handlers remain compatibility adapters for the current public `/api/emails` URLs; no production routing cutover is implied by local service ownership.
+The transactional send and suppression route families are now owned by shared handlers consumed by this Hono service. The existing Next.js handlers remain compatibility adapters for the current public `/api/emails` and `/api/suppressions` URLs; no production routing cutover is implied by local service ownership.
+
+Next.js still owns dashboard-only and not-yet-migrated public route families, including API keys, contacts/audience, broadcasts, email read/detail, billing, Better Auth, internal cron, and dashboard UI routes. Webhooks remain available in this service through the current shared adapter.
+
+The stable send/batch DTO, validation, response, and public error-envelope boundary is documented in [`../../docs/public-send-contract.md`](../../docs/public-send-contract.md) and implemented under `packages/core/src/contracts/`; adapter code should consume that boundary rather than importing Next.js app-local validation internals.
 
 ### Transactional send local testing
 
@@ -36,10 +42,16 @@ Exercise the service route with an OpenSend API key:
 bun -e 'const r = await fetch("http://localhost:3026/emails", { method: "POST", headers: { "authorization": "Bearer os_...", "content-type": "application/json" }, body: JSON.stringify({ from: "sender@example.com", to: "recipient@example.com", subject: "Hello", html: "<p>Hello</p>" }) }); console.log(r.status, await r.text())'
 ```
 
-Focused tests for this route family live in `tests/api-emails.test.ts` and cover both the Hono service routes and the Next.js compatibility adapters:
+Focused tests for the transactional send route family live in `tests/api-emails.test.ts` and cover both the Hono service routes and the Next.js compatibility adapters:
 
 ```bash
 bun run test -- tests/api-emails.test.ts
+```
+
+Focused suppression parity tests live in `tests/suppressions-route.test.ts`:
+
+```bash
+bun run test -- tests/suppressions-route.test.ts
 ```
 
 

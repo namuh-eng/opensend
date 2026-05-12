@@ -316,4 +316,114 @@ describe("suppression management routes", () => {
       code: "not_found",
     });
   });
+
+  it("exposes suppression list and delete through the Hono control-plane routes", async () => {
+    mockListSuppressions.mockResolvedValue({
+      object: "list",
+      scope: "user",
+      data: [
+        {
+          id: "supp-1",
+          object: "suppression",
+          email: "blocked@test.com",
+          reason: "bounced",
+          scope: "user",
+        },
+      ],
+      has_more: true,
+    });
+    mockDeleteSuppression.mockResolvedValue({
+      object: "suppression",
+      deleted: true,
+    });
+
+    const { Hono } = await import("hono");
+    const { registerSuppressionRoutes } = await import(
+      "../services/api/src/routes/suppressions"
+    );
+    const app = new Hono();
+    registerSuppressionRoutes(app);
+
+    const listResponse = await app.request(
+      "/suppressions?limit=10&after=supp-0",
+      {
+        headers: { Authorization: "Bearer os_test" },
+      },
+    );
+
+    expect(listResponse.status).toBe(200);
+    await expect(listResponse.json()).resolves.toEqual({
+      object: "list",
+      scope: "user",
+      data: [
+        {
+          id: "supp-1",
+          object: "suppression",
+          email: "blocked@test.com",
+          reason: "bounced",
+          scope: "user",
+        },
+      ],
+      has_more: true,
+    });
+    expect(mockListSuppressions).toHaveBeenCalledWith({
+      userId: "user-1",
+      limit: 10,
+      after: "supp-0",
+    });
+
+    const deleteResponse = await app.request(
+      "/suppressions/blocked%40test.com",
+      {
+        method: "DELETE",
+        headers: { Authorization: "Bearer os_test" },
+      },
+    );
+
+    expect(deleteResponse.status).toBe(200);
+    await expect(deleteResponse.json()).resolves.toEqual({
+      object: "suppression",
+      deleted: true,
+    });
+    expect(mockDeleteSuppression).toHaveBeenCalledWith(
+      "user-1",
+      "blocked@test.com",
+    );
+  });
+
+  it("preserves Hono suppression auth and permission failures before service calls", async () => {
+    const { Hono } = await import("hono");
+    const { registerSuppressionRoutes } = await import(
+      "../services/api/src/routes/suppressions"
+    );
+    const app = new Hono();
+    registerSuppressionRoutes(app);
+
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce(null);
+    const unauthorized = await app.request("/suppressions");
+
+    expect(unauthorized.status).toBe(401);
+    await expect(unauthorized.json()).resolves.toEqual({
+      error: "Missing or invalid API key",
+    });
+
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({
+      apiKeyId: "key-1",
+      permission: "sending_access",
+      domain: null,
+      userId: "user-1",
+    });
+    const forbidden = await app.request("/suppressions/blocked%40test.com", {
+      method: "DELETE",
+      headers: { Authorization: "Bearer os_test" },
+    });
+
+    expect(forbidden.status).toBe(403);
+    await expect(forbidden.json()).resolves.toMatchObject({
+      code: "insufficient_api_key_permission",
+      statusCode: 403,
+    });
+    expect(mockListSuppressions).not.toHaveBeenCalled();
+    expect(mockDeleteSuppression).not.toHaveBeenCalled();
+  });
 });

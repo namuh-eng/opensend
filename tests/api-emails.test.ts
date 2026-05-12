@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  batchSendEmailResponseSchema,
+  publicApiErrorEnvelopeSchema,
+  sendEmailResponseSchema,
+} from "../packages/core/src/contracts";
 
 // ── Mocks ─────────────────────────────────────────────────────────
 
@@ -9,6 +14,8 @@ const mockGetApiKeyAuthHeaderError = vi.hoisted(() => vi.fn());
 const mockEmitCloudWatchMetric = vi.hoisted(() => vi.fn());
 const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
+const mockListSuppressions = vi.hoisted(() => vi.fn());
+const mockDeleteSuppression = vi.hoisted(() => vi.fn());
 const mockReserveEmailQuota = vi.hoisted(() => vi.fn());
 const mockReleaseEmailQuota = vi.hoisted(() => vi.fn());
 const mockEmailReadService = vi.hoisted(() => ({
@@ -77,7 +84,13 @@ vi.mock("@/lib/ses", () => ({
   sendEmail: mockSendEmail,
 }));
 
-vi.mock("@opensend/core", () => {
+vi.mock("@opensend/core", async () => {
+  const contracts = await vi.importActual<
+    typeof import("../packages/core/src/contracts")
+  >("../packages/core/src/contracts");
+  const templateRenderer = await vi.importActual<
+    typeof import("../packages/core/src/services/template-renderer")
+  >("../packages/core/src/services/template-renderer");
   const testTraceparent =
     "00-11111111111111111111111111111111-2222222222222222-01";
   const getHeader = (
@@ -95,6 +108,8 @@ vi.mock("@opensend/core", () => {
   };
 
   return {
+    ...contracts,
+    ...templateRenderer,
     EmailDetailServiceError: MockEmailDetailServiceError,
     EmailReadServiceError: MockEmailReadServiceError,
     EmailLifecycleServiceError: MockEmailLifecycleServiceError,
@@ -105,6 +120,19 @@ vi.mock("@opensend/core", () => {
     createEmailDetailService: () => mockEmailDetailService,
     createEmailLifecycleService: () => mockEmailLifecycleService,
     createEmailReadService: () => mockEmailReadService,
+    SuppressionServiceError: class SuppressionServiceError extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+      ) {
+        super(message);
+        this.name = "SuppressionServiceError";
+      }
+    },
+    createSuppressionService: () => ({
+      listSuppressions: mockListSuppressions,
+      deleteSuppression: mockDeleteSuppression,
+    }),
     detectSandboxTestRecipient: (recipient: string) => {
       const normalized = recipient.trim().toLowerCase();
       const [local, domain] = normalized.split("@");
@@ -396,7 +424,7 @@ describe("POST /api/emails", () => {
     const res = await POST(req);
     expect(res.status).toBe(422);
     const json = await res.json();
-    expect(json).toEqual({
+    expect(publicApiErrorEnvelopeSchema.parse(json)).toEqual({
       name: "validation_error",
       code: "validation_error",
       message: "Validation failed.",
@@ -474,7 +502,8 @@ describe("POST /api/emails", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("x-correlation-id")).toBe("corr-email-test");
     expect(res.headers.get("traceparent")).toBe(traceparent);
-    await expect(res.json()).resolves.toEqual({ id: emailId });
+    const body = await res.json();
+    expect(sendEmailResponseSchema.parse(body)).toEqual({ id: emailId });
     expect(mockSendEmail).not.toHaveBeenCalled();
     expect(valuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -635,6 +664,121 @@ describe("POST /api/emails", () => {
       html: "<p>Widget</p><p>25</p>",
       text: "",
     });
+  });
+
+  it("renders React Email-backed stored templates through the shared renderer", async () => {
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "react-template-email" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          userId: AUTH_RESULT.userId,
+          subject: null,
+          html: "<p>legacy html should not render</p>",
+          text: "legacy text should not render",
+          variables: [],
+          document: {
+            rendering: {
+              kind: "react_email",
+              templateKey: "demo-welcome",
+            },
+          },
+        }),
+      },
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Ignored for React registry templates",
+          template: {
+            id: "11111111-1111-4111-8111-111111111111",
+            variables: {
+              recipientName: "Ada",
+              productName: "Acme",
+              actionUrl: "https://example.com/start",
+            },
+          },
+        },
+        { Authorization: "Bearer os_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    const inserted = valuesMock.mock.calls[0][0];
+    expect(inserted).toMatchObject({
+      subject: "Welcome to Acme",
+      text: expect.stringContaining("Hi Ada"),
+      status: "queued",
+    });
+    expect(inserted.html).toContain("Welcome to Acme");
+    expect(inserted.html).toContain("https://example.com/start");
+  });
+
+  it("returns a public validation error for unknown React Email template keys", async () => {
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          userId: AUTH_RESULT.userId,
+          subject: null,
+          html: null,
+          text: null,
+          variables: [],
+          document: {
+            rendering: {
+              kind: "react_email",
+              templateKey: "tenant-provided-tsx-string",
+            },
+          },
+        }),
+      },
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Will not render",
+          template: {
+            id: "11111111-1111-4111-8111-111111111111",
+            variables: {},
+          },
+        },
+        { Authorization: "Bearer os_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      code: "validation_error",
+      statusCode: 422,
+      message: "Unknown React Email template key: tenant-provided-tsx-string",
+      details: {
+        fieldErrors: {
+          template: [
+            "Unknown React Email template key: tenant-provided-tsx-string",
+          ],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
   });
 
   it("keeps the public validation_error envelope for missing template variables without fallbacks", async () => {
@@ -2365,7 +2509,9 @@ describe("services/api transactional email routes", () => {
     });
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ id: "svc-email-1" });
+    expect(sendEmailResponseSchema.parse(await res.json())).toEqual({
+      id: "svc-email-1",
+    });
     expect(valuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: ["svc@test.com"],
@@ -2396,7 +2542,9 @@ describe("services/api transactional email routes", () => {
       body: JSON.stringify({}),
     });
     expect(unauthenticated.status).toBe(401);
-    await expect(unauthenticated.json()).resolves.toMatchObject({
+    expect(
+      publicApiErrorEnvelopeSchema.parse(await unauthenticated.json()),
+    ).toMatchObject({
       name: "missing_api_key",
       code: "missing_api_key",
       statusCode: 401,
@@ -2411,7 +2559,9 @@ describe("services/api transactional email routes", () => {
       body: JSON.stringify({ from: "sender@domain.com" }),
     });
     expect(invalid.status).toBe(422);
-    await expect(invalid.json()).resolves.toMatchObject({
+    expect(
+      publicApiErrorEnvelopeSchema.parse(await invalid.json()),
+    ).toMatchObject({
       name: "validation_error",
       code: "validation_error",
       statusCode: 422,
@@ -2452,7 +2602,9 @@ describe("services/api transactional email routes", () => {
     });
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ id: "existing-email" });
+    expect(sendEmailResponseSchema.parse(await res.json())).toEqual({
+      id: "existing-email",
+    });
     expect(mockReserveEmailQuota).not.toHaveBeenCalled();
     expect(nonLogInsertCalls()).toHaveLength(0);
   });
@@ -2492,7 +2644,7 @@ describe("services/api transactional email routes", () => {
     });
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({
+    expect(batchSendEmailResponseSchema.parse(await res.json())).toMatchObject({
       data: [
         { id: "svc-batch-1" },
         {

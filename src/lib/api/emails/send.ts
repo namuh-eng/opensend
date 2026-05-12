@@ -3,7 +3,6 @@ import {
   publicApiKeyUnauthorizedResponse,
   validateApiKey,
 } from "@/lib/api-auth";
-import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
 import { requireAllowedSendingDomain } from "@/lib/api-key-permissions";
 import { captureApiResponseLog } from "@/lib/api-logging";
 import { getIdempotencyWindowStart } from "@/lib/api/emails/idempotency";
@@ -20,9 +19,11 @@ import {
   suppressedRecipientError,
 } from "@/lib/suppressions";
 import {
-  interpolateTemplateVariables,
-  normalizeStoredTemplateVariables,
-} from "@/lib/templates/variables";
+  StoredTemplateRendererConfigError,
+  getStoredTemplateRendererConfig,
+  renderStoredTemplateContent,
+} from "@/lib/templates/stored-renderer";
+import { normalizeStoredTemplateVariables } from "@/lib/templates/variables";
 import {
   buildOneClickUnsubscribeHeaders,
   createUnsubscribeUrl,
@@ -30,8 +31,8 @@ import {
   hasUnsubscribePlaceholder,
   replaceUnsubscribePlaceholder,
 } from "@/lib/unsubscribe";
-import { normalizeScheduledAt, sendEmailSchema } from "@/lib/validation/emails";
 import {
+  TemplateRendererError,
   createBackgroundJob,
   createTelemetryContext,
   detectSandboxTestRecipient,
@@ -39,19 +40,17 @@ import {
   getSandboxTestOutcomeForRecipients,
   getTelemetryCarrier,
   logTelemetry,
+  normalizeEmailRecipient,
+  normalizeScheduledAt,
+  publicApiError,
   publishBackgroundJob,
   recordTelemetryError,
+  sendEmailSchema,
+  zodValidationDetails,
 } from "@opensend/core";
 import { and, eq, gte, lt } from "drizzle-orm";
 
 // ── Helpers ───────────────────────────────────────────────────────
-
-function normalizeToArray(
-  value: string | string[] | undefined,
-): string[] | undefined {
-  if (!value) return undefined;
-  return Array.isArray(value) ? value : [value];
-}
 
 function jsonWithTelemetry(
   body: unknown,
@@ -86,6 +85,16 @@ function recordAcceptMetric(
       Outcome: input.outcome,
     },
   });
+}
+
+function templateRenderApiFailureMessage(error: unknown): string | null {
+  if (error instanceof TemplateRendererError) {
+    return error.message;
+  }
+  if (error instanceof StoredTemplateRendererConfigError) {
+    return error.message;
+  }
+  return null;
 }
 
 function summarizeQueuePublishError(error: unknown): {
@@ -400,10 +409,10 @@ export async function handlePostEmailRequest(
     }
   }
 
-  const to = normalizeToArray(validated.to) as string[];
-  const cc = normalizeToArray(validated.cc);
-  const bcc = normalizeToArray(validated.bcc);
-  const replyTo = normalizeToArray(validated.reply_to);
+  const to = normalizeEmailRecipient(validated.to) as string[];
+  const cc = normalizeEmailRecipient(validated.cc);
+  const bcc = normalizeEmailRecipient(validated.bcc);
+  const replyTo = normalizeEmailRecipient(validated.reply_to);
   const scheduledAt = validated.scheduled_at
     ? normalizeScheduledAt(validated.scheduled_at)
     : null;
@@ -530,13 +539,43 @@ export async function handlePostEmailRequest(
         }
       }
 
-      finalHtml = template.html || "";
-      if (template.subject) finalSubject = template.subject;
-      if (template.text !== null) finalText = template.text ?? "";
+      try {
+        const rendererConfig = getStoredTemplateRendererConfig(
+          template.document,
+        );
+        const storedSubject =
+          typeof template.subject === "string" && template.subject.length > 0
+            ? template.subject
+            : null;
+        const renderedTemplate = await renderStoredTemplateContent({
+          template,
+          subject:
+            storedSubject ??
+            (rendererConfig.kind === "legacy" ? finalSubject : undefined),
+          variables: renderVars,
+        });
+        finalHtml = renderedTemplate.html;
+        finalText = renderedTemplate.text;
+        finalSubject = renderedTemplate.subject;
+      } catch (error) {
+        const message = templateRenderApiFailureMessage(error);
+        if (!message) throw error;
 
-      finalHtml = interpolateTemplateVariables(finalHtml, renderVars);
-      finalText = interpolateTemplateVariables(finalText, renderVars);
-      finalSubject = interpolateTemplateVariables(finalSubject, renderVars);
+        recordAcceptMetric(telemetry, {
+          durationMs: performance.now() - startedAt,
+          outcome: "invalid",
+        });
+        return await logResponse(
+          jsonWithTelemetry(
+            publicApiError("validation_error", message, 422, {
+              formErrors: [],
+              fieldErrors: { template: [message] },
+            }),
+            telemetry,
+            { status: 422 },
+          ),
+        );
+      }
     }
 
     const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();
