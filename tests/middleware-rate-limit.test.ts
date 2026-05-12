@@ -116,6 +116,23 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("x-ratelimit-backend")).toBe("disabled");
   });
 
+  it("lets POST /emails/:id/cancel reach the root API route without requiring a dashboard session", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/emails/email_123/cancel", {
+        method: "POST",
+        headers: { authorization: "Bearer test-api-key" },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("x-ratelimit-backend")).toBe("disabled");
+  });
+
   it("preserves dashboard GET /emails/batch session protection", async () => {
     mockGetSessionCookie.mockReturnValue(null);
     const { middleware } = await import("@/middleware");
@@ -305,6 +322,31 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("x-middleware-rewrite")).toBe(
       "https://example.com/api/emails/batch",
     );
+    expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
+  });
+
+  it("shares rate-limit buckets between root email cancel aliases and /api/emails", async () => {
+    process.env.RATE_LIMIT_BACKEND = "redis";
+    mockGetSessionCookie.mockReturnValue(null);
+    mockIncrCache.mockResolvedValue(1);
+
+    const { middleware } = await import("@/middleware");
+    const response = await middleware(
+      makeRequest("https://example.com/emails/email_123/cancel", {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": "203.0.113.10",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+
+    expect(mockIncrCache).toHaveBeenCalledWith(
+      "ratelimit:203.0.113.10:Bearer test-api-key:/api/emails/email_123/cancel",
+      60,
+    );
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
     expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
   });
 

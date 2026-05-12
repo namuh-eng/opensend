@@ -88,6 +88,13 @@ function isSendPostAlias(pathname: string, method: string): boolean {
   );
 }
 
+function isEmailCancelAlias(pathname: string, method: string): boolean {
+  if (method !== "POST") return false;
+
+  const parts = pathname.split("/").filter(Boolean);
+  return parts[0] === "emails" && parts.length === 3 && parts[2] === "cancel";
+}
+
 function isContactsAlias(pathname: string, method: string): boolean {
   if (pathname === "/contacts") return ["GET", "POST"].includes(method);
   if (pathname.startsWith("/contacts/")) {
@@ -181,6 +188,9 @@ function isSendApiPost(pathname: string, method: string): boolean {
 function getRateLimitPathname(pathname: string, method: string): string {
   if (isSingleSendPostAlias(pathname, method)) return "/api/emails";
   if (isBatchSendPostAlias(pathname, method)) return "/api/emails/batch";
+  if (isEmailCancelAlias(pathname, method)) {
+    return pathname.replace(/^\/emails/, "/api/emails");
+  }
   if (isContactsAlias(pathname, method)) {
     return pathname === "/contacts"
       ? "/api/contacts"
@@ -249,6 +259,7 @@ export async function middleware(request: NextRequest) {
   // Protect non-API page routes with session check. Resend-compatible send
   // aliases must bypass dashboard session redirects and use public API auth.
   const isSendAlias = isSendPostAlias(pathname, request.method);
+  const isEmailCancel = isEmailCancelAlias(pathname, request.method);
   const isContactAlias = isContactsAlias(pathname, request.method);
   const isAudienceAlias = isAudiencesAlias(pathname, request.method);
   const isSegmentAlias = isSegmentsAlias(pathname, request.method);
@@ -256,6 +267,7 @@ export async function middleware(request: NextRequest) {
   if (
     !pathname.startsWith("/api/") &&
     !isSendAlias &&
+    !isEmailCancel &&
     !isContactAlias &&
     !isAudienceAlias &&
     !isSegmentAlias &&
