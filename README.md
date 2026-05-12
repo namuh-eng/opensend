@@ -173,7 +173,7 @@ Never commit `.env`, API keys, bearer tokens, database URLs with real passwords,
 - **REST API** — send single or batch emails with API-key auth and idempotency keys.
 - **Resend-compatible surface** — transactional sends, audiences/contacts, suppressions, and webhook semantics shaped for easy migration.
 - **SDKs** — first-party TypeScript, Python, and Go packages.
-- **React email templates** — pass React components via the TypeScript SDK.
+- **React email templates** — pass React components via the TypeScript SDK, or use registry-controlled dashboard starters with shared-renderer previews (see [docs/react-email-templates.md](docs/react-email-templates.md)).
 - **Domain verification** — DKIM, SPF, DMARC, click tracking, and custom return paths, with Cloudflare automation.
 - **Broadcasts** — block editor, slash commands, audience targeting, and review flow.
 - **Automations** — multi-step workflows triggered by contact updates and custom events, executed by the ingester worker.

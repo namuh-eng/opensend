@@ -51,6 +51,7 @@ export function TemplatesList() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [creatingStarter, setCreatingStarter] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
@@ -152,6 +153,47 @@ export function TemplatesList() {
       setCreateError("Could not create template.");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleCreateReactEmailStarter = async () => {
+    setCreatingStarter(true);
+    setCreateError(null);
+    try {
+      const apiKey =
+        typeof window !== "undefined"
+          ? (localStorage?.getItem?.("api_key") ?? null)
+          : null;
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+      const res = await fetch("/api/templates", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: "Onboarding welcome",
+          react_email_template_key: "onboarding-welcome",
+        }),
+      });
+      if (!res.ok) {
+        setCreateError(await readCreateTemplateError(res));
+        return;
+      }
+
+      const templateId = getCreatedTemplateId(await res.json());
+      if (!templateId) {
+        setCreateError(
+          "Template was created but no preview route was returned.",
+        );
+        return;
+      }
+
+      router.push(`/templates/${templateId}`);
+    } catch {
+      setCreateError("Could not create React Email starter.");
+    } finally {
+      setCreatingStarter(false);
     }
   };
 
@@ -323,6 +365,15 @@ export function TemplatesList() {
             <path d="M16 18l6-6-6-6" />
             <path d="M8 6l-6 6 6 6" />
           </svg>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleCreateReactEmailStarter}
+          disabled={creatingStarter}
+          className="h-9 px-4 text-[13px] font-medium border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] disabled:cursor-not-allowed disabled:opacity-70 transition-colors flex items-center gap-1.5"
+        >
+          {creatingStarter ? "Creating..." : "Use React Email starter"}
         </button>
 
         <button
