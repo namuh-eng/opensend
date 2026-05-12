@@ -2,6 +2,7 @@ import { handleMcpHttpRequest } from "@opensend/mcp";
 import { Hono } from "hono";
 import { handlePostEmailBatchRequest } from "../../../src/lib/api/emails/batch-send";
 import { handlePostEmailRequest } from "../../../src/lib/api/emails/send";
+import { registerSuppressionRoutes } from "./routes/suppressions";
 import { registerWebhookRoutes } from "./routes/webhooks";
 
 export const CONTROL_PLANE_API_SERVICE = "control-plane-api";
@@ -44,6 +45,7 @@ export function createApp(options: ControlPlaneAppOptions = {}) {
   );
 
   registerWebhookRoutes(app);
+  registerSuppressionRoutes(app);
 
   app.all(
     "/mcp",
