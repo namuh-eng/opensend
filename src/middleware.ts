@@ -135,6 +135,27 @@ function isBroadcastsAlias(pathname: string, method: string): boolean {
   return false;
 }
 
+function isTemplatesAlias(pathname: string, method: string): boolean {
+  if (pathname === "/templates") return ["GET", "POST"].includes(method);
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "templates") return false;
+  if (parts.length === 2) return ["GET", "PATCH", "DELETE"].includes(method);
+  if (parts.length === 3 && ["publish", "duplicate"].includes(parts[2] ?? "")) {
+    return method === "POST";
+  }
+
+  return false;
+}
+
+function isTemplateGetAlias(pathname: string, method: string): boolean {
+  if (method !== "GET") return false;
+  if (pathname === "/templates") return true;
+
+  const parts = pathname.split("/").filter(Boolean);
+  return parts[0] === "templates" && parts.length === 2;
+}
+
 function isBroadcastsCollectionAlias(
   pathname: string,
   method: string,
@@ -175,6 +196,21 @@ function shouldHandleBroadcastsAlias(request: NextRequest): boolean {
   return true;
 }
 
+function shouldHandleTemplatesAlias(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl;
+  if (!isTemplatesAlias(pathname, request.method)) return false;
+  if (isTemplateGetAlias(pathname, request.method)) {
+    return isApiLikeRequest(request);
+  }
+  return true;
+}
+
+function toPublicTemplatesPath(pathname: string): string {
+  return pathname === "/templates"
+    ? "/api/public/templates"
+    : pathname.replace(/^\/templates/, "/api/public/templates");
+}
+
 function isSendApiPost(pathname: string, method: string): boolean {
   return (
     method === "POST" &&
@@ -210,6 +246,11 @@ function getRateLimitPathname(pathname: string, method: string): string {
     return pathname === "/broadcasts"
       ? "/api/broadcasts"
       : pathname.replace(/^\/broadcasts/, "/api/broadcasts");
+  }
+  if (isTemplatesAlias(pathname, method)) {
+    return pathname === "/templates"
+      ? "/api/templates"
+      : pathname.replace(/^\/templates/, "/api/templates");
   }
   return pathname;
 }
@@ -264,6 +305,7 @@ export async function middleware(request: NextRequest) {
   const isAudienceAlias = isAudiencesAlias(pathname, request.method);
   const isSegmentAlias = isSegmentsAlias(pathname, request.method);
   const isBroadcastAlias = shouldHandleBroadcastsAlias(request);
+  const isTemplateAlias = shouldHandleTemplatesAlias(request);
   if (
     !pathname.startsWith("/api/") &&
     !isSendAlias &&
@@ -271,7 +313,8 @@ export async function middleware(request: NextRequest) {
     !isContactAlias &&
     !isAudienceAlias &&
     !isSegmentAlias &&
-    !isBroadcastAlias
+    !isBroadcastAlias &&
+    !isTemplateAlias
   ) {
     // Allow auth page, public landing page, and static assets
     if (
@@ -319,6 +362,12 @@ export async function middleware(request: NextRequest) {
       return NextResponse.rewrite(new URL("/api/broadcasts", request.url), {
         headers: responseHeaders,
       });
+    }
+    if (isTemplateAlias) {
+      return NextResponse.rewrite(
+        new URL(toPublicTemplatesPath(pathname), request.url),
+        { headers: responseHeaders },
+      );
     }
 
     return NextResponse.next({ headers: responseHeaders });
@@ -382,6 +431,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL("/api/broadcasts", request.url), {
       headers: responseHeaders,
     });
+  }
+  if (isTemplateAlias) {
+    return NextResponse.rewrite(
+      new URL(toPublicTemplatesPath(pathname), request.url),
+      { headers: responseHeaders },
+    );
   }
 
   return NextResponse.next({ headers: responseHeaders });

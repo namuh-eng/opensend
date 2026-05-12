@@ -13,9 +13,11 @@ import type {
   ContactListResponse,
   ContactResponse,
   CreateBroadcastPayload,
+  CreateTemplatePayload,
   DeleteAudienceResponse,
   DeleteBroadcastResponse,
   DeleteContactResponse,
+  DeleteTemplateResponse,
   EmailOptions,
   EmailResponse,
   RequestOptions,
@@ -25,7 +27,10 @@ import type {
   SegmentResponse,
   SendBroadcastPayload,
   SendEmailPayload,
+  TemplateListResponse,
+  TemplateResponse,
   UpdateBroadcastPayload,
+  UpdateTemplatePayload,
 } from "../packages/sdk/src";
 
 describe("Opensend SDK", () => {
@@ -347,6 +352,30 @@ describe("Opensend SDK", () => {
       object: "broadcast";
       deleted: true;
     }>();
+    expectTypeOf<CreateTemplatePayload>().toMatchTypeOf<{
+      name: string;
+      html?: string;
+      replyTo?: string | string[] | null;
+    }>();
+    expectTypeOf<UpdateTemplatePayload>().toMatchTypeOf<{
+      subject?: string | null;
+      status?: "draft" | "published";
+    }>();
+    expectTypeOf<TemplateListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ object: "template"; id: string; alias: string | null }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<TemplateResponse>().toMatchTypeOf<{
+      object: "template";
+      id: string;
+      reply_to?: string | string[] | null;
+    }>();
+    expectTypeOf<DeleteTemplateResponse>().toMatchTypeOf<{
+      object: "template";
+      id: string;
+      deleted: true;
+    }>();
     expectTypeOf<ContactListResponse>().toMatchTypeOf<{
       object: "list";
       data: Array<{
@@ -662,6 +691,105 @@ describe("Opensend SDK", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
       "https://api.example.com/audiences/aud_123",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("builds Resend-compatible root templates API requests and maps camelCase payload aliases", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "template", id: "tmpl_123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+    const resend = new Resend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.templates.create({
+      name: "Receipt",
+      alias: "receipt",
+      from: "Acme <billing@example.com>",
+      subject: "Your receipt",
+      html: "<p>Hello</p>",
+      text: "Hello",
+      replyTo: "reply@example.com",
+      previewText: "Receipt preview",
+      variables: [{ key: "name", type: "string", fallbackValue: "friend" }],
+    });
+    await client.templates.list({
+      limit: 10,
+      after: "tmpl_100",
+      search: "receipt",
+      status: "draft",
+    });
+    await resend.templates.get("receipt");
+    await resend.templates.update("receipt", {
+      replyTo: "support@example.com",
+      previewText: "Updated preview",
+      subject: "Updated",
+    });
+    await resend.templates.publish("receipt");
+    await resend.templates.duplicate("receipt");
+    await resend.templates.delete("receipt");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/templates",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const createCallOptions = fetchMock.mock.calls[0]?.[1];
+    expect(JSON.parse(String(createCallOptions?.body))).toEqual({
+      name: "Receipt",
+      alias: "receipt",
+      from: "Acme <billing@example.com>",
+      subject: "Your receipt",
+      html: "<p>Hello</p>",
+      text: "Hello",
+      reply_to: "reply@example.com",
+      preview_text: "Receipt preview",
+      variables: [{ key: "name", type: "string", fallbackValue: "friend" }],
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/templates?limit=10&after=tmpl_100&search=receipt&status=draft",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/templates/receipt",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "https://api.example.com/templates/receipt",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+    const updateCallOptions = fetchMock.mock.calls[3]?.[1];
+    expect(JSON.parse(String(updateCallOptions?.body))).toEqual({
+      reply_to: "support@example.com",
+      preview_text: "Updated preview",
+      subject: "Updated",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "https://api.example.com/templates/receipt/publish",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "https://api.example.com/templates/receipt/duplicate",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      "https://api.example.com/templates/receipt",
       expect.objectContaining({ method: "DELETE" }),
     );
   });

@@ -146,25 +146,35 @@ const API_GROUPS: EndpointGroup[] = [
     endpoints: [
       {
         method: "POST",
-        path: "/api/templates",
-        description: "Create a new template",
-        curl: `curl -X POST https://api.opensend.com/api/templates \\
+        path: "/templates",
+        description:
+          "Create a stored template through the Resend-compatible root API",
+        curl: `curl -X POST https://api.opensend.com/templates \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{ "name": "Welcome Email", "html": "<p>Welcome {{name}}</p>" }'`,
+  -d '{ "name": "Welcome Email", "alias": "welcome", "subject": "Welcome", "html": "<p>Welcome {{name}}</p>" }'
+
+// SDK
+await client.templates.create({
+  name: "Welcome Email",
+  alias: "welcome",
+  subject: "Welcome",
+  html: "<p>Welcome {{name}}</p>",
+});`,
       },
       {
         method: "GET",
-        path: "/api/templates",
-        description: "List all templates",
-        curl: `curl https://api.opensend.com/api/templates \\
+        path: "/templates",
+        description:
+          "List stored templates for the authenticated API-key tenant",
+        curl: `curl https://api.opensend.com/templates \\
   -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
         method: "GET",
-        path: "/api/templates/:id",
-        description: "Retrieve a template by ID",
-        curl: `curl https://api.opensend.com/api/templates/TEMPLATE_ID \\
+        path: "/templates/:id",
+        description: "Retrieve a stored template by ID or alias",
+        curl: `curl https://api.opensend.com/templates/TEMPLATE_ID_OR_ALIAS \\
   -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
@@ -177,19 +187,36 @@ const API_GROUPS: EndpointGroup[] = [
       },
       {
         method: "PATCH",
-        path: "/api/templates/:id",
-        description: "Update a template",
-        curl: `curl -X PATCH https://api.opensend.com/api/templates/TEMPLATE_ID \\
+        path: "/templates/:id",
+        description: "Update a stored template by ID or alias",
+        curl: `curl -X PATCH https://api.opensend.com/templates/TEMPLATE_ID_OR_ALIAS \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{ "name": "Updated Template" }'`,
+  -d '{ "name": "Updated Template", "reply_to": "support@example.com" }'`,
       },
       {
         method: "DELETE",
-        path: "/api/templates/:id",
-        description: "Delete a template",
-        curl: `curl -X DELETE https://api.opensend.com/api/templates/TEMPLATE_ID \\
+        path: "/templates/:id",
+        description: "Delete a stored template by ID or alias",
+        curl: `curl -X DELETE https://api.opensend.com/templates/TEMPLATE_ID_OR_ALIAS \\
   -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "POST",
+        path: "/templates/:id/publish",
+        description: "Publish a draft stored template by ID or alias",
+        curl: `curl -X POST https://api.opensend.com/templates/TEMPLATE_ID_OR_ALIAS/publish \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "POST",
+        path: "/templates/:id/duplicate",
+        description: "Duplicate a stored template by ID or alias",
+        curl: `curl -X POST https://api.opensend.com/templates/TEMPLATE_ID_OR_ALIAS/duplicate \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"
+
+// SDK
+await client.templates.duplicate("TEMPLATE_ID_OR_ALIAS");`,
       },
     ],
   },

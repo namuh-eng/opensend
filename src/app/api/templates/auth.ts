@@ -31,7 +31,11 @@ export async function authorizeTemplateRoute(
     if (permissionError) return { ok: false, response: permissionError };
   }
 
-  if ("apiKeyId" in auth) return { ok: true };
+  if ("apiKeyId" in auth) {
+    return auth.userId
+      ? { ok: true, userId: auth.userId }
+      : { ok: false, response: unauthorizedResponse() };
+  }
 
   const userId = await getRouteUserId(auth);
   return userId ? { ok: true, userId } : { ok: true };
