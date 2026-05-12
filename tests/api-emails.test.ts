@@ -9,6 +9,8 @@ const mockGetApiKeyAuthHeaderError = vi.hoisted(() => vi.fn());
 const mockEmitCloudWatchMetric = vi.hoisted(() => vi.fn());
 const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
+const mockListSuppressions = vi.hoisted(() => vi.fn());
+const mockDeleteSuppression = vi.hoisted(() => vi.fn());
 const mockReserveEmailQuota = vi.hoisted(() => vi.fn());
 const mockReleaseEmailQuota = vi.hoisted(() => vi.fn());
 const mockEmailReadService = vi.hoisted(() => ({
@@ -105,6 +107,19 @@ vi.mock("@opensend/core", () => {
     createEmailDetailService: () => mockEmailDetailService,
     createEmailLifecycleService: () => mockEmailLifecycleService,
     createEmailReadService: () => mockEmailReadService,
+    SuppressionServiceError: class SuppressionServiceError extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+      ) {
+        super(message);
+        this.name = "SuppressionServiceError";
+      }
+    },
+    createSuppressionService: () => ({
+      listSuppressions: mockListSuppressions,
+      deleteSuppression: mockDeleteSuppression,
+    }),
     detectSandboxTestRecipient: (recipient: string) => {
       const normalized = recipient.trim().toLowerCase();
       const [local, domain] = normalized.split("@");

@@ -7,6 +7,8 @@ const mockGetWebhook = vi.hoisted(() => vi.fn());
 const mockUpdateWebhook = vi.hoisted(() => vi.fn());
 const mockDeleteWebhook = vi.hoisted(() => vi.fn());
 const mockReplayWebhookDelivery = vi.hoisted(() => vi.fn());
+const mockListSuppressions = vi.hoisted(() => vi.fn());
+const mockDeleteSuppression = vi.hoisted(() => vi.fn());
 const mockListApiKeys = vi.hoisted(() => vi.fn());
 const mockCreateApiKey = vi.hoisted(() => vi.fn());
 const mockGetApiKey = vi.hoisted(() => vi.fn());
@@ -21,6 +23,18 @@ const MockApiKeyServiceError = vi.hoisted(
       ) {
         super(message);
         this.name = "ApiKeyServiceError";
+      }
+    },
+);
+const MockSuppressionServiceError = vi.hoisted(
+  () =>
+    class SuppressionServiceError extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+      ) {
+        super(message);
+        this.name = "SuppressionServiceError";
       }
     },
 );
@@ -54,6 +68,7 @@ vi.mock("@/lib/billing/quota", () => ({
 vi.mock("@opensend/core", () => ({
   ApiKeyServiceError: MockApiKeyServiceError,
   WebhookServiceError: MockWebhookServiceError,
+  SuppressionServiceError: MockSuppressionServiceError,
   createApiKeyService: () => ({
     listApiKeys: mockListApiKeys,
     createApiKey: mockCreateApiKey,
@@ -115,6 +130,10 @@ vi.mock("@opensend/core", () => ({
       domain: key.domain,
     })),
     has_more: result.hasMore,
+  }),
+  createSuppressionService: () => ({
+    listSuppressions: mockListSuppressions,
+    deleteSuppression: mockDeleteSuppression,
   }),
   createWebhookService: () => ({
     listWebhooks: mockListWebhooks,
