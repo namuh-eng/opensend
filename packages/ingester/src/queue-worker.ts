@@ -10,6 +10,7 @@ import {
   type SandboxTestOutcome,
   type TelemetryContext,
   applyEmailTracking,
+  buildTrackingSubdomainRecordName,
   createBackgroundJob,
   createEmailTrackingToken,
   createTelemetryContext,
@@ -535,7 +536,10 @@ async function renderTrackedHtmlForDelivery(
 
   const recipient = email.to.length === 1 ? email.to[0] : undefined;
   const trackingBaseUrl = getEmailTrackingBaseUrl({
-    trackingSubdomain: domain.trackingSubdomain,
+    trackingSubdomain: buildTrackingSubdomainRecordName(
+      domain.name,
+      domain.trackingSubdomain,
+    ),
   });
 
   return applyEmailTracking({

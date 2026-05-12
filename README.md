@@ -161,6 +161,7 @@ If you touch SDKs or service skeletons, also run their package-specific tests:
 
 ```bash
 cd packages/go-sdk && go test ./...
+ruby -I packages/ruby-sdk/lib packages/ruby-sdk/test/opensend_test.rb
 bun run --cwd services/api test  # if tests exist for the touched API slice
 ```
 
@@ -172,8 +173,8 @@ Never commit `.env`, API keys, bearer tokens, database URLs with real passwords,
 
 - **REST API** — send single or batch emails with API-key auth and idempotency keys.
 - **Resend-compatible surface** — transactional sends, audiences/contacts, suppressions, and webhook semantics shaped for easy migration.
-- **SDKs** — first-party TypeScript, Python, and Go packages.
-- **React email templates** — pass React components via the TypeScript SDK.
+- **SDKs** — first-party TypeScript, Python, Go, and Ruby packages.
+- **React email templates** — pass React components via the TypeScript SDK, or use registry-controlled dashboard starters with shared-renderer previews (see [docs/react-email-templates.md](docs/react-email-templates.md)).
 - **Domain verification** — DKIM, SPF, DMARC, click tracking, and custom return paths, with Cloudflare automation.
 - **Broadcasts** — block editor, slash commands, audience targeting, and review flow.
 - **Automations** — multi-step workflows triggered by contact updates and custom events, executed by the ingester worker.
@@ -292,6 +293,31 @@ func main() {
 
 Full docs: [`packages/go-sdk/README.md`](./packages/go-sdk/README.md) and [`docs/sdk/go.md`](./docs/sdk/go.md)
 
+### Ruby SDK
+
+```bash
+cd packages/ruby-sdk
+gem build opensend.gemspec
+gem install ./opensend-0.1.0.gem
+```
+
+```ruby
+require "opensend"
+
+OpenSend.api_key ENV.fetch("OPENSEND_API_KEY")
+
+email = OpenSend::Emails.send(
+  from: "hello@yourdomain.com",
+  to: "recipient@example.com",
+  subject: "Hello from Opensend",
+  html: "<h1>It works!</h1>"
+)
+
+puts "Queued email #{email.fetch('id')}"
+```
+
+Full docs: [`packages/ruby-sdk/README.md`](./packages/ruby-sdk/README.md) and [`docs/sdk/ruby.md`](./docs/sdk/ruby.md)
+
 ## Self-hosting
 
 ### Requirements
@@ -347,7 +373,8 @@ packages/
 ├── ingester/        # Production Hono ingester and workers, port 3016
 ├── sdk/             # TypeScript SDK
 ├── python-sdk/      # Python SDK
-└── go-sdk/          # Go SDK
+├── go-sdk/          # Go SDK
+└── ruby-sdk/        # Ruby SDK
 
 services/
 ├── api/             # Bun + Hono control-plane API skeleton, port 3026
@@ -398,6 +425,7 @@ bun run dev:api              # control-plane API skeleton on :3026
 bun run start:ingester       # production ingester locally on :3016
 cd services/ingester-go && go test ./...
 cd packages/go-sdk && go test ./...
+ruby -I packages/ruby-sdk/lib packages/ruby-sdk/test/opensend_test.rb
 ```
 
 ## Roadmap

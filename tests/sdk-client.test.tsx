@@ -9,19 +9,28 @@ import type {
   BatchEmailResponse,
   BroadcastListResponse,
   BroadcastResponse,
+  CancelEmailResponse,
   ContactListResponse,
   ContactResponse,
   CreateBroadcastPayload,
+  CreateTemplatePayload,
   DeleteAudienceResponse,
   DeleteBroadcastResponse,
   DeleteContactResponse,
+  DeleteTemplateResponse,
   EmailOptions,
   EmailResponse,
   RequestOptions,
   SDKOptions,
+  SegmentContactListResponse,
+  SegmentListResponse,
+  SegmentResponse,
   SendBroadcastPayload,
   SendEmailPayload,
+  TemplateListResponse,
+  TemplateResponse,
   UpdateBroadcastPayload,
+  UpdateTemplatePayload,
 } from "../packages/sdk/src";
 
 describe("Opensend SDK", () => {
@@ -150,14 +159,136 @@ describe("Opensend SDK", () => {
     );
   });
 
+  it("serializes Resend replyTo arrays to REST reply_to for single sends", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ id: "email_reply_to" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Resend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.emails.send({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      replyTo: ["support@example.com", "billing@example.com"],
+    });
+
+    const sendCallOptions = fetchMock.mock.calls[0]?.[1];
+    const outgoingBody = JSON.parse(String(sendCallOptions?.body)) as Record<
+      string,
+      unknown
+    >;
+
+    expect(outgoingBody).toMatchObject({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      reply_to: ["support@example.com", "billing@example.com"],
+    });
+    expect(outgoingBody).not.toHaveProperty("replyTo");
+  });
+
+  it("keeps snake_case reply_to precedence over the replyTo send alias", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ id: "email_reply_to_precedence" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.emails.send({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      reply_to: ["snake@example.com"],
+      replyTo: ["camel@example.com"],
+    });
+
+    const sendCallOptions = fetchMock.mock.calls[0]?.[1];
+    const outgoingBody = JSON.parse(String(sendCallOptions?.body)) as Record<
+      string,
+      unknown
+    >;
+
+    expect(outgoingBody.reply_to).toEqual(["snake@example.com"]);
+    expect(outgoingBody).not.toHaveProperty("replyTo");
+  });
+
+  it("builds Resend-compatible root segments API requests", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "segment", id: "seg_123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Resend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.segments.create({ name: "Registered Users" });
+    await client.segments.list({ limit: 10, after: "seg_1", search: "vip" });
+    await client.segments.get("seg_123");
+    await client.segments.delete("seg_123");
+    await client.segments.listContacts("seg_123", { limit: 5, after: "c_1" });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/segments",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/segments?limit=10&after=seg_1&search=vip",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/segments/seg_123",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "https://api.example.com/segments/seg_123",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "https://api.example.com/segments/seg_123/contacts?limit=5&after=c_1",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
   it("keeps SDK public type exports available from the entrypoint", () => {
     expectTypeOf<SDKOptions>().toMatchTypeOf<{ baseUrl?: string }>();
     expectTypeOf<RequestOptions>().toMatchTypeOf<{ idempotencyKey?: string }>();
     expectTypeOf<SendEmailPayload>().toMatchTypeOf<
-      EmailOptions & { react?: ReactNode }
+      EmailOptions & { react?: ReactNode; replyTo?: string | string[] }
     >();
     expectTypeOf<ApiResponse<EmailResponse>>().toEqualTypeOf<{
       data: EmailResponse | null;
+      error: ApiError | null;
+    }>();
+    expectTypeOf<ApiResponse<CancelEmailResponse>>().toEqualTypeOf<{
+      data: CancelEmailResponse | null;
       error: ApiError | null;
     }>();
     expectTypeOf<BatchEmailResponse>().toMatchTypeOf<{ data: unknown[] }>();
@@ -178,6 +309,21 @@ describe("Opensend SDK", () => {
     expectTypeOf<DeleteAudienceResponse>().toMatchTypeOf<{
       object: "audience";
       deleted: true;
+    }>();
+    expectTypeOf<SegmentResponse>().toMatchTypeOf<{
+      object: "segment";
+      id: string;
+      name: string;
+    }>();
+    expectTypeOf<SegmentListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ id: string; name: string; created_at: string }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<SegmentContactListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ email: string; status: "subscribed" | "unsubscribed" }>;
+      has_more: boolean;
     }>();
     expectTypeOf<CreateBroadcastPayload>().toMatchTypeOf<{
       from: string;
@@ -204,6 +350,30 @@ describe("Opensend SDK", () => {
     }>();
     expectTypeOf<DeleteBroadcastResponse>().toMatchTypeOf<{
       object: "broadcast";
+      deleted: true;
+    }>();
+    expectTypeOf<CreateTemplatePayload>().toMatchTypeOf<{
+      name: string;
+      html?: string;
+      replyTo?: string | string[] | null;
+    }>();
+    expectTypeOf<UpdateTemplatePayload>().toMatchTypeOf<{
+      subject?: string | null;
+      status?: "draft" | "published";
+    }>();
+    expectTypeOf<TemplateListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ object: "template"; id: string; alias: string | null }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<TemplateResponse>().toMatchTypeOf<{
+      object: "template";
+      id: string;
+      reply_to?: string | string[] | null;
+    }>();
+    expectTypeOf<DeleteTemplateResponse>().toMatchTypeOf<{
+      object: "template";
+      id: string;
       deleted: true;
     }>();
     expectTypeOf<ContactListResponse>().toMatchTypeOf<{
@@ -405,6 +575,32 @@ describe("Opensend SDK", () => {
     });
   });
 
+  it("cancels scheduled emails through the Resend-compatible root endpoint", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "email", id: "email_123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Resend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    const response = await client.emails.cancel("email_123");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/emails/email_123/cancel",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(response).toEqual({
+      data: { object: "email", id: "email_123" },
+      error: null,
+    });
+  });
+
   it("uses Resend-compatible root contacts endpoints for CRUD", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ object: "contact", id: "contact_123" }), {
@@ -495,6 +691,105 @@ describe("Opensend SDK", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
       "https://api.example.com/audiences/aud_123",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("builds Resend-compatible root templates API requests and maps camelCase payload aliases", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "template", id: "tmpl_123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+    const resend = new Resend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.templates.create({
+      name: "Receipt",
+      alias: "receipt",
+      from: "Acme <billing@example.com>",
+      subject: "Your receipt",
+      html: "<p>Hello</p>",
+      text: "Hello",
+      replyTo: "reply@example.com",
+      previewText: "Receipt preview",
+      variables: [{ key: "name", type: "string", fallbackValue: "friend" }],
+    });
+    await client.templates.list({
+      limit: 10,
+      after: "tmpl_100",
+      search: "receipt",
+      status: "draft",
+    });
+    await resend.templates.get("receipt");
+    await resend.templates.update("receipt", {
+      replyTo: "support@example.com",
+      previewText: "Updated preview",
+      subject: "Updated",
+    });
+    await resend.templates.publish("receipt");
+    await resend.templates.duplicate("receipt");
+    await resend.templates.delete("receipt");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/templates",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const createCallOptions = fetchMock.mock.calls[0]?.[1];
+    expect(JSON.parse(String(createCallOptions?.body))).toEqual({
+      name: "Receipt",
+      alias: "receipt",
+      from: "Acme <billing@example.com>",
+      subject: "Your receipt",
+      html: "<p>Hello</p>",
+      text: "Hello",
+      reply_to: "reply@example.com",
+      preview_text: "Receipt preview",
+      variables: [{ key: "name", type: "string", fallbackValue: "friend" }],
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/templates?limit=10&after=tmpl_100&search=receipt&status=draft",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/templates/receipt",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "https://api.example.com/templates/receipt",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+    const updateCallOptions = fetchMock.mock.calls[3]?.[1];
+    expect(JSON.parse(String(updateCallOptions?.body))).toEqual({
+      reply_to: "support@example.com",
+      preview_text: "Updated preview",
+      subject: "Updated",
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "https://api.example.com/templates/receipt/publish",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "https://api.example.com/templates/receipt/duplicate",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      "https://api.example.com/templates/receipt",
       expect.objectContaining({ method: "DELETE" }),
     );
   });

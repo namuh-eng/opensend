@@ -170,7 +170,7 @@ export interface DomainOptions {
 export interface UpdateDomainPayload {
   click_tracking?: boolean;
   open_tracking?: boolean;
-  tracking_subdomain?: string;
+  tracking_subdomain?: string | null;
   capabilities?: DomainCapability[];
   sending_enabled?: boolean;
   receiving_enabled?: boolean;
@@ -290,6 +290,49 @@ export interface ContactListItem {
 export interface ContactListResponse {
   object: "list";
   data: ContactListItem[];
+  has_more: boolean;
+}
+
+export interface CreateSegmentPayload {
+  name: string;
+}
+
+export interface SegmentResponse {
+  object: "segment";
+  id: string;
+  name: string;
+  created_at?: string;
+}
+
+export interface SegmentListItem {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
+export interface SegmentListResponse {
+  object: "list";
+  data: SegmentListItem[];
+  has_more: boolean;
+  total?: number;
+}
+
+export interface DeleteSegmentResponse {
+  success: true;
+}
+
+export interface SegmentContactListItem {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  status: "subscribed" | "unsubscribed";
+  created_at: string;
+}
+
+export interface SegmentContactListResponse {
+  object: "list";
+  data: SegmentContactListItem[];
   has_more: boolean;
 }
 

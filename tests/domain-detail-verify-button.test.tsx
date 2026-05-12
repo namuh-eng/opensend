@@ -18,6 +18,7 @@ const baseDomain: DomainDetailData = {
   createdAt: new Date().toISOString(),
   clickTracking: false,
   openTracking: false,
+  trackingSubdomain: null,
   tls: "opportunistic",
   sendingEnabled: true,
   receivingEnabled: false,

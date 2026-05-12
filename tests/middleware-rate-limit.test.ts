@@ -116,6 +116,23 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("x-ratelimit-backend")).toBe("disabled");
   });
 
+  it("lets POST /emails/:id/cancel reach the root API route without requiring a dashboard session", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/emails/email_123/cancel", {
+        method: "POST",
+        headers: { authorization: "Bearer test-api-key" },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("x-ratelimit-backend")).toBe("disabled");
+  });
+
   it("preserves dashboard GET /emails/batch session protection", async () => {
     mockGetSessionCookie.mockReturnValue(null);
     const { middleware } = await import("@/middleware");
@@ -200,6 +217,103 @@ describe("middleware rate limiting", () => {
       "https://example.com/api/broadcasts",
     );
     expect(response.headers.get("x-ratelimit-backend")).toBe("disabled");
+  });
+
+  it("preserves browser/RSC dashboard GET /templates instead of rewriting the root API alias", async () => {
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/templates", {
+        method: "GET",
+        headers: {
+          accept: "*/*",
+          rsc: "1",
+          "next-router-state-tree": encodeURIComponent("[]"),
+          "next-url": "/templates",
+        },
+      }),
+    );
+
+    expect(mockGetSessionCookie).toHaveBeenCalled();
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("redirects unauthenticated browser/RSC GET /templates to auth instead of the root API alias", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/templates", {
+        method: "GET",
+        headers: {
+          accept: "*/*",
+          rsc: "1",
+          "next-router-state-tree": encodeURIComponent("[]"),
+          "next-url": "/templates",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://example.com/auth");
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+  });
+
+  it("rewrites explicit root /templates API clients to strict public template adapters", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const collection = await middleware(
+      makeRequest("https://example.com/templates", {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+    const detail = await middleware(
+      makeRequest("https://example.com/templates/welcome", {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+    const mutation = await middleware(
+      makeRequest("https://example.com/templates/welcome/publish", {
+        method: "POST",
+        headers: { authorization: "Bearer test-api-key" },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(collection.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/public/templates",
+    );
+    expect(detail.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/public/templates/welcome",
+    );
+    expect(mutation.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/public/templates/welcome/publish",
+    );
+  });
+
+  it("preserves browser dashboard GET /templates/:id detail routes", async () => {
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/templates/welcome", {
+        method: "GET",
+        headers: { accept: "text/html" },
+      }),
+    );
+
+    expect(mockGetSessionCookie).toHaveBeenCalled();
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
   });
 
   it("allows root contacts API aliases without requiring a dashboard session", async () => {
@@ -308,6 +422,31 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
   });
 
+  it("shares rate-limit buckets between root email cancel aliases and /api/emails", async () => {
+    process.env.RATE_LIMIT_BACKEND = "redis";
+    mockGetSessionCookie.mockReturnValue(null);
+    mockIncrCache.mockResolvedValue(1);
+
+    const { middleware } = await import("@/middleware");
+    const response = await middleware(
+      makeRequest("https://example.com/emails/email_123/cancel", {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": "203.0.113.10",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+
+    expect(mockIncrCache).toHaveBeenCalledWith(
+      "ratelimit:203.0.113.10:Bearer test-api-key:/api/emails/email_123/cancel",
+      60,
+    );
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
+  });
+
   it("shares rate-limit buckets between root contacts aliases and /api/contacts", async () => {
     process.env.RATE_LIMIT_BACKEND = "redis";
     mockGetSessionCookie.mockReturnValue(null);
@@ -351,6 +490,31 @@ describe("middleware rate limiting", () => {
       "ratelimit:203.0.113.10:Bearer test-api-key:/api/segments/aud_123",
       60,
     );
+    expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
+  });
+
+  it("lets root segments aliases reach API routes without dashboard session redirects", async () => {
+    process.env.RATE_LIMIT_BACKEND = "redis";
+    mockGetSessionCookie.mockReturnValue(null);
+    mockIncrCache.mockResolvedValue(1);
+
+    const { middleware } = await import("@/middleware");
+    const response = await middleware(
+      makeRequest("https://example.com/segments/seg_123/contacts", {
+        method: "GET",
+        headers: {
+          "x-forwarded-for": "203.0.113.10",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(mockIncrCache).toHaveBeenCalledWith(
+      "ratelimit:203.0.113.10:Bearer test-api-key:/api/segments/seg_123/contacts",
+      60,
+    );
+    expect(response.headers.get("location")).toBeNull();
     expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
   });
 

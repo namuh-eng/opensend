@@ -26,6 +26,8 @@ export async function GET(request: NextRequest) {
     const result = await templateService().listTemplates({
       search: request.nextUrl.searchParams.get("search") ?? undefined,
       status: request.nextUrl.searchParams.get("status") ?? undefined,
+      limit: Number(request.nextUrl.searchParams.get("limit")) || undefined,
+      after: request.nextUrl.searchParams.get("after") ?? undefined,
       userId: auth.userId,
     });
 
@@ -42,6 +44,7 @@ export async function GET(request: NextRequest) {
         created_at: r.createdAt,
       })),
       total: result.total,
+      has_more: result.hasMore,
     });
   } catch (error) {
     return mapTemplateError(error, "Failed to fetch templates");

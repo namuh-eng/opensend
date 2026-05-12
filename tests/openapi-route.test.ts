@@ -51,6 +51,7 @@ describe("GET /openapi.json", () => {
     });
     expect(document.paths).toHaveProperty("/emails");
     expect(document.paths).toHaveProperty("/emails/batch");
+    expect(document.paths).toHaveProperty("/emails/{email_id}/cancel");
     expect(document.paths).toHaveProperty("/api/domains");
     expect(serialized).not.toMatch(
       /AWS_ACCESS_KEY|AWS_SECRET_ACCESS_KEY|CLOUDFLARE|DATABASE_URL/i,
@@ -81,5 +82,7 @@ describe("GET /openapi.json", () => {
 
     expect(docsPage).toContain('href="/openapi.json"');
     expect(docsPage).toContain("OpenAPI 3.0 JSON");
+    expect(docsPage).toContain("/emails/:email_id/cancel");
+    expect(docsPage).toContain("Cancel a scheduled email.");
   });
 });

@@ -22,6 +22,8 @@ test("dashboard user can add a domain with session auth", async ({
 
     await authenticatedPage.getByRole("button", { name: "Add domain" }).click();
     await authenticatedPage.getByPlaceholder("yourdomain.com").fill(domainName);
+    await authenticatedPage.getByText("Advanced options").click();
+    await authenticatedPage.getByPlaceholder("links").fill("links");
     await authenticatedPage
       .getByRole("button", { name: "Add", exact: true })
       .click();
@@ -33,11 +35,25 @@ test("dashboard user can add a domain with session auth", async ({
       authenticatedPage.getByRole("heading", { name: domainName }),
     ).toBeVisible();
 
-    const { rows } = await e2eDb.query<{ user_id: string }>(
-      "select user_id from domains where name = $1",
+    const { rows } = await e2eDb.query<{
+      user_id: string;
+      tracking_subdomain: string | null;
+      records: Array<{ type: string; name: string }> | null;
+    }>(
+      "select user_id, tracking_subdomain, records from domains where name = $1",
       [domainName],
     );
-    expect(rows).toEqual([{ user_id: e2eUser.id }]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      user_id: e2eUser.id,
+      tracking_subdomain: "links",
+    });
+    expect(rows[0]?.records ?? []).toContainEqual(
+      expect.objectContaining({
+        type: "CNAME",
+        name: `links.${domainName}`,
+      }),
+    );
   } finally {
     await e2eDb.query("delete from domains where name = $1", [domainName]);
   }

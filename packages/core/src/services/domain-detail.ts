@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { domainRepo } from "../db/repositories/domainRepo";
 import { domains } from "../db/schema";
-import { getEffectiveReturnPathLabel } from "./domain";
+import { getEffectiveReturnPathLabel, syncTrackingCnameRecord } from "./domain";
 import {
   cloudflareDnsCleanupProvider,
   domainIdentityProvider,
@@ -16,7 +16,12 @@ type DomainCapability = NonNullable<DomainRow["capabilities"]>[number];
 type DomainDetailUpdateData = Partial<
   Pick<
     DomainInsert,
-    "trackClicks" | "trackOpens" | "trackingSubdomain" | "capabilities" | "tls"
+    | "trackClicks"
+    | "trackOpens"
+    | "trackingSubdomain"
+    | "capabilities"
+    | "tls"
+    | "records"
   >
 >;
 
@@ -40,7 +45,7 @@ export type DomainDetailResponse = {
 export type UpdateDomainDetailInput = {
   click_tracking?: boolean;
   open_tracking?: boolean;
-  tracking_subdomain?: string;
+  tracking_subdomain?: string | null;
   capabilities?: DomainCapability[];
   sending_enabled?: boolean;
   receiving_enabled?: boolean;
@@ -208,6 +213,12 @@ function toUpdateData(
   }
   if (input.tracking_subdomain !== undefined) {
     updates.trackingSubdomain = input.tracking_subdomain;
+    updates.records = syncTrackingCnameRecord({
+      records: existingDomain.records ?? [],
+      domainName: existingDomain.name,
+      previousTrackingSubdomain: existingDomain.trackingSubdomain,
+      nextTrackingSubdomain: input.tracking_subdomain,
+    });
   }
 
   if (input.capabilities !== undefined) {

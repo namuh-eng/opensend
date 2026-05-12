@@ -1,4 +1,4 @@
-import { type SQL, and, count, desc, eq, ilike, lt } from "drizzle-orm";
+import { type SQL, and, count, desc, eq, ilike, lt, or } from "drizzle-orm";
 import { db } from "../client";
 import { templates } from "../schema";
 
@@ -12,6 +12,18 @@ export const templateRepo = {
   async findByAlias(alias: string) {
     return await db.query.templates.findFirst({
       where: eq(templates.alias, alias),
+    });
+  },
+
+  async findByIdOrAlias(idOrAlias: string, userId?: string) {
+    const idOrAliasCondition = or(
+      eq(templates.id, idOrAlias),
+      eq(templates.alias, idOrAlias),
+    );
+    return await db.query.templates.findFirst({
+      where: userId
+        ? and(idOrAliasCondition, eq(templates.userId, userId))
+        : idOrAliasCondition,
     });
   },
 
@@ -64,9 +76,13 @@ export const templateRepo = {
       search?: string;
       status?: string;
       userId?: string;
+      limit?: number;
+      after?: string;
     } = {},
   ) {
-    const { search, status, userId } = options;
+    const { search, status, userId, after } = options;
+    const requestedLimit = options.limit ?? 200;
+    const limit = Math.min(Math.max(requestedLimit, 1), 200);
     const conditions: SQL[] = [];
 
     if (search) conditions.push(ilike(templates.name, `%${search}%`));
@@ -74,6 +90,7 @@ export const templateRepo = {
       conditions.push(eq(templates.status, status));
     }
     if (userId) conditions.push(eq(templates.userId, userId));
+    if (after) conditions.push(lt(templates.id, after));
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     const [totalRow] = await db
@@ -95,8 +112,14 @@ export const templateRepo = {
       .from(templates)
       .where(whereClause)
       .orderBy(desc(templates.createdAt))
-      .limit(200);
+      .limit(limit + 1);
 
-    return { data, total: totalRow?.count ?? 0 };
+    const hasMore = data.length > limit;
+
+    return {
+      data: hasMore ? data.slice(0, limit) : data,
+      total: totalRow?.count ?? 0,
+      hasMore,
+    };
   },
 };

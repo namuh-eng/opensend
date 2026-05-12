@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { createE2ETenant, expect, test } from "./fixtures/auth";
 
-test("dashboard delivery failure export uses session auth and tenant scope", async ({
+test("dashboard email CSV export uses session auth and tenant scope", async ({
   authenticatedPage: page,
   e2eDb,
   e2eRunId,
@@ -80,13 +80,23 @@ test("dashboard delivery failure export uses session auth and tenant scope", asy
   expect(path).toBeTruthy();
 
   const csv = await readFile(path ?? "", "utf8");
-  expect(csv).toContain("id,recipient,status,reason,source_email_id");
+  expect(csv).toContain("id,to,from,subject,status,created_at");
   expect(csv).toContain(recipientA);
-  expect(csv).toContain(suppressedA);
   expect(csv).not.toContain(recipientB);
+  expect(csv).not.toContain(suppressedA);
+
+  const legacyFailureExport = await page.evaluate(async () => {
+    const response = await fetch(
+      "/api/dashboard/delivery-failures/export?statuses=suppressed",
+    );
+    return { status: response.status, body: await response.text() };
+  });
+  expect(legacyFailureExport.status).toBe(200);
+  expect(legacyFailureExport.body).toContain(suppressedA);
+  expect(legacyFailureExport.body).not.toContain(recipientB);
 });
 
-test("empty dashboard delivery failure export shows a visible empty state", async ({
+test("empty dashboard email export shows a visible empty state", async ({
   authenticatedPage: page,
 }) => {
   await page.goto("/emails");
@@ -94,8 +104,7 @@ test("empty dashboard delivery failure export shows a visible empty state", asyn
 
   await expect(
     page.getByRole("status").filter({
-      hasText:
-        "No bounced, complained, or suppressed failures match these filters.",
+      hasText: "No emails match these filters.",
     }),
   ).toBeVisible();
 });
