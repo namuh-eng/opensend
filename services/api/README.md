@@ -21,6 +21,8 @@ Current endpoints:
 
 The transactional send route family is now owned by shared send handlers consumed by this Hono service. The existing Next.js handlers remain compatibility adapters for the current public `/api/emails` URLs; no production routing cutover is implied by local service ownership.
 
+The stable send/batch DTO, validation, response, and public error-envelope boundary is documented in [`../../docs/public-send-contract.md`](../../docs/public-send-contract.md) and implemented under `packages/core/src/contracts/`; adapter code should consume that boundary rather than importing Next.js app-local validation internals.
+
 ### Transactional send local testing
 
 Start the Hono service on the default port:

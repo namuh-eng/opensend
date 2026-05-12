@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  batchSendEmailResponseSchema,
+  publicApiErrorEnvelopeSchema,
+  sendEmailResponseSchema,
+} from "../packages/core/src/contracts";
 
 // ── Mocks ─────────────────────────────────────────────────────────
 
@@ -77,7 +82,10 @@ vi.mock("@/lib/ses", () => ({
   sendEmail: mockSendEmail,
 }));
 
-vi.mock("@opensend/core", () => {
+vi.mock("@opensend/core", async () => {
+  const contracts = await vi.importActual<
+    typeof import("../packages/core/src/contracts")
+  >("../packages/core/src/contracts");
   const testTraceparent =
     "00-11111111111111111111111111111111-2222222222222222-01";
   const getHeader = (
@@ -95,6 +103,7 @@ vi.mock("@opensend/core", () => {
   };
 
   return {
+    ...contracts,
     EmailDetailServiceError: MockEmailDetailServiceError,
     EmailReadServiceError: MockEmailReadServiceError,
     EmailLifecycleServiceError: MockEmailLifecycleServiceError,
@@ -396,7 +405,7 @@ describe("POST /api/emails", () => {
     const res = await POST(req);
     expect(res.status).toBe(422);
     const json = await res.json();
-    expect(json).toEqual({
+    expect(publicApiErrorEnvelopeSchema.parse(json)).toEqual({
       name: "validation_error",
       code: "validation_error",
       message: "Validation failed.",
@@ -474,7 +483,8 @@ describe("POST /api/emails", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("x-correlation-id")).toBe("corr-email-test");
     expect(res.headers.get("traceparent")).toBe(traceparent);
-    await expect(res.json()).resolves.toEqual({ id: emailId });
+    const body = await res.json();
+    expect(sendEmailResponseSchema.parse(body)).toEqual({ id: emailId });
     expect(mockSendEmail).not.toHaveBeenCalled();
     expect(valuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -2365,7 +2375,9 @@ describe("services/api transactional email routes", () => {
     });
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ id: "svc-email-1" });
+    expect(sendEmailResponseSchema.parse(await res.json())).toEqual({
+      id: "svc-email-1",
+    });
     expect(valuesMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: ["svc@test.com"],
@@ -2396,7 +2408,9 @@ describe("services/api transactional email routes", () => {
       body: JSON.stringify({}),
     });
     expect(unauthenticated.status).toBe(401);
-    await expect(unauthenticated.json()).resolves.toMatchObject({
+    expect(
+      publicApiErrorEnvelopeSchema.parse(await unauthenticated.json()),
+    ).toMatchObject({
       name: "missing_api_key",
       code: "missing_api_key",
       statusCode: 401,
@@ -2411,7 +2425,9 @@ describe("services/api transactional email routes", () => {
       body: JSON.stringify({ from: "sender@domain.com" }),
     });
     expect(invalid.status).toBe(422);
-    await expect(invalid.json()).resolves.toMatchObject({
+    expect(
+      publicApiErrorEnvelopeSchema.parse(await invalid.json()),
+    ).toMatchObject({
       name: "validation_error",
       code: "validation_error",
       statusCode: 422,
@@ -2452,7 +2468,9 @@ describe("services/api transactional email routes", () => {
     });
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ id: "existing-email" });
+    expect(sendEmailResponseSchema.parse(await res.json())).toEqual({
+      id: "existing-email",
+    });
     expect(mockReserveEmailQuota).not.toHaveBeenCalled();
     expect(nonLogInsertCalls()).toHaveLength(0);
   });
@@ -2492,7 +2510,7 @@ describe("services/api transactional email routes", () => {
     });
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toMatchObject({
+    expect(batchSendEmailResponseSchema.parse(await res.json())).toMatchObject({
       data: [
         { id: "svc-batch-1" },
         {

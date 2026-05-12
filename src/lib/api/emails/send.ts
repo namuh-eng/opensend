@@ -3,7 +3,6 @@ import {
   publicApiKeyUnauthorizedResponse,
   validateApiKey,
 } from "@/lib/api-auth";
-import { publicApiError, zodValidationDetails } from "@/lib/api-errors";
 import { requireAllowedSendingDomain } from "@/lib/api-key-permissions";
 import { captureApiResponseLog } from "@/lib/api-logging";
 import { getIdempotencyWindowStart } from "@/lib/api/emails/idempotency";
@@ -30,7 +29,6 @@ import {
   hasUnsubscribePlaceholder,
   replaceUnsubscribePlaceholder,
 } from "@/lib/unsubscribe";
-import { normalizeScheduledAt, sendEmailSchema } from "@/lib/validation/emails";
 import {
   createBackgroundJob,
   createTelemetryContext,
@@ -39,19 +37,17 @@ import {
   getSandboxTestOutcomeForRecipients,
   getTelemetryCarrier,
   logTelemetry,
+  normalizeEmailRecipient,
+  normalizeScheduledAt,
+  publicApiError,
   publishBackgroundJob,
   recordTelemetryError,
+  sendEmailSchema,
+  zodValidationDetails,
 } from "@opensend/core";
 import { and, eq, gte, lt } from "drizzle-orm";
 
 // ── Helpers ───────────────────────────────────────────────────────
-
-function normalizeToArray(
-  value: string | string[] | undefined,
-): string[] | undefined {
-  if (!value) return undefined;
-  return Array.isArray(value) ? value : [value];
-}
 
 function jsonWithTelemetry(
   body: unknown,
@@ -400,10 +396,10 @@ export async function handlePostEmailRequest(
     }
   }
 
-  const to = normalizeToArray(validated.to) as string[];
-  const cc = normalizeToArray(validated.cc);
-  const bcc = normalizeToArray(validated.bcc);
-  const replyTo = normalizeToArray(validated.reply_to);
+  const to = normalizeEmailRecipient(validated.to) as string[];
+  const cc = normalizeEmailRecipient(validated.cc);
+  const bcc = normalizeEmailRecipient(validated.bcc);
+  const replyTo = normalizeEmailRecipient(validated.reply_to);
   const scheduledAt = validated.scheduled_at
     ? normalizeScheduledAt(validated.scheduled_at)
     : null;
