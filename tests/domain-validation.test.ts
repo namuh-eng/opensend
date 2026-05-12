@@ -1,4 +1,7 @@
-import { createDomainSchema } from "@/lib/validation/domains";
+import {
+  createDomainSchema,
+  updateDomainSchema,
+} from "@/lib/validation/domains";
 import { describe, expect, it } from "vitest";
 
 const basePayload = {
@@ -40,5 +43,40 @@ describe("domain validation", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("accepts a Resend-compatible tracking subdomain label", () => {
+    const result = createDomainSchema.safeParse({
+      ...basePayload,
+      tracking_subdomain: "links-1",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.tracking_subdomain).toBe("links-1");
+    }
+  });
+
+  it.each([
+    ["too long", "a".repeat(64)],
+    ["does not start with a letter", "1links"],
+    ["does not end with a letter or number", "links-"],
+    ["contains a dot", "links.example.com"],
+    ["contains an underscore", "link_track"],
+  ])("rejects a tracking subdomain label that %s", (_reason, label) => {
+    const result = createDomainSchema.safeParse({
+      ...basePayload,
+      tracking_subdomain: label,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("allows update callers to clear a tracking subdomain", () => {
+    const result = updateDomainSchema.safeParse({
+      tracking_subdomain: null,
+    });
+
+    expect(result.success).toBe(true);
   });
 });

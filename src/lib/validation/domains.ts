@@ -34,13 +34,25 @@ export const returnPathLabelSchema = z
     "Return path can only contain letters, numbers, and hyphens",
   );
 
+export const trackingSubdomainLabelSchema = z
+  .string()
+  .trim()
+  .min(1, "Tracking subdomain is required")
+  .max(63, "Tracking subdomain must be 63 characters or less")
+  .regex(/^[A-Za-z]/, "Tracking subdomain must start with a letter")
+  .regex(/[A-Za-z0-9]$/, "Tracking subdomain must end with a letter or number")
+  .regex(
+    /^[A-Za-z0-9-]+$/,
+    "Tracking subdomain can only contain letters, numbers, and hyphens",
+  );
+
 export const createDomainSchema = z.object({
   name: z.string().trim().min(1, "Domain name is required").max(255),
   region: domainRegionSchema.optional().default("us-east-1"),
   custom_return_path: returnPathLabelSchema.optional(),
   open_tracking: z.boolean().optional(),
   click_tracking: z.boolean().optional(),
-  tracking_subdomain: z.string().trim().min(1).max(255).optional(),
+  tracking_subdomain: trackingSubdomainLabelSchema.optional(),
   tls: domainTlsSchema.optional().default("opportunistic"),
   capabilities: z.array(domainCapabilitySchema).optional(),
 });
@@ -49,7 +61,7 @@ export const updateDomainSchema = z
   .object({
     click_tracking: z.boolean().optional(),
     open_tracking: z.boolean().optional(),
-    tracking_subdomain: z.string().trim().min(1).max(255).optional(),
+    tracking_subdomain: trackingSubdomainLabelSchema.nullable().optional(),
     capabilities: z.array(domainCapabilitySchema).optional(),
     sending_enabled: z.boolean().optional(),
     receiving_enabled: z.boolean().optional(),

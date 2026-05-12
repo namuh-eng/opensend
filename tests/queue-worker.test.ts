@@ -54,6 +54,15 @@ vi.mock("@opensend/core", () => ({
     findDueScheduled: mockFindDueScheduled,
     update: mockUpdateEmail,
   },
+  buildTrackingSubdomainRecordName: (
+    domainName: string,
+    trackingSubdomain?: string | null,
+  ) => {
+    if (!trackingSubdomain) return null;
+    return trackingSubdomain.includes(".")
+      ? trackingSubdomain
+      : `${trackingSubdomain}.${domainName}`;
+  },
   getEmailAddressDomain: (address: string) =>
     address.split("@").pop()?.replace(">", "").trim().toLowerCase() ?? "",
   getEmailTrackingBaseUrl: (input: { trackingSubdomain?: string | null }) =>

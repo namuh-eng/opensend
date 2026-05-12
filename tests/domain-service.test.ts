@@ -133,17 +133,24 @@ describe("domain service", () => {
       invalidateDomainCaches,
     });
 
+    const previousTrackingTarget = process.env.TRACKING_CNAME_TARGET;
+    process.env.TRACKING_CNAME_TARGET = "track.opensend.example";
     const result = await service.createDomain({
       name: "Example.COM",
       region: "eu-west-1",
       customReturnPath: "outbound",
       openTracking: true,
       clickTracking: true,
-      trackingSubdomain: "track.example.com",
+      trackingSubdomain: "links",
       tls: "enforced",
       capabilities: [{ name: "sending", enabled: false }],
       userId: "user-1",
     });
+    if (previousTrackingTarget === undefined) {
+      process.env.TRACKING_CNAME_TARGET = undefined;
+    } else {
+      process.env.TRACKING_CNAME_TARGET = previousTrackingTarget;
+    }
 
     expect(createDomainIdentity).toHaveBeenCalledWith("example.com", {
       userId: "user-1",
@@ -156,7 +163,7 @@ describe("domain service", () => {
       customReturnPath: "outbound",
       trackOpens: true,
       trackClicks: true,
-      trackingSubdomain: "track.example.com",
+      trackingSubdomain: "links",
       tls: "enforced",
       capabilities: [{ name: "sending", enabled: false }],
       userId: "user-1",
@@ -195,6 +202,13 @@ describe("domain service", () => {
         type: "TXT",
         name: "_dmarc.example.com",
         value: "v=DMARC1; p=none;",
+        status: "pending",
+        ttl: "Auto",
+      },
+      {
+        type: "CNAME",
+        name: "links.example.com",
+        value: "track.opensend.example",
         status: "pending",
         ttl: "Auto",
       },

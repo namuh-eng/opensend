@@ -604,7 +604,12 @@ export const openApiDocument = {
           custom_return_path: { type: "string" },
           open_tracking: { type: "boolean" },
           click_tracking: { type: "boolean" },
-          tracking_subdomain: { type: "string" },
+          tracking_subdomain: {
+            type: "string",
+            description:
+              "Single DNS label for branded tracking URLs, for example links.",
+            maxLength: 63,
+          },
           tls: { type: "string", enum: ["opportunistic", "enforced"] },
           capabilities: {
             type: "array",

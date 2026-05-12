@@ -4,6 +4,7 @@ const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockDeleteDNSRecord = vi.hoisted(() => vi.fn());
 const mockListDNSRecords = vi.hoisted(() => vi.fn());
+const mockConfigureDNSRecords = vi.hoisted(() => vi.fn());
 const mockQueueEvent = vi.hoisted(() => vi.fn());
 const mockDeleteDomainIdentity = vi.hoisted(() => vi.fn());
 const mockGetDomainIdentity = vi.hoisted(() => vi.fn());
@@ -73,6 +74,7 @@ vi.mock("@opensend/core", () => ({
 }));
 
 vi.mock("@/lib/cloudflare", () => ({
+  configureDNSRecords: mockConfigureDNSRecords,
   deleteDNSRecord: mockDeleteDNSRecord,
   listDNSRecords: mockListDNSRecords,
 }));
@@ -123,6 +125,7 @@ describe("Domain API validation", () => {
     mockGetServerSession.mockReset();
     mockDeleteDNSRecord.mockReset();
     mockListDNSRecords.mockReset();
+    mockConfigureDNSRecords.mockReset();
     mockQueueEvent.mockReset();
     mockDeleteDomainIdentity.mockReset();
     mockGetDomainIdentity.mockReset();
@@ -493,6 +496,69 @@ describe("Domain API validation", () => {
     expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
+  it("forwards a validated tracking subdomain label during create", async () => {
+    mockCreateDomain.mockResolvedValueOnce({
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      status: "not_started",
+      region: "us-east-1",
+      records: [
+        {
+          type: "CNAME",
+          name: "links.example.com",
+          value: "track.opensend.example",
+          status: "pending",
+          ttl: "Auto",
+        },
+      ],
+      customReturnPath: null,
+      trackOpens: false,
+      trackClicks: false,
+      trackingSubdomain: "links",
+      tls: "opportunistic",
+      capabilities: [{ name: "sending", enabled: true }],
+      createdAt: new Date("2026-05-06T00:00:00.000Z"),
+    });
+
+    const { POST } = await import("@/app/api/domains/route");
+    const res = await POST(
+      makeRequest("http://localhost:3015/api/domains", "POST", {
+        name: "example.com",
+        tracking_subdomain: "links",
+      }),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(201);
+    expect(mockCreateDomain).toHaveBeenCalledWith(
+      expect.objectContaining({ trackingSubdomain: "links" }),
+    );
+    expect(json.tracking_subdomain).toBe("links");
+    expect(json.records).toContainEqual({
+      type: "CNAME",
+      name: "links.example.com",
+      value: "track.opensend.example",
+      status: "pending",
+      ttl: "Auto",
+    });
+  });
+
+  it("returns 422 for invalid tracking subdomain labels", async () => {
+    const { POST } = await import("@/app/api/domains/route");
+    const req = makeRequest("http://localhost:3015/api/domains", "POST", {
+      name: "example.com",
+      tracking_subdomain: "links.example.com",
+    });
+
+    const res = await POST(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error).toBe("Validation failed");
+    expect(json.details.fieldErrors.tracking_subdomain).toBeDefined();
+    expect(mockCreateDomain).not.toHaveBeenCalled();
+  });
+
   it("returns 422 for invalid domain update payload", async () => {
     const { PATCH } = await import("@/app/api/domains/[id]/route");
     const req = makeRequest(
@@ -514,6 +580,51 @@ describe("Domain API validation", () => {
     expect(json.details.fieldErrors.click_tracking).toBeDefined();
     expect(json.details.fieldErrors.tls).toBeDefined();
     expect(mockUpdateDomainDetail).not.toHaveBeenCalled();
+  });
+
+  it("accepts a tracking subdomain label during update", async () => {
+    mockUpdateDomainDetail.mockResolvedValueOnce({
+      response: { object: "domain", id: VALID_DOMAIN_ID },
+      changedFields: ["tracking_subdomain"],
+      eventPayload: {
+        id: VALID_DOMAIN_ID,
+        changed_fields: ["tracking_subdomain"],
+        domain: {
+          id: VALID_DOMAIN_ID,
+          name: "example.com",
+          status: "not_started",
+          region: "us-east-1",
+          records: [
+            {
+              type: "CNAME",
+              name: "links.example.com",
+              value: "track.opensend.example",
+              status: "pending",
+              ttl: "Auto",
+            },
+          ],
+          capabilities: [{ name: "sending", enabled: true }],
+          created_at: "2026-05-06T00:00:00.000Z",
+        },
+      },
+    });
+
+    const { PATCH } = await import("@/app/api/domains/[id]/route");
+    const res = await PATCH(
+      makeRequest(
+        `http://localhost:3015/api/domains/${VALID_DOMAIN_ID}`,
+        "PATCH",
+        { tracking_subdomain: "links" },
+      ),
+      { params: Promise.resolve({ id: VALID_DOMAIN_ID }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockUpdateDomainDetail).toHaveBeenCalledWith({
+      id: VALID_DOMAIN_ID,
+      userId: "user-1",
+      updates: { tracking_subdomain: "links" },
+    });
   });
 
   it("returns 422 for invalid domain detail params before calling the service", async () => {
@@ -666,6 +777,61 @@ describe("Domain API validation", () => {
 
     expect(res.status).toBe(404);
     expect(mockReconcileVerification).not.toHaveBeenCalled();
+  });
+
+  it("auto-configures persisted DNS records through Cloudflare for the caller tenant", async () => {
+    const records = [
+      {
+        type: "CNAME",
+        name: "links.example.com",
+        value: "track.opensend.example",
+        status: "pending",
+        ttl: "Auto",
+      },
+    ];
+    mockDb.query.domains.findFirst.mockResolvedValue({
+      id: VALID_DOMAIN_ID,
+      name: "example.com",
+      userId: "user-1",
+      status: "pending",
+      records,
+    });
+    mockConfigureDNSRecords.mockResolvedValueOnce([
+      {
+        action: "created",
+        name: "links.example.com",
+        type: "CNAME",
+        record: {
+          id: "dns-track",
+          type: "CNAME",
+          name: "links.example.com",
+          content: "track.opensend.example",
+          ttl: 1,
+        },
+      },
+    ]);
+
+    const { POST } = await import(
+      "@/app/api/domains/[id]/auto-configure/route"
+    );
+    const res = await POST(
+      makeRequest(
+        `http://localhost:3015/api/domains/${VALID_DOMAIN_ID}/auto-configure`,
+        "POST",
+      ),
+      { params: Promise.resolve({ id: VALID_DOMAIN_ID }) },
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(mockConfigureDNSRecords).toHaveBeenCalledWith(records);
+    expect(json.dns_records).toEqual([
+      expect.objectContaining({
+        action: "created",
+        name: "links.example.com",
+        type: "CNAME",
+      }),
+    ]);
   });
 });
 
