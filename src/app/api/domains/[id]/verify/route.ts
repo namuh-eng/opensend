@@ -61,12 +61,20 @@ export async function POST(
     const result = await domainService.reconcileVerification(id);
 
     if (result.status === "not_found") {
-      await invalidateDomainCaches({ id, name: domain.name });
+      await invalidateDomainCaches({
+        id,
+        name: domain.name,
+        region: domain.region,
+      });
       return Response.json({ error: "Domain not found" }, { status: 404 });
     }
 
     const reconciled = result.domain;
-    await invalidateDomainCaches({ id: reconciled.id, name: reconciled.name });
+    await invalidateDomainCaches({
+      id: reconciled.id,
+      name: reconciled.name,
+      region: reconciled.region,
+    });
 
     if (result.status === "updated") {
       await queueEvent({

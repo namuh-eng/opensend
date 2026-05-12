@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock the AWS SES SDK — vi.hoisted ensures mockSend is available during mock factory
-const { mockSend } = vi.hoisted(() => ({
+const { mockSend, mockSesClient } = vi.hoisted(() => ({
   mockSend: vi.fn(),
+  mockSesClient: vi.fn(),
 }));
 
 vi.mock("@aws-sdk/client-sesv2", () => ({
-  SESv2Client: vi.fn().mockImplementation(() => ({
+  SESv2Client: mockSesClient.mockImplementation(() => ({
     send: mockSend,
   })),
   SendEmailCommand: vi.fn().mockImplementation((input) => ({
@@ -47,6 +48,7 @@ import {
 describe("SES Client", () => {
   beforeEach(() => {
     mockSend.mockReset();
+    mockSesClient.mockClear();
   });
 
   describe("sendEmail", () => {
@@ -397,6 +399,31 @@ describe("SES Client", () => {
       await expect(deleteDomainIdentity("")).rejects.toThrow(
         "domain is required",
       );
+    });
+  });
+
+  describe("region-aware domain identity operations", () => {
+    it("uses one SES client for create, verify, and delete in the requested region", async () => {
+      mockSend
+        .mockResolvedValueOnce({
+          DkimAttributes: {
+            Tokens: ["token-sa"],
+            Status: "PENDING",
+          },
+        })
+        .mockResolvedValueOnce({
+          VerifiedForSendingStatus: true,
+          DkimAttributes: { Tokens: ["token-sa"], Status: "SUCCESS" },
+        })
+        .mockResolvedValueOnce({});
+
+      await createDomainIdentity("regional.example", { region: "sa-east-1" });
+      await getDomainIdentity("regional.example", { region: "sa-east-1" });
+      await deleteDomainIdentity("regional.example", { region: "sa-east-1" });
+
+      expect(mockSesClient).toHaveBeenCalledTimes(1);
+      expect(mockSesClient).toHaveBeenCalledWith({ region: "sa-east-1" });
+      expect(mockSend).toHaveBeenCalledTimes(3);
     });
   });
 });

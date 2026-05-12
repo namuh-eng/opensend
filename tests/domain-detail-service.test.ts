@@ -128,7 +128,11 @@ describe("domain detail service", () => {
       vi.fn<(_input: DomainUpdateInput) => Promise<DomainRow | undefined>>();
     const invalidateDomainCaches =
       vi.fn<
-        (_input: { id?: string | null; name?: string | null }) => Promise<void>
+        (_input: {
+          id?: string | null;
+          name?: string | null;
+          region?: string | null;
+        }) => Promise<void>
       >();
     const service = createDomainDetailService({
       getDomainById: async () => domainRow({ trackOpens: true }),
@@ -170,7 +174,11 @@ describe("domain detail service", () => {
     const updateCalls: DomainUpdateInput[] = [];
     const invalidateDomainCaches =
       vi.fn<
-        (_input: { id?: string | null; name?: string | null }) => Promise<void>
+        (_input: {
+          id?: string | null;
+          name?: string | null;
+          region?: string | null;
+        }) => Promise<void>
       >();
     const service = createDomainDetailService({
       getDomainById: async () => existing,
@@ -206,6 +214,7 @@ describe("domain detail service", () => {
     expect(invalidateDomainCaches).toHaveBeenCalledWith({
       id: existing.id,
       name: "example.com",
+      region: "us-east-1",
     });
     expect(result).toEqual({
       response: { object: "domain", id: existing.id },
@@ -306,7 +315,11 @@ describe("domain detail service", () => {
   it("invalidates stale caches when a user-scoped update races with deletion", async () => {
     const invalidateDomainCaches =
       vi.fn<
-        (_input: { id?: string | null; name?: string | null }) => Promise<void>
+        (_input: {
+          id?: string | null;
+          name?: string | null;
+          region?: string | null;
+        }) => Promise<void>
       >();
     const service = createDomainDetailService({
       getDomainById: async () => domainRow(),
@@ -324,6 +337,7 @@ describe("domain detail service", () => {
     expect(invalidateDomainCaches).toHaveBeenCalledWith({
       id: "11111111-1111-4111-8111-111111111111",
       name: "example.com",
+      region: "us-east-1",
     });
   });
 
@@ -364,7 +378,9 @@ describe("domain detail service", () => {
       });
 
       expect(result.response.deleted).toBe(true);
-      expect(deleteDomainIdentity).toHaveBeenCalledWith("example.com");
+      expect(deleteDomainIdentity).toHaveBeenCalledWith("example.com", {
+        region: "us-east-1",
+      });
       expect(listDNSRecords).toHaveBeenCalledWith({ name: "example.com" });
       expect(deleteDNSRecord).toHaveBeenCalledWith("spf");
       expect(deleteDNSRecord).toHaveBeenCalledTimes(1);
@@ -381,7 +397,11 @@ describe("domain detail service", () => {
     const deleteDNSRecord = vi.fn<(_: string) => Promise<void>>();
     const invalidateDomainCaches =
       vi.fn<
-        (_input: { id?: string | null; name?: string | null }) => Promise<void>
+        (_input: {
+          id?: string | null;
+          name?: string | null;
+          region?: string | null;
+        }) => Promise<void>
       >();
     const service = createDomainDetailService({
       getDomainById: async () => domainRow(),
@@ -412,7 +432,9 @@ describe("domain detail service", () => {
       userId: "user-1",
     });
 
-    expect(deleteDomainIdentity).toHaveBeenCalledWith("example.com");
+    expect(deleteDomainIdentity).toHaveBeenCalledWith("example.com", {
+      region: "us-east-1",
+    });
     expect(deleteDNSRecord).toHaveBeenCalledTimes(2);
     expect(deleteDNSRecord).toHaveBeenCalledWith("spf");
     expect(deleteDNSRecord).toHaveBeenCalledWith("dkim");
@@ -422,6 +444,7 @@ describe("domain detail service", () => {
     expect(invalidateDomainCaches).toHaveBeenCalledWith({
       id: "11111111-1111-4111-8111-111111111111",
       name: "example.com",
+      region: "us-east-1",
     });
     expect(result).toEqual({
       response: {

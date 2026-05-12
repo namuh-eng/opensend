@@ -85,6 +85,7 @@ describe("domain service", () => {
 
       expect(createDomainIdentity).toHaveBeenCalledWith("example.com", {
         userId: "user-1",
+        region: "us-east-1",
       });
       expect(inserted[0]).toMatchObject({
         name: "example.com",
@@ -113,7 +114,13 @@ describe("domain service", () => {
       status: "PENDING",
     }));
     const invalidateDomainCaches =
-      vi.fn<(_: { id: string; name: string }) => Promise<void>>();
+      vi.fn<
+        (_: {
+          id: string;
+          name: string;
+          region?: string | null;
+        }) => Promise<void>
+      >();
     const repository = createRepository({
       async create(data) {
         inserted.push(data);
@@ -154,6 +161,7 @@ describe("domain service", () => {
 
     expect(createDomainIdentity).toHaveBeenCalledWith("example.com", {
       userId: "user-1",
+      region: "eu-west-1",
     });
     expect(inserted[0]).toMatchObject({
       name: "example.com",
@@ -224,6 +232,7 @@ describe("domain service", () => {
     expect(invalidateDomainCaches).toHaveBeenCalledWith({
       id: "created-domain",
       name: "example.com",
+      region: "eu-west-1",
     });
   });
 
@@ -286,6 +295,7 @@ describe("domain service", () => {
     const existingDomain = domainRow({
       id: "dom-1",
       name: "example.com",
+      region: "ap-northeast-1",
       status: "pending",
       records: [
         {
@@ -304,6 +314,7 @@ describe("domain service", () => {
         },
       ],
     });
+    const getDomainIdentity = vi.fn(async () => ({ verified: true }));
     const repository = createRepository({
       async findById() {
         return existingDomain;
@@ -316,11 +327,14 @@ describe("domain service", () => {
 
     const service = createDomainService({
       repository,
-      getDomainIdentity: async () => ({ verified: true }),
+      getDomainIdentity,
     });
 
     const result = await service.reconcileVerification("dom-1");
 
+    expect(getDomainIdentity).toHaveBeenCalledWith("example.com", {
+      region: "ap-northeast-1",
+    });
     expect(result.status).toBe("updated");
     expect(updates).toHaveLength(1);
     expect(updates[0].data.status).toBe("verified");
