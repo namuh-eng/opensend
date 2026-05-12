@@ -52,6 +52,7 @@ export interface SendEmailInput {
     content_type?: string;
     content_id?: string;
   }>;
+  region?: string;
 }
 
 export interface SendEmailResult {
@@ -77,6 +78,7 @@ export interface CreateDomainIdentityOptions {
   // key never leaves our DB, and we publish a single TXT record. Without a
   // userId we fall back to legacy SES-managed signing (3 CNAMEs).
   userId?: string;
+  region?: string;
 }
 
 export interface GetDomainResult {
@@ -87,7 +89,23 @@ export interface GetDomainResult {
 
 // ── Client ─────────────────────────────────────────────────────────
 
-const ses = new SESv2Client({ region: process.env.AWS_REGION ?? "us-east-1" });
+const DEFAULT_SES_REGION = "us-east-1";
+const sesClients = new Map<string, SESv2Client>();
+
+function normalizeSesRegion(region: string | null | undefined): string {
+  const trimmed = region?.trim();
+  return trimmed || DEFAULT_SES_REGION;
+}
+
+function getSesClient(region?: string | null): SESv2Client {
+  const resolvedRegion = normalizeSesRegion(region);
+  const cached = sesClients.get(resolvedRegion);
+  if (cached) return cached;
+
+  const client = new SESv2Client({ region: resolvedRegion });
+  sesClients.set(resolvedRegion, client);
+  return client;
+}
 
 // ── Email Sending ──────────────────────────────────────────────────
 
@@ -130,7 +148,7 @@ export async function sendEmail(
         },
       },
     });
-    const response = await ses.send(command);
+    const response = await getSesClient(input.region).send(command);
     return { id: response.MessageId ?? "" };
   }
 
@@ -164,7 +182,7 @@ export async function sendEmail(
     },
   });
 
-  const response = await ses.send(command);
+  const response = await getSesClient(input.region).send(command);
   return { id: response.MessageId ?? "" };
 }
 
@@ -180,23 +198,24 @@ export async function createDomainIdentity(
   // key we hand it; the public key goes into one DNS TXT record. This is
   // the path Resend uses and what the dashboard takes for new domains.
   if (options.userId) {
-    return createExternalDkimIdentity(domain, options.userId);
+    return createExternalDkimIdentity(domain, options.userId, options.region);
   }
 
   // Legacy SES-managed signing — kept for SDK callers that don't pass a
   // userId yet, and for any pre-BYO rows already in production.
-  return createSesManagedIdentity(domain);
+  return createSesManagedIdentity(domain, options.region);
 }
 
 async function createExternalDkimIdentity(
   domain: string,
   userId: string,
+  region?: string,
 ): Promise<CreateDomainResult> {
   const keypair = generateDkimKeypair(userId);
 
   if (useDevStub) {
     console.log(
-      `[DEV] Would create SES EXTERNAL identity for ${domain} (selector ${keypair.selector})`,
+      `[DEV] Would create SES EXTERNAL identity for ${domain} in ${normalizeSesRegion(region)} (selector ${keypair.selector})`,
     );
     return {
       dkimOrigin: "EXTERNAL",
@@ -214,9 +233,10 @@ async function createExternalDkimIdentity(
     DomainSigningSelector: keypair.selector,
     DomainSigningPrivateKey: privateKeyForSes,
   };
+  const client = getSesClient(region);
 
   try {
-    const response = await ses.send(
+    const response = await client.send(
       new CreateEmailIdentityCommand({
         EmailIdentity: domain,
         DkimSigningAttributes: signingAttributes,
@@ -236,7 +256,7 @@ async function createExternalDkimIdentity(
     // dashboard add yields a fresh keypair instead of inheriting whatever
     // was there before.
     if (!isAlreadyExistsError(error)) throw error;
-    await ses.send(
+    await client.send(
       new PutEmailIdentityDkimSigningAttributesCommand({
         EmailIdentity: domain,
         SigningAttributesOrigin: "EXTERNAL",
@@ -255,18 +275,22 @@ async function createExternalDkimIdentity(
 
 async function createSesManagedIdentity(
   domain: string,
+  region?: string,
 ): Promise<CreateDomainResult> {
   if (useDevStub) {
-    console.log(`[DEV] Would create SES identity for domain: ${domain}`);
+    console.log(
+      `[DEV] Would create SES identity for domain: ${domain} in ${normalizeSesRegion(region)}`,
+    );
     return {
       dkimOrigin: "AWS_SES",
       dkimTokens: ["dev-token-1", "dev-token-2", "dev-token-3"],
       status: "PENDING",
     };
   }
+  const client = getSesClient(region);
 
   try {
-    const response = await ses.send(
+    const response = await client.send(
       new CreateEmailIdentityCommand({ EmailIdentity: domain }),
     );
     return {
@@ -276,7 +300,7 @@ async function createSesManagedIdentity(
     };
   } catch (error) {
     if (!isAlreadyExistsError(error)) throw error;
-    const response = await ses.send(
+    const response = await client.send(
       new GetEmailIdentityCommand({ EmailIdentity: domain }),
     );
     return {
@@ -306,6 +330,7 @@ function isAlreadyExistsError(error: unknown): boolean {
 
 export async function getDomainIdentity(
   domain: string,
+  options: { region?: string } = {},
 ): Promise<GetDomainResult> {
   if (!domain) throw new Error("domain is required");
 
@@ -317,7 +342,7 @@ export async function getDomainIdentity(
     EmailIdentity: domain,
   });
 
-  const response = await ses.send(command);
+  const response = await getSesClient(options.region).send(command);
 
   return {
     verified: response.VerifiedForSendingStatus ?? false,
@@ -326,11 +351,16 @@ export async function getDomainIdentity(
   };
 }
 
-export async function deleteDomainIdentity(domain: string): Promise<void> {
+export async function deleteDomainIdentity(
+  domain: string,
+  options: { region?: string } = {},
+): Promise<void> {
   if (!domain) throw new Error("domain is required");
 
   if (useDevStub) {
-    console.log(`[DEV] Would delete SES identity for domain: ${domain}`);
+    console.log(
+      `[DEV] Would delete SES identity for domain: ${domain} in ${normalizeSesRegion(options.region)}`,
+    );
     return;
   }
 
@@ -338,7 +368,7 @@ export async function deleteDomainIdentity(domain: string): Promise<void> {
     EmailIdentity: domain,
   });
 
-  await ses.send(command);
+  await getSesClient(options.region).send(command);
 }
 
 // ── MIME Builder (for attachments) ─────────────────────────────────

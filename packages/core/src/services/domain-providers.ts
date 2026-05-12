@@ -71,8 +71,10 @@ async function readCloudflareResult<T>(response: Response): Promise<T> {
 export const domainIdentityProvider: DomainIdentityProvider = {
   createDomainIdentity: (domain, options) =>
     emailProvider.createDomainIdentity(domain, options),
-  getDomainIdentity: (domain) => emailProvider.getDomainIdentity(domain),
-  deleteDomainIdentity: (domain) => emailProvider.deleteDomainIdentity(domain),
+  getDomainIdentity: (domain, options) =>
+    emailProvider.getDomainIdentity(domain, options),
+  deleteDomainIdentity: (domain, options) =>
+    emailProvider.deleteDomainIdentity(domain, options),
 };
 
 export const cloudflareDnsCleanupProvider: DomainDnsCleanupProvider = {

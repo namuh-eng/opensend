@@ -100,7 +100,7 @@ contributor-facing set; the table below adds the production-only entries.
 | Variable | Purpose |
 | --- | --- |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | IAM credentials with SES + (optionally) S3, SQS, EventBridge permissions. Prefer IAM roles when available. |
-| `AWS_REGION` | SES region. Use `us-east-1` unless you have a reason to pick another. |
+| `AWS_REGION` | Default AWS region for non-domain-scoped AWS clients such as SQS/S3. SES sends and domain identity calls use the selected domain's region and fall back to `us-east-1` when no domain row is available. |
 
 ### Optional
 
@@ -185,10 +185,43 @@ migrations. Use it for local iteration; never for production.
 
 ## AWS SES
 
+### Region-aware sending
+
+OpenSend Phase 1 uses **domain-selected SES regions**, not transparent
+same-domain failover. Each sending domain has one configured SES region, and
+the background worker routes a queued send to the SES region for the `From`
+domain owned by that OpenSend user. If the sender has no matching domain row,
+delivery falls back to `us-east-1`.
+
+Supported dashboard/API domain regions:
+
+- `us-east-1`
+- `eu-west-1`
+- `sa-east-1`
+- `ap-northeast-1`
+
+Before selecting a non-default region for a domain, set up that SES region
+independently:
+
+1. Request SES production access or understand sandbox limitations for that
+   region.
+2. Confirm the region's sending quotas and rate limits are sufficient.
+3. Create/verify the domain identity and DKIM records in that same region
+   through OpenSend.
+4. Publish the MAIL FROM MX value rendered by OpenSend:
+   `feedback-smtp.<region>.amazonses.com`.
+5. Configure SNS/configuration-set feedback topics for each sending region and
+   point them at the ingester `/events/ses` endpoint.
+
+Backup-domain failover and SES Global Endpoints are not implemented in this
+phase; model regional resilience as separate domains until that Phase 2 work
+lands.
+
 ### Sandbox vs production
 
 New AWS accounts start in **SES sandbox mode** — emails only go to verified
-addresses. To send to anyone, request production access from the SES console:
+addresses. Sandbox/production status is region-scoped. To send to anyone,
+request production access from the SES console in every sending region:
 **Account dashboard → Request production access**.
 
 ### IAM minimum
