@@ -12,9 +12,15 @@ import {
   templates,
 } from "@/lib/db/schema";
 import {
+  StoredTemplateRendererConfigError,
+  getStoredTemplateRendererConfig,
+  renderStoredTemplateContent,
+} from "@/lib/templates/stored-renderer";
+import {
   type ConditionOperator,
   type ConditionStepConfig,
   type ContactUpdateStepConfig,
+  TemplateRendererError,
   type WaitForEventStepConfig,
   automationRunRepo,
   emailService,
@@ -376,33 +382,46 @@ function resolveReference(
   if (directPath) {
     return getPath(context[directPath[1]], directPath[2].split("."));
   }
-  return value.replace(/{{\s*([^}]+?)\s*}}/g, (_match, token: string) => {
-    const path = token.trim().split(".");
-    const resolved = getPath(context, path);
-    return resolved === undefined || resolved === null ? "" : String(resolved);
-  });
-}
-
-function renderTemplate(
-  content: string | null,
-  variables: Record<string, unknown>,
-) {
-  let rendered = content ?? "";
-  for (const [key, value] of Object.entries(variables)) {
-    if (typeof value === "object") continue;
-    rendered = rendered.replace(
-      new RegExp(
-        `{{\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*}}`,
-        "g",
-      ),
-      value === undefined || value === null ? "" : String(value),
-    );
-  }
-  return rendered;
+  return value.replace(
+    /{{{\s*([^}]+?)\s*}}}|{{\s*([^}]+?)\s*}}/g,
+    (
+      match,
+      tripleToken: string | undefined,
+      doubleToken: string | undefined,
+    ) => {
+      if (tripleToken !== undefined) return match;
+      const token = doubleToken ?? "";
+      const path = token.trim().split(".");
+      const resolved = getPath(context, path);
+      return resolved === undefined || resolved === null
+        ? ""
+        : String(resolved);
+    },
+  );
 }
 
 function normalizeReplyTo(value: string | null): string[] | undefined {
   return value ? [value] : undefined;
+}
+
+function legacyAutomationRenderVariables(
+  variables: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(variables)
+      .filter(([, value]) => typeof value !== "object")
+      .map(([key, value]) => [key, value === undefined ? "" : value]),
+  );
+}
+
+function templateRenderFailureReason(error: unknown): string | null {
+  if (error instanceof TemplateRendererError) {
+    return `send_email template render failed: ${error.message}`;
+  }
+  if (error instanceof StoredTemplateRendererConfigError) {
+    return `send_email template render failed: ${error.message}`;
+  }
+  return null;
 }
 
 function getSendEmailConfig(step: AutomationStep): {
@@ -1067,14 +1086,35 @@ async function processSendEmailStep(
   const from = String(
     resolveReference(config.from ?? template.from ?? "", context) ?? "",
   ).trim();
-  const subjectSource = config.subject ?? template.subject ?? "";
-  const subject = renderTemplate(
-    String(resolveReference(subjectSource, context) ?? ""),
-    variables,
-  ).trim();
+  const subjectSource = config.subject ?? template.subject;
+  const subjectOverride =
+    subjectSource === null || subjectSource === undefined
+      ? undefined
+      : String(resolveReference(subjectSource, context) ?? "");
   const replyTo = String(
     resolveReference(config.replyTo ?? template.replyTo ?? "", context) ?? "",
   ).trim();
+
+  let renderedTemplate: { subject: string; html: string; text: string };
+  try {
+    const rendererConfig = getStoredTemplateRendererConfig(template.document);
+    renderedTemplate = await renderStoredTemplateContent({
+      template,
+      subject: subjectOverride,
+      variables:
+        rendererConfig.kind === "legacy"
+          ? legacyAutomationRenderVariables(variables)
+          : variables,
+    });
+  } catch (error) {
+    const reason = templateRenderFailureReason(error);
+    if (reason) {
+      return await failRun(deps, run, step.key, states, now, reason);
+    }
+    throw error;
+  }
+
+  const subject = renderedTemplate.subject.trim();
 
   if (!from) {
     return await failRun(
@@ -1101,8 +1141,8 @@ async function processSendEmailStep(
     from,
     to: [contact.email],
     subject,
-    html: renderTemplate(template.html, variables),
-    text: renderTemplate(template.text, variables),
+    html: renderedTemplate.html,
+    text: renderedTemplate.text,
     replyTo: normalizeReplyTo(replyTo),
     tags: [
       { name: "automation_id", value: automation.id },

@@ -88,6 +88,9 @@ vi.mock("@opensend/core", async () => {
   const contracts = await vi.importActual<
     typeof import("../packages/core/src/contracts")
   >("../packages/core/src/contracts");
+  const templateRenderer = await vi.importActual<
+    typeof import("../packages/core/src/services/template-renderer")
+  >("../packages/core/src/services/template-renderer");
   const testTraceparent =
     "00-11111111111111111111111111111111-2222222222222222-01";
   const getHeader = (
@@ -106,6 +109,7 @@ vi.mock("@opensend/core", async () => {
 
   return {
     ...contracts,
+    ...templateRenderer,
     EmailDetailServiceError: MockEmailDetailServiceError,
     EmailReadServiceError: MockEmailReadServiceError,
     EmailLifecycleServiceError: MockEmailLifecycleServiceError,
@@ -660,6 +664,121 @@ describe("POST /api/emails", () => {
       html: "<p>Widget</p><p>25</p>",
       text: "",
     });
+  });
+
+  it("renders React Email-backed stored templates through the shared renderer", async () => {
+    const valuesMock = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "react-template-email" }]),
+    });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          userId: AUTH_RESULT.userId,
+          subject: null,
+          html: "<p>legacy html should not render</p>",
+          text: "legacy text should not render",
+          variables: [],
+          document: {
+            rendering: {
+              kind: "react_email",
+              templateKey: "demo-welcome",
+            },
+          },
+        }),
+      },
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Ignored for React registry templates",
+          template: {
+            id: "11111111-1111-4111-8111-111111111111",
+            variables: {
+              recipientName: "Ada",
+              productName: "Acme",
+              actionUrl: "https://example.com/start",
+            },
+          },
+        },
+        { Authorization: "Bearer os_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    const inserted = valuesMock.mock.calls[0][0];
+    expect(inserted).toMatchObject({
+      subject: "Welcome to Acme",
+      text: expect.stringContaining("Hi Ada"),
+      status: "queued",
+    });
+    expect(inserted.html).toContain("Welcome to Acme");
+    expect(inserted.html).toContain("https://example.com/start");
+  });
+
+  it("returns a public validation error for unknown React Email template keys", async () => {
+    Object.assign(mockDb.query, {
+      emails: { findFirst: vi.fn().mockResolvedValue(null) },
+      contacts: { findFirst: vi.fn().mockResolvedValue(null) },
+      templates: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: "11111111-1111-4111-8111-111111111111",
+          userId: AUTH_RESULT.userId,
+          subject: null,
+          html: null,
+          text: null,
+          variables: [],
+          document: {
+            rendering: {
+              kind: "react_email",
+              templateKey: "tenant-provided-tsx-string",
+            },
+          },
+        }),
+      },
+    });
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Will not render",
+          template: {
+            id: "11111111-1111-4111-8111-111111111111",
+            variables: {},
+          },
+        },
+        { Authorization: "Bearer os_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      code: "validation_error",
+      statusCode: 422,
+      message: "Unknown React Email template key: tenant-provided-tsx-string",
+      details: {
+        fieldErrors: {
+          template: [
+            "Unknown React Email template key: tenant-provided-tsx-string",
+          ],
+        },
+      },
+    });
+    expect(mockReserveEmailQuota).not.toHaveBeenCalled();
+    expect(nonLogInsertCalls()).toHaveLength(0);
   });
 
   it("keeps the public validation_error envelope for missing template variables without fallbacks", async () => {
