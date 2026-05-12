@@ -282,6 +282,138 @@ describe("automation runner", () => {
     });
   });
 
+  it("renders legacy stored templates through the shared renderer before sending", async () => {
+    const setup = deps({
+      getTemplate: vi.fn().mockResolvedValue({
+        ...template,
+        subject: "Receipt for {{{first_name}}} on {{plan}}",
+        html: "<p>{{{first_name}}} picked {{plan}}</p><p>{{event}}</p>",
+        text: "{{first_name}} picked {{plan}}",
+      }),
+      listSteps: vi.fn().mockResolvedValue([
+        {
+          ...steps[2],
+          config: {
+            template: {
+              id: template.id,
+              variables: { plan: "event.plan" },
+            },
+          },
+        },
+      ]),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "send" }), setup.deps);
+
+    expect(setup.sendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: "Receipt for Ada on pro",
+        html: "<p>Ada picked pro</p><p>{{event}}</p>",
+        text: "Ada picked pro",
+      }),
+    );
+  });
+
+  it("renders React Email-backed stored templates from a safe registry key", async () => {
+    const setup = deps({
+      getDelivery: vi.fn().mockResolvedValue({
+        ...delivery,
+        payload: {
+          productName: "Acme",
+          actionUrl: "https://example.com/start",
+        },
+      }),
+      getTemplate: vi.fn().mockResolvedValue({
+        ...template,
+        subject: null,
+        html: "<p>legacy html should not render</p>",
+        text: "legacy text should not render",
+        document: {
+          rendering: {
+            kind: "react_email",
+            templateKey: "demo-welcome",
+          },
+        },
+      }),
+      listSteps: vi.fn().mockResolvedValue([
+        {
+          ...steps[2],
+          config: {
+            template: {
+              id: template.id,
+              variables: {
+                recipientName: "contact.firstName",
+                productName: "event.productName",
+                actionUrl: "event.actionUrl",
+              },
+            },
+          },
+        },
+      ]),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "send" }), setup.deps);
+
+    const sent = setup.sendEmail.mock.calls[0]?.[0];
+    expect(sent).toMatchObject({
+      from: "sender@example.com",
+      to: ["user@example.com"],
+      subject: "Welcome to Acme",
+    });
+    expect(sent?.html).toContain("Welcome to Acme");
+    expect(sent?.html).toContain("Hi Ada");
+    expect(sent?.html).toContain("https://example.com/start");
+    expect(sent?.text).toContain("WELCOME TO ACME");
+    expect(sent?.text).toContain("Hi Ada");
+  });
+
+  it("fails React Email-backed stored templates with unknown registry keys", async () => {
+    const setup = deps({
+      getTemplate: vi.fn().mockResolvedValue({
+        ...template,
+        document: {
+          rendering: {
+            kind: "react_email",
+            templateKey: "tenant-provided-tsx-string",
+          },
+        },
+      }),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "send" }), setup.deps);
+
+    expect(setup.sendEmail).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "send",
+      failureReason:
+        "send_email template render failed: Unknown React Email template key: tenant-provided-tsx-string",
+    });
+  });
+
+  it("fails React Email-backed stored templates with missing registry keys", async () => {
+    const setup = deps({
+      getTemplate: vi.fn().mockResolvedValue({
+        ...template,
+        document: {
+          rendering: {
+            kind: "react_email",
+          },
+        },
+      }),
+    });
+
+    await processAutomationRunStep(run({ currentStepKey: "send" }), setup.deps);
+
+    expect(setup.sendEmail).not.toHaveBeenCalled();
+    expect(setup.updates[0]).toMatchObject({
+      status: "failed",
+      currentStepKey: "send",
+      failureReason:
+        "send_email template render failed: React Email template key is missing.",
+    });
+  });
+
   it("evaluates condition steps and advances to the met branch in one tick", async () => {
     const conditionAutomation: Automation = {
       ...automation,

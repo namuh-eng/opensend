@@ -44,6 +44,23 @@ export interface EmailResponse {
 
 export type SendEmailResponse = EmailResponse;
 
+export type EmailPublicErrorCode =
+  | "invalid_json"
+  | "validation_error"
+  | "missing_api_key"
+  | "malformed_api_key"
+  | "invalid_api_key"
+  | "invalid_idempotency_key"
+  | "insufficient_api_key_permission"
+  | "api_key_domain_restricted"
+  | "idempotency_conflict"
+  | "not_found"
+  | "quota_exceeded"
+  | "recipient_suppressed"
+  | "rate_limit_exceeded"
+  | "rate_limit_unavailable"
+  | "internal_server_error";
+
 export type EmailStatus =
   | "queued"
   | "processing"
@@ -82,11 +99,13 @@ export interface ProviderRetryVisibility {
 
 export interface BatchEmailItemError {
   error: {
-    name?: string;
-    code: string;
+    name: EmailPublicErrorCode;
+    code: EmailPublicErrorCode;
     message: string;
     statusCode: number;
-    details?: Record<string, string | number | boolean | null>;
+    details?:
+      | { formErrors: string[]; fieldErrors: Record<string, string[]> }
+      | Record<string, string | number | boolean | null>;
   };
 }
 
