@@ -645,15 +645,15 @@ class ApiKeys {
   async create(
     payload: CreateApiKeyPayload,
   ): Promise<ApiResponse<ApiKeyResponse>> {
-    return this.http.request<ApiKeyResponse>("POST", "/api/api-keys", payload);
+    return this.http.request<ApiKeyResponse>("POST", "/api-keys", payload);
   }
 
   async list(): Promise<ApiResponse<ApiKeyListResponse>> {
-    return this.http.request<ApiKeyListResponse>("GET", "/api/api-keys");
+    return this.http.request<ApiKeyListResponse>("GET", "/api-keys");
   }
 
   async delete(id: string): Promise<ApiResponse<null>> {
-    return this.http.request<null>("DELETE", `/api/api-keys/${id}`);
+    return this.http.request<null>("DELETE", `/api-keys/${id}`);
   }
 }
 

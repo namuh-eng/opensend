@@ -3165,13 +3165,13 @@ describe("POST /emails/:email_id/cancel", () => {
       status: "canceled",
     });
 
-    const { POST } = await import("@/app/emails/[email_id]/cancel/route");
+    const { POST } = await import("@/app/emails/[id]/cancel/route");
     const res = await POST(
       new Request("http://localhost:3015/emails/email-uuid/cancel", {
         method: "POST",
         headers: { Authorization: "Bearer os_test123" },
       }) as never,
-      { params: Promise.resolve({ email_id: "email-uuid" }) },
+      { params: Promise.resolve({ id: "email-uuid" }) },
     );
 
     expect(res.status).toBe(200);
@@ -3188,12 +3188,12 @@ describe("POST /emails/:email_id/cancel", () => {
   it("uses the same API-key auth boundary as the internal cancel route", async () => {
     mockValidateApiKey.mockResolvedValueOnce(null);
 
-    const { POST } = await import("@/app/emails/[email_id]/cancel/route");
+    const { POST } = await import("@/app/emails/[id]/cancel/route");
     const res = await POST(
       new Request("http://localhost:3015/emails/email-uuid/cancel", {
         method: "POST",
       }) as never,
-      { params: Promise.resolve({ email_id: "email-uuid" }) },
+      { params: Promise.resolve({ id: "email-uuid" }) },
     );
 
     expect(res.status).toBe(401);
@@ -3211,13 +3211,13 @@ describe("POST /emails/:email_id/cancel", () => {
       ),
     );
 
-    const { POST } = await import("@/app/emails/[email_id]/cancel/route");
+    const { POST } = await import("@/app/emails/[id]/cancel/route");
     const res = await POST(
       new Request("http://localhost:3015/emails/email-uuid/cancel", {
         method: "POST",
         headers: { Authorization: "Bearer os_test123" },
       }) as never,
-      { params: Promise.resolve({ email_id: "email-uuid" }) },
+      { params: Promise.resolve({ id: "email-uuid" }) },
     );
 
     expect(res.status).toBe(400);
@@ -3231,13 +3231,13 @@ describe("POST /emails/:email_id/cancel", () => {
       new MockEmailLifecycleServiceError("email_not_found", "Email not found"),
     );
 
-    const { POST } = await import("@/app/emails/[email_id]/cancel/route");
+    const { POST } = await import("@/app/emails/[id]/cancel/route");
     const res = await POST(
       new Request("http://localhost:3015/emails/other-tenant-email/cancel", {
         method: "POST",
         headers: { Authorization: "Bearer os_test123" },
       }) as never,
-      { params: Promise.resolve({ email_id: "other-tenant-email" }) },
+      { params: Promise.resolve({ id: "other-tenant-email" }) },
     );
 
     expect(res.status).toBe(404);
