@@ -9,6 +9,14 @@ export const templateRepo = {
     });
   },
 
+  async findByIdForUser(id: string, userId?: string) {
+    return await db.query.templates.findFirst({
+      where: userId
+        ? and(eq(templates.id, id), eq(templates.userId, userId))
+        : eq(templates.id, id),
+    });
+  },
+
   async findByAlias(alias: string) {
     return await db.query.templates.findFirst({
       where: eq(templates.alias, alias),
