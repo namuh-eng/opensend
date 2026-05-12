@@ -161,6 +161,14 @@ const API_GROUPS: EndpointGroup[] = [
   -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
       {
+        method: "GET",
+        path: "/api/templates/:id/preview",
+        description:
+          "Render a dashboard/API preview through the same stored-template renderer used by sends",
+        curl: `curl https://api.opensend.com/api/templates/TEMPLATE_ID/preview \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
         method: "PATCH",
         path: "/api/templates/:id",
         description: "Update a template",
@@ -494,6 +502,10 @@ export async function POST() {
               The REST API remains JSON-only: send React components through the
               TypeScript SDK, or send pre-rendered{" "}
               <code className="font-mono text-[#F0F0F0]">html</code> directly.
+              Dashboard React Email starters are registry-controlled and run
+              inside your Opensend app; self-hosted deployments do not call
+              Resend-hosted rendering services, and arbitrary tenant TSX/JS is
+              not executed.
             </p>
           </div>
         </div>

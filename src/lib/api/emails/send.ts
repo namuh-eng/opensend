@@ -22,8 +22,8 @@ import {
   StoredTemplateRendererConfigError,
   getStoredTemplateRendererConfig,
   renderStoredTemplateContent,
+  resolveStoredTemplateRenderVariables,
 } from "@/lib/templates/stored-renderer";
-import { normalizeStoredTemplateVariables } from "@/lib/templates/variables";
 import {
   buildOneClickUnsubscribeHeaders,
   createUnsubscribeUrl,
@@ -498,45 +498,37 @@ export async function handlePostEmailRequest(
         );
       }
 
-      const templateVars = normalizeStoredTemplateVariables(template.variables);
       const providedVars = validated.template.variables ?? {};
-      const renderVars: Record<string, unknown> = { ...providedVars };
+      const renderVariableResult = resolveStoredTemplateRenderVariables({
+        storedVariables: template.variables,
+        providedVariables: providedVars,
+        mode: "send",
+      });
 
-      for (const templateVar of templateVars) {
-        if (
-          Object.prototype.hasOwnProperty.call(providedVars, templateVar.key)
-        ) {
-          continue;
-        }
-
-        if (templateVar.hasFallbackValue) {
-          renderVars[templateVar.key] = templateVar.fallbackValue;
-          continue;
-        }
-
-        if (templateVar.required) {
-          recordAcceptMetric(telemetry, {
-            durationMs: performance.now() - startedAt,
-            outcome: "invalid",
-          });
-          return await logResponse(
-            jsonWithTelemetry(
-              publicApiError(
-                "validation_error",
-                `Missing required template variable: ${templateVar.key}`,
-                422,
-                {
-                  formErrors: [],
-                  fieldErrors: {
-                    template: [`Missing required variable: ${templateVar.key}`],
-                  },
+      if (!renderVariableResult.ok) {
+        recordAcceptMetric(telemetry, {
+          durationMs: performance.now() - startedAt,
+          outcome: "invalid",
+        });
+        return await logResponse(
+          jsonWithTelemetry(
+            publicApiError(
+              "validation_error",
+              `Missing required template variable: ${renderVariableResult.missingRequiredKey}`,
+              422,
+              {
+                formErrors: [],
+                fieldErrors: {
+                  template: [
+                    `Missing required variable: ${renderVariableResult.missingRequiredKey}`,
+                  ],
                 },
-              ),
-              telemetry,
-              { status: 422 },
+              },
             ),
-          );
-        }
+            telemetry,
+            { status: 422 },
+          ),
+        );
       }
 
       try {
@@ -552,7 +544,7 @@ export async function handlePostEmailRequest(
           subject:
             storedSubject ??
             (rendererConfig.kind === "legacy" ? finalSubject : undefined),
-          variables: renderVars,
+          variables: renderVariableResult.variables,
         });
         finalHtml = renderedTemplate.html;
         finalText = renderedTemplate.text;

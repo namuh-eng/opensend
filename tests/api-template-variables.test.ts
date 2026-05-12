@@ -128,6 +128,66 @@ describe("template variable metadata service", () => {
     expect(inserted[0]?.userId).toBe("user-123");
   });
 
+  it("creates React Email starter templates from registry metadata only", async () => {
+    const inserted: TemplateInsert[] = [];
+    const repository = createRepository({
+      async create(data) {
+        inserted.push(data);
+        return [templateRow({ ...data })];
+      },
+    });
+
+    await createTemplateService({ repository }).createTemplate({
+      name: "Onboarding welcome",
+      react_email_template_key: "onboarding-welcome",
+    });
+
+    expect(inserted[0]).toMatchObject({
+      name: "Onboarding welcome",
+      html: "<!-- React Email registry template: onboarding-welcome -->",
+      document: {
+        rendering: {
+          kind: "react_email",
+          templateKey: "onboarding-welcome",
+        },
+        starter: {
+          key: "onboarding-welcome",
+          source: "opensend-registry",
+        },
+      },
+      variables: expect.arrayContaining([
+        expect.objectContaining({
+          key: "actionUrl",
+          required: true,
+          fallbackValue: null,
+        }),
+        expect.objectContaining({
+          key: "productName",
+          required: false,
+          fallbackValue: "Opensend",
+        }),
+      ]),
+    });
+  });
+
+  it("rejects unknown React Email starter keys instead of accepting tenant code", async () => {
+    const create = vi.fn(async () => [templateRow()]);
+    const service = createTemplateService({
+      repository: createRepository({ create }),
+    });
+
+    await expect(
+      service.createTemplate({
+        name: "Tenant TSX",
+        react_email_template_key: "tenant-provided-tsx-string",
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_input",
+      message: "Unknown React Email template key: tenant-provided-tsx-string",
+    } satisfies Partial<TemplateServiceError>);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("preserves reserved-name and 50-variable validation on create", async () => {
     const create = vi.fn(async () => [templateRow()]);
     const service = createTemplateService({

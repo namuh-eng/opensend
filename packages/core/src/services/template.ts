@@ -1,5 +1,9 @@
 import { templateRepo } from "../db/repositories/templateRepo";
 import type { templates } from "../db/schema";
+import {
+  getReactEmailTemplateMetadata,
+  isReactEmailTemplateKey,
+} from "./template-renderer";
 
 type TemplateRow = typeof templates.$inferSelect;
 type TemplateInsert = typeof templates.$inferInsert;
@@ -330,6 +334,32 @@ function toTruthyStoredString(value: unknown): string | null {
   return value ? (value as string) : null;
 }
 
+function toReactEmailStarterVariables(
+  templateKey: string,
+): StoredTemplateVariable[] {
+  if (!isReactEmailTemplateKey(templateKey)) {
+    throw new TemplateServiceError(
+      "invalid_input",
+      `Unknown React Email template key: ${templateKey}`,
+    );
+  }
+
+  return getReactEmailTemplateMetadata(templateKey).variables.map(
+    (variable) => ({
+      name: variable.key,
+      key: variable.key,
+      type: variable.type,
+      required: variable.required,
+      fallbackValue: variable.fallbackValue,
+    }),
+  );
+}
+
+function getReactEmailTemplateKey(input: Record<string, unknown>): string {
+  const rawKey = input.react_email_template_key;
+  return typeof rawKey === "string" ? rawKey.trim() : "";
+}
+
 function generateAlias(name: string): string {
   return (
     name
@@ -417,13 +447,18 @@ export function createTemplateService({
       const body = asRecord(input);
       const name = typeof body.name === "string" ? body.name.trim() : "";
       const html = typeof body.html === "string" ? body.html.trim() : "";
+      const reactEmailTemplateKey = getReactEmailTemplateKey(body);
 
-      if (!name || !html) {
+      if (!name || (!html && !reactEmailTemplateKey)) {
         throw new TemplateServiceError(
           "invalid_input",
           "name and html are required",
         );
       }
+
+      const reactEmailVariables = reactEmailTemplateKey
+        ? toReactEmailStarterVariables(reactEmailTemplateKey)
+        : null;
 
       const alias =
         typeof body.alias === "string" && body.alias.trim()
@@ -433,15 +468,31 @@ export function createTemplateService({
       const createData: TemplateInsert = {
         name,
         alias,
-        html,
+        html:
+          reactEmailVariables === null
+            ? html
+            : `<!-- React Email registry template: ${reactEmailTemplateKey} -->`,
         subject: toTruthyStoredString(body.subject),
         from: toTruthyStoredString(body.from),
         replyTo: toTruthyStoredString(body.reply_to),
         previewText: toTruthyStoredString(body.preview_text),
         text: toTruthyStoredString(body.text),
-        variables: normalizeVariablesOrThrow(body.variables),
+        variables:
+          reactEmailVariables ?? normalizeVariablesOrThrow(body.variables),
         status: "draft",
       };
+      if (reactEmailVariables !== null) {
+        createData.document = {
+          rendering: {
+            kind: "react_email",
+            templateKey: reactEmailTemplateKey,
+          },
+          starter: {
+            key: reactEmailTemplateKey,
+            source: "opensend-registry",
+          },
+        };
+      }
       if (options.userId) createData.userId = options.userId;
 
       const [template] = await repository.create(createData);
@@ -538,6 +589,8 @@ export function createTemplateService({
         html: existing.html,
         text: existing.text,
         variables: existing.variables,
+        document: existing.document,
+        userId: existing.userId,
       });
 
       return {
