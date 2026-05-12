@@ -71,6 +71,7 @@ interface ApiResponse<T> {
 }
 
 export type SendEmailPayload = EmailOptions & {
+  replyTo?: string | string[];
   react?: ReactNode;
 };
 export type CreateDomainPayload = DomainOptions;
@@ -331,6 +332,19 @@ function toBroadcastPayload<T extends BroadcastPayloadAliases>(
   return normalized;
 }
 
+type SendEmailRestPayload = Omit<SendEmailPayload, "replyTo">;
+
+function toSendEmailPayload(payload: SendEmailPayload): SendEmailRestPayload {
+  const { replyTo, ...rest } = payload;
+  const normalized: SendEmailRestPayload = { ...rest };
+
+  if (normalized.reply_to === undefined && replyTo !== undefined) {
+    normalized.reply_to = replyTo;
+  }
+
+  return normalized;
+}
+
 interface ReactRenderSuccess {
   html: string;
   error: null;
@@ -436,7 +450,7 @@ class Emails {
     payload: SendEmailPayload,
     options: RequestOptions = {},
   ): Promise<ApiResponse<EmailResponse>> {
-    const { react, ...rest } = payload;
+    const { react, ...rest } = toSendEmailPayload(payload);
 
     if (react != null) {
       const rendered = await renderReactToHtml(react);
@@ -456,7 +470,7 @@ class Emails {
     return this.http.request<BatchEmailResponse>(
       "POST",
       "/emails/batch",
-      payload,
+      payload.map(toSendEmailPayload),
       options,
     );
   }

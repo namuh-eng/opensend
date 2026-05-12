@@ -154,6 +154,77 @@ describe("Opensend SDK", () => {
     );
   });
 
+  it("serializes Resend replyTo arrays to REST reply_to for single sends", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ id: "email_reply_to" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Resend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.emails.send({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      replyTo: ["support@example.com", "billing@example.com"],
+    });
+
+    const sendCallOptions = fetchMock.mock.calls[0]?.[1];
+    const outgoingBody = JSON.parse(String(sendCallOptions?.body)) as Record<
+      string,
+      unknown
+    >;
+
+    expect(outgoingBody).toMatchObject({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      reply_to: ["support@example.com", "billing@example.com"],
+    });
+    expect(outgoingBody).not.toHaveProperty("replyTo");
+  });
+
+  it("keeps snake_case reply_to precedence over the replyTo send alias", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ id: "email_reply_to_precedence" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.emails.send({
+      from: "hello@example.com",
+      to: "user@example.com",
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      reply_to: ["snake@example.com"],
+      replyTo: ["camel@example.com"],
+    });
+
+    const sendCallOptions = fetchMock.mock.calls[0]?.[1];
+    const outgoingBody = JSON.parse(String(sendCallOptions?.body)) as Record<
+      string,
+      unknown
+    >;
+
+    expect(outgoingBody.reply_to).toEqual(["snake@example.com"]);
+    expect(outgoingBody).not.toHaveProperty("replyTo");
+  });
+
   it("builds Resend-compatible root segments API requests", async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ object: "segment", id: "seg_123" }), {
@@ -205,7 +276,7 @@ describe("Opensend SDK", () => {
     expectTypeOf<SDKOptions>().toMatchTypeOf<{ baseUrl?: string }>();
     expectTypeOf<RequestOptions>().toMatchTypeOf<{ idempotencyKey?: string }>();
     expectTypeOf<SendEmailPayload>().toMatchTypeOf<
-      EmailOptions & { react?: ReactNode }
+      EmailOptions & { react?: ReactNode; replyTo?: string | string[] }
     >();
     expectTypeOf<ApiResponse<EmailResponse>>().toEqualTypeOf<{
       data: EmailResponse | null;

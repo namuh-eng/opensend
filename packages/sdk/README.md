@@ -65,6 +65,21 @@ returns after the API persists the row and queues background delivery work. Poll
 `bounced`, `opened`, or `clicked`. The `created_at` timestamp is queue time;
 `sent_at` is set by the worker after SES accepts the message.
 
+### Multiple Reply-To addresses
+
+Use Resend-compatible `replyTo` for one or more Reply-To addresses. The SDK
+serializes it to the REST `reply_to` field.
+
+```typescript
+await resend.emails.send({
+  from: "hello@updates.example.com",
+  to: "user@example.com",
+  subject: "Need help?",
+  html: "<p>Reply to reach our support team.</p>",
+  replyTo: ["support@example.com", "billing@example.com"],
+});
+```
+
 ### With React components
 
 Install React and ReactDOM alongside the SDK when you use the `react` payload.
