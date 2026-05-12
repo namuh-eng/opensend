@@ -55,6 +55,7 @@ export type TemplateListItem = Pick<
 export type TemplateListResult = {
   data: TemplateListItem[];
   total: number;
+  hasMore: boolean;
 };
 
 export type TemplateDetail = Pick<
@@ -91,9 +92,15 @@ type TemplateListOptions = {
   search?: string;
   status?: string;
   userId?: string;
+  limit?: number;
+  after?: string;
 };
 
 type TemplateCreateOptions = {
+  userId?: string;
+};
+
+type TemplateMutationOptions = {
   userId?: string;
 };
 
@@ -115,6 +122,10 @@ export class TemplateServiceError extends Error {
 
 export type TemplateRepository = {
   findById(id: string): Promise<TemplateRow | undefined>;
+  findByIdOrAlias(
+    idOrAlias: string,
+    userId?: string,
+  ): Promise<TemplateRow | undefined>;
   create(data: TemplateInsert): Promise<TemplateRow[]>;
   update(id: string, data: Partial<TemplateInsert>): Promise<TemplateRow[]>;
   delete(id: string): Promise<TemplateRow[]>;
@@ -122,6 +133,8 @@ export type TemplateRepository = {
     search?: string;
     status?: string;
     userId?: string;
+    limit?: number;
+    after?: string;
   }): Promise<TemplateListResult>;
 };
 
@@ -334,6 +347,14 @@ function toTruthyStoredString(value: unknown): string | null {
   return value ? (value as string) : null;
 }
 
+function getFirstBodyValue(
+  body: Record<string, unknown>,
+  snakeCaseKey: string,
+  camelCaseKey: string,
+): unknown {
+  return hasOwn(body, snakeCaseKey) ? body[snakeCaseKey] : body[camelCaseKey];
+}
+
 function toReactEmailStarterVariables(
   templateKey: string,
 ): StoredTemplateVariable[] {
@@ -437,6 +458,8 @@ export function createTemplateService({
         search,
         status,
         userId: options.userId,
+        limit: options.limit,
+        after: options.after?.trim() || undefined,
       });
     },
 
@@ -474,8 +497,12 @@ export function createTemplateService({
             : `<!-- React Email registry template: ${reactEmailTemplateKey} -->`,
         subject: toTruthyStoredString(body.subject),
         from: toTruthyStoredString(body.from),
-        replyTo: toTruthyStoredString(body.reply_to),
-        previewText: toTruthyStoredString(body.preview_text),
+        replyTo: toTruthyStoredString(
+          getFirstBodyValue(body, "reply_to", "replyTo"),
+        ),
+        previewText: toTruthyStoredString(
+          getFirstBodyValue(body, "preview_text", "previewText"),
+        ),
         text: toTruthyStoredString(body.text),
         variables:
           reactEmailVariables ?? normalizeVariablesOrThrow(body.variables),
@@ -504,8 +531,14 @@ export function createTemplateService({
       };
     },
 
-    async getTemplate(id: string): Promise<TemplateDetail> {
-      const template = await repository.findById(id);
+    async getTemplate(
+      idOrAlias: string,
+      options: TemplateMutationOptions = {},
+    ): Promise<TemplateDetail> {
+      const template = await repository.findByIdOrAlias(
+        idOrAlias,
+        options.userId,
+      );
       if (!template) {
         throw new TemplateServiceError("not_found", "Template not found");
       }
@@ -513,7 +546,11 @@ export function createTemplateService({
       return toTemplateDetail(template);
     },
 
-    async updateTemplate(id: string, input: unknown): Promise<TemplateDetail> {
+    async updateTemplate(
+      idOrAlias: string,
+      input: unknown,
+      options: TemplateMutationOptions = {},
+    ): Promise<TemplateDetail> {
       const body = asRecord(input);
       const updateData: Partial<TemplateInsert> = {};
 
@@ -532,12 +569,17 @@ export function createTemplateService({
       if (body.from !== undefined) {
         updateData.from = body.from as TemplateInsert["from"];
       }
-      if (body.replyTo !== undefined) {
-        updateData.replyTo = body.replyTo as TemplateInsert["replyTo"];
+      const replyTo = getFirstBodyValue(body, "reply_to", "replyTo");
+      if (replyTo !== undefined) {
+        updateData.replyTo = replyTo as TemplateInsert["replyTo"];
       }
-      if (body.previewText !== undefined) {
-        updateData.previewText =
-          body.previewText as TemplateInsert["previewText"];
+      const previewText = getFirstBodyValue(
+        body,
+        "preview_text",
+        "previewText",
+      );
+      if (previewText !== undefined) {
+        updateData.previewText = previewText as TemplateInsert["previewText"];
       }
       if (body.html !== undefined) {
         updateData.html = body.html as TemplateInsert["html"];
@@ -546,18 +588,23 @@ export function createTemplateService({
         updateData.text = body.text as TemplateInsert["text"];
       }
 
+      const existing = await repository.findByIdOrAlias(
+        idOrAlias,
+        options.userId,
+      );
+      if (!existing) {
+        throw new TemplateServiceError("not_found", "Template not found");
+      }
+
       if (body.html !== undefined || body.subject !== undefined) {
-        const existing = await repository.findById(id);
-        if (existing) {
-          updateData.variables = buildAutomaticVariables(existing, body);
-        }
+        updateData.variables = buildAutomaticVariables(existing, body);
       }
 
       if (body.variables !== undefined) {
         updateData.variables = normalizeVariablesOrThrow(body.variables);
       }
 
-      const [updated] = await repository.update(id, updateData);
+      const [updated] = await repository.update(existing.id, updateData);
       if (!updated) {
         throw new TemplateServiceError("not_found", "Template not found");
       }
@@ -565,15 +612,32 @@ export function createTemplateService({
       return toTemplateDetail(updated);
     },
 
-    async deleteTemplate(id: string): Promise<void> {
-      const [deleted] = await repository.delete(id);
+    async deleteTemplate(
+      idOrAlias: string,
+      options: TemplateMutationOptions = {},
+    ): Promise<void> {
+      const existing = await repository.findByIdOrAlias(
+        idOrAlias,
+        options.userId,
+      );
+      if (!existing) {
+        throw new TemplateServiceError("not_found", "Template not found");
+      }
+
+      const [deleted] = await repository.delete(existing.id);
       if (!deleted) {
         throw new TemplateServiceError("not_found", "Template not found");
       }
     },
 
-    async duplicateTemplate(id: string): Promise<TemplateDuplicateResult> {
-      const existing = await repository.findById(id);
+    async duplicateTemplate(
+      idOrAlias: string,
+      options: TemplateMutationOptions = {},
+    ): Promise<TemplateDuplicateResult> {
+      const existing = await repository.findByIdOrAlias(
+        idOrAlias,
+        options.userId,
+      );
       if (!existing) {
         throw new TemplateServiceError("not_found", "Template not found");
       }
@@ -600,8 +664,14 @@ export function createTemplateService({
       };
     },
 
-    async publishTemplate(id: string): Promise<TemplatePublishResult> {
-      const existing = await repository.findById(id);
+    async publishTemplate(
+      idOrAlias: string,
+      options: TemplateMutationOptions = {},
+    ): Promise<TemplatePublishResult> {
+      const existing = await repository.findByIdOrAlias(
+        idOrAlias,
+        options.userId,
+      );
       if (!existing) {
         throw new TemplateServiceError("not_found", "Template not found");
       }
@@ -613,7 +683,7 @@ export function createTemplateService({
         );
       }
 
-      const [updated] = await repository.update(id, {
+      const [updated] = await repository.update(existing.id, {
         status: "published",
         publishedAt: now(),
         hasUnpublishedVersions: false,

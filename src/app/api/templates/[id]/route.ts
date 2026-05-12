@@ -51,7 +51,10 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const template = await templateService().getTemplate(id);
+    if (!auth.userId) return unauthorizedResponse();
+    const template = await templateService().getTemplate(id, {
+      userId: auth.userId,
+    });
     return NextResponse.json(templateResponse(template));
   } catch (error) {
     return mapTemplateError(error, "Failed to fetch template");
@@ -69,9 +72,11 @@ export async function PATCH(
 
   try {
     const { id } = await params;
+    if (!auth.userId) return unauthorizedResponse();
     const updated = await templateService().updateTemplate(
       id,
       await request.json(),
+      { userId: auth.userId },
     );
 
     return NextResponse.json(templateResponse(updated));
@@ -91,7 +96,8 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    await templateService().deleteTemplate(id);
+    if (!auth.userId) return unauthorizedResponse();
+    await templateService().deleteTemplate(id, { userId: auth.userId });
     return NextResponse.json({ success: true });
   } catch (error) {
     return mapTemplateError(error, "Failed to delete template");

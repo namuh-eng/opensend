@@ -114,6 +114,14 @@ const emailIdPathParameter: ParameterObject = {
   schema: { type: "string", format: "uuid" },
 };
 
+const templateIdOrAliasPathParameter: ParameterObject = {
+  name: "id",
+  in: "path",
+  required: true,
+  description: "Template ID or alias.",
+  schema: { type: "string" },
+};
+
 const paginationParameters: readonly ReferenceObject[] = [
   { $ref: "#/components/parameters/Limit" },
   { $ref: "#/components/parameters/After" },
@@ -142,6 +150,11 @@ export const openApiDocument = {
     },
     { name: "Domains", description: "Manage sending domains and DNS setup." },
     { name: "Contacts", description: "Manage audience contacts." },
+    {
+      name: "Templates",
+      description:
+        "Create, list, update, publish, duplicate, and delete stored templates.",
+    },
   ],
   security: bearerSecurity,
   paths: {
@@ -201,6 +214,121 @@ export const openApiDocument = {
         parameters: [emailIdPathParameter],
         responses: {
           "200": { $ref: "#/components/responses/EmailCanceled" },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/templates": {
+      get: {
+        tags: ["Templates"],
+        summary: "List templates",
+        description:
+          "Resend-compatible root collection. Browser dashboard GET /templates remains a signed-in dashboard page; API-like requests are rewritten to this public JSON contract.",
+        operationId: "listTemplatesAlias",
+        security: bearerSecurity,
+        parameters: paginationParameters,
+        responses: {
+          "200": {
+            description: "Template list.",
+            content: jsonContent({ $ref: "#/components/schemas/TemplateList" }),
+          },
+          ...errorResponses,
+        },
+      },
+      post: {
+        tags: ["Templates"],
+        summary: "Create a template",
+        operationId: "createTemplateAlias",
+        security: bearerSecurity,
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/CreateTemplateRequest",
+          }),
+        },
+        responses: {
+          "201": { $ref: "#/components/responses/TemplateMutation" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/templates/{id}": {
+      get: {
+        tags: ["Templates"],
+        summary: "Retrieve a template by ID or alias",
+        operationId: "getTemplateAlias",
+        security: bearerSecurity,
+        parameters: [templateIdOrAliasPathParameter],
+        responses: {
+          "200": {
+            description: "Template detail.",
+            content: jsonContent({ $ref: "#/components/schemas/Template" }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Templates"],
+        summary: "Update a template by ID or alias",
+        operationId: "updateTemplateAlias",
+        security: bearerSecurity,
+        parameters: [templateIdOrAliasPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateTemplateRequest",
+          }),
+        },
+        responses: {
+          "200": { $ref: "#/components/responses/TemplateMutation" },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Templates"],
+        summary: "Delete a template by ID or alias",
+        operationId: "deleteTemplateAlias",
+        security: bearerSecurity,
+        parameters: [templateIdOrAliasPathParameter],
+        responses: {
+          "200": {
+            description: "Template deleted.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DeleteTemplateResponse",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/templates/{id}/publish": {
+      post: {
+        tags: ["Templates"],
+        summary: "Publish a draft template by ID or alias",
+        operationId: "publishTemplateAlias",
+        security: bearerSecurity,
+        parameters: [templateIdOrAliasPathParameter],
+        responses: {
+          "200": { $ref: "#/components/responses/TemplateMutation" },
+          "400": { $ref: "#/components/responses/BadRequest" },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/templates/{id}/duplicate": {
+      post: {
+        tags: ["Templates"],
+        summary: "Duplicate a template by ID or alias",
+        operationId: "duplicateTemplateAlias",
+        security: bearerSecurity,
+        parameters: [templateIdOrAliasPathParameter],
+        responses: {
+          "200": { $ref: "#/components/responses/TemplateMutation" },
           "404": { $ref: "#/components/responses/NotFound" },
           ...errorResponses,
         },
@@ -459,6 +587,106 @@ export const openApiDocument = {
           },
         },
         required: ["name", "value"],
+      },
+      TemplateVariable: {
+        type: "object",
+        properties: {
+          key: { type: "string" },
+          name: { type: "string" },
+          type: { type: "string", enum: ["string", "number"] },
+          required: { type: "boolean" },
+          fallback_value: { oneOf: [{ type: "string" }, { type: "number" }] },
+        },
+        required: ["key"],
+      },
+      CreateTemplateRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          alias: { type: "string", nullable: true },
+          from: { type: "string", nullable: true },
+          subject: { type: "string", nullable: true },
+          reply_to: { $ref: "#/components/schemas/EmailRecipient" },
+          html: { type: "string" },
+          text: { type: "string", nullable: true },
+          variables: {
+            type: "array",
+            items: { $ref: "#/components/schemas/TemplateVariable" },
+          },
+        },
+        required: ["name", "html"],
+      },
+      UpdateTemplateRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          alias: { type: "string", nullable: true },
+          status: { type: "string", enum: ["draft", "published"] },
+          from: { type: "string", nullable: true },
+          subject: { type: "string", nullable: true },
+          reply_to: { $ref: "#/components/schemas/EmailRecipient" },
+          html: { type: "string" },
+          text: { type: "string", nullable: true },
+          variables: {
+            type: "array",
+            items: { $ref: "#/components/schemas/TemplateVariable" },
+          },
+        },
+      },
+      TemplateMutationResponse: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["template"] },
+          id: { type: "string" },
+        },
+        required: ["object", "id"],
+      },
+      Template: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["template"] },
+          id: { type: "string" },
+          name: { type: "string" },
+          alias: { type: "string", nullable: true },
+          status: { type: "string", enum: ["draft", "published"] },
+          subject: { type: "string", nullable: true },
+          from: { type: "string", nullable: true },
+          reply_to: { $ref: "#/components/schemas/EmailRecipient" },
+          preview_text: { type: "string", nullable: true },
+          html: { type: "string", nullable: true },
+          text: { type: "string", nullable: true },
+          variables: {
+            type: "array",
+            items: { $ref: "#/components/schemas/TemplateVariable" },
+          },
+          current_version_id: { type: "string", nullable: true },
+          published_at: { type: "string", format: "date-time", nullable: true },
+          has_unpublished_versions: { type: "boolean" },
+          created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
+        },
+        required: ["object", "id", "name", "status"],
+      },
+      TemplateList: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["list"] },
+          data: {
+            type: "array",
+            items: { $ref: "#/components/schemas/Template" },
+          },
+          has_more: { type: "boolean" },
+        },
+        required: ["object", "data", "has_more"],
+      },
+      DeleteTemplateResponse: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["template"] },
+          id: { type: "string" },
+          deleted: { type: "boolean" },
+        },
+        required: ["object", "id", "deleted"],
       },
       TemplateReference: {
         type: "object",
@@ -729,6 +957,12 @@ export const openApiDocument = {
         description: "Scheduled email canceled.",
         content: jsonContent({
           $ref: "#/components/schemas/EmailCanceled",
+        }),
+      },
+      TemplateMutation: {
+        description: "Template mutation accepted.",
+        content: jsonContent({
+          $ref: "#/components/schemas/TemplateMutationResponse",
         }),
       },
       BadRequest: {

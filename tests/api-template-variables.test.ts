@@ -42,6 +42,9 @@ function createRepository(
     async findById() {
       return templateRow();
     },
+    async findByIdOrAlias() {
+      return templateRow();
+    },
     async create(data) {
       return [templateRow({ ...data, id: "tmpl-1" })];
     },
@@ -52,7 +55,7 @@ function createRepository(
       return [templateRow({ id })];
     },
     async listForApi() {
-      return { data: [], total: 0 };
+      return { data: [], total: 0, hasMore: false };
     },
     ...overrides,
   };
@@ -224,7 +227,9 @@ describe("template variable metadata service", () => {
   it("returns configured fallback_value and legacy variable metadata on detail", async () => {
     const service = createTemplateService({
       repository: createRepository({
-        async findById() {
+        async findByIdOrAlias(idOrAlias, userId) {
+          expect(idOrAlias).toBe("receipt");
+          expect(userId).toBe("user-1");
           return templateRow({
             variables: [
               {
@@ -241,7 +246,9 @@ describe("template variable metadata service", () => {
       }),
     });
 
-    await expect(service.getTemplate("tmpl-1")).resolves.toMatchObject({
+    await expect(
+      service.getTemplate("receipt", { userId: "user-1" }),
+    ).resolves.toMatchObject({
       variables: [
         {
           key: "PRODUCT",
@@ -304,7 +311,7 @@ describe("template variable metadata service", () => {
   it("preserves existing variable metadata during automatic extraction", async () => {
     const updates: Array<{ id: string; data: Partial<TemplateInsert> }> = [];
     const repository = createRepository({
-      async findById() {
+      async findByIdOrAlias() {
         return templateRow({
           html: "<p>{{{PRODUCT}}}</p>",
           variables: [
@@ -344,5 +351,79 @@ describe("template variable metadata service", () => {
         fallbackValue: null,
       },
     ]);
+  });
+});
+
+describe("template service ID-or-alias tenant scoping", () => {
+  it("resolves detail and mutations through tenant-scoped ID-or-alias lookups", async () => {
+    const lookups: Array<{ idOrAlias: string; userId?: string }> = [];
+    const updates: Array<{ id: string; data: Partial<TemplateInsert> }> = [];
+    const deletes: string[] = [];
+    const repository = createRepository({
+      async findByIdOrAlias(idOrAlias, userId) {
+        lookups.push({ idOrAlias, userId });
+        return templateRow({ id: "tmpl-real", alias: "receipt", userId });
+      },
+      async update(id, data) {
+        updates.push({ id, data });
+        return [templateRow({ id, ...data, userId: "user-1" })];
+      },
+      async delete(id) {
+        deletes.push(id);
+        return [templateRow({ id, userId: "user-1" })];
+      },
+    });
+
+    const service = createTemplateService({ repository });
+
+    await expect(
+      service.getTemplate("receipt", { userId: "user-1" }),
+    ).resolves.toMatchObject({ id: "tmpl-real", alias: "receipt" });
+    await service.updateTemplate(
+      "receipt",
+      { reply_to: "reply@example.com", preview_text: "Preview" },
+      { userId: "user-1" },
+    );
+    await service.deleteTemplate("receipt", { userId: "user-1" });
+
+    expect(lookups).toEqual([
+      { idOrAlias: "receipt", userId: "user-1" },
+      { idOrAlias: "receipt", userId: "user-1" },
+      { idOrAlias: "receipt", userId: "user-1" },
+    ]);
+    expect(updates).toEqual([
+      {
+        id: "tmpl-real",
+        data: {
+          replyTo: "reply@example.com",
+          previewText: "Preview",
+        },
+      },
+    ]);
+    expect(deletes).toEqual(["tmpl-real"]);
+  });
+
+  it("returns not_found when an alias exists only outside the scoped tenant", async () => {
+    const service = createTemplateService({
+      repository: createRepository({
+        async findByIdOrAlias() {
+          return undefined;
+        },
+        async update() {
+          throw new Error("update should not run");
+        },
+      }),
+    });
+
+    await expect(
+      service.updateTemplate(
+        "shared-alias",
+        { name: "Nope" },
+        { userId: "user-b" },
+      ),
+    ).rejects.toMatchObject({
+      code: "not_found",
+      message: "Template not found",
+    } satisfies Partial<TemplateServiceError>);
   });
 });

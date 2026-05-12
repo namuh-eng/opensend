@@ -219,6 +219,103 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("x-ratelimit-backend")).toBe("disabled");
   });
 
+  it("preserves browser/RSC dashboard GET /templates instead of rewriting the root API alias", async () => {
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/templates", {
+        method: "GET",
+        headers: {
+          accept: "*/*",
+          rsc: "1",
+          "next-router-state-tree": encodeURIComponent("[]"),
+          "next-url": "/templates",
+        },
+      }),
+    );
+
+    expect(mockGetSessionCookie).toHaveBeenCalled();
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("redirects unauthenticated browser/RSC GET /templates to auth instead of the root API alias", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/templates", {
+        method: "GET",
+        headers: {
+          accept: "*/*",
+          rsc: "1",
+          "next-router-state-tree": encodeURIComponent("[]"),
+          "next-url": "/templates",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("https://example.com/auth");
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+  });
+
+  it("rewrites explicit root /templates API clients to strict public template adapters", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const collection = await middleware(
+      makeRequest("https://example.com/templates", {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+    const detail = await middleware(
+      makeRequest("https://example.com/templates/welcome", {
+        method: "GET",
+        headers: {
+          accept: "application/json",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+    const mutation = await middleware(
+      makeRequest("https://example.com/templates/welcome/publish", {
+        method: "POST",
+        headers: { authorization: "Bearer test-api-key" },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(collection.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/public/templates",
+    );
+    expect(detail.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/public/templates/welcome",
+    );
+    expect(mutation.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/public/templates/welcome/publish",
+    );
+  });
+
+  it("preserves browser dashboard GET /templates/:id detail routes", async () => {
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/templates/welcome", {
+        method: "GET",
+        headers: { accept: "text/html" },
+      }),
+    );
+
+    expect(mockGetSessionCookie).toHaveBeenCalled();
+    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
   it("allows root contacts API aliases without requiring a dashboard session", async () => {
     mockGetSessionCookie.mockReturnValue(null);
     const { middleware } = await import("@/middleware");

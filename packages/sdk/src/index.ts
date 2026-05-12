@@ -235,6 +235,84 @@ type SendBroadcastResponse = Pick<
   "object" | "id" | "status" | "scheduled_at"
 >;
 
+type TemplateStatus = "draft" | "published";
+type TemplateVariableType = "string" | "number";
+
+interface TemplateVariable {
+  key: string;
+  name?: string;
+  type?: TemplateVariableType;
+  required?: boolean;
+  fallback_value?: string | number | null;
+  fallbackValue?: string | number | null;
+}
+
+interface TemplatePayloadAliases {
+  reply_to?: string | string[] | null;
+  replyTo?: string | string[] | null;
+  preview_text?: string | null;
+  previewText?: string | null;
+}
+
+interface CreateTemplatePayload extends TemplatePayloadAliases {
+  name: string;
+  alias?: string | null;
+  from?: string | null;
+  subject?: string | null;
+  html?: string;
+  text?: string | null;
+  variables?: TemplateVariable[];
+}
+
+type UpdateTemplatePayload = Partial<CreateTemplatePayload> & {
+  status?: TemplateStatus;
+};
+
+interface TemplateListOptions extends ListOptions {
+  search?: string;
+  status?: TemplateStatus;
+}
+
+interface TemplateListItem {
+  object: "template";
+  id: string;
+  name: string;
+  alias: string | null;
+  status: TemplateStatus;
+  current_version_id?: string | null;
+  published_at?: string | null;
+  has_unpublished_versions?: boolean;
+  created_at: string;
+}
+
+interface TemplateListResponse {
+  object: "list";
+  data: TemplateListItem[];
+  has_more: boolean;
+}
+
+interface TemplateResponse extends TemplateListItem {
+  subject?: string | null;
+  from?: string | null;
+  reply_to?: string | string[] | null;
+  preview_text?: string | null;
+  html?: string | null;
+  text?: string | null;
+  variables?: TemplateVariable[];
+  updated_at?: string | null;
+}
+
+type CreateTemplateResponse = Pick<TemplateResponse, "object" | "id">;
+type UpdateTemplateResponse = Pick<TemplateResponse, "object" | "id">;
+type PublishTemplateResponse = Pick<TemplateResponse, "object" | "id">;
+type DuplicateTemplateResponse = Pick<TemplateResponse, "object" | "id">;
+
+interface DeleteTemplateResponse {
+  object: "template";
+  id: string;
+  deleted: true;
+}
+
 function normalizeBaseUrl(baseUrl: string = DEFAULT_BASE_URL): string {
   if (!baseUrl.trim()) {
     throw new Error("baseUrl must be a non-empty string when provided");
@@ -327,6 +405,22 @@ function toBroadcastPayload<T extends BroadcastPayloadAliases>(
   }
   if (normalized.scheduled_at === undefined && scheduledAt !== undefined) {
     normalized.scheduled_at = scheduledAt;
+  }
+
+  return normalized;
+}
+
+function toTemplatePayload<T extends TemplatePayloadAliases>(
+  payload: T,
+): Omit<T, "replyTo" | "previewText"> {
+  const { replyTo, previewText, ...rest } = payload;
+  const normalized = { ...rest };
+
+  if (normalized.reply_to === undefined && replyTo !== undefined) {
+    normalized.reply_to = replyTo;
+  }
+  if (normalized.preview_text === undefined && previewText !== undefined) {
+    normalized.preview_text = previewText;
   }
 
   return normalized;
@@ -758,6 +852,81 @@ class Broadcasts {
   }
 }
 
+class Templates {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(
+    payload: CreateTemplatePayload,
+  ): Promise<ApiResponse<CreateTemplateResponse>> {
+    return this.http.request<CreateTemplateResponse>(
+      "POST",
+      "/templates",
+      toTemplatePayload(payload),
+    );
+  }
+
+  async list(
+    options: TemplateListOptions = {},
+  ): Promise<ApiResponse<TemplateListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.search) params.set("search", options.search);
+    if (options.status) params.set("status", options.status);
+
+    const query = params.toString();
+    return this.http.request<TemplateListResponse>(
+      "GET",
+      query ? `/templates?${query}` : "/templates",
+    );
+  }
+
+  async get(idOrAlias: string): Promise<ApiResponse<TemplateResponse>> {
+    return this.http.request<TemplateResponse>(
+      "GET",
+      `/templates/${idOrAlias}`,
+    );
+  }
+
+  async update(
+    idOrAlias: string,
+    payload: UpdateTemplatePayload,
+  ): Promise<ApiResponse<UpdateTemplateResponse>> {
+    return this.http.request<UpdateTemplateResponse>(
+      "PATCH",
+      `/templates/${idOrAlias}`,
+      toTemplatePayload(payload),
+    );
+  }
+
+  async delete(
+    idOrAlias: string,
+  ): Promise<ApiResponse<DeleteTemplateResponse>> {
+    return this.http.request<DeleteTemplateResponse>(
+      "DELETE",
+      `/templates/${idOrAlias}`,
+    );
+  }
+
+  async publish(
+    idOrAlias: string,
+  ): Promise<ApiResponse<PublishTemplateResponse>> {
+    return this.http.request<PublishTemplateResponse>(
+      "POST",
+      `/templates/${idOrAlias}/publish`,
+    );
+  }
+
+  async duplicate(
+    idOrAlias: string,
+  ): Promise<ApiResponse<DuplicateTemplateResponse>> {
+    return this.http.request<DuplicateTemplateResponse>(
+      "POST",
+      `/templates/${idOrAlias}/duplicate`,
+    );
+  }
+}
+
 class Automations {
   constructor(private readonly http: HttpClient) {}
 
@@ -884,6 +1053,7 @@ class Opensend {
   public readonly segments: Segments;
   public readonly audiences: Audiences;
   public readonly broadcasts: Broadcasts;
+  public readonly templates: Templates;
   public readonly automations: Automations;
   public readonly events: Events;
 
@@ -901,6 +1071,7 @@ class Opensend {
     this.segments = new Segments(http);
     this.audiences = new Audiences(http);
     this.broadcasts = new Broadcasts(http);
+    this.templates = new Templates(http);
     this.automations = new Automations(http);
     this.events = new Events(http);
   }
@@ -962,6 +1133,19 @@ export type {
   CreateBroadcastResponse,
   DeleteBroadcastResponse,
   SendBroadcastResponse,
+  TemplateStatus,
+  TemplateVariable,
+  CreateTemplatePayload,
+  UpdateTemplatePayload,
+  TemplateListOptions,
+  TemplateListItem,
+  TemplateListResponse,
+  TemplateResponse,
+  CreateTemplateResponse,
+  UpdateTemplateResponse,
+  DeleteTemplateResponse,
+  PublishTemplateResponse,
+  DuplicateTemplateResponse,
   CreateContactPayload,
   CreateContactResponse,
   UpdateContactPayload,

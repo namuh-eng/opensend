@@ -29,7 +29,10 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const published = await templateService().publishTemplate(id);
+    if (!auth.userId) return unauthorizedResponse();
+    const published = await templateService().publishTemplate(id, {
+      userId: auth.userId,
+    });
 
     return NextResponse.json({
       object: "template",
