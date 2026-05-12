@@ -263,18 +263,39 @@ await client.broadcasts.send("BROADCAST_ID", {
     endpoints: [
       {
         method: "POST",
-        path: "/api/segments",
+        path: "/segments",
         description: "Create a new segment",
-        curl: `curl -X POST https://api.opensend.com/api/segments \\
+        curl: `curl -X POST https://api.opensend.com/segments \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{ "name": "Active Users" }'`,
       },
       {
         method: "GET",
-        path: "/api/segments",
+        path: "/segments",
         description: "List all segments",
-        curl: `curl https://api.opensend.com/api/segments \\
+        curl: `curl https://api.opensend.com/segments \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "GET",
+        path: "/segments/:id",
+        description: "Retrieve a segment by ID",
+        curl: `curl https://api.opensend.com/segments/SEGMENT_ID \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "DELETE",
+        path: "/segments/:id",
+        description: "Delete a segment by ID",
+        curl: `curl -X DELETE https://api.opensend.com/segments/SEGMENT_ID \\
+  -H "Authorization: Bearer os_YOUR_API_KEY"`,
+      },
+      {
+        method: "GET",
+        path: "/segments/:id/contacts",
+        description: "List contacts in a segment",
+        curl: `curl https://api.opensend.com/segments/SEGMENT_ID/contacts \\
   -H "Authorization: Bearer os_YOUR_API_KEY"`,
       },
     ],
