@@ -25,6 +25,8 @@ The transactional send and suppression route families are now owned by shared ha
 
 Next.js still owns dashboard-only and not-yet-migrated public route families, including API keys, contacts/audience, broadcasts, email read/detail, billing, Better Auth, internal cron, and dashboard UI routes. Webhooks remain available in this service through the current shared adapter.
 
+The stable send/batch DTO, validation, response, and public error-envelope boundary is documented in [`../../docs/public-send-contract.md`](../../docs/public-send-contract.md) and implemented under `packages/core/src/contracts/`; adapter code should consume that boundary rather than importing Next.js app-local validation internals.
+
 ### Transactional send local testing
 
 Start the Hono service on the default port:

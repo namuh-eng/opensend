@@ -3,11 +3,6 @@ import {
   publicApiKeyUnauthorizedResponse,
   validateApiKey,
 } from "@/lib/api-auth";
-import {
-  type PublicApiErrorEnvelope,
-  publicApiError,
-  zodValidationDetails,
-} from "@/lib/api-errors";
 import { requireAllowedBatchSendingDomains } from "@/lib/api-key-permissions";
 import { captureApiResponseLog } from "@/lib/api-logging";
 import { getIdempotencyWindowStart } from "@/lib/api/emails/idempotency";
@@ -31,10 +26,8 @@ import {
   replaceUnsubscribePlaceholder,
 } from "@/lib/unsubscribe";
 import {
+  type PublicApiErrorEnvelope,
   batchSendEmailSchema,
-  normalizeScheduledAt,
-} from "@/lib/validation/emails";
-import {
   createBackgroundJob,
   createTelemetryContext,
   detectSandboxTestRecipient,
@@ -42,8 +35,12 @@ import {
   getSandboxTestOutcomeForRecipients,
   getTelemetryCarrier,
   logTelemetry,
+  normalizeEmailRecipient,
+  normalizeScheduledAt,
+  publicApiError,
   publishBackgroundJob,
   recordTelemetryError,
+  zodValidationDetails,
 } from "@opensend/core";
 import { and, eq, gte, lt } from "drizzle-orm";
 
@@ -102,13 +99,6 @@ function emailIdsFromBatchResponse(response: BatchSendResponseBody): string[] {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────
-
-function normalizeToArray(
-  value: string | string[] | undefined,
-): string[] | undefined {
-  if (!value) return undefined;
-  return Array.isArray(value) ? value : [value];
-}
 
 function jsonWithTelemetry(
   body: unknown,
@@ -464,13 +454,13 @@ export async function handlePostEmailBatchRequest(
     return await logResponse(domainRestrictionError);
   }
   const itemRecipients = validatedItems.map(
-    (item) => normalizeToArray(item.to) as string[],
+    (item) => normalizeEmailRecipient(item.to) as string[],
   );
   const itemSandboxRecipients = validatedItems.map((item, index) =>
     getSandboxRecipientsForMessage({
       to: itemRecipients[index] ?? [],
-      cc: normalizeToArray(item.cc),
-      bcc: normalizeToArray(item.bcc),
+      cc: normalizeEmailRecipient(item.cc),
+      bcc: normalizeEmailRecipient(item.bcc),
     }),
   );
   const hasMixedSandboxItem = itemSandboxRecipients.some(
@@ -557,10 +547,10 @@ export async function handlePostEmailBatchRequest(
         ) {
           continue;
         }
-        const to = normalizeToArray(item.to) as string[];
-        const cc = normalizeToArray(item.cc);
-        const bcc = normalizeToArray(item.bcc);
-        const replyTo = normalizeToArray(item.reply_to);
+        const to = normalizeEmailRecipient(item.to) as string[];
+        const cc = normalizeEmailRecipient(item.cc);
+        const bcc = normalizeEmailRecipient(item.bcc);
+        const replyTo = normalizeEmailRecipient(item.reply_to);
         const scheduledAt = item.scheduled_at
           ? normalizeScheduledAt(item.scheduled_at)
           : null;
