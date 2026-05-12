@@ -190,6 +190,7 @@ describe("QueueWorker", () => {
         from: "sender@example.com",
         to: ["user@example.com"],
         attachments: [{ filename: "inline.txt", content: "aGVsbG8=" }],
+        region: "us-east-1",
       }),
     );
     expect(mockUpdateEmail).toHaveBeenNthCalledWith(2, "email-1", {
@@ -198,6 +199,101 @@ describe("QueueWorker", () => {
       providerNextRetryAt: null,
       providerDeadLetteredAt: null,
     });
+  });
+
+  it("routes queued sends through the From domain SES region", async () => {
+    mockFindById.mockResolvedValue({
+      id: "email-eu",
+      from: "Sender <hello@example.com>",
+      to: ["user@example.com"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "",
+      headers: {},
+      attachments: [],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+    mockFindDomainByNameForUser.mockResolvedValue({
+      id: "domain-eu",
+      name: "example.com",
+      userId: "user-1",
+      region: "eu-west-1",
+      trackClicks: false,
+      trackOpens: false,
+      trackingSubdomain: null,
+    });
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({ queueUrl: null });
+
+    await expect(
+      worker.processJob({
+        id: "email.send:email-eu",
+        type: "email.send",
+        source: "api",
+        requestedAt: "2026-04-28T00:00:00.000Z",
+        emailId: "email-eu",
+      }),
+    ).resolves.toEqual({ status: "sent" });
+
+    expect(mockFindDomainByNameForUser).toHaveBeenCalledTimes(1);
+    expect(mockFindDomainByNameForUser).toHaveBeenCalledWith(
+      "example.com",
+      "user-1",
+    );
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ region: "eu-west-1" }),
+    );
+  });
+
+  it("falls back to us-east-1 when no From-domain row exists", async () => {
+    mockFindById.mockResolvedValue({
+      id: "email-default-region",
+      from: "sender@example.com",
+      to: ["user@example.com"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "",
+      headers: {},
+      attachments: [],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+    mockFindDomainByNameForUser.mockResolvedValue(null);
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({ queueUrl: null });
+
+    await expect(
+      worker.processJob({
+        id: "email.send:email-default-region",
+        type: "email.send",
+        source: "api",
+        requestedAt: "2026-04-28T00:00:00.000Z",
+        emailId: "email-default-region",
+      }),
+    ).resolves.toEqual({ status: "sent" });
+
+    expect(mockFindDomainByNameForUser).toHaveBeenCalledWith(
+      "example.com",
+      "user-1",
+    );
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ region: "us-east-1" }),
+    );
   });
 
   it("applies domain tracking only to the provider payload", async () => {

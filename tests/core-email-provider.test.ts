@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockSend } = vi.hoisted(() => ({
+const { mockSend, mockSesClient } = vi.hoisted(() => ({
   mockSend: vi.fn(),
+  mockSesClient: vi.fn(),
 }));
 
 vi.mock("@aws-sdk/client-sesv2", () => ({
-  SESv2Client: vi.fn().mockImplementation(() => ({
+  SESv2Client: mockSesClient.mockImplementation(() => ({
     send: mockSend,
   })),
   SendEmailCommand: vi.fn().mockImplementation((input) => ({
@@ -24,6 +25,12 @@ vi.mock("@aws-sdk/client-sesv2", () => ({
     ...input,
     _type: "DeleteEmailIdentityCommand",
   })),
+  PutEmailIdentityDkimSigningAttributesCommand: vi
+    .fn()
+    .mockImplementation((input) => ({
+      ...input,
+      _type: "PutEmailIdentityDkimSigningAttributesCommand",
+    })),
 }));
 
 describe("EmailProviderService", () => {
@@ -32,6 +39,7 @@ describe("EmailProviderService", () => {
   beforeEach(() => {
     vi.resetModules();
     mockSend.mockReset();
+    mockSesClient.mockClear();
     process.env.AWS_ACCESS_KEY_ID = "test-key";
   });
 
@@ -76,5 +84,52 @@ describe("EmailProviderService", () => {
     expect(raw).toContain("Content-ID: <logo>");
     expect(raw).toContain('Content-Disposition: inline; filename="logo.bin"');
     expect(raw).toContain("aW1hZ2U=");
+  });
+
+  it("creates and reuses SES clients per requested region", async () => {
+    mockSend
+      .mockResolvedValueOnce({ MessageId: "eu-message" })
+      .mockResolvedValueOnce({
+        DkimAttributes: { Tokens: [], Status: "PENDING" },
+      })
+      .mockResolvedValueOnce({ VerifiedForSendingStatus: true })
+      .mockResolvedValueOnce({});
+
+    const { EmailProviderService } = await import(
+      "../packages/core/src/services/emailProvider"
+    );
+    const provider = new EmailProviderService();
+
+    await provider.sendEmail({
+      from: "hello@example.com",
+      to: ["user@example.com"],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      region: "eu-west-1",
+    });
+    await provider.createDomainIdentity("example.com", { region: "eu-west-1" });
+    await provider.getDomainIdentity("example.com", { region: "eu-west-1" });
+    await provider.deleteDomainIdentity("example.com", { region: "eu-west-1" });
+
+    expect(mockSesClient).toHaveBeenCalledTimes(1);
+    expect(mockSesClient).toHaveBeenCalledWith({ region: "eu-west-1" });
+    expect(mockSend).toHaveBeenCalledTimes(4);
+  });
+
+  it("defaults SES client selection to us-east-1", async () => {
+    mockSend.mockResolvedValueOnce({ MessageId: "default-message" });
+    const { EmailProviderService } = await import(
+      "../packages/core/src/services/emailProvider"
+    );
+    const provider = new EmailProviderService();
+
+    await provider.sendEmail({
+      from: "hello@example.com",
+      to: ["user@example.com"],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+    });
+
+    expect(mockSesClient).toHaveBeenCalledWith({ region: "us-east-1" });
   });
 });

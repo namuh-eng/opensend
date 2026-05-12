@@ -25,6 +25,7 @@ type EmailAttachment = {
 
 type EmailProviderCreateDomainIdentityOptions = {
   userId?: string;
+  region?: string;
 };
 
 type EmailProviderCreateDomainIdentityResult = {
@@ -50,15 +51,24 @@ const hasAwsCredentials =
 const useDomainDevStub =
   process.env.NODE_ENV === "development" && !hasAwsCredentials;
 
-export class EmailProviderService {
-  private client: SESv2Client | null = null;
+const DEFAULT_SES_REGION = "us-east-1";
 
-  private getClient() {
-    if (this.client) return this.client;
-    this.client = new SESv2Client({
-      region: process.env.AWS_REGION ?? "us-east-1",
-    });
-    return this.client;
+function normalizeSesRegion(region: string | null | undefined): string {
+  const trimmed = region?.trim();
+  return trimmed || DEFAULT_SES_REGION;
+}
+
+export class EmailProviderService {
+  private readonly clients = new Map<string, SESv2Client>();
+
+  private getClient(region?: string | null) {
+    const resolvedRegion = normalizeSesRegion(region);
+    const cached = this.clients.get(resolvedRegion);
+    if (cached) return cached;
+
+    const client = new SESv2Client({ region: resolvedRegion });
+    this.clients.set(resolvedRegion, client);
+    return client;
   }
 
   async sendEmail(params: {
@@ -72,6 +82,7 @@ export class EmailProviderService {
     replyTo?: string[];
     headers?: Record<string, string>;
     attachments?: EmailAttachment[];
+    region?: string;
   }) {
     const command =
       params.attachments && params.attachments.length > 0
@@ -109,17 +120,18 @@ export class EmailProviderService {
 
     if (!process.env.AWS_ACCESS_KEY_ID) {
       console.log(
-        `[DEV] SES send skipped: ${params.subject} to ${params.to.join(", ")}`,
+        `[DEV] SES send skipped in ${normalizeSesRegion(params.region)}: ${params.subject} to ${params.to.join(", ")}`,
       );
       return { id: `dev-${Date.now()}` };
     }
 
-    const res = await this.getClient().send(command);
+    const res = await this.getClient(params.region).send(command);
     return { id: res.MessageId };
   }
 
   async getDomainIdentity(
     domain: string,
+    options: { region?: string } = {},
   ): Promise<EmailProviderGetDomainIdentityResult> {
     if (!domain) throw new Error("domain is required");
 
@@ -127,7 +139,7 @@ export class EmailProviderService {
       return { verified: false, dkimStatus: "NOT_STARTED", dkimTokens: [] };
     }
 
-    const res = await this.getClient().send(
+    const res = await this.getClient(options.region).send(
       new GetEmailIdentityCommand({ EmailIdentity: domain }),
     );
 
@@ -138,15 +150,20 @@ export class EmailProviderService {
     };
   }
 
-  async deleteDomainIdentity(domain: string): Promise<void> {
+  async deleteDomainIdentity(
+    domain: string,
+    options: { region?: string } = {},
+  ): Promise<void> {
     if (!domain) throw new Error("domain is required");
 
     if (useDomainDevStub) {
-      console.log(`[DEV] Would delete SES identity for domain: ${domain}`);
+      console.log(
+        `[DEV] Would delete SES identity for domain: ${domain} in ${normalizeSesRegion(options.region)}`,
+      );
       return;
     }
 
-    await this.getClient().send(
+    await this.getClient(options.region).send(
       new DeleteEmailIdentityCommand({ EmailIdentity: domain }),
     );
   }
@@ -158,21 +175,26 @@ export class EmailProviderService {
     if (!domain) throw new Error("domain is required");
 
     if (options.userId) {
-      return this.createExternalDkimIdentity(domain, options.userId);
+      return this.createExternalDkimIdentity(
+        domain,
+        options.userId,
+        options.region,
+      );
     }
 
-    return this.createSesManagedIdentity(domain);
+    return this.createSesManagedIdentity(domain, options.region);
   }
 
   private async createExternalDkimIdentity(
     domain: string,
     userId: string,
+    region?: string,
   ): Promise<EmailProviderCreateDomainIdentityResult> {
     const keypair = generateDkimKeypair(userId);
 
     if (useDomainDevStub) {
       console.log(
-        `[DEV] Would create SES EXTERNAL identity for ${domain} (selector ${keypair.selector})`,
+        `[DEV] Would create SES EXTERNAL identity for ${domain} in ${normalizeSesRegion(region)} (selector ${keypair.selector})`,
       );
       return {
         dkimOrigin: "EXTERNAL",
@@ -188,9 +210,10 @@ export class EmailProviderService {
       DomainSigningSelector: keypair.selector,
       DomainSigningPrivateKey: pemToBase64Body(privateKeyPem),
     };
+    const client = this.getClient(region);
 
     try {
-      const res = await this.getClient().send(
+      const res = await client.send(
         new CreateEmailIdentityCommand({
           EmailIdentity: domain,
           DkimSigningAttributes: signingAttributes,
@@ -205,7 +228,7 @@ export class EmailProviderService {
       };
     } catch (error) {
       if (!isAlreadyExistsError(error)) throw error;
-      await this.getClient().send(
+      await client.send(
         new PutEmailIdentityDkimSigningAttributesCommand({
           EmailIdentity: domain,
           SigningAttributesOrigin: "EXTERNAL",
@@ -224,18 +247,22 @@ export class EmailProviderService {
 
   private async createSesManagedIdentity(
     domain: string,
+    region?: string,
   ): Promise<EmailProviderCreateDomainIdentityResult> {
     if (useDomainDevStub) {
-      console.log(`[DEV] Would create SES identity for domain: ${domain}`);
+      console.log(
+        `[DEV] Would create SES identity for domain: ${domain} in ${normalizeSesRegion(region)}`,
+      );
       return {
         dkimOrigin: "AWS_SES",
         dkimTokens: ["dev-token-1", "dev-token-2", "dev-token-3"],
         status: "PENDING",
       };
     }
+    const client = this.getClient(region);
 
     try {
-      const res = await this.getClient().send(
+      const res = await client.send(
         new CreateEmailIdentityCommand({ EmailIdentity: domain }),
       );
       return {
@@ -245,7 +272,7 @@ export class EmailProviderService {
       };
     } catch (error) {
       if (!isAlreadyExistsError(error)) throw error;
-      const res = await this.getClient().send(
+      const res = await client.send(
         new GetEmailIdentityCommand({ EmailIdentity: domain }),
       );
       return {

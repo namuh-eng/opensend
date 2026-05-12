@@ -1,17 +1,17 @@
-import { db } from "@/lib/db";
-import { templates } from "@/lib/db/schema";
 import {
   StoredTemplateRendererConfigError,
-  getStoredTemplateRendererConfig,
-  renderStoredTemplateContent,
-  resolveStoredTemplateRenderVariables,
-} from "@/lib/templates/stored-renderer";
+  TemplatePreviewServiceError,
+  createTemplatePreviewService,
+} from "@/lib/templates/preview-service";
 import { TemplateRendererError } from "@opensend/core";
-import { and, eq } from "drizzle-orm";
 import { type NextRequest, NextResponse } from "next/server";
 import { authorizeTemplateRoute } from "../../auth";
 
 function previewErrorResponse(error: unknown) {
+  if (error instanceof TemplatePreviewServiceError) {
+    return NextResponse.json({ error: error.message }, { status: 404 });
+  }
+
   if (
     error instanceof TemplateRendererError ||
     error instanceof StoredTemplateRendererConfigError
@@ -26,6 +26,10 @@ function previewErrorResponse(error: unknown) {
   );
 }
 
+function templatePreviewService() {
+  return createTemplatePreviewService();
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -37,54 +41,11 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const template = await db.query.templates.findFirst({
-      where: auth.userId
-        ? and(eq(templates.id, id), eq(templates.userId, auth.userId))
-        : eq(templates.id, id),
+    const preview = await templatePreviewService().renderPreview(id, {
+      userId: auth.userId,
     });
 
-    if (!template) {
-      return NextResponse.json(
-        { error: "Template not found" },
-        { status: 404 },
-      );
-    }
-
-    const rendererConfig = getStoredTemplateRendererConfig(template.document);
-    const variableResult = resolveStoredTemplateRenderVariables({
-      storedVariables: template.variables,
-      mode: "preview",
-    });
-    const storedSubject =
-      typeof template.subject === "string" && template.subject.length > 0
-        ? template.subject
-        : null;
-    const rendered = await renderStoredTemplateContent({
-      template,
-      subject:
-        storedSubject ??
-        (rendererConfig.kind === "legacy"
-          ? (template.subject ?? "")
-          : undefined),
-      variables: variableResult.variables,
-    });
-
-    return NextResponse.json({
-      object: "template_preview",
-      id: template.id,
-      rendering: {
-        kind: rendererConfig.kind,
-        template_key:
-          rendererConfig.kind === "react_email"
-            ? rendererConfig.templateKey
-            : null,
-      },
-      subject: rendered.subject,
-      html: rendered.html,
-      text: rendered.text,
-      variables: variableResult.resolutions,
-      warnings: variableResult.warnings,
-    });
+    return NextResponse.json(preview);
   } catch (error) {
     return previewErrorResponse(error);
   }

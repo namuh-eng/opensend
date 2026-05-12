@@ -118,7 +118,10 @@ export type DomainDetailServiceDependencies = {
     id: string;
     userId: string;
   }) => Promise<{ id: string; name: string } | undefined>;
-  deleteDomainIdentity?: (domain: string) => Promise<void>;
+  deleteDomainIdentity?: (
+    domain: string,
+    options?: { region?: string },
+  ) => Promise<void>;
   listDNSRecords?: (input: { name: string }) => Promise<
     DomainDetailDnsRecord[]
   >;
@@ -126,6 +129,7 @@ export type DomainDetailServiceDependencies = {
   invalidateDomainCaches?: (domain: {
     id?: string | null;
     name?: string | null;
+    region?: string | null;
   }) => Promise<void>;
   logger?: Pick<Console, "warn">;
 };
@@ -285,8 +289,8 @@ export function createDomainDetailService({
   getDomainById = (id: string) => domainRepo.findById(id),
   updateDomainForUser = defaultUpdateDomainForUser,
   deleteDomainForUser = defaultDeleteDomainForUser,
-  deleteDomainIdentity = (domain: string) =>
-    domainIdentityProvider.deleteDomainIdentity(domain),
+  deleteDomainIdentity = (domain: string, options?: { region?: string }) =>
+    domainIdentityProvider.deleteDomainIdentity(domain, options),
   listDNSRecords = (input: { name: string }) =>
     cloudflareDnsCleanupProvider.listDNSRecords(input),
   deleteDNSRecord = (id: string) =>
@@ -345,11 +349,16 @@ export function createDomainDetailService({
         await invalidateDomainCaches({
           id: input.id,
           name: existingDomain.name,
+          region: existingDomain.region,
         });
         throw new DomainDetailServiceError("not_found", "Not found");
       }
 
-      await invalidateDomainCaches({ id: updated.id, name: updated.name });
+      await invalidateDomainCaches({
+        id: updated.id,
+        name: updated.name,
+        region: updated.region,
+      });
 
       return {
         response: {
@@ -372,7 +381,7 @@ export function createDomainDetailService({
       const domain = await getExistingForUser(input.id, input.userId);
 
       try {
-        await deleteDomainIdentity(domain.name);
+        await deleteDomainIdentity(domain.name, { region: domain.region });
       } catch (sesErr) {
         logger.warn(
           `Failed to delete SES identity for ${domain.name}:`,
@@ -399,7 +408,11 @@ export function createDomainDetailService({
         userId: input.userId,
       });
 
-      await invalidateDomainCaches({ id: input.id, name: domain.name });
+      await invalidateDomainCaches({
+        id: input.id,
+        name: domain.name,
+        region: domain.region,
+      });
 
       if (!deleted) {
         throw new DomainDetailServiceError("not_found", "Not found");
