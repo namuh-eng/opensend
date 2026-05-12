@@ -1,6 +1,10 @@
 "use client";
 
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
+import {
+  ExportStatusMessage,
+  useDashboardCsvExport,
+} from "@/components/use-dashboard-csv-export";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -22,6 +26,7 @@ export function SegmentsList() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showModal, setShowModal] = useState(false);
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>(null);
+  const { exportState, exportCsv } = useDashboardCsvExport("segments");
 
   const fetchSegments = useCallback(async () => {
     setLoading(true);
@@ -80,6 +85,12 @@ export function SegmentsList() {
     });
   };
 
+  const handleExport = () => {
+    const params = new URLSearchParams();
+    if (search.trim()) params.set("search", search.trim());
+    void exportCsv(params);
+  };
+
   const totalPages = Math.ceil(total / limit);
   const start = total === 0 ? 0 : (page - 1) * limit + 1;
 
@@ -93,6 +104,16 @@ export function SegmentsList() {
           className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)]"
           onChange={(e) => handleSearchChange(e.target.value)}
         />
+
+        <ExportStatusMessage state={exportState} />
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exportState.type === "loading"}
+          className="h-9 px-3 text-[13px] text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] rounded-md hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Export
+        </button>
 
         <button
           type="button"

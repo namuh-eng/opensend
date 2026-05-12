@@ -2,6 +2,10 @@
 
 import { DataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
+import {
+  ExportStatusMessage,
+  useDashboardCsvExport,
+} from "@/components/use-dashboard-csv-export";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -100,29 +104,16 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
     [router, pathname, searchParams],
   );
 
-  const handleExport = useCallback(() => {
-    const headers = ["ID", "Method", "Endpoint", "Status", "Created At"];
-    const csvContent = [
-      headers.join(","),
-      ...logs.map((log) =>
-        [log.id, log.method, log.endpoint, log.statusCode, log.createdAt].join(
-          ",",
-        ),
-      ),
-    ].join("\n");
+  const { exportState, exportCsv } = useDashboardCsvExport("logs");
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute(
-      "download",
-      `logs-export-${new Date().toISOString()}.csv`,
-    );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }, [logs]);
+  const handleExport = useCallback(() => {
+    const params = new URLSearchParams();
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (dateFrom) params.set("after", dateFrom);
+    if (dateTo) params.set("before", dateTo);
+    if (query.trim()) params.set("q", query.trim());
+    void exportCsv(params);
+  }, [dateFrom, dateTo, exportCsv, query, statusFilter]);
 
   const columns = [
     {
@@ -171,24 +162,28 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-[#F0F0F0]">Logs</h1>
-        <button
-          type="button"
-          onClick={handleExport}
-          className="h-9 px-4 text-[13px] font-medium bg-[rgba(176,199,217,0.145)] text-[#F0F0F0] border border-[rgba(176,199,217,0.145)] rounded-md hover:bg-[rgba(176,199,217,0.2)] transition-colors flex items-center gap-2"
-        >
-          <svg
-            aria-hidden="true"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
+        <div className="flex items-center gap-3">
+          <ExportStatusMessage state={exportState} />
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exportState.type === "loading"}
+            className="h-9 px-4 text-[13px] font-medium bg-[rgba(176,199,217,0.145)] text-[#F0F0F0] border border-[rgba(176,199,217,0.145)] rounded-md hover:bg-[rgba(176,199,217,0.2)] transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-          </svg>
-          Export CSV
-        </button>
+            <svg
+              aria-hidden="true"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+            </svg>
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
