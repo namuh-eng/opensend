@@ -19,7 +19,7 @@
 #   - PORT                        : host port for the app (default 3015)
 #   - INGESTER_PORT               : host port for the ingester (default 3016)
 #   - POSTGRES_PORT               : host port for Postgres (default 5432)
-#   - POSTGRES_PASSWORD           : Postgres password (default `opensend`; CHANGE in production)
+#   - POSTGRES_PASSWORD           : Postgres password (REQUIRED; set in .env before `docker compose up`)
 #   - AWS_*                       : SES + S3 credentials. If unset, email sending is disabled.
 #   - BACKGROUND_JOBS_*           : SQS/EventBridge wiring for async send pipeline.
 #   - INGESTER_JOB_TOKEN          : optional bearer token protecting ingester /jobs/* scans.
@@ -42,7 +42,7 @@ services:
       - "${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_USER: opensend
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-opensend}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
       POSTGRES_DB: opensend
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -59,7 +59,7 @@ services:
       context: .
       target: migrator
     environment:
-      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:-opensend}@postgres:5432/opensend
+      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}@postgres:5432/opensend
     depends_on:
       postgres:
         condition: service_healthy
@@ -75,7 +75,7 @@ services:
     ports:
       - "${PORT:-3015}:8080"
     environment:
-      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:-opensend}@postgres:5432/opensend
+      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}@postgres:5432/opensend
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
@@ -117,7 +117,7 @@ services:
     ports:
       - "${INGESTER_PORT:-3016}:3016"
     environment:
-      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:-opensend}@postgres:5432/opensend
+      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}@postgres:5432/opensend
       PORT: 3016
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}

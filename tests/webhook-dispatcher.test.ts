@@ -13,6 +13,12 @@ vi.mock("@opensend/core", () => ({
     findById: mockFindEventById,
   },
   signWebhookPayload: mockSignWebhookPayload,
+  assertSafeOutboundUrl: vi.fn(async () => {}),
+  UnsafeOutboundUrlError: class extends Error {},
+  resolveWebhookSigningSecret: (row: {
+    signingSecret: string | null;
+    signingSecretEnc: string | null;
+  }) => row.signingSecret ?? "",
   toWebhookEventType: (eventType: string) => {
     const candidate = eventType.includes(".")
       ? eventType

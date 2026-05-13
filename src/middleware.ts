@@ -72,6 +72,39 @@ async function checkRate(
   };
 }
 
+function getTrustedProxyHops(): number {
+  const raw = process.env.TRUSTED_PROXY_HOPS;
+  const n = raw ? Number.parseInt(raw, 10) : 0;
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+/**
+ * Resolves the client IP from `x-forwarded-for`.
+ *
+ * XFF is a comma-separated list; right-most entries are appended by trusted
+ * proxies. Reading the left-most entry trusts whatever the original client
+ * sent — easy to spoof for rate-limit evasion. We instead select the entry
+ * `TRUSTED_PROXY_HOPS` from the right (0 = direct connection, 1 = one proxy,
+ * etc.), falling back to `x-real-ip`. Operators must set
+ * `TRUSTED_PROXY_HOPS` to match their deploy topology.
+ */
+export function extractClientIp(request: NextRequest): string {
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) {
+    const parts = xff
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (parts.length > 0) {
+      const hops = getTrustedProxyHops();
+      const idx = Math.max(0, parts.length - 1 - hops);
+      const candidate = parts[idx];
+      if (candidate) return candidate;
+    }
+  }
+  return request.headers.get("x-real-ip")?.trim() ?? "";
+}
+
 // Rate limit tiers by route pattern
 function isSingleSendPostAlias(pathname: string, method: string): boolean {
   return pathname === "/emails" && method === "POST";
@@ -415,8 +448,7 @@ export async function middleware(request: NextRequest) {
 
   const rateLimit = await import("@/lib/cache/redis");
 
-  const rawIp =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+  const rawIp = extractClientIp(request);
   const ip = /^[\d.a-fA-F:]+$/.test(rawIp) ? rawIp : "unknown";
   const authKey = request.headers.get("authorization")?.slice(0, 20) ?? "anon";
   const rateLimitPathname = getRateLimitPathname(pathname, request.method);

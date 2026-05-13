@@ -1,6 +1,7 @@
 import { processScheduledAutomations } from "@/lib/workers/automation-runner";
 import { processScheduledBroadcasts } from "@/lib/workers/broadcast-sender";
 import { processScheduledEmails } from "@/lib/workers/scheduled-emails";
+import { timingSafeStringEqual } from "@opensend/core";
 import { NextResponse } from "next/server";
 
 /**
@@ -10,11 +11,10 @@ import { NextResponse } from "next/server";
  * Should be called by a task scheduler (e.g. AWS EventBridge, Vercel Cron).
  */
 export async function GET(request: Request) {
-  // Simple auth check via header (shared secret)
   const authHeader = request.headers.get("x-cron-auth");
   const expectedToken = process.env.CRON_AUTH_TOKEN;
 
-  if (!expectedToken || authHeader !== expectedToken) {
+  if (!expectedToken || !timingSafeStringEqual(authHeader, expectedToken)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

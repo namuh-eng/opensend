@@ -34,8 +34,17 @@ export function isDashboardExportResource(
   return DASHBOARD_EXPORT_RESOURCES.includes(value as DashboardExportResource);
 }
 
+const CSV_FORMULA_TRIGGERS = new Set(["=", "+", "-", "@", "\t", "\r"]);
+
 export function escapeCsvValue(value: CsvValue): string {
-  const raw = value instanceof Date ? value.toISOString() : String(value ?? "");
+  const stringified =
+    value instanceof Date ? value.toISOString() : String(value ?? "");
+  // Prefix formula triggers with a leading apostrophe to neutralize
+  // spreadsheet formula execution on import.
+  const raw =
+    stringified.length > 0 && CSV_FORMULA_TRIGGERS.has(stringified.charAt(0))
+      ? `'${stringified}`
+      : stringified;
   if (/[",\n\r]/.test(raw)) {
     return `"${raw.replace(/"/g, '""')}"`;
   }

@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { user } from "../db/schema";
 
@@ -22,13 +23,15 @@ export type InviteListResponse = {
 };
 
 export type InviteMemberRepository = {
-  listMembers(): Promise<InviteMemberRow[]>;
+  listMembersForUser(userId: string): Promise<InviteMemberRow[]>;
 };
 
 const inviteMemberRepository: InviteMemberRepository = {
-  async listMembers() {
-    // In a real multi-tenant setup, we'd filter by orgId.
-    // For now, we return all users as a base implementation of the 'Team' view.
+  async listMembersForUser(userId: string) {
+    // TODO: replace with a real org/membership join once multi-member orgs ship.
+    // Until then, restrict the "Team" view to the calling user to prevent
+    // cross-tenant disclosure (every authenticated session would otherwise see
+    // every user in the database).
     return db
       .select({
         id: user.id,
@@ -36,7 +39,8 @@ const inviteMemberRepository: InviteMemberRepository = {
         email: user.email,
         createdAt: user.createdAt,
       })
-      .from(user);
+      .from(user)
+      .where(eq(user.id, userId));
   },
 };
 
@@ -58,8 +62,8 @@ export function createInvitesService({
   repository = inviteMemberRepository,
 }: InvitesServiceDependencies = {}) {
   return {
-    async listMembers(): Promise<InviteListResponse> {
-      const members = await repository.listMembers();
+    async listMembers(userId: string): Promise<InviteListResponse> {
+      const members = await repository.listMembersForUser(userId);
 
       return {
         object: "list",

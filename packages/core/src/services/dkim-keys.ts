@@ -6,13 +6,20 @@ import {
   randomBytes,
 } from "node:crypto";
 
-const KEY_ENV = "DKIM_ENCRYPTION_KEY";
+const KEY_ENV_PRIMARY = "DKIM_ENCRYPTION_KEY";
 const KEY_LENGTH = 32;
 const IV_LENGTH = 12;
 
 export type EncryptedBlob = {
   ct: string;
   iv: string;
+  /**
+   * Master-key version that encrypted this blob. Absent / 1 = legacy single-key
+   * envelope. Higher versions look up DKIM_ENCRYPTION_KEY_V<N> and let the
+   * operator rotate without breaking historical rows. New writes use
+   * DKIM_KEY_VERSION (default 1).
+   */
+  kv?: number;
 };
 
 export type GeneratedDkimKey = {
@@ -22,26 +29,39 @@ export type GeneratedDkimKey = {
   privateKeyPemEncrypted: EncryptedBlob;
 };
 
-function loadMasterKey(): Buffer {
-  const raw = process.env[KEY_ENV];
+function keyEnvForVersion(version: number): string {
+  return version <= 1 ? KEY_ENV_PRIMARY : `${KEY_ENV_PRIMARY}_V${version}`;
+}
+
+function loadMasterKey(version: number): Buffer {
+  const envName = keyEnvForVersion(version);
+  const raw = process.env[envName];
   if (!raw) {
     throw new Error(
-      `${KEY_ENV} is not set — generate one with \`openssl rand -base64 32\` and add it to .env`,
+      `${envName} is not set — generate one with \`openssl rand -base64 32\` and add it to .env`,
     );
   }
 
   const buf = Buffer.from(raw, "base64");
   if (buf.length !== KEY_LENGTH) {
     throw new Error(
-      `${KEY_ENV} must decode to ${KEY_LENGTH} bytes (got ${buf.length})`,
+      `${envName} must decode to ${KEY_LENGTH} bytes (got ${buf.length})`,
     );
   }
 
   return buf;
 }
 
+function currentKeyVersion(): number {
+  const raw = process.env.DKIM_KEY_VERSION;
+  if (!raw) return 1;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
+
 export function encryptSecret(plaintext: string): EncryptedBlob {
-  const key = loadMasterKey();
+  const version = currentKeyVersion();
+  const key = loadMasterKey(version);
   const iv = randomBytes(IV_LENGTH);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
   const ct = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
@@ -50,11 +70,13 @@ export function encryptSecret(plaintext: string): EncryptedBlob {
   return {
     ct: Buffer.concat([ct, tag]).toString("base64"),
     iv: iv.toString("base64"),
+    kv: version,
   };
 }
 
 export function decryptSecret(blob: EncryptedBlob): string {
-  const key = loadMasterKey();
+  const version = blob.kv ?? 1;
+  const key = loadMasterKey(version);
   const iv = Buffer.from(blob.iv, "base64");
   const combined = Buffer.from(blob.ct, "base64");
   const tag = combined.subarray(combined.length - 16);

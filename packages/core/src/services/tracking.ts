@@ -40,18 +40,19 @@ export type ApplyEmailTrackingResult = {
 };
 
 function getTrackingSecret(): string {
-  const secret =
-    process.env.TRACKING_SECRET ??
-    process.env.UNSUBSCRIBE_SECRET ??
-    process.env.BETTER_AUTH_SECRET ??
-    process.env.AUTH_SECRET ??
-    process.env.DASHBOARD_KEY;
-
-  if (secret) return secret;
+  // Production must use a dedicated TRACKING_SECRET. Reusing another
+  // secret (auth, dashboard) means a leak of that secret would let an
+  // attacker forge tracking-pixel/click tokens.
   if (process.env.NODE_ENV === "production") {
-    throw new Error("TRACKING_SECRET or DASHBOARD_KEY is required");
+    const secret = process.env.TRACKING_SECRET?.trim();
+    if (!secret || secret.length < 16) {
+      throw new Error(
+        "TRACKING_SECRET must be set to at least 16 chars in production",
+      );
+    }
+    return secret;
   }
-  return "opensend-local-tracking-secret";
+  return process.env.TRACKING_SECRET ?? "opensend-local-tracking-secret";
 }
 
 function signPayload(encodedPayload: string): string {
