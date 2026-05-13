@@ -75,6 +75,7 @@ vi.mock("@opensend/core", () => {
     suppressionRepo: {
       suppressFromSesEvent: mockSuppressFromSesEvent,
     },
+    timingSafeStringEqual: (a: string, b: string) => a === b,
     toWebhookEventType: (eventType: string) => {
       const candidate = eventType.includes(".")
         ? eventType

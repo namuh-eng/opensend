@@ -6,17 +6,20 @@ export const LIST_UNSUBSCRIBE_POST_HEADER = "List-Unsubscribe-Post";
 export const LIST_UNSUBSCRIBE_POST_VALUE = "List-Unsubscribe=One-Click";
 
 function getUnsubscribeSecret(): string {
-  const secret =
-    process.env.UNSUBSCRIBE_SECRET ??
-    process.env.BETTER_AUTH_SECRET ??
-    process.env.AUTH_SECRET ??
-    process.env.DASHBOARD_KEY;
-
-  if (secret) return secret;
+  // Production must use a dedicated UNSUBSCRIBE_SECRET so that compromising
+  // an unrelated secret (Better Auth session, dashboard) cannot be replayed
+  // to forge unsubscribe tokens. Dev keeps a single-purpose fallback to
+  // avoid bootstrap friction for self-hosters running the dev server.
   if (process.env.NODE_ENV === "production") {
-    throw new Error("UNSUBSCRIBE_SECRET or DASHBOARD_KEY is required");
+    const secret = process.env.UNSUBSCRIBE_SECRET?.trim();
+    if (!secret || secret.length < 16) {
+      throw new Error(
+        "UNSUBSCRIBE_SECRET must be set to at least 16 chars in production",
+      );
+    }
+    return secret;
   }
-  return "opensend-local-unsubscribe-secret";
+  return process.env.UNSUBSCRIBE_SECRET ?? "opensend-local-unsubscribe-secret";
 }
 
 function signContactId(contactId: string): string {

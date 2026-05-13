@@ -309,6 +309,7 @@ export const webhooks = pgTable("webhooks", {
   eventTypes: jsonb("event_types").notNull().$type<string[]>(),
   status: varchar("status", { length: 50 }).notNull().default("active"),
   signingSecret: varchar("signing_secret", { length: 255 }),
+  signingSecretEnc: text("signing_secret_enc"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

@@ -6,6 +6,7 @@ import {
   UnsafeOutboundUrlError,
   assertSafeOutboundUrl,
 } from "../security/url-safety";
+import { encryptWebhookSecret } from "../security/webhook-secret-crypto";
 
 type WebhookRow = typeof webhooks.$inferSelect;
 type WebhookInsert = typeof webhooks.$inferInsert;
@@ -174,13 +175,6 @@ function toWebhookDetail(
   };
 }
 
-function toWebhookCreateResult(row: WebhookRow): WebhookServiceCreateResult {
-  return {
-    ...toWebhookListItem(row),
-    signingSecret: row.signingSecret,
-  };
-}
-
 function buildUpdateData(input: UpdateWebhookInput): Partial<WebhookInsert> {
   const data: Partial<WebhookInsert> = {};
 
@@ -232,15 +226,31 @@ export function createWebhookService({
         }
         throw err;
       }
-      const signingSecret = generateSigningSecret();
+      const plaintextSecret = generateSigningSecret();
+      // When the encryption key is configured we store only the AES-GCM
+      // envelope. In dev environments without a key (caught by the boot
+      // guard in prod), we fall back to the legacy plaintext column so
+      // the self-host bootstrap still works.
+      const hasEncryptionKey = Boolean(
+        process.env.WEBHOOK_SECRET_ENCRYPTION_KEY,
+      );
+      const signingSecretEnc = hasEncryptionKey
+        ? encryptWebhookSecret(plaintextSecret)
+        : null;
       const [row] = await repository.create({
         url: input.endpoint,
         eventTypes: input.events,
-        signingSecret,
+        signingSecret: hasEncryptionKey ? null : plaintextSecret,
+        signingSecretEnc,
         userId: input.userId,
       });
 
-      return toWebhookCreateResult(row);
+      // The user sees the plaintext secret exactly once at creation time;
+      // afterwards only the (possibly encrypted) stored value is readable.
+      return {
+        ...toWebhookListItem(row),
+        signingSecret: plaintextSecret,
+      };
     },
 
     async getWebhook(

@@ -41,6 +41,7 @@ export * from "./services/dkim-keys";
 export * from "./services/domain-detail";
 export * from "./services/domain-events";
 export * from "./services/webhook";
+export * from "./services/webhook-secret-resolver";
 export * from "./services/apiKeys";
 export * from "./services/contact";
 export * from "./services/contact-operations";

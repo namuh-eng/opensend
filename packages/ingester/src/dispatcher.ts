@@ -2,6 +2,7 @@ import {
   UnsafeOutboundUrlError,
   assertSafeOutboundUrl,
   emailEventRepo,
+  resolveWebhookSigningSecret,
   signWebhookPayload,
   toWebhookEventType,
   webhookDeliveryRepo,
@@ -88,7 +89,7 @@ export class WebhookDispatcher {
     });
 
     const signature = signWebhookPayload(
-      webhook.signingSecret || "",
+      resolveWebhookSigningSecret(webhook),
       msgId,
       timestamp,
       body,

@@ -1,0 +1,1 @@
+ALTER TABLE "webhooks" ADD COLUMN "signing_secret_enc" text;

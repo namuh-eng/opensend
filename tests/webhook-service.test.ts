@@ -22,6 +22,7 @@ function webhookRow(overrides: Partial<WebhookRow> = {}): WebhookRow {
     eventTypes: ["email.sent"],
     status: "active",
     signingSecret: "whsec_existing",
+    signingSecretEnc: null,
     createdAt: new Date("2026-05-04T00:00:00.000Z"),
     document: null,
     userId: null,
