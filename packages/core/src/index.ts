@@ -72,3 +72,4 @@ export * from "./services/publicStatus";
 export * from "./services/invites";
 export * from "./jobs/background-jobs";
 export * from "./observability/telemetry";
+export * from "./security";
