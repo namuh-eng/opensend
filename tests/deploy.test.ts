@@ -43,9 +43,20 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     const script = readFileSync(scriptPath, "utf-8");
     expect(script).toContain("buildx build");
     expect(script).toContain("linux/amd64");
-    expect(script).toContain("aws ecs update-service");
+    expect(script).toContain("ecs update-service");
     expect(script).toContain("--force-new-deployment");
     expect(script).toContain("aws ecs wait services-stable");
+  });
+
+  it("deploy script injects required production app secrets into ECS task definitions", () => {
+    const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
+    expect(script).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID");
+    expect(script).toContain("aws secretsmanager describe-secret");
+    expect(script).toContain('"name": "WEBHOOK_SECRET_ENCRYPTION_KEY"');
+    expect(script).toContain("register_app_task_definition");
+    expect(script).toContain(
+      'redeploy "${APP_SERVICE}" "${APP_TASK_DEFINITION}"',
+    );
   });
 
   it("deploy script runs migrations before ECS service redeploys", () => {
