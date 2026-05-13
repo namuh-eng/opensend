@@ -61,6 +61,13 @@ export const webhookRepo = {
     return { data, hasMore };
   },
 
+  /**
+   * SECURITY: cross-tenant by design. The webhook dispatcher needs to scan
+   * every endpoint in the system to fan out an event, so this method
+   * deliberately omits a userId filter. Do NOT call from user-facing API
+   * routes — those must use `list({ userId, ... })` which scopes by owner.
+   * Callers must already be running in a trusted server-side context.
+   */
   async listForDispatch(options: { limit?: number; after?: string } = {}) {
     const { limit = 20, after } = options;
     const conditions = [];
