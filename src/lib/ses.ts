@@ -9,6 +9,11 @@ import {
   SendEmailCommand,
 } from "@aws-sdk/client-sesv2";
 import {
+  safeMimeBoundary,
+  sanitizeHeaderName,
+  sanitizeHeaderValue,
+} from "@opensend/core";
+import {
   type EncryptedBlob,
   decryptSecret,
   generateDkimKeypair,
@@ -373,20 +378,34 @@ export async function deleteDomainIdentity(
 
 // ── MIME Builder (for attachments) ─────────────────────────────────
 
-function buildMimeMessage(input: SendEmailInput): string {
-  const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+function sanitizeAttachmentFilename(name: string): string {
+  // Strip any character that could break out of the quoted-string MIME parameter.
+  return sanitizeHeaderValue("attachment.filename", name).replace(
+    /["\\]/g,
+    "_",
+  );
+}
+
+export function buildMimeMessage(input: SendEmailInput): string {
+  const boundary = safeMimeBoundary("----=_Part");
   const lines: string[] = [];
 
-  lines.push(`From: ${input.from}`);
-  lines.push(`To: ${input.to.join(", ")}`);
-  if (input.cc?.length) lines.push(`Cc: ${input.cc.join(", ")}`);
-  if (input.bcc?.length) lines.push(`Bcc: ${input.bcc.join(", ")}`);
-  lines.push(`Subject: ${input.subject}`);
+  lines.push(`From: ${sanitizeHeaderValue("From", input.from)}`);
+  lines.push(`To: ${sanitizeHeaderValue("To", input.to.join(", "))}`);
+  if (input.cc?.length)
+    lines.push(`Cc: ${sanitizeHeaderValue("Cc", input.cc.join(", "))}`);
+  if (input.bcc?.length)
+    lines.push(`Bcc: ${sanitizeHeaderValue("Bcc", input.bcc.join(", "))}`);
+  lines.push(`Subject: ${sanitizeHeaderValue("Subject", input.subject)}`);
   if (input.replyTo?.length)
-    lines.push(`Reply-To: ${input.replyTo.join(", ")}`);
+    lines.push(
+      `Reply-To: ${sanitizeHeaderValue("Reply-To", input.replyTo.join(", "))}`,
+    );
   if (input.headers) {
     for (const [key, value] of Object.entries(input.headers)) {
-      lines.push(`${key}: ${value}`);
+      const safeName = sanitizeHeaderName(key);
+      const safeValue = sanitizeHeaderValue(safeName, String(value));
+      lines.push(`${safeName}: ${safeValue}`);
     }
   }
   lines.push("MIME-Version: 1.0");
@@ -409,19 +428,24 @@ function buildMimeMessage(input: SendEmailInput): string {
 
   // Attachments
   for (const attachment of input.attachments ?? []) {
-    const contentType =
+    const safeFilename = sanitizeAttachmentFilename(attachment.filename);
+    const contentType = sanitizeHeaderValue(
+      "Content-Type",
       attachment.contentType ??
-      attachment.content_type ??
-      inferContentType(attachment.filename);
+        attachment.content_type ??
+        inferContentType(attachment.filename),
+    );
     const contentId = attachment.contentId ?? attachment.content_id;
     lines.push(`--${boundary}`);
-    lines.push(`Content-Type: ${contentType}; name="${attachment.filename}"`);
+    lines.push(`Content-Type: ${contentType}; name="${safeFilename}"`);
     lines.push("Content-Transfer-Encoding: base64");
     if (contentId) {
-      lines.push(`Content-ID: ${formatContentId(contentId)}`);
+      lines.push(
+        `Content-ID: ${sanitizeHeaderValue("Content-ID", formatContentId(contentId))}`,
+      );
     }
     lines.push(
-      `Content-Disposition: ${contentId ? "inline" : "attachment"}; filename="${attachment.filename}"`,
+      `Content-Disposition: ${contentId ? "inline" : "attachment"}; filename="${safeFilename}"`,
     );
     lines.push("");
     lines.push(attachment.content);

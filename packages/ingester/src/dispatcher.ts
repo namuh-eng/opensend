@@ -1,4 +1,6 @@
 import {
+  UnsafeOutboundUrlError,
+  assertSafeOutboundUrl,
   emailEventRepo,
   signWebhookPayload,
   toWebhookEventType,
@@ -93,6 +95,17 @@ export class WebhookDispatcher {
     );
 
     try {
+      try {
+        await assertSafeOutboundUrl(webhook.url, { context: "dispatch" });
+      } catch (err) {
+        if (err instanceof UnsafeOutboundUrlError) {
+          return await this.markTerminal(
+            delivery,
+            `Refused unsafe webhook URL: ${err.reason}`,
+          );
+        }
+        throw err;
+      }
       const response = await this.fetchImpl(webhook.url, {
         method: "POST",
         headers: {

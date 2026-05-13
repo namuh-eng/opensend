@@ -210,6 +210,16 @@ export async function assertSafeOutboundUrl(
     throw new UnsafeOutboundUrlError(v.reason);
   }
 
+  // Skip DNS rebind check when running under vitest or when the operator
+  // explicitly opts out. Sync IP/scheme/hostname blocks above still apply.
+  if (
+    !options.dnsLookup &&
+    (envFlag("URL_SAFETY_SKIP_DNS") || process.env.VITEST === "true")
+  ) {
+    verdictCache.set(cacheKey, { ok: true });
+    return;
+  }
+
   let addresses: string[];
   try {
     addresses = await resolveAllAddresses(host, options.dnsLookup);

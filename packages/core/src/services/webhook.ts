@@ -2,6 +2,10 @@ import { randomBytes } from "node:crypto";
 import { webhookDeliveryRepo } from "../db/repositories/webhookDeliveryRepo";
 import { webhookRepo } from "../db/repositories/webhookRepo";
 import type { webhookDeliveries, webhooks } from "../db/schema";
+import {
+  UnsafeOutboundUrlError,
+  assertSafeOutboundUrl,
+} from "../security/url-safety";
 
 type WebhookRow = typeof webhooks.$inferSelect;
 type WebhookInsert = typeof webhooks.$inferInsert;
@@ -103,7 +107,8 @@ export type WebhookServiceDependencies = {
 export type WebhookServiceErrorCode =
   | "not_found"
   | "disabled"
-  | "dispatch_failed";
+  | "dispatch_failed"
+  | "unsafe_url";
 
 export class WebhookServiceError extends Error {
   constructor(
@@ -216,6 +221,17 @@ export function createWebhookService({
     async createWebhook(
       input: CreateWebhookInput,
     ): Promise<WebhookServiceCreateResult> {
+      try {
+        await assertSafeOutboundUrl(input.endpoint, { context: "create" });
+      } catch (err) {
+        if (err instanceof UnsafeOutboundUrlError) {
+          throw new WebhookServiceError(
+            "unsafe_url",
+            `Webhook endpoint rejected: ${err.reason}`,
+          );
+        }
+        throw err;
+      }
       const signingSecret = generateSigningSecret();
       const [row] = await repository.create({
         url: input.endpoint,
@@ -246,6 +262,19 @@ export function createWebhookService({
       userId: string,
       input: UpdateWebhookInput,
     ): Promise<WebhookServiceListItem | undefined> {
+      if (input.endpoint !== undefined) {
+        try {
+          await assertSafeOutboundUrl(input.endpoint, { context: "create" });
+        } catch (err) {
+          if (err instanceof UnsafeOutboundUrlError) {
+            throw new WebhookServiceError(
+              "unsafe_url",
+              `Webhook endpoint rejected: ${err.reason}`,
+            );
+          }
+          throw err;
+        }
+      }
       const [row] = await repository.update(id, userId, buildUpdateData(input));
       return row ? toWebhookListItem(row) : undefined;
     },
