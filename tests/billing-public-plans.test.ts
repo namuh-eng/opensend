@@ -41,15 +41,29 @@ describe("public billing plan approval", () => {
     ).toBe(true);
   });
 
-  it.each([
-    { stripePriceId: "price_live_123" },
-    { stripePriceId: " price_live_123 " },
-  ])("allows public paid plans with a non-empty Stripe price ID %#", (row) => {
+  it.each([{ stripePriceId: "price_live_123" }])(
+    "allows public paid plans with a non-empty Stripe price ID %#",
+    (row) => {
+      expect(
+        isApprovedPublicPlan(
+          plan({ monthlyPriceCents: 2900, stripePriceId: row.stripePriceId }),
+        ),
+      ).toBe(true);
+    },
+  );
+
+  it("rejects a malformed paid row using the canonical free slug", () => {
     expect(
       isApprovedPublicPlan(
-        plan({ monthlyPriceCents: 2900, stripePriceId: row.stripePriceId }),
+        plan({
+          slug: "free",
+          name: "Free",
+          monthlyPriceCents: 2900,
+          stripePriceId: "price_live_123",
+          isPublic: true,
+        }),
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it.each([
@@ -57,6 +71,7 @@ describe("public billing plan approval", () => {
     { monthlyPriceCents: 2900, stripePriceId: null },
     { monthlyPriceCents: 2900, stripePriceId: "" },
     { monthlyPriceCents: 2900, stripePriceId: "   " },
+    { monthlyPriceCents: 2900, stripePriceId: " price_live_123 " },
     {
       monthlyPriceCents: 2900,
       stripePriceId: "price_live_123",

@@ -139,8 +139,14 @@ function toPlanSummary(row: {
 
 export function isApprovedPublicPlan(row: BillingPlanRow): boolean {
   if (!row.isPublic) return false;
-  if (row.slug === FREE_PLAN_SLUG) return true;
-  return row.monthlyPriceCents > 0 && Boolean(row.stripePriceId?.trim());
+  if (row.slug === FREE_PLAN_SLUG) return row.monthlyPriceCents === 0;
+  const stripePriceId = row.stripePriceId;
+  return (
+    row.monthlyPriceCents > 0 &&
+    stripePriceId !== null &&
+    stripePriceId !== "" &&
+    stripePriceId === stripePriceId.trim()
+  );
 }
 
 async function loadPlanAndSubscription(userId: string) {
