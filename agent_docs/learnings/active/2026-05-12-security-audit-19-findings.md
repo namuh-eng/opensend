@@ -34,3 +34,26 @@ promoted_to: null
 5. Backward-compatible for self-hosters; loud actionable errors over silent breakage.
 
 **Status:** Pre-flight baseline cleaned (stale `.next/dev/types/validator.ts` removed, missing `@react-email/render` installed). Branch `security/remediate-19-findings` cut from `main` at commit `6891d21`.
+
+## Outcome (complete 2026-05-13)
+
+All 19 findings shipped across 5 commits on branch `security/remediate-19-findings`:
+
+- **Phase 1** — shared utilities (`url-safety`, `mime-sanitize`, `timing-safe`, `csv-escape`, `webhook-secret-crypto`) + boot guards. Ingester binds `127.0.0.1` in prod (#17).
+- **Phase 2** (`789695a`) — SSRF wiring at create+dispatch (#1), MIME header sanitization + safe boundary (#2, #15).
+- **Phase 3** (`75ac78b`) — timing-safe cron/ingester tokens (#3), CSV formula escape (#4), SNS SubscribeURL allowlist (#5), CSV import 10MB/MIME caps (#6), XFF hop selection (#7).
+- **Phase 4** (`25b5317`) — dedicated unsubscribe+tracking secrets (#8), Better Auth `trustedOrigins` (#9), DKIM key versioning (#11), HTTP security headers (#12), invites tenant scope (#13), webhook AES-GCM at rest via `signing_secret_enc` + drizzle/0018 (#14), `BETTER_AUTH_URL` port (#18), cookie pin (#19).
+- **Phase 5** (`c0ee992`) — `POSTGRES_PASSWORD:?required` in compose (#10), `listForDispatch` JSDoc warning (#16), `.env.example` Security Secrets block.
+- **Phase 6** — `CLAUDE.md` Production Gotchas updated with required prod env vars + SSRF/CSV/timing-safe usage rules.
+
+**Pre-mortem mitigations actually shipped:**
+1. SSRF — env-based vitest skip (`URL_SAFETY_SKIP_DNS`) so tests don't hit DNS; LRU cache for prod verdicts.
+2. Timing-safe compare — SHA-256 normalization on both sides; rejects empty input.
+3. Postgres password — compose now requires it (`${POSTGRES_PASSWORD:?...}`) with `.env.example` providing a clearly-placeholder default so self-hosters notice.
+4. Webhook secret encryption — resolver prefers `signing_secret_enc` and falls back to legacy plaintext, so existing rows keep working until rotated.
+
+**Notable test rework:** `vi.mock("@opensend/core", ...)` blocks across `tests/webhook-dispatcher.test.ts` and `tests/ingester-ses-route.test.ts` needed new exports (`assertSafeOutboundUrl`, `UnsafeOutboundUrlError`, `resolveWebhookSigningSecret`, `timingSafeStringEqual`) — easy gotcha for future contributors touching `@opensend/core` exports.
+
+**Migration B (drop plaintext `signing_secret`)** deliberately not shipped in this branch — operator must verify all rows have `signing_secret_enc` populated before dropping the legacy column. Tracking separately.
+
+**Pre-existing failure unrelated to this work:** `tests/audit-events.test.ts` is timezone-dependent (uses `getMonth()` on a parsed date string) and fails on any non-UTC runner. Not in scope for the security audit; flagged for a separate fix.
