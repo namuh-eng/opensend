@@ -93,6 +93,7 @@ contributor-facing set; the table below adds the production-only entries.
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string. In Docker Compose the app/migrator containers override this to use the internal `postgres` host. |
 | `BETTER_AUTH_SECRET` | Random 32-byte hex string for session signing. Generate with `openssl rand -hex 32`. |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | Random secret, at least 16 characters, used to encrypt webhook signing secrets at rest. Production app startup fails when this is missing or too short. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Better Auth Google OAuth credentials. Set the redirect URI to `https://<your-host>/api/auth/callback/google`. |
 
 ### Required for sending email
@@ -126,6 +127,17 @@ contributor-facing set; the table below adds the production-only entries.
 | `RATE_LIMIT_BACKEND` | `disabled` (single-process dev), or `redis` (production). |
 | `REDIS_URL` | TLS Redis endpoint, e.g. `rediss://default:<password>@<endpoint>:6379`. Used for rate limiting AND auth/domain metadata cache. |
 | `CLOUDWATCH_METRICS_NAMESPACE` | Override the default `Opensend` EMF metrics namespace. |
+
+### AWS ECS deploy secret wiring
+
+The repo deploy script registers a fresh app task definition before updating
+the ECS app service. It injects `WEBHOOK_SECRET_ENCRYPTION_KEY` from AWS
+Secrets Manager and never reads or prints the secret value. By default it looks
+up the secret named `opensend/webhook/secret-encryption-key` when
+`PRODUCT=opensend`; override that lookup with
+`WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID` or pass an exact
+`WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN` when your bootstrap uses a different
+name.
 
 ### Hosted Stripe billing
 

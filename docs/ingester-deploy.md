@@ -231,6 +231,11 @@ already-processed notification returns `200 OK` and no-ops.
 Before pointing production SES SNS at a freshly stood-up ingester, verify:
 
 - The ingester image is built for `linux/amd64` and pushed to your registry.
+- The app ECS task definition injects `WEBHOOK_SECRET_ENCRYPTION_KEY` from the
+  deployment secret manager. For the repo deploy script, create or point
+  `WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID` /
+  `WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN` at that AWS Secrets Manager secret
+  before running `scripts/deploy.sh app` or `scripts/deploy.sh all`.
 - The ingester service has the same `DATABASE_URL`, AWS credentials, SQS
   config, Redis URL, and `INGESTER_JOB_TOKEN` as the app.
 - The events host (`events.<your-domain>`) resolves and serves a 200 on
