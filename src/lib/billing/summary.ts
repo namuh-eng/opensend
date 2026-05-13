@@ -25,6 +25,8 @@ export interface BillingPlanSummary {
   isPublic: boolean;
 }
 
+type BillingPlanRow = typeof plans.$inferSelect;
+
 export interface BillingSubscriptionSummary {
   id: string;
   status: SubscriptionStatus;
@@ -135,6 +137,12 @@ function toPlanSummary(row: {
   };
 }
 
+export function isApprovedPublicPlan(row: BillingPlanRow): boolean {
+  if (!row.isPublic) return false;
+  if (row.slug === FREE_PLAN_SLUG) return true;
+  return row.monthlyPriceCents > 0 && Boolean(row.stripePriceId?.trim());
+}
+
 async function loadPlanAndSubscription(userId: string) {
   const sub = await db.query.subscriptions.findFirst({
     where: eq(subscriptions.userId, userId),
@@ -221,8 +229,13 @@ export async function loadBillingSummary(
 export async function listPublicPlans(): Promise<BillingPlanSummary[]> {
   const rows = await db.select().from(plans).where(eq(plans.isPublic, true));
   return rows
+    .filter(isApprovedPublicPlan)
     .map(toPlanSummary)
-    .sort((a, b) => a.monthlyPriceCents - b.monthlyPriceCents);
+    .sort(
+      (a, b) =>
+        a.monthlyPriceCents - b.monthlyPriceCents ||
+        a.slug.localeCompare(b.slug),
+    );
 }
 
 function toPublicPlanResponse(plan: BillingPlanSummary): PublicPlanResponse {
