@@ -11,6 +11,7 @@ import {
   publishBackgroundJob,
   recordTelemetryError,
   suppressionRepo,
+  timingSafeStringEqual,
   toWebhookEventType,
   webhookRepo,
 } from "@opensend/core";
@@ -25,6 +26,7 @@ import {
   parseSnsEnvelope,
   verifySnsSignature,
 } from "./sns-message";
+import { isAllowedSnsSubscribeUrl } from "./sns-subscribe-url";
 import {
   StripeWebhookProcessor,
   buildPaymentFailedEmail,
@@ -89,7 +91,7 @@ function getSesSuppressionOutcome(
 function isAuthorizedJobRequest(authHeader: string | undefined): boolean {
   const token = process.env.INGESTER_JOB_TOKEN?.trim();
   if (!token) return true;
-  return authHeader === `Bearer ${token}`;
+  return timingSafeStringEqual(authHeader, `Bearer ${token}`);
 }
 
 async function runJobEndpoint<T>(
@@ -308,22 +310,28 @@ app.post("/events/ses", async (c) => {
         sns_message_id: snsMessage.MessageId,
       });
       if (snsMessage.SubscribeURL) {
-        try {
-          const r = await fetch(snsMessage.SubscribeURL);
-          logTelemetry("info", "ses.sns.subscription_confirmed", telemetry, {
+        if (!isAllowedSnsSubscribeUrl(snsMessage.SubscribeURL)) {
+          logTelemetry("warn", "ses.sns.subscription_url_rejected", telemetry, {
             sns_message_id: snsMessage.MessageId,
-            confirm_status: r.status,
           });
-        } catch (err) {
-          logTelemetry(
-            "error",
-            "ses.sns.subscription_confirm_failed",
-            telemetry,
-            {
+        } else {
+          try {
+            const r = await fetch(snsMessage.SubscribeURL);
+            logTelemetry("info", "ses.sns.subscription_confirmed", telemetry, {
               sns_message_id: snsMessage.MessageId,
-              error: err instanceof Error ? err.message : String(err),
-            },
-          );
+              confirm_status: r.status,
+            });
+          } catch (err) {
+            logTelemetry(
+              "error",
+              "ses.sns.subscription_confirm_failed",
+              telemetry,
+              {
+                sns_message_id: snsMessage.MessageId,
+                error: err instanceof Error ? err.message : String(err),
+              },
+            );
+          }
         }
       }
       return c.text("OK");
