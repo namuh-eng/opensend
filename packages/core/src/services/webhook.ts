@@ -227,21 +227,10 @@ export function createWebhookService({
         throw err;
       }
       const plaintextSecret = generateSigningSecret();
-      // When the encryption key is configured we store only the AES-GCM
-      // envelope. In dev environments without a key (caught by the boot
-      // guard in prod), we fall back to the legacy plaintext column so
-      // the self-host bootstrap still works.
-      const hasEncryptionKey = Boolean(
-        process.env.WEBHOOK_SECRET_ENCRYPTION_KEY,
-      );
-      const signingSecretEnc = hasEncryptionKey
-        ? encryptWebhookSecret(plaintextSecret)
-        : null;
       const [row] = await repository.create({
         url: input.endpoint,
         eventTypes: input.events,
-        signingSecret: hasEncryptionKey ? null : plaintextSecret,
-        signingSecretEnc,
+        signingSecretEnc: encryptWebhookSecret(plaintextSecret),
         userId: input.userId,
       });
 

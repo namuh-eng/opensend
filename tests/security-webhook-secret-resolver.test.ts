@@ -20,45 +20,40 @@ describe("resolveWebhookSigningSecret", () => {
     const enc = encryptWebhookSecret(plain);
     expect(
       resolveWebhookSigningSecret({
-        signingSecret: null,
         signingSecretEnc: enc,
       }),
     ).toBe(plain);
   });
 
-  it("prefers encrypted column over legacy plaintext", () => {
+  it("uses encrypted column when present", () => {
     const plain = "whsec_realencryptedvalue";
     const enc = encryptWebhookSecret(plain);
     expect(
       resolveWebhookSigningSecret({
-        signingSecret: "whsec_oldplaintext",
         signingSecretEnc: enc,
       }),
     ).toBe(plain);
   });
 
-  it("falls back to legacy plaintext when enc is null", () => {
+  it("returns empty string when enc is null", () => {
     expect(
       resolveWebhookSigningSecret({
-        signingSecret: "whsec_legacy123",
         signingSecretEnc: null,
       }),
-    ).toBe("whsec_legacy123");
+    ).toBe("");
   });
 
-  it("falls back to legacy plaintext when enc has unrecognized format", () => {
+  it("returns empty string when enc has unrecognized format", () => {
     expect(
       resolveWebhookSigningSecret({
-        signingSecret: "whsec_legacy",
         signingSecretEnc: "not-a-v1-envelope",
       }),
-    ).toBe("whsec_legacy");
+    ).toBe("");
   });
 
   it("returns empty string when neither column is set", () => {
     expect(
       resolveWebhookSigningSecret({
-        signingSecret: null,
         signingSecretEnc: null,
       }),
     ).toBe("");

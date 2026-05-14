@@ -307,13 +307,6 @@ export const webhooks = pgTable("webhooks", {
   eventTypes: jsonb("event_types").notNull().$type<string[]>(),
   status: varchar("status", { length: 50 }).notNull().default("active"),
   /**
-   * Legacy plaintext signing secret. Retained for back-compat reads during
-   * the encryption-at-rest rollout. New writes populate signingSecretEnc
-   * and leave this column NULL; a follow-up backfill rewraps remaining
-   * plaintext rows and a later migration will drop this column.
-   */
-  signingSecret: varchar("signing_secret", { length: 255 }),
-  /**
    * AES-256-GCM envelope of the signing secret in the v1.<iv>.<ct>.<tag>
    * format produced by `encryptWebhookSecret`. Requires
    * WEBHOOK_SECRET_ENCRYPTION_KEY to be configured.
