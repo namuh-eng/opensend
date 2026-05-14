@@ -173,15 +173,15 @@ describe("audit event service", () => {
       source: "dashboard",
       search: "example",
     });
-    expect(observedOptions.dateFrom?.getFullYear()).toBe(2026);
-    expect(observedOptions.dateFrom?.getMonth()).toBe(4);
-    expect(observedOptions.dateFrom?.getDate()).toBe(1);
-    expect(observedOptions.dateTo?.getFullYear()).toBe(2026);
-    expect(observedOptions.dateTo?.getMonth()).toBe(4);
-    expect(observedOptions.dateTo?.getDate()).toBe(11);
-    expect(observedOptions.dateTo?.getHours()).toBe(23);
-    expect(observedOptions.dateTo?.getMinutes()).toBe(59);
-    expect(observedOptions.dateTo?.getSeconds()).toBe(59);
-    expect(observedOptions.dateTo?.getMilliseconds()).toBe(999);
+    expect(observedOptions.dateFrom?.getUTCFullYear()).toBe(2026);
+    expect(observedOptions.dateFrom?.getUTCMonth()).toBe(4);
+    expect(observedOptions.dateFrom?.getUTCDate()).toBe(1);
+    expect(observedOptions.dateTo?.getUTCFullYear()).toBe(2026);
+    expect(observedOptions.dateTo?.getUTCMonth()).toBe(4);
+    expect(observedOptions.dateTo?.getUTCDate()).toBe(11);
+    expect(observedOptions.dateTo?.getUTCHours()).toBe(23);
+    expect(observedOptions.dateTo?.getUTCMinutes()).toBe(59);
+    expect(observedOptions.dateTo?.getUTCSeconds()).toBe(59);
+    expect(observedOptions.dateTo?.getUTCMilliseconds()).toBe(999);
   });
 });

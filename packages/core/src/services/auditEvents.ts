@@ -142,7 +142,7 @@ function parseDate(value: string | null | undefined, endOfDay = false) {
   if (Number.isNaN(date.getTime())) return undefined;
 
   if (endOfDay && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    date.setHours(23, 59, 59, 999);
+    date.setUTCHours(23, 59, 59, 999);
   }
 
   return date;
