@@ -9,7 +9,7 @@ type FakeRow = {
   url: string;
   eventTypes: string[];
   status: "active" | "disabled";
-  signingSecret: string | null;
+  signingSecretEnc: string | null;
   userId: string;
   createdAt: Date;
 };
@@ -25,7 +25,7 @@ function makeRepos() {
           url: data.url,
           eventTypes: data.eventTypes ?? [],
           status: "active",
-          signingSecret: data.signingSecret ?? null,
+          signingSecretEnc: data.signingSecretEnc ?? null,
           userId: data.userId,
           createdAt: new Date(),
         };

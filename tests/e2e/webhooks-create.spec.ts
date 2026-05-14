@@ -36,9 +36,9 @@ test("dashboard empty webhooks page creates an endpoint through the real API rou
     id: string;
     user_id: string;
     event_types: string[];
-    signing_secret: string | null;
+    signing_secret_enc: string | null;
   }>(
-    `select id, user_id, event_types, signing_secret
+    `select id, user_id, event_types, signing_secret_enc
      from webhooks
      where url = $1`,
     [endpoint],
@@ -47,7 +47,7 @@ test("dashboard empty webhooks page creates an endpoint through the real API rou
   expect(created.rowCount).toBe(1);
   expect(created.rows[0]?.user_id).toBe(e2eUser.id);
   expect(created.rows[0]?.event_types).toEqual(["email.sent"]);
-  expect(created.rows[0]?.signing_secret).toMatch(/^whsec_/);
+  expect(created.rows[0]?.signing_secret_enc).toMatch(/^v1\./);
 
   await authenticatedPage
     .getByRole("button", { name: "View endpoint" })

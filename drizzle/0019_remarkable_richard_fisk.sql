@@ -1,0 +1,1 @@
+ALTER TABLE "webhooks" DROP COLUMN "signing_secret";
