@@ -16,8 +16,8 @@ test("dashboard webhook delivery row exposes replay and calls replay route", asy
   expect(eventId).toBeTruthy();
 
   const webhookResult = await e2eDb.query<{ id: string }>(
-    `insert into webhooks (url, event_types, status, signing_secret, user_id, document)
-     values ($1, $2::jsonb, 'active', 'whsec_e2e', $3, $4::jsonb)
+    `insert into webhooks (url, event_types, status, user_id, document)
+     values ($1, $2::jsonb, 'active', $3, $4::jsonb)
      returning id`,
     [
       "https://example.com/e2e-webhook",
