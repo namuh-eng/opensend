@@ -138,11 +138,9 @@ export function TemplateDetail({ template }: TemplateDetailProps) {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-[#F0F0F0]">
-            {template.name}
-          </h1>
+          <h1 className="text-2xl font-semibold text-fg">{template.name}</h1>
           {preview?.rendering.kind === "react_email" ? (
-            <p className="mt-1 text-sm text-[#A1A4A5]">
+            <p className="mt-1 text-sm text-fg-2">
               React Email registry template: {preview.rendering.template_key}
             </p>
           ) : null}
@@ -158,45 +156,45 @@ export function TemplateDetail({ template }: TemplateDetailProps) {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 text-sm text-[#A1A4A5]">
+      <div className="grid grid-cols-2 gap-4 text-sm text-fg-2">
         {template.alias && (
           <div>
-            <span className="text-[#6B7071]">Alias:</span> {template.alias}
+            <span className="text-fg-3">Alias:</span> {template.alias}
           </div>
         )}
         {template.from && (
           <div>
-            <span className="text-[#6B7071]">From:</span> {template.from}
+            <span className="text-fg-3">From:</span> {template.from}
           </div>
         )}
         {subjectPreview && (
           <div>
-            <span className="text-[#6B7071]">Subject:</span> {subjectPreview}
+            <span className="text-fg-3">Subject:</span> {subjectPreview}
           </div>
         )}
         <div>
-          <span className="text-[#6B7071]">Created:</span>{" "}
+          <span className="text-fg-3">Created:</span>{" "}
           {new Date(template.createdAt).toLocaleDateString()}
         </div>
         <div>
-          <span className="text-[#6B7071]">Updated:</span>{" "}
+          <span className="text-fg-3">Updated:</span>{" "}
           {new Date(template.updatedAt).toLocaleDateString()}
         </div>
       </div>
 
-      <section className="rounded-lg border border-[rgba(176,199,217,0.1)] bg-[#0D0F10] p-4">
+      <section className="rounded-lg border border-line bg-bg-card p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-medium text-[#F0F0F0]">
+            <h2 className="text-sm font-medium text-fg">
               Production renderer preview
             </h2>
-            <p className="mt-1 text-xs text-[#A1A4A5]">
+            <p className="mt-1 text-xs text-fg-2">
               Rendered through the same stored-template renderer used by send
               and automation flows. Preview sample values are labeled and are
               not sent automatically.
             </p>
           </div>
-          <span className="rounded-full bg-[#1A1D1E] px-2 py-1 text-xs text-[#A1A4A5]">
+          <span className="rounded-full bg-bg-2 px-2 py-1 text-xs text-fg-2">
             {previewLoading ? "Rendering..." : "Rendered"}
           </span>
         </div>
@@ -219,13 +217,13 @@ export function TemplateDetail({ template }: TemplateDetailProps) {
 
       {preview?.variables.length || template.variables.length ? (
         <div>
-          <h3 className="text-sm font-medium text-[#A1A4A5] mb-2">
+          <h3 className="text-sm font-medium text-fg-2 mb-2">
             Variable resolution
           </h3>
           {preview?.variables.length ? (
-            <div className="overflow-hidden rounded-lg border border-[rgba(176,199,217,0.1)]">
-              <table className="w-full text-left text-xs text-[#A1A4A5]">
-                <thead className="bg-[#111415] text-[#F0F0F0]">
+            <div className="overflow-hidden rounded-lg border border-line">
+              <table className="w-full text-left text-xs text-fg-2">
+                <thead className="bg-bg-2 text-fg">
                   <tr>
                     <th className="px-3 py-2 font-medium">Variable</th>
                     <th className="px-3 py-2 font-medium">Value</th>
@@ -235,11 +233,8 @@ export function TemplateDetail({ template }: TemplateDetailProps) {
                 </thead>
                 <tbody>
                   {preview.variables.map((variable) => (
-                    <tr
-                      key={variable.key}
-                      className="border-t border-[rgba(176,199,217,0.08)]"
-                    >
-                      <td className="px-3 py-2 font-mono text-[#F0F0F0]">
+                    <tr key={variable.key} className="border-t border-line">
+                      <td className="px-3 py-2 font-mono text-fg">
                         {`{{${variable.key}}}`}
                       </td>
                       <td className="px-3 py-2">
@@ -265,7 +260,7 @@ export function TemplateDetail({ template }: TemplateDetailProps) {
               {template.variables.map((variable) => (
                 <span
                   key={variable.key ?? variable.name}
-                  className="text-xs px-2 py-1 rounded bg-[#1A1D1E] text-[#A1A4A5] border border-[rgba(176,199,217,0.1)]"
+                  className="text-xs px-2 py-1 rounded bg-bg-2 text-fg-2 border border-line"
                 >
                   {`{{${variable.key ?? variable.name}}}`}
                   {variable.required && (
@@ -280,10 +275,8 @@ export function TemplateDetail({ template }: TemplateDetailProps) {
 
       {htmlPreview ? (
         <div data-testid="template-html-preview">
-          <h3 className="text-sm font-medium text-[#A1A4A5] mb-2">
-            HTML Preview
-          </h3>
-          <div className="border border-[rgba(176,199,217,0.1)] rounded-lg overflow-hidden bg-white">
+          <h3 className="text-sm font-medium text-fg-2 mb-2">HTML Preview</h3>
+          <div className="border border-line rounded-lg overflow-hidden bg-white">
             <iframe
               srcDoc={htmlPreview}
               className="w-full min-h-[520px]"
@@ -296,10 +289,10 @@ export function TemplateDetail({ template }: TemplateDetailProps) {
 
       {textPreview ? (
         <div data-testid="template-text-preview">
-          <h3 className="text-sm font-medium text-[#A1A4A5] mb-2">
+          <h3 className="text-sm font-medium text-fg-2 mb-2">
             Text/plain Preview
           </h3>
-          <pre className="text-sm text-[#A1A4A5] bg-[#1A1D1E] p-4 rounded-lg whitespace-pre-wrap">
+          <pre className="text-sm text-fg-2 bg-bg-2 p-4 rounded-lg whitespace-pre-wrap">
             {textPreview}
           </pre>
         </div>

@@ -247,7 +247,7 @@ export function MetricsPage() {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-[#F0F0F0]">Metrics</h1>
+        <h1 className="text-2xl font-semibold text-fg">Metrics</h1>
         <div className="flex items-center gap-2">
           <ComboboxFilter
             options={domainOptions}
@@ -325,7 +325,7 @@ export function MetricsPage() {
       </div>
 
       {/* Footer */}
-      <div className="mt-4 text-[12px] text-[#A1A4A5]">
+      <div className="mt-4 text-[12px] text-fg-2">
         Data is updated every 15 minutes. Last updated {lastUpdatedStr}.
       </div>
     </div>

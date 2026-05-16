@@ -395,10 +395,10 @@ function EndpointCard({
   onToggle: () => void;
 }) {
   return (
-    <div className="border-b border-[rgba(176,199,217,0.145)] last:border-b-0">
+    <div className="border-b border-line last:border-b-0">
       <button
         type="button"
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[rgba(24,25,28,0.5)] transition-colors"
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-bg-2 transition-colors"
         onClick={onToggle}
       >
         <span
@@ -406,19 +406,17 @@ function EndpointCard({
         >
           {endpoint.method}
         </span>
-        <span className="text-[14px] text-[#F0F0F0] font-mono flex-1">
+        <span className="text-[14px] text-fg font-mono flex-1">
           {endpoint.path}
         </span>
-        <span className="text-[13px] text-[#A1A4A5]">
-          {endpoint.description}
-        </span>
-        <span className="text-[#A1A4A5] text-[13px] ml-2">
+        <span className="text-[13px] text-fg-2">{endpoint.description}</span>
+        <span className="text-fg-2 text-[13px] ml-2">
           {expanded ? "\u25BC" : "\u25B6"}
         </span>
       </button>
       {expanded && (
         <div className="px-4 pb-4 pl-[92px]">
-          <pre className="text-[12px] text-[#A1A4A5] font-mono bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
+          <pre className="text-[12px] text-fg-2 font-mono bg-bg-3 border border-line rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
             {endpoint.curl}
           </pre>
         </div>
@@ -447,13 +445,11 @@ export default function DocsPage() {
       <div className="max-w-4xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="mb-10">
-          <h1 className="text-3xl font-semibold text-[#F0F0F0] mb-2">
-            API Reference
-          </h1>
-          <p className="text-[14px] text-[#A1A4A5]">
+          <h1 className="text-3xl font-semibold text-fg mb-2">API Reference</h1>
+          <p className="text-[14px] text-fg-2">
             All endpoints require a Bearer token in the Authorization header.
             Base URL:{" "}
-            <code className="px-1.5 py-0.5 bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded text-[13px] text-[#F0F0F0] font-mono">
+            <code className="px-1.5 py-0.5 bg-bg-3 border border-line rounded text-[13px] text-fg font-mono">
               https://api.opensend.com
             </code>
             .{" "}
@@ -461,12 +457,12 @@ export default function DocsPage() {
               "Use your OpenSend API key (`os_...`) with the Resend-compatible API surface."
             }
           </p>
-          <div className="mt-5 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] p-4">
-            <p className="text-[13px] text-[#A1A4A5]">
+          <div className="mt-5 rounded-lg border border-line bg-bg-2 p-4">
+            <p className="text-[13px] text-fg-2">
               Need a machine-readable contract? Download the unauthenticated
               OpenAPI 3.0 JSON at{" "}
               <a
-                className="font-mono text-[#F0F0F0] underline decoration-[rgba(176,199,217,0.35)] underline-offset-4 hover:decoration-[#F0F0F0]"
+                className="font-mono text-fg underline decoration-[rgba(176,199,217,0.35)] underline-offset-4 hover:decoration-[#F0F0F0]"
                 href="/openapi.json"
               >
                 /openapi.json
@@ -475,22 +471,20 @@ export default function DocsPage() {
             </p>
           </div>
 
-          <div className="mt-5 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] p-4 space-y-3">
-            <h2 className="text-[15px] font-semibold text-[#F0F0F0]">
+          <div className="mt-5 rounded-lg border border-line bg-bg-2 p-4 space-y-3">
+            <h2 className="text-[15px] font-semibold text-fg">
               MCP server for agent clients
             </h2>
-            <p className="text-[13px] text-[#A1A4A5]">
+            <p className="text-[13px] text-fg-2">
               OpenSend includes an initial MCP parity slice for Codex and other
               MCP clients. HTTP mode is served by the control-plane API at{" "}
-              <code className="font-mono text-[#F0F0F0]">/mcp</code> and uses{" "}
-              <code className="font-mono text-[#F0F0F0]">
-                Authorization: Bearer
-              </code>{" "}
+              <code className="font-mono text-fg">/mcp</code> and uses{" "}
+              <code className="font-mono text-fg">Authorization: Bearer</code>{" "}
               API-key auth, not dashboard cookies. The first tools cover
               send/list/get emails, create/list/get contacts, create/list/get
               domains, and create/list/get webhooks.
             </p>
-            <pre className="text-[12px] text-[#A1A4A5] font-mono bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
+            <pre className="text-[12px] text-fg-2 font-mono bg-bg-3 border border-line rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
               {`# Codex stdio
 codex mcp add opensend \
   --env OPENSEND_API_KEY=os_... \
@@ -504,27 +498,26 @@ Content-Type: application/json
 
 {"jsonrpc":"2.0","id":"tools","method":"tools/list"}`}
             </pre>
-            <p className="text-[12px] text-[#A1A4A5]">
+            <p className="text-[12px] text-fg-2">
               Deferred tools: received emails, broadcasts, segments, topics,
               contact properties, API-key management, and public npx packaging.
             </p>
           </div>
 
-          <div className="mt-5 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] p-4 space-y-3">
-            <h2 className="text-[15px] font-semibold text-[#F0F0F0]">
+          <div className="mt-5 rounded-lg border border-line bg-bg-2 p-4 space-y-3">
+            <h2 className="text-[15px] font-semibold text-fg">
               React Email with the TypeScript SDK
             </h2>
-            <p className="text-[13px] text-[#A1A4A5]">
+            <p className="text-[13px] text-fg-2">
               Use the Resend-compatible SDK path when you want to author emails
               as React components. Install{" "}
-              <code className="font-mono text-[#F0F0F0]">react</code> and{" "}
-              <code className="font-mono text-[#F0F0F0]">react-dom</code>{" "}
-              alongside{" "}
-              <code className="font-mono text-[#F0F0F0]">opensend</code>; the
-              SDK renders the component to HTML locally and posts JSON to the
-              email API.
+              <code className="font-mono text-fg">react</code> and{" "}
+              <code className="font-mono text-fg">react-dom</code> alongside{" "}
+              <code className="font-mono text-fg">opensend</code>; the SDK
+              renders the component to HTML locally and posts JSON to the email
+              API.
             </p>
-            <pre className="text-[12px] text-[#A1A4A5] font-mono bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
+            <pre className="text-[12px] text-fg-2 font-mono bg-bg-3 border border-line rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
               {`import { Html, Text } from "@react-email/components";
 import { Resend } from "opensend";
 
@@ -553,10 +546,10 @@ export async function POST() {
   return Response.json(data);
 }`}
             </pre>
-            <p className="text-[12px] text-[#A1A4A5]">
+            <p className="text-[12px] text-fg-2">
               The REST API remains JSON-only: send React components through the
               TypeScript SDK, or send pre-rendered{" "}
-              <code className="font-mono text-[#F0F0F0]">html</code> directly.
+              <code className="font-mono text-fg">html</code> directly.
               Dashboard React Email starters are registry-controlled and run
               inside your Opensend app; self-hosted deployments do not call
               Resend-hosted rendering services, and arbitrary tenant TSX/JS is
@@ -568,10 +561,10 @@ export async function POST() {
         {/* Groups */}
         {API_GROUPS.map((group) => (
           <div key={group.name} className="mb-8">
-            <h2 className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-3">
+            <h2 className="text-[11px] font-medium text-fg-2 tracking-wider mb-3">
               {group.name.toUpperCase()}
             </h2>
-            <div className="border border-[rgba(176,199,217,0.145)] rounded-lg overflow-hidden">
+            <div className="border border-line rounded-lg overflow-hidden">
               {group.endpoints.map((ep) => {
                 const key = `${ep.method}-${ep.path}`;
                 return (

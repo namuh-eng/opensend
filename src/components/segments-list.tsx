@@ -101,7 +101,7 @@ export function SegmentsList() {
         <input
           type="text"
           placeholder="Search..."
-          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)]"
+          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
           onChange={(e) => handleSearchChange(e.target.value)}
         />
 
@@ -110,7 +110,7 @@ export function SegmentsList() {
           type="button"
           onClick={handleExport}
           disabled={exportState.type === "loading"}
-          className="h-9 px-3 text-[13px] text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] rounded-md hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-9 px-3 text-[13px] text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         >
           Export
         </button>
@@ -126,15 +126,15 @@ export function SegmentsList() {
 
       {/* Data table */}
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-[14px] text-[#A1A4A5]">
+        <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
           Loading segments...
         </div>
       ) : segments.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-6">
-          <h3 className="text-[16px] font-semibold text-[#F0F0F0] mb-2">
+          <h3 className="text-[16px] font-semibold text-fg mb-2">
             No segments
           </h3>
-          <p className="text-[14px] text-[#A1A4A5] text-center max-w-[360px] mb-6">
+          <p className="text-[14px] text-fg-2 text-center max-w-[360px] mb-6">
             Segments let you group contacts based on shared characteristics.
           </p>
         </div>
@@ -142,7 +142,7 @@ export function SegmentsList() {
         <>
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[rgba(176,199,217,0.145)]">
+              <tr className="border-b border-line">
                 <th className="w-10 px-3 py-2 text-left">
                   <input
                     type="checkbox"
@@ -152,16 +152,16 @@ export function SegmentsList() {
                     aria-label="Select all"
                   />
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Name
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Contacts
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Unsubscribed
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Created
                 </th>
                 <th className="w-10 px-3 py-2" />
@@ -171,7 +171,7 @@ export function SegmentsList() {
               {segments.map((seg) => (
                 <tr
                   key={seg.id}
-                  className="border-b border-[rgba(176,199,217,0.145)] hover:bg-[rgba(24,25,28,0.5)] transition-colors group"
+                  className="border-b border-line hover:bg-bg-2 transition-colors group"
                 >
                   <td className="w-10 px-3 py-2">
                     <input
@@ -181,7 +181,7 @@ export function SegmentsList() {
                       className="accent-white rounded cursor-pointer"
                     />
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#F0F0F0]">
+                  <td className="px-3 py-2 text-[14px] text-fg">
                     <Link
                       href={`/audience?segmentId=${seg.id}`}
                       className="hover:underline"
@@ -189,14 +189,14 @@ export function SegmentsList() {
                       {seg.name}
                     </Link>
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {seg.contactsCount}
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {seg.unsubscribedCount}
                   </td>
                   <td
-                    className="px-3 py-2 text-[14px] text-[#A1A4A5]"
+                    className="px-3 py-2 text-[14px] text-fg-2"
                     title={new Date(seg.createdAt).toLocaleString()}
                   >
                     {formatRelativeTime(seg.createdAt)}
@@ -205,7 +205,7 @@ export function SegmentsList() {
                     <button
                       type="button"
                       aria-label="More actions"
-                      className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors opacity-0 group-hover:opacity-100"
+                      className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100"
                     >
                       <svg
                         aria-hidden="true"
@@ -226,7 +226,7 @@ export function SegmentsList() {
           </table>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between mt-3 text-[13px] text-[#A1A4A5]">
+          <div className="flex items-center justify-between mt-3 text-[13px] text-fg-2">
             <span>
               Page {page} – {start} of {total} segments – {limit} items
             </span>
@@ -235,7 +235,7 @@ export function SegmentsList() {
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-2 py-1 rounded border border-[rgba(176,199,217,0.145)] disabled:opacity-30 hover:border-[rgba(176,199,217,0.3)] transition-colors"
+                className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
               >
                 &larr;
               </button>
@@ -243,7 +243,7 @@ export function SegmentsList() {
                 type="button"
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="px-2 py-1 rounded border border-[rgba(176,199,217,0.145)] disabled:opacity-30 hover:border-[rgba(176,199,217,0.3)] transition-colors"
+                className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
               >
                 &rarr;
               </button>
@@ -321,8 +321,8 @@ function CreateSegmentModal({
         }}
         role="presentation"
       />
-      <div className="relative bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-lg w-[440px] p-6">
-        <h2 className="text-[16px] font-semibold text-[#F0F0F0] mb-4">
+      <div className="relative bg-bg-card border border-line rounded-lg w-[440px] p-6">
+        <h2 className="text-[16px] font-semibold text-fg mb-4">
           Create a new segment
         </h2>
 
@@ -330,7 +330,7 @@ function CreateSegmentModal({
           <div>
             <label
               htmlFor="segment-name"
-              className="block text-[13px] text-[#A1A4A5] mb-1.5"
+              className="block text-[13px] text-fg-2 mb-1.5"
             >
               Name
             </label>
@@ -341,7 +341,7 @@ function CreateSegmentModal({
               onChange={(e) => setName(e.target.value)}
               maxLength={255}
               placeholder="Your segment name"
-              className="w-full h-9 px-3 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)]"
+              className="w-full h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
             />
           </div>
 
@@ -352,7 +352,7 @@ function CreateSegmentModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-9 px-4 text-[13px] text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] rounded-md hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors"
+            className="h-9 px-4 text-[13px] text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 transition-colors"
           >
             Cancel
           </button>

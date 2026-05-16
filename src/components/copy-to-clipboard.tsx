@@ -21,12 +21,10 @@ export function CopyToClipboard({
 
   return (
     <span className={`inline-flex items-center gap-1.5 ${className}`}>
-      <span className="text-[14px] text-[#A1A4A5] font-mono truncate">
-        {value}
-      </span>
+      <span className="text-[14px] text-fg-2 font-mono truncate">{value}</span>
       <button
         type="button"
-        className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors shrink-0"
+        className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors shrink-0"
         onClick={handleCopy}
         aria-label={copied ? "Copied" : "Copy to clipboard"}
       >

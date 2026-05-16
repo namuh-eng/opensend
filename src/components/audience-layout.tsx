@@ -47,7 +47,7 @@ export function AudienceLayout({ stats, children }: AudienceLayoutProps) {
     <div>
       {/* Header row */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-[#F0F0F0]">Audience</h1>
+        <h1 className="text-2xl font-semibold text-fg">Audience</h1>
 
         {/* Add contacts dropdown */}
         <div className="relative" ref={dropdownRef}>
@@ -74,10 +74,10 @@ export function AudienceLayout({ stats, children }: AudienceLayoutProps) {
           </button>
 
           {dropdownOpen && (
-            <div className="absolute right-0 top-full mt-1 w-48 bg-[#1a1a1a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1">
+            <div className="absolute right-0 top-full mt-1 w-48 bg-bg-2 border border-line rounded-md shadow-lg z-50 py-1">
               <button
                 type="button"
-                className="w-full text-left px-3 py-2 text-[13px] text-[#F0F0F0] hover:bg-[rgba(176,199,217,0.1)] transition-colors"
+                className="w-full text-left px-3 py-2 text-[13px] text-fg hover:bg-white/10 transition-colors"
                 onClick={() => {
                   setDropdownOpen(false);
                   setAddModalOpen(true);
@@ -87,7 +87,7 @@ export function AudienceLayout({ stats, children }: AudienceLayoutProps) {
               </button>
               <button
                 type="button"
-                className="w-full text-left px-3 py-2 text-[13px] text-[#F0F0F0] hover:bg-[rgba(176,199,217,0.1)] transition-colors"
+                className="w-full text-left px-3 py-2 text-[13px] text-fg hover:bg-white/10 transition-colors"
                 onClick={() => setDropdownOpen(false)}
               >
                 Import CSV
@@ -98,7 +98,7 @@ export function AudienceLayout({ stats, children }: AudienceLayoutProps) {
       </div>
 
       {/* Tab bar */}
-      <div className="flex items-center gap-0 border-b border-[rgba(176,199,217,0.145)] mb-6">
+      <div className="flex items-center gap-0 border-b border-line mb-6">
         {TABS.map((tab) => {
           const isActive =
             tab.href === "/audience"
@@ -110,9 +110,7 @@ export function AudienceLayout({ stats, children }: AudienceLayoutProps) {
               href={tab.href}
               data-state={isActive ? "active" : "inactive"}
               className={`px-4 py-2 text-[14px] font-medium transition-colors relative ${
-                isActive
-                  ? "text-[#F0F0F0]"
-                  : "text-[#A1A4A5] hover:text-[#F0F0F0]"
+                isActive ? "text-fg" : "text-fg-2 hover:text-fg"
               }`}
             >
               {tab.label}
@@ -127,31 +125,29 @@ export function AudienceLayout({ stats, children }: AudienceLayoutProps) {
       {/* Summary stats */}
       <div className="flex items-start gap-12 mb-6">
         <div>
-          <div className="text-[11px] font-medium tracking-wider text-[#A1A4A5] uppercase mb-1">
+          <div className="text-[11px] font-medium tracking-wider text-fg-2 uppercase mb-1">
             ALL CONTACTS
           </div>
-          <div className="text-[20px] font-semibold text-[#F0F0F0]">
-            {stats.all}
-          </div>
+          <div className="text-[20px] font-semibold text-fg">{stats.all}</div>
         </div>
         <div>
-          <div className="text-[11px] font-medium tracking-wider text-[#A1A4A5] uppercase mb-1">
+          <div className="text-[11px] font-medium tracking-wider text-fg-2 uppercase mb-1">
             SUBSCRIBERS
           </div>
-          <div className="text-[20px] font-semibold text-[#F0F0F0]">
+          <div className="text-[20px] font-semibold text-fg">
             {stats.subscribed}
           </div>
         </div>
         <div>
-          <div className="text-[11px] font-medium tracking-wider text-[#A1A4A5] uppercase mb-1">
+          <div className="text-[11px] font-medium tracking-wider text-fg-2 uppercase mb-1">
             UNSUBSCRIBERS
           </div>
-          <div className="text-[20px] font-semibold text-[#F0F0F0]">
+          <div className="text-[20px] font-semibold text-fg">
             {stats.unsubscribed}
           </div>
         </div>
         <div>
-          <div className="text-[11px] font-medium tracking-wider text-[#A1A4A5] uppercase mb-1">
+          <div className="text-[11px] font-medium tracking-wider text-fg-2 uppercase mb-1">
             METRICS
           </div>
         </div>

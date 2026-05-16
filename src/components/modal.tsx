@@ -48,14 +48,14 @@ export function Modal({
         aria-label="Close modal"
       />
       {/* Dialog */}
-      <div className="relative z-10 w-full max-w-[520px] rounded-lg border border-[rgba(176,199,217,0.145)] bg-[#0a0a0a] shadow-xl">
+      <div className="relative z-10 w-full max-w-[520px] rounded-lg border border-line bg-bg-card shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4">
-          <h2 className="text-[16px] font-semibold text-[#F0F0F0]">{title}</h2>
+          <h2 className="text-[16px] font-semibold text-fg">{title}</h2>
           <button
             type="button"
             aria-label="Close"
-            className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+            className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
             onClick={onClose}
           >
             <svg
@@ -89,7 +89,7 @@ export function Modal({
           )}
           <button
             type="button"
-            className="px-3 py-1.5 rounded-md text-[13px] font-medium text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] hover:bg-[rgba(176,199,217,0.145)] transition-colors"
+            className="px-3 py-1.5 rounded-md text-[13px] font-medium text-fg-2 border border-line hover:bg-white/[0.14] transition-colors"
             onClick={onClose}
           >
             Cancel

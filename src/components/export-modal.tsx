@@ -93,13 +93,11 @@ export function ExportModal({ open, onClose }: ExportModalProps) {
     >
       <div className="space-y-4">
         {message ? (
-          <output className="block text-[13px] text-[#A1A4A5]">
-            {message}
-          </output>
+          <output className="block text-[13px] text-fg-2">{message}</output>
         ) : null}
         {/* Date Range */}
         <div>
-          <span className="block text-[12px] font-medium text-[#A1A4A5] tracking-wider mb-2">
+          <span className="block text-[12px] font-medium text-fg-2 tracking-wider mb-2">
             DATE RANGE
           </span>
           <div className="flex items-center gap-2">
@@ -107,15 +105,15 @@ export function ExportModal({ open, onClose }: ExportModalProps) {
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="flex-1 px-3 py-1.5 text-[13px] text-[#F0F0F0] bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-[8px] outline-none focus:border-[rgba(176,199,217,0.3)]"
+              className="flex-1 px-3 py-1.5 text-[13px] text-fg bg-bg-3 border border-line rounded-[8px] outline-none focus:border-line-3"
               aria-label="Date from"
             />
-            <span className="text-[13px] text-[#A1A4A5]">to</span>
+            <span className="text-[13px] text-fg-2">to</span>
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="flex-1 px-3 py-1.5 text-[13px] text-[#F0F0F0] bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-[8px] outline-none focus:border-[rgba(176,199,217,0.3)]"
+              className="flex-1 px-3 py-1.5 text-[13px] text-fg bg-bg-3 border border-line rounded-[8px] outline-none focus:border-line-3"
               aria-label="Date to"
             />
           </div>
@@ -123,7 +121,7 @@ export function ExportModal({ open, onClose }: ExportModalProps) {
 
         {/* Status Multi-select */}
         <div>
-          <span className="block text-[12px] font-medium text-[#A1A4A5] tracking-wider mb-2">
+          <span className="block text-[12px] font-medium text-fg-2 tracking-wider mb-2">
             STATUS
           </span>
           <div className="flex flex-wrap gap-1.5">
@@ -137,7 +135,7 @@ export function ExportModal({ open, onClose }: ExportModalProps) {
                   className={`px-2.5 py-1 text-[12px] rounded-full border transition-colors ${
                     isSelected
                       ? "bg-white text-black border-white"
-                      : "text-[#A1A4A5] border-[rgba(176,199,217,0.145)] hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)]"
+                      : "text-fg-2 border-line hover:text-fg hover:border-line-3"
                   }`}
                 >
                   {opt.label}

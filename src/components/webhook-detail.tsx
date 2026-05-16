@@ -112,21 +112,18 @@ export function WebhookDetail({ webhook }: { webhook: WebhookDetailData }) {
 
   return (
     <div>
-      <div className="mb-6 flex items-center gap-2 text-[13px] text-[#A1A4A5]">
-        <Link
-          href="/webhooks"
-          className="transition-colors hover:text-[#F0F0F0]"
-        >
+      <div className="mb-6 flex items-center gap-2 text-[13px] text-fg-2">
+        <Link href="/webhooks" className="transition-colors hover:text-fg">
           Webhooks
         </Link>
         <span>/</span>
-        <span className="text-[#F0F0F0]">Endpoint</span>
+        <span className="text-fg">Endpoint</span>
       </div>
 
       <div className="mb-8 flex items-start justify-between gap-6">
         <div>
-          <p className="text-[13px] text-[#A1A4A5]">Webhook endpoint</p>
-          <h1 className="mt-1 break-all text-2xl font-semibold text-[#F0F0F0]">
+          <p className="text-[13px] text-fg-2">Webhook endpoint</p>
+          <h1 className="mt-1 break-all text-2xl font-semibold text-fg">
             {webhook.endpoint}
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-white/40">
@@ -146,7 +143,7 @@ export function WebhookDetail({ webhook }: { webhook: WebhookDetailData }) {
           {webhook.events.map((event) => (
             <span
               key={event}
-              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-[#F0F0F0]"
+              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-fg"
             >
               {event}
             </span>
@@ -208,7 +205,7 @@ export function WebhookDetail({ webhook }: { webhook: WebhookDetailData }) {
             <tbody className="divide-y divide-white/5">
               {webhook.recentDeliveries.map((delivery) => (
                 <tr key={delivery.id} className="hover:bg-white/[0.02]">
-                  <td className="whitespace-nowrap px-6 py-4 font-mono text-xs text-[#F0F0F0]">
+                  <td className="whitespace-nowrap px-6 py-4 font-mono text-xs text-fg">
                     {delivery.id}
                   </td>
                   <td className="whitespace-nowrap px-6 py-4 text-sm">
@@ -232,7 +229,7 @@ export function WebhookDetail({ webhook }: { webhook: WebhookDetailData }) {
                   <td className="whitespace-nowrap px-6 py-4 text-right text-sm">
                     <button
                       type="button"
-                      className="rounded-md border border-white/10 px-3 py-1.5 text-xs font-medium text-[#F0F0F0] transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-md border border-white/10 px-3 py-1.5 text-xs font-medium text-fg transition-colors hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
                       disabled={replayingId !== null}
                       onClick={() => void replayDelivery(delivery.id)}
                     >

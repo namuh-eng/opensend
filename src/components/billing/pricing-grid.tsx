@@ -32,7 +32,7 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
 
   if (plans.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-[rgba(176,199,217,0.145)] p-12 text-center text-[14px] text-[#A1A4A5]">
+      <div className="rounded-lg border border-dashed border-line p-12 text-center text-[14px] text-fg-2">
         No public plans available. Run database seed to load the default plan
         catalogue.
       </div>
@@ -87,13 +87,13 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
               className={`flex flex-col rounded-lg border p-6 ${
                 isCurrent
                   ? "border-purple-500/60 bg-[rgba(88,28,135,0.12)]"
-                  : "border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.6)]"
+                  : "border-line bg-bg-3"
               }`}
               data-testid={`pricing-card-${plan.slug}`}
               data-current={isCurrent ? "true" : undefined}
             >
               <header className="mb-4 flex items-baseline justify-between">
-                <h3 className="text-[18px] font-semibold text-[#F0F0F0]">
+                <h3 className="text-[18px] font-semibold text-fg">
                   {plan.name}
                 </h3>
                 {isCurrent ? (
@@ -106,16 +106,14 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
                 ) : null}
               </header>
               <div className="mb-4">
-                <span className="text-[28px] font-semibold text-[#F0F0F0]">
+                <span className="text-[28px] font-semibold text-fg">
                   {formatPrice(plan.monthlyPriceCents)}
                 </span>
                 {plan.monthlyPriceCents > 0 ? (
-                  <span className="ml-1 text-[13px] text-[#A1A4A5]">
-                    / month
-                  </span>
+                  <span className="ml-1 text-[13px] text-fg-2">/ month</span>
                 ) : null}
               </div>
-              <ul className="mb-6 flex-1 space-y-2 text-[13px] text-[#A1A4A5]">
+              <ul className="mb-6 flex-1 space-y-2 text-[13px] text-fg-2">
                 <li>{formatNumber(plan.monthlyEmailQuota)} emails / month</li>
                 <li>
                   {formatNumber(plan.maxDomains)}{" "}
@@ -130,7 +128,7 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
                 type="button"
                 disabled={isCurrent || isPending}
                 onClick={() => handleUpgrade(plan.id)}
-                className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-2 text-[13px] font-medium text-[#F0F0F0] transition-colors hover:bg-[rgba(24,25,28,1)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-md border border-line bg-bg-3 px-3 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card disabled:cursor-not-allowed disabled:opacity-50"
                 data-testid={`pricing-card-${plan.slug}-upgrade`}
               >
                 {isCurrent

@@ -35,9 +35,9 @@ export function EmailsHeader({ activeTab, apiKeys = [] }: EmailsHeaderProps) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold text-[#F0F0F0]">Emails</h1>
+        <h1 className="text-2xl font-semibold text-fg">Emails</h1>
       </div>
-      <div className="flex items-center justify-between border-b border-[rgba(176,199,217,0.145)]">
+      <div className="flex items-center justify-between border-b border-line">
         <div className="flex items-center gap-0">
           {tabs.map((tab) => {
             const isActive = tab.value === activeTab;
@@ -47,9 +47,7 @@ export function EmailsHeader({ activeTab, apiKeys = [] }: EmailsHeaderProps) {
                 href={tab.href}
                 data-state={isActive ? "active" : "inactive"}
                 className={`px-4 py-2 text-[14px] font-medium transition-colors relative ${
-                  isActive
-                    ? "text-[#F0F0F0]"
-                    : "text-[#A1A4A5] hover:text-[#F0F0F0]"
+                  isActive ? "text-fg" : "text-fg-2 hover:text-fg"
                 }`}
               >
                 {tab.label}
@@ -66,7 +64,7 @@ export function EmailsHeader({ activeTab, apiKeys = [] }: EmailsHeaderProps) {
             <button
               type="button"
               aria-label="More actions"
-              className="p-1.5 rounded hover:bg-[rgba(24,25,28,0.5)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+              className="p-1.5 rounded hover:bg-bg-2 text-fg-2 hover:text-fg transition-colors"
               onClick={() => setMenuOpen(!menuOpen)}
             >
               <svg
@@ -82,10 +80,10 @@ export function EmailsHeader({ activeTab, apiKeys = [] }: EmailsHeaderProps) {
               </svg>
             </button>
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 min-w-[160px] bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-[8px] py-1 z-10">
+              <div className="absolute right-0 top-full mt-1 min-w-[160px] bg-bg-3 border border-line rounded-[8px] py-1 z-10">
                 <button
                   type="button"
-                  className="w-full block px-3 py-2 text-[13px] text-[#A1A4A5] hover:text-[#F0F0F0] hover:bg-[rgba(176,199,217,0.1)] transition-colors text-left"
+                  className="w-full block px-3 py-2 text-[13px] text-fg-2 hover:text-fg hover:bg-white/10 transition-colors text-left"
                   onClick={() => {
                     setExportOpen(true);
                     setMenuOpen(false);
@@ -95,7 +93,7 @@ export function EmailsHeader({ activeTab, apiKeys = [] }: EmailsHeaderProps) {
                 </button>
                 <a
                   href="/docs"
-                  className="block px-3 py-2 text-[13px] text-[#A1A4A5] hover:text-[#F0F0F0] hover:bg-[rgba(176,199,217,0.1)] transition-colors"
+                  className="block px-3 py-2 text-[13px] text-fg-2 hover:text-fg hover:bg-white/10 transition-colors"
                 >
                   Go to docs
                 </a>

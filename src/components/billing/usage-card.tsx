@@ -33,18 +33,18 @@ function UsageRow({ label, metric, testId }: UsageRowProps) {
   return (
     <div className="space-y-2" data-testid={testId}>
       <div className="flex items-center justify-between text-[13px]">
-        <span className="text-[#A1A4A5]">{label}</span>
-        <span className="font-medium text-[#F0F0F0]">
+        <span className="text-fg-2">{label}</span>
+        <span className="font-medium text-fg">
           {formatNumber(metric.used)} / {formatNumber(metric.limit)}
           <span
-            className="ml-2 text-[12px] text-[#A1A4A5]"
+            className="ml-2 text-[12px] text-fg-2"
             data-testid={testId ? `${testId}-percent` : undefined}
           >
             {formatUsagePercent(metric)}
           </span>
         </span>
       </div>
-      <div className="h-2 w-full overflow-hidden rounded-full bg-[rgba(176,199,217,0.145)]">
+      <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.14]">
         <div
           className={`h-full ${thresholdColor(threshold)} transition-all`}
           style={{ width: `${percent}%` }}
@@ -64,16 +64,16 @@ interface UnknownUsageRowProps {
 function UnknownUsageRow({ label, limit, testId }: UnknownUsageRowProps) {
   return (
     <div
-      className="rounded-md border border-dashed border-[rgba(176,199,217,0.145)] p-3"
+      className="rounded-md border border-dashed border-line p-3"
       data-testid={testId}
     >
       <div className="flex items-center justify-between text-[13px]">
-        <span className="text-[#A1A4A5]">{label}</span>
-        <span className="font-medium text-[#F0F0F0]">
+        <span className="text-fg-2">{label}</span>
+        <span className="font-medium text-fg">
           Unknown / {formatNumber(limit)}
         </span>
       </div>
-      <p className="mt-2 text-[12px] text-[#A1A4A5]">
+      <p className="mt-2 text-[12px] text-fg-2">
         Usage has not been reported for this billing period yet.
       </p>
     </div>
@@ -108,12 +108,12 @@ export function UsageCard({ data }: { data: UsageCardData }) {
 
   return (
     <div
-      className="rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.6)] p-6"
+      className="rounded-lg border border-line bg-bg-3 p-6"
       data-testid="billing-usage-card"
     >
       <div className="mb-5 flex items-baseline justify-between">
-        <h2 className="text-[16px] font-semibold text-[#F0F0F0]">Usage</h2>
-        <span className="text-[12px] text-[#A1A4A5]">
+        <h2 className="text-[16px] font-semibold text-fg">Usage</h2>
+        <span className="text-[12px] text-fg-2">
           {formatRange(data.periodStart, data.periodEnd)}
         </span>
       </div>

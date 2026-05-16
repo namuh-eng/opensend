@@ -614,7 +614,7 @@ function CopyButton({ code }: { code: string }) {
     <button
       type="button"
       aria-label={copied ? "Copied" : "Copy code"}
-      className="absolute top-2 right-2 p-1.5 rounded-md text-[#A1A4A5] hover:text-[#F0F0F0] hover:bg-[rgba(176,199,217,0.145)] transition-colors"
+      className="absolute top-2 right-2 p-1.5 rounded-md text-fg-2 hover:text-fg hover:bg-white/[0.14] transition-colors"
       onClick={handleCopy}
     >
       {copied ? (
@@ -701,17 +701,17 @@ export function ApiCodeDrawer({ open, onClose, context }: ApiCodeDrawerProps) {
         ref={drawerRef}
         aria-label={title}
         open={open}
-        className={`fixed top-0 right-0 z-50 h-full w-full max-w-[520px] m-0 p-0 bg-[#0a0a0a] border-l border-[rgba(176,199,217,0.145)] shadow-2xl transform transition-transform duration-200 ease-in-out ${
+        className={`fixed top-0 right-0 z-50 h-full w-full max-w-[520px] m-0 p-0 bg-bg-card border-l border-line shadow-2xl transform transition-transform duration-200 ease-in-out ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(176,199,217,0.145)]">
-          <h2 className="text-[16px] font-semibold text-[#F0F0F0]">{title}</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line">
+          <h2 className="text-[16px] font-semibold text-fg">{title}</h2>
           <button
             type="button"
             aria-label="Close"
-            className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+            className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
             onClick={onClose}
           >
             <svg
@@ -727,7 +727,7 @@ export function ApiCodeDrawer({ open, onClose, context }: ApiCodeDrawerProps) {
         </div>
 
         {/* Language tabs */}
-        <div className="flex items-center gap-0 px-6 border-b border-[rgba(176,199,217,0.145)]">
+        <div className="flex items-center gap-0 px-6 border-b border-line">
           {LANGUAGE_TABS.map((tab) => {
             const isActive = tab.value === activeLanguage;
             return (
@@ -736,9 +736,7 @@ export function ApiCodeDrawer({ open, onClose, context }: ApiCodeDrawerProps) {
                 type="button"
                 data-testid={`lang-tab-${tab.value}`}
                 className={`px-4 py-2.5 text-[13px] font-medium transition-colors relative ${
-                  isActive
-                    ? "text-[#F0F0F0]"
-                    : "text-[#A1A4A5] hover:text-[#F0F0F0]"
+                  isActive ? "text-fg" : "text-fg-2 hover:text-fg"
                 }`}
                 onClick={() => setActiveLanguage(tab.value)}
               >
@@ -755,12 +753,12 @@ export function ApiCodeDrawer({ open, onClose, context }: ApiCodeDrawerProps) {
         <div className="overflow-y-auto h-[calc(100%-105px)] px-6 py-4 space-y-6">
           {sections.map((section) => (
             <div key={section.title}>
-              <h3 className="text-[13px] font-medium text-[#A1A4A5] mb-2">
+              <h3 className="text-[13px] font-medium text-fg-2 mb-2">
                 {section.title}
               </h3>
-              <div className="relative rounded-lg bg-[rgba(24,25,28,0.6)] border border-[rgba(176,199,217,0.1)]">
+              <div className="relative rounded-lg bg-bg-3 border border-line">
                 <CopyButton code={section.code[activeLanguage] ?? ""} />
-                <pre className="p-4 pr-10 overflow-x-auto text-[13px] leading-[1.6] text-[#e4e4e7] font-mono">
+                <pre className="p-4 pr-10 overflow-x-auto text-[13px] leading-[1.6] text-fg font-mono">
                   <code>{section.code[activeLanguage] ?? ""}</code>
                 </pre>
               </div>
@@ -783,7 +781,7 @@ export function ApiDrawerButton({ onClick }: ApiDrawerButtonProps) {
     <button
       type="button"
       aria-label="API drawer"
-      className="p-2 rounded-md border border-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)] transition-colors"
+      className="p-2 rounded-md border border-line text-fg-2 hover:text-fg hover:bg-bg-2 transition-colors"
       onClick={onClick}
     >
       <svg

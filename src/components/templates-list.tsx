@@ -273,7 +273,7 @@ export function TemplatesList() {
           <input
             type="text"
             placeholder="Search..."
-            className="w-full h-9 px-3 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)]"
+            className="w-full h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
             onChange={(e) => handleSearchChange(e.target.value)}
           />
         </div>
@@ -283,7 +283,7 @@ export function TemplatesList() {
           <button
             type="button"
             onClick={() => setStatusDropdownOpen(!statusDropdownOpen)}
-            className="h-9 px-3 text-[13px] border border-[rgba(176,199,217,0.145)] rounded-md text-[#A1A4A5] hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors flex items-center gap-1.5 min-w-[130px]"
+            className="h-9 px-3 text-[13px] border border-line rounded-md text-fg-2 hover:text-fg hover:border-line-3 transition-colors flex items-center gap-1.5 min-w-[130px]"
           >
             <span>
               {statusFilter === "draft"
@@ -308,7 +308,7 @@ export function TemplatesList() {
           {statusDropdownOpen && (
             <div
               role="menu"
-              className="absolute top-full left-0 mt-1 w-[180px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1"
+              className="absolute top-full left-0 mt-1 w-[180px] bg-bg-card border border-line rounded-md shadow-lg z-50 py-1"
             >
               <button
                 type="button"
@@ -317,7 +317,7 @@ export function TemplatesList() {
                   setStatusFilter("");
                   setStatusDropdownOpen(false);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-[rgba(176,199,217,0.08)] transition-colors ${!statusFilter ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/[0.08] transition-colors ${!statusFilter ? "text-fg" : "text-fg-2"}`}
               >
                 All Statuses
               </button>
@@ -328,7 +328,7 @@ export function TemplatesList() {
                   setStatusFilter("draft");
                   setStatusDropdownOpen(false);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-[rgba(176,199,217,0.08)] transition-colors ${statusFilter === "draft" ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/[0.08] transition-colors ${statusFilter === "draft" ? "text-fg" : "text-fg-2"}`}
               >
                 Draft
               </button>
@@ -339,7 +339,7 @@ export function TemplatesList() {
                   setStatusFilter("published");
                   setStatusDropdownOpen(false);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-[rgba(176,199,217,0.08)] transition-colors ${statusFilter === "published" ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/[0.08] transition-colors ${statusFilter === "published" ? "text-fg" : "text-fg-2"}`}
               >
                 Published
               </button>
@@ -350,7 +350,7 @@ export function TemplatesList() {
         {/* API drawer button */}
         <button
           type="button"
-          className="h-9 w-9 flex items-center justify-center border border-[rgba(176,199,217,0.145)] rounded-md text-[#A1A4A5] hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors"
+          className="h-9 w-9 flex items-center justify-center border border-line rounded-md text-fg-2 hover:text-fg hover:border-line-3 transition-colors"
           aria-label="API reference"
         >
           <svg
@@ -371,7 +371,7 @@ export function TemplatesList() {
           type="button"
           onClick={handleCreateReactEmailStarter}
           disabled={creatingStarter}
-          className="h-9 px-4 text-[13px] font-medium border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] disabled:cursor-not-allowed disabled:opacity-70 transition-colors flex items-center gap-1.5"
+          className="h-9 px-4 text-[13px] font-medium border border-line rounded-md text-fg hover:border-line-3 disabled:cursor-not-allowed disabled:opacity-70 transition-colors flex items-center gap-1.5"
         >
           {creatingStarter ? "Creating..." : "Use React Email starter"}
         </button>
@@ -409,15 +409,15 @@ export function TemplatesList() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-[14px] text-[#A1A4A5]">
+        <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
           Loading templates...
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-6">
-          <h3 className="text-[16px] font-semibold text-[#F0F0F0] mb-2">
+          <h3 className="text-[16px] font-semibold text-fg mb-2">
             No templates
           </h3>
-          <p className="text-[14px] text-[#A1A4A5] text-center max-w-[360px] mb-6">
+          <p className="text-[14px] text-fg-2 text-center max-w-[360px] mb-6">
             Create reusable email templates for your application.
           </p>
         </div>
@@ -427,7 +427,7 @@ export function TemplatesList() {
             <div
               key={t.id}
               data-testid="template-card"
-              className="group border border-[rgba(176,199,217,0.145)] rounded-lg overflow-hidden hover:border-[rgba(176,199,217,0.3)] transition-colors"
+              className="group border border-line rounded-lg overflow-hidden hover:border-line-3 transition-colors"
             >
               {/* Preview thumbnail */}
               <Link href={`/templates/${t.id}/editor`}>
@@ -453,17 +453,17 @@ export function TemplatesList() {
                         if (e.key === "Enter") handleRenameSubmit(t.id);
                         if (e.key === "Escape") setRenameId(null);
                       }}
-                      className="w-full text-[14px] font-medium text-[#F0F0F0] bg-transparent border border-[rgba(176,199,217,0.3)] rounded px-1 outline-none"
+                      className="w-full text-[14px] font-medium text-fg bg-transparent border border-line-3 rounded px-1 outline-none"
                     />
                   ) : (
                     <Link
                       href={`/templates/${t.id}/editor`}
-                      className="block text-[14px] font-medium text-[#F0F0F0] hover:underline truncate"
+                      className="block text-[14px] font-medium text-fg hover:underline truncate"
                     >
                       {t.name}
                     </Link>
                   )}
-                  <span className="text-[12px] text-[#666] font-mono truncate block">
+                  <span className="text-[12px] text-fg-4 font-mono truncate block">
                     {t.alias}
                   </span>
                 </div>
@@ -479,7 +479,7 @@ export function TemplatesList() {
                     onClick={() =>
                       setActionMenuId(actionMenuId === t.id ? null : t.id)
                     }
-                    className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors opacity-0 group-hover:opacity-100"
+                    className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100"
                   >
                     <svg
                       aria-hidden="true"
@@ -494,14 +494,14 @@ export function TemplatesList() {
                     </svg>
                   </button>
                   {actionMenuId === t.id && (
-                    <div className="absolute right-0 top-full mt-1 w-[200px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1">
+                    <div className="absolute right-0 top-full mt-1 w-[200px] bg-bg-card border border-line rounded-md shadow-lg z-50 py-1">
                       <button
                         type="button"
                         onClick={() => {
                           router.push(`/templates/${t.id}`);
                           setActionMenuId(null);
                         }}
-                        className="w-full px-3 py-1.5 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                        className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                       >
                         View details
                       </button>
@@ -511,7 +511,7 @@ export function TemplatesList() {
                           router.push(`/templates/${t.id}/editor`);
                           setActionMenuId(null);
                         }}
-                        className="w-full px-3 py-1.5 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                        className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                       >
                         Edit template
                       </button>
@@ -522,22 +522,22 @@ export function TemplatesList() {
                           setRenameValue(t.name);
                           setActionMenuId(null);
                         }}
-                        className="w-full px-3 py-1.5 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                        className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                       >
                         Rename template
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDuplicate(t)}
-                        className="w-full px-3 py-1.5 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                        className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                       >
                         Duplicate template
                       </button>
-                      <div className="my-1 border-t border-[rgba(176,199,217,0.145)]" />
+                      <div className="my-1 border-t border-line" />
                       <button
                         type="button"
                         onClick={() => handleRemove(t.id)}
-                        className="w-full px-3 py-1.5 text-left text-[13px] text-red-400 hover:bg-[rgba(176,199,217,0.08)] hover:text-red-300 transition-colors"
+                        className="w-full px-3 py-1.5 text-left text-[13px] text-red-400 hover:bg-white/[0.08] hover:text-red-300 transition-colors"
                       >
                         Remove template
                       </button>

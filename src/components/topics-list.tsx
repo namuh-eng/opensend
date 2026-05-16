@@ -100,7 +100,7 @@ export function TopicsList() {
         <input
           type="text"
           placeholder="Search..."
-          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)]"
+          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
           onChange={(e) => handleSearchChange(e.target.value)}
         />
 
@@ -110,7 +110,7 @@ export function TopicsList() {
             setDefaultFilter(e.target.value);
             setPage(1);
           }}
-          className="h-9 px-3 text-[13px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] outline-none cursor-pointer appearance-none pr-8"
+          className="h-9 px-3 text-[13px] bg-bg-card border border-line rounded-md text-fg outline-none cursor-pointer appearance-none pr-8"
           style={selectStyle}
         >
           <option value="">Any Default</option>
@@ -131,15 +131,15 @@ export function TopicsList() {
 
       {/* Data table or empty state */}
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-[14px] text-[#A1A4A5]">
+        <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
           Loading topics...
         </div>
       ) : topics.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-6">
-          <h3 className="text-[16px] font-semibold text-[#F0F0F0] mb-2">
+          <h3 className="text-[16px] font-semibold text-fg mb-2">
             No topics yet
           </h3>
-          <p className="text-[14px] text-[#A1A4A5] text-center max-w-[360px] mb-6">
+          <p className="text-[14px] text-fg-2 text-center max-w-[360px] mb-6">
             Topics let contacts manage their subscription preferences. Create
             topics to allow users to opt in or out of different types of
             communications.
@@ -162,7 +162,7 @@ export function TopicsList() {
         <>
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[rgba(176,199,217,0.145)]">
+              <tr className="border-b border-line">
                 <th className="w-10 px-3 py-2 text-left">
                   <input
                     type="checkbox"
@@ -172,19 +172,19 @@ export function TopicsList() {
                     aria-label="Select all"
                   />
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Name
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Description
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Default
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Visibility
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Created
                 </th>
                 <th className="w-10 px-3 py-2" />
@@ -194,7 +194,7 @@ export function TopicsList() {
               {topics.map((topic) => (
                 <tr
                   key={topic.id}
-                  className="border-b border-[rgba(176,199,217,0.145)] hover:bg-[rgba(24,25,28,0.5)] transition-colors group"
+                  className="border-b border-line hover:bg-bg-2 transition-colors group"
                 >
                   <td className="w-10 px-3 py-2">
                     <input
@@ -204,22 +204,22 @@ export function TopicsList() {
                       className="accent-white rounded cursor-pointer"
                     />
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#F0F0F0]">
+                  <td className="px-3 py-2 text-[14px] text-fg">
                     {topic.name}
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5] max-w-[200px] truncate">
+                  <td className="px-3 py-2 text-[14px] text-fg-2 max-w-[200px] truncate">
                     {topic.description ?? "—"}
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {topic.defaultSubscription === "opt_in"
                       ? "Opt-in"
                       : "Opt-out"}
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {topic.visibility === "public" ? "Public" : "Private"}
                   </td>
                   <td
-                    className="px-3 py-2 text-[14px] text-[#A1A4A5]"
+                    className="px-3 py-2 text-[14px] text-fg-2"
                     title={new Date(topic.createdAt).toLocaleString()}
                   >
                     {formatRelativeTime(topic.createdAt)}
@@ -228,7 +228,7 @@ export function TopicsList() {
                     <button
                       type="button"
                       aria-label="More actions"
-                      className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors opacity-0 group-hover:opacity-100"
+                      className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100"
                     >
                       <svg
                         aria-hidden="true"
@@ -249,7 +249,7 @@ export function TopicsList() {
           </table>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between mt-3 text-[13px] text-[#A1A4A5]">
+          <div className="flex items-center justify-between mt-3 text-[13px] text-fg-2">
             <span>
               Page {page} – {start} of {total} topics – {limit} items
             </span>
@@ -258,7 +258,7 @@ export function TopicsList() {
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-2 py-1 rounded border border-[rgba(176,199,217,0.145)] disabled:opacity-30 hover:border-[rgba(176,199,217,0.3)] transition-colors"
+                className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
               >
                 &larr;
               </button>
@@ -266,7 +266,7 @@ export function TopicsList() {
                 type="button"
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="px-2 py-1 rounded border border-[rgba(176,199,217,0.145)] disabled:opacity-30 hover:border-[rgba(176,199,217,0.3)] transition-colors"
+                className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
               >
                 &rarr;
               </button>
@@ -276,9 +276,9 @@ export function TopicsList() {
       )}
 
       {/* Unsubscribe Page Preview */}
-      <div className="mt-8 border border-[rgba(176,199,217,0.145)] rounded-lg overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-[rgba(176,199,217,0.145)]">
-          <h3 className="text-[14px] font-medium text-[#F0F0F0]">
+      <div className="mt-8 border border-line rounded-lg overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-line">
+          <h3 className="text-[14px] font-medium text-fg">
             Unsubscribe Page Preview
           </h3>
           <UnsubscribeEditorUnavailableControl
@@ -374,11 +374,11 @@ function UnsubscribeEditorUnavailableControl({
         disabled
         aria-describedby={copyId}
         title={UNSUBSCRIBE_EDITOR_UNAVAILABLE_COPY}
-        className="inline-flex cursor-not-allowed items-center rounded-md border border-[rgba(176,199,217,0.145)] px-4 py-2 text-[13px] font-medium text-[#666] opacity-80"
+        className="inline-flex cursor-not-allowed items-center rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg-4 opacity-80"
       >
         {label}
       </button>
-      <p id={copyId} className="text-[11px] leading-4 text-[#777]">
+      <p id={copyId} className="text-[11px] leading-4 text-fg-3">
         {UNSUBSCRIBE_EDITOR_UNAVAILABLE_COPY}
       </p>
     </div>
@@ -450,8 +450,8 @@ function CreateTopicModal({
         }}
         role="presentation"
       />
-      <div className="relative bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-lg w-[440px] p-6">
-        <h2 className="text-[16px] font-semibold text-[#F0F0F0] mb-4">
+      <div className="relative bg-bg-card border border-line rounded-lg w-[440px] p-6">
+        <h2 className="text-[16px] font-semibold text-fg mb-4">
           Create a new topic
         </h2>
 
@@ -459,7 +459,7 @@ function CreateTopicModal({
           <div>
             <label
               htmlFor="topic-name"
-              className="block text-[13px] text-[#A1A4A5] mb-1.5"
+              className="block text-[13px] text-fg-2 mb-1.5"
             >
               Name
             </label>
@@ -470,14 +470,14 @@ function CreateTopicModal({
               onChange={(e) => setName(e.target.value)}
               maxLength={50}
               placeholder="Public display name"
-              className="w-full h-9 px-3 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)]"
+              className="w-full h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
             />
           </div>
 
           <div>
             <label
               htmlFor="topic-description"
-              className="block text-[13px] text-[#A1A4A5] mb-1.5"
+              className="block text-[13px] text-fg-2 mb-1.5"
             >
               Description
             </label>
@@ -488,14 +488,14 @@ function CreateTopicModal({
               maxLength={200}
               placeholder="Optional public description"
               rows={3}
-              className="w-full px-3 py-2 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)] resize-none"
+              className="w-full px-3 py-2 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3 resize-none"
             />
           </div>
 
           <div>
             <label
               htmlFor="topic-default"
-              className="block text-[13px] text-[#A1A4A5] mb-1.5"
+              className="block text-[13px] text-fg-2 mb-1.5"
             >
               Defaults to
             </label>
@@ -505,7 +505,7 @@ function CreateTopicModal({
               onChange={(e) =>
                 setDefaultSubscription(e.target.value as "opt_in" | "opt_out")
               }
-              className="w-full h-9 px-3 text-[13px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] outline-none cursor-pointer"
+              className="w-full h-9 px-3 text-[13px] bg-bg-card border border-line rounded-md text-fg outline-none cursor-pointer"
             >
               <option value="opt_out">Opt-out</option>
               <option value="opt_in">Opt-in</option>
@@ -515,7 +515,7 @@ function CreateTopicModal({
           <div>
             <label
               htmlFor="topic-visibility"
-              className="block text-[13px] text-[#A1A4A5] mb-1.5"
+              className="block text-[13px] text-fg-2 mb-1.5"
             >
               Visibility
             </label>
@@ -525,7 +525,7 @@ function CreateTopicModal({
               onChange={(e) =>
                 setVisibility(e.target.value as "private" | "public")
               }
-              className="w-full h-9 px-3 text-[13px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] outline-none cursor-pointer"
+              className="w-full h-9 px-3 text-[13px] bg-bg-card border border-line rounded-md text-fg outline-none cursor-pointer"
             >
               <option value="public">Public</option>
               <option value="private">Private</option>
@@ -539,7 +539,7 @@ function CreateTopicModal({
           <button
             type="button"
             onClick={onClose}
-            className="h-9 px-4 text-[13px] text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] rounded-md hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors"
+            className="h-9 px-4 text-[13px] text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 transition-colors"
           >
             Cancel
           </button>

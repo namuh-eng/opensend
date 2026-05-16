@@ -128,7 +128,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-[#F0F0F0]">Domains</h1>
+        <h1 className="text-2xl font-semibold text-fg">Domains</h1>
         <button
           type="button"
           onClick={() => setShowAddModal(true)}
@@ -168,23 +168,23 @@ export function DomainsPage({ domains }: DomainsPageProps) {
 
       {/* Data Table */}
       {paginatedDomains.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-[14px] text-[#A1A4A5]">
+        <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
           No domains found
         </div>
       ) : (
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[rgba(176,199,217,0.145)]">
-              <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+            <tr className="border-b border-line">
+              <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                 Domain
               </th>
-              <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+              <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                 Status
               </th>
-              <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+              <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                 Region
               </th>
-              <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+              <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                 Created
               </th>
               <th className="w-10 px-3 py-2" />
@@ -200,7 +200,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
 
       {/* Pagination */}
       {filteredDomains.length > 0 && (
-        <div className="flex items-center justify-between mt-4 text-[13px] text-[#A1A4A5]">
+        <div className="flex items-center justify-between mt-4 text-[13px] text-fg-2">
           <span>
             {(page - 1) * itemsPerPage + 1}–
             {Math.min(page * itemsPerPage, filteredDomains.length)} of{" "}
@@ -213,7 +213,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
                 setItemsPerPage(Number(e.target.value));
                 setPage(1);
               }}
-              className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg px-2 py-1 text-[#A1A4A5] text-[13px]"
+              className="bg-bg-3 border border-line rounded-lg px-2 py-1 text-fg-2 text-[13px]"
             >
               {ITEMS_PER_PAGE_OPTIONS.map((n) => (
                 <option key={n} value={n}>
@@ -225,7 +225,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
               type="button"
               disabled={page <= 1}
               onClick={() => setPage((p) => p - 1)}
-              className="px-2 py-1 rounded border border-[rgba(176,199,217,0.145)] disabled:opacity-30"
+              className="px-2 py-1 rounded border border-line disabled:opacity-30"
             >
               ←
             </button>
@@ -233,7 +233,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
               type="button"
               disabled={page >= totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="px-2 py-1 rounded border border-[rgba(176,199,217,0.145)] disabled:opacity-30"
+              className="px-2 py-1 rounded border border-line disabled:opacity-30"
             >
               →
             </button>
@@ -280,7 +280,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
             }
           }}
         >
-          <p className="text-[13px] text-[#A1A4A5] mb-4">
+          <p className="text-[13px] text-fg-2 mb-4">
             Enter the domain you want to verify for sending emails.
           </p>
           <input
@@ -288,7 +288,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
             value={newDomain}
             onChange={(e) => setNewDomain(e.target.value)}
             placeholder="yourdomain.com"
-            className="w-full px-3 py-2 bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg text-[#F0F0F0] text-[14px] placeholder:text-[#52525b] focus:outline-none focus:border-[#3b82f6]"
+            className="w-full px-3 py-2 bg-bg-3 border border-line rounded-lg text-fg text-[14px] placeholder:text-fg-4 focus:outline-none focus:border-[#3b82f6]"
           />
           <button
             type="button"
@@ -298,18 +298,16 @@ export function DomainsPage({ domains }: DomainsPageProps) {
             {showAdvanced ? "Hide advanced options" : "Advanced options"}
           </button>
           {showAdvanced && (
-            <div className="mt-3 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(10,10,10,0.35)] p-3">
+            <div className="mt-3 rounded-lg border border-line bg-bg-card p-3">
               <label
                 htmlFor="tracking-subdomain"
-                className="block text-[13px] font-medium text-[#F0F0F0] mb-1"
+                className="block text-[13px] font-medium text-fg mb-1"
               >
                 Custom tracking subdomain
               </label>
-              <p className="text-[12px] text-[#A1A4A5] mb-2">
+              <p className="text-[12px] text-fg-2 mb-2">
                 Optional. OpenSend will add a CNAME like{" "}
-                <span className="font-mono text-[#F0F0F0]">
-                  links.yourdomain.com
-                </span>{" "}
+                <span className="font-mono text-fg">links.yourdomain.com</span>{" "}
                 so tracked clicks and opens can use your branded domain.
               </p>
               <input
@@ -318,7 +316,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
                 value={trackingSubdomain}
                 onChange={(e) => setTrackingSubdomain(e.target.value)}
                 placeholder="links"
-                className="w-full px-3 py-2 bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg text-[#F0F0F0] text-[14px] placeholder:text-[#52525b] focus:outline-none focus:border-[#3b82f6]"
+                className="w-full px-3 py-2 bg-bg-3 border border-line rounded-lg text-fg text-[14px] placeholder:text-fg-4 focus:outline-none focus:border-[#3b82f6]"
               />
             </div>
           )}
@@ -330,11 +328,11 @@ export function DomainsPage({ domains }: DomainsPageProps) {
 
 function DomainRow({ domain }: { domain: DomainListItem }) {
   return (
-    <tr className="border-b border-[rgba(176,199,217,0.145)] hover:bg-[rgba(24,25,28,0.5)] transition-colors">
-      <td className="px-3 py-2 text-[14px] text-[#F0F0F0]">
+    <tr className="border-b border-line hover:bg-bg-2 transition-colors">
+      <td className="px-3 py-2 text-[14px] text-fg">
         <Link
           href={`/domains/${domain.id}`}
-          className="text-[#F0F0F0] hover:underline"
+          className="text-fg hover:underline"
         >
           {domain.name}
         </Link>
@@ -345,11 +343,11 @@ function DomainRow({ domain }: { domain: DomainListItem }) {
           variant={getDomainStatusVariant(domain.status)}
         />
       </td>
-      <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+      <td className="px-3 py-2 text-[14px] text-fg-2">
         {formatRegionDisplay(domain.region)}
       </td>
       <td
-        className="px-3 py-2 text-[14px] text-[#A1A4A5]"
+        className="px-3 py-2 text-[14px] text-fg-2"
         title={new Date(domain.createdAt).toLocaleString()}
       >
         {formatRelativeTime(domain.createdAt)}
@@ -358,7 +356,7 @@ function DomainRow({ domain }: { domain: DomainListItem }) {
         <button
           type="button"
           aria-label="More actions"
-          className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+          className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
         >
           <svg
             aria-hidden="true"

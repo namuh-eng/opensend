@@ -70,7 +70,7 @@ export function ExportStatusMessage({
   return (
     <p
       className={`text-[12px] ${
-        state.type === "error" ? "text-[#EF4444]" : "text-[#A1A4A5]"
+        state.type === "error" ? "text-red" : "text-fg-2"
       }`}
       role={state.type === "error" ? "alert" : "status"}
     >

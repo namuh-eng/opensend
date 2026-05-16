@@ -116,9 +116,9 @@ function QuotaRow({
             />
           </svg>
         )}
-        <span className="text-[14px] text-[#A1A4A5]">{label}</span>
+        <span className="text-[14px] text-fg-2">{label}</span>
       </div>
-      <span className="text-[14px] text-[#F0F0F0]">{value}</span>
+      <span className="text-[14px] text-fg">{value}</span>
     </div>
   );
 }
@@ -128,7 +128,7 @@ function UpgradeAffordance({ billingEnabled }: { billingEnabled: boolean }) {
     return (
       <Link
         href="/settings/billing/plans"
-        className="inline-flex rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] hover:bg-[rgba(24,25,28,1)]"
+        className="inline-flex rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] font-medium text-fg hover:bg-bg-card"
       >
         Upgrade
       </Link>
@@ -140,11 +140,11 @@ function UpgradeAffordance({ billingEnabled }: { billingEnabled: boolean }) {
       <button
         type="button"
         disabled
-        className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] px-3 py-1.5 text-[13px] font-medium text-[#A1A4A5] opacity-70"
+        className="rounded-md border border-line bg-bg-2 px-3 py-1.5 text-[13px] font-medium text-fg-2 opacity-70"
       >
         Upgrade unavailable
       </button>
-      <p className="text-[12px] text-[#A1A4A5]">
+      <p className="text-[12px] text-fg-2">
         Billing is disabled for this installation, so plan upgrades are not
         available here.
       </p>
@@ -168,14 +168,12 @@ function QuotaSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mb-8 border-b border-[rgba(176,199,217,0.145)] pb-8 last:mb-0 last:border-b-0 last:pb-0">
+    <div className="mb-8 border-b border-line pb-8 last:mb-0 last:border-b-0 last:pb-0">
       <div className="flex items-start justify-between gap-12">
         {/* Left side — title, description, upgrade */}
         <div className="max-w-[340px] shrink-0">
-          <h2 className="mb-2 text-[18px] font-semibold text-[#F0F0F0]">
-            {title}
-          </h2>
-          <p className="mb-4 text-[14px] leading-relaxed text-[#A1A4A5]">
+          <h2 className="mb-2 text-[18px] font-semibold text-fg">{title}</h2>
+          <p className="mb-4 text-[14px] leading-relaxed text-fg-2">
             {description}
           </p>
           <UpgradeAffordance billingEnabled={billingEnabled} />
@@ -184,9 +182,7 @@ function QuotaSection({
         {/* Right side — plan badge + quota rows */}
         <div className="flex-1">
           <div className="mb-4 flex justify-end">
-            <span className="text-[14px] font-medium text-[#F0F0F0]">
-              {planName}
-            </span>
+            <span className="text-[14px] font-medium text-fg">{planName}</span>
           </div>
           {overLimitMessage ? (
             <p

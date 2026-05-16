@@ -151,7 +151,7 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
       header: "Created",
       sortable: true,
       render: (row: LogRow) => (
-        <span className="text-[#A1A4A5] text-[13px]">
+        <span className="text-fg-2 text-[13px]">
           {formatDate(row.createdAt)}
         </span>
       ),
@@ -161,14 +161,14 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-[#F0F0F0]">Logs</h1>
+        <h1 className="text-2xl font-semibold text-fg">Logs</h1>
         <div className="flex items-center gap-3">
           <ExportStatusMessage state={exportState} />
           <button
             type="button"
             onClick={handleExport}
             disabled={exportState.type === "loading"}
-            className="h-9 px-4 text-[13px] font-medium bg-[rgba(176,199,217,0.145)] text-[#F0F0F0] border border-[rgba(176,199,217,0.145)] rounded-md hover:bg-[rgba(176,199,217,0.2)] transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-9 px-4 text-[13px] font-medium bg-white/[0.14] text-fg border border-line rounded-md hover:bg-white/20 transition-colors flex items-center gap-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <svg
               aria-hidden="true"
@@ -201,7 +201,7 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
             updateFilters({ q: val });
           }}
           placeholder="Search logs by email id, endpoint, status, or body"
-          className="min-w-[320px] bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] text-[#F0F0F0] text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
+          className="min-w-[320px] bg-bg-3 border border-line text-fg text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
         />
 
         <select
@@ -211,7 +211,7 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
             setStatusFilter(val);
             updateFilters({ status: val === "all" ? "" : val });
           }}
-          className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] text-[#F0F0F0] text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
+          className="bg-bg-3 border border-line text-fg text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
         >
           <option value="all">All statuses</option>
           <option value="2xx">2xx Success</option>
@@ -220,7 +220,7 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
         </select>
 
         <div className="flex items-center gap-2">
-          <label htmlFor="date-from" className="text-[12px] text-[#A1A4A5]">
+          <label htmlFor="date-from" className="text-[12px] text-fg-2">
             From
           </label>
           <input
@@ -232,12 +232,12 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
               setDateFrom(val);
               updateFilters({ after: val });
             }}
-            className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] text-[#F0F0F0] text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
+            className="bg-bg-3 border border-line text-fg text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
           />
         </div>
 
         <div className="flex items-center gap-2">
-          <label htmlFor="date-to" className="text-[12px] text-[#A1A4A5]">
+          <label htmlFor="date-to" className="text-[12px] text-fg-2">
             To
           </label>
           <input
@@ -249,7 +249,7 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
               setDateTo(val);
               updateFilters({ before: val });
             }}
-            className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] text-[#F0F0F0] text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
+            className="bg-bg-3 border border-line text-fg text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
           />
         </div>
 
@@ -263,7 +263,7 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
               setQuery("");
               updateFilters({ status: "", after: "", before: "", q: "" });
             }}
-            className="text-[12px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+            className="text-[12px] text-fg-2 hover:text-fg transition-colors"
           >
             Clear filters
           </button>
@@ -271,7 +271,7 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
       </div>
 
       {/* Table */}
-      <div className="border border-[rgba(176,199,217,0.145)] rounded-lg overflow-hidden">
+      <div className="border border-line rounded-lg overflow-hidden">
         <DataTable
           columns={columns}
           rows={logs}

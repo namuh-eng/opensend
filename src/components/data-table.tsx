@@ -130,7 +130,7 @@ export function DataTable<T>({
   return (
     <table className="w-full">
       <thead>
-        <tr className="border-b border-[rgba(176,199,217,0.145)]">
+        <tr className="border-b border-line">
           {checkboxEnabled && (
             <th className="w-10 px-3 py-2 text-left">
               <input
@@ -145,7 +145,7 @@ export function DataTable<T>({
           {columns.map((col) => (
             <th
               key={col.key}
-              className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal"
+              className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal"
               aria-sort={
                 sortState?.key === col.key
                   ? sortState.direction === "asc"
@@ -157,7 +157,7 @@ export function DataTable<T>({
               {col.sortable ? (
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 transition-colors hover:text-[#F0F0F0]"
+                  className="inline-flex items-center gap-1 transition-colors hover:text-fg"
                   onClick={() => toggleSort(col.key)}
                 >
                   {col.header}
@@ -182,7 +182,7 @@ export function DataTable<T>({
           <tr>
             <td
               colSpan={totalCols}
-              className="px-3 py-12 text-center text-[14px] text-[#A1A4A5]"
+              className="px-3 py-12 text-center text-[14px] text-fg-2"
             >
               {emptyMessage}
             </td>
@@ -193,7 +193,7 @@ export function DataTable<T>({
             return (
               <tr
                 key={id}
-                className="border-b border-[rgba(176,199,217,0.145)] hover:bg-[rgba(24,25,28,0.5)] transition-colors"
+                className="border-b border-line hover:bg-bg-2 transition-colors"
               >
                 {checkboxEnabled && (
                   <td className="w-10 px-3 py-2">
@@ -209,7 +209,7 @@ export function DataTable<T>({
                 {columns.map((col) => (
                   <td
                     key={col.key}
-                    className="px-3 py-2 text-[14px] text-[#F0F0F0]"
+                    className="px-3 py-2 text-[14px] text-fg"
                     onClick={() => onRowClick?.(row)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") onRowClick?.(row);
@@ -226,7 +226,7 @@ export function DataTable<T>({
                     <button
                       type="button"
                       aria-label="More actions"
-                      className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+                      className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
                         setOpenMenuId(openMenuId === id ? null : id);
@@ -247,17 +247,15 @@ export function DataTable<T>({
                     {openMenuId === id && (
                       <div
                         ref={menuRef}
-                        className="absolute right-0 top-full z-50 min-w-[180px] rounded-md border border-[rgba(176,199,217,0.145)] bg-[#1a1a1a] py-1 shadow-lg"
+                        className="absolute right-0 top-full z-50 min-w-[180px] rounded-md border border-line bg-bg-2 py-1 shadow-lg"
                       >
                         {actions.map((action) => (
                           <button
                             key={action.label}
                             type="button"
-                            className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-[rgba(176,199,217,0.145)] transition-colors ${
-                              action.destructive
-                                ? "text-red-400"
-                                : "text-[#F0F0F0]"
-                            } ${action.separator ? "border-t border-[rgba(176,199,217,0.145)] mt-1 pt-1.5" : ""}`}
+                            className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-white/[0.14] transition-colors ${
+                              action.destructive ? "text-red-400" : "text-fg"
+                            } ${action.separator ? "border-t border-line mt-1 pt-1.5" : ""}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               action.onClick(row);

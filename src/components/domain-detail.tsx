@@ -228,15 +228,12 @@ export function DomainDetail({ domain }: DomainDetailProps) {
   return (
     <div>
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-6 text-[13px] text-[#A1A4A5]">
-        <Link
-          href="/domains"
-          className="hover:text-[#F0F0F0] transition-colors"
-        >
+      <div className="flex items-center gap-2 mb-6 text-[13px] text-fg-2">
+        <Link href="/domains" className="hover:text-fg transition-colors">
           Domains
         </Link>
         <span>/</span>
-        <span className="text-[#F0F0F0]">Domain</span>
+        <span className="text-fg">Domain</span>
       </div>
 
       {/* Header */}
@@ -244,7 +241,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
         <div className="flex items-center gap-4">
           <div
             data-testid="domain-icon"
-            className="w-16 h-16 rounded-xl bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] flex items-center justify-center"
+            className="w-16 h-16 rounded-xl bg-bg-3 border border-line flex items-center justify-center"
           >
             <svg
               aria-hidden="true"
@@ -260,10 +257,8 @@ export function DomainDetail({ domain }: DomainDetailProps) {
             </svg>
           </div>
           <div>
-            <p className="text-[13px] text-[#A1A4A5]">Domain</p>
-            <h1 className="text-[22px] font-semibold text-[#F0F0F0]">
-              {domain.name}
-            </h1>
+            <p className="text-[13px] text-fg-2">Domain</p>
+            <h1 className="text-[22px] font-semibold text-fg">{domain.name}</h1>
           </div>
         </div>
 
@@ -273,7 +268,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
               type="button"
               onClick={handleVerify}
               disabled={verifying}
-              className="px-3 py-2 rounded-md border border-[rgba(176,199,217,0.145)] text-[13px] font-medium text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-2 rounded-md border border-line text-[13px] font-medium text-fg hover:bg-bg-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {verifying ? "Verifying…" : "Verify DNS Records"}
             </button>
@@ -286,7 +281,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
           <button
             type="button"
             aria-label="API drawer"
-            className="p-2 rounded-md border border-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)] transition-colors"
+            className="p-2 rounded-md border border-line text-fg-2 hover:text-fg hover:bg-bg-2 transition-colors"
           >
             <svg
               aria-hidden="true"
@@ -305,7 +300,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
             <button
               type="button"
               aria-label="More actions"
-              className="p-2 rounded-md border border-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)] transition-colors"
+              className="p-2 rounded-md border border-line text-fg-2 hover:text-fg hover:bg-bg-2 transition-colors"
               onClick={() => setActionsOpen(!actionsOpen)}
             >
               <svg
@@ -321,25 +316,25 @@ export function DomainDetail({ domain }: DomainDetailProps) {
               </svg>
             </button>
             {actionsOpen && (
-              <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-[rgba(176,199,217,0.145)] bg-[#0a0a0a] shadow-xl z-20 py-1">
+              <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-line bg-bg-card shadow-xl z-20 py-1">
                 <button
                   type="button"
-                  className="w-full text-left px-3 py-2 text-[13px] text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)]"
+                  className="w-full text-left px-3 py-2 text-[13px] text-fg hover:bg-bg-2"
                   onClick={handleRestart}
                 >
                   Restart
                 </button>
                 <Link
                   href="/docs"
-                  className="block px-3 py-2 text-[13px] text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)]"
+                  className="block px-3 py-2 text-[13px] text-fg hover:bg-bg-2"
                   onClick={() => setActionsOpen(false)}
                 >
                   Go to docs
                 </Link>
-                <div className="border-t border-[rgba(176,199,217,0.145)] my-1" />
+                <div className="border-t border-line my-1" />
                 <button
                   type="button"
-                  className="w-full text-left px-3 py-2 text-[13px] text-red-400 hover:bg-[rgba(24,25,28,0.5)]"
+                  className="w-full text-left px-3 py-2 text-[13px] text-red-400 hover:bg-bg-2"
                   onClick={() => {
                     setActionsOpen(false);
                     handleDelete();
@@ -356,15 +351,15 @@ export function DomainDetail({ domain }: DomainDetailProps) {
       {/* Metadata */}
       <div className="grid grid-cols-4 gap-x-8 gap-y-6 mb-8">
         <div>
-          <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-1">
             CREATED
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">
+          <p className="text-[14px] text-fg">
             {formatRelativeTime(domain.createdAt)}
           </p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-1">
             STATUS
           </p>
           <StatusBadge
@@ -373,7 +368,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
           />
         </div>
         <div>
-          <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-1">
             PROVIDER
           </p>
           <div className="flex items-center gap-1.5">
@@ -386,23 +381,23 @@ export function DomainDetail({ domain }: DomainDetailProps) {
             >
               <path d="M16.5 7.3l-1.2 4.5c-.1.3-.3.4-.6.3l-3.3-1.2-1.6 1.6c-.2.2-.4.2-.5.1l.4-3.5 4.5-4c.2-.2 0-.3-.1-.2L8 9.5l-3.3-1c-.4-.1-.4-.4.1-.6l12.8-4.9c.4-.1.7.1.6.6l-1.7 3.7z" />
             </svg>
-            <span className="text-[14px] text-[#F0F0F0]">Cloudflare</span>
+            <span className="text-[14px] text-fg">Cloudflare</span>
           </div>
         </div>
         <div>
-          <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-1">
             REGION
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">
+          <p className="text-[14px] text-fg">
             {regionFriendly}{" "}
-            <span className="text-[#A1A4A5]">({domain.region})</span>
+            <span className="text-fg-2">({domain.region})</span>
           </p>
         </div>
       </div>
 
       {/* Domain Events */}
       <div className="mb-8">
-        <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-4">
+        <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-4">
           DOMAIN EVENTS
         </p>
 
@@ -420,7 +415,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
               <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
               <path d="M14 2v6h6M9 15l2 2 4-4" />
             </svg>
-            <p className="text-[14px] text-[#4ade80]">
+            <p className="text-[14px] text-accent">
               <strong>Domain verified:</strong> Your domain is ready to send
               emails.
             </p>
@@ -430,17 +425,15 @@ export function DomainDetail({ domain }: DomainDetailProps) {
         <div className="flex items-center justify-center gap-8 py-4">
           {domain.events.map((event, i) => (
             <div key={event.timestamp} className="flex items-center gap-8">
-              {i > 0 && (
-                <div className="w-12 h-px bg-[rgba(176,199,217,0.145)]" />
-              )}
+              {i > 0 && <div className="w-12 h-px bg-white/[0.14]" />}
               <div className="flex flex-col items-center gap-2">
-                <div className="w-10 h-10 rounded-full bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] flex items-center justify-center">
+                <div className="w-10 h-10 rounded-full bg-bg-3 border border-line flex items-center justify-center">
                   <EventIcon type={event.type} />
                 </div>
-                <span className="text-[13px] text-[#F0F0F0] font-medium">
+                <span className="text-[13px] text-fg font-medium">
                   {formatEventLabel(event.type)}
                 </span>
-                <span className="text-[11px] text-[#A1A4A5]">
+                <span className="text-[11px] text-fg-2">
                   {formatEventTimestamp(event.timestamp)}
                 </span>
               </div>
@@ -450,7 +443,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-[rgba(176,199,217,0.145)] mb-6">
+      <div className="border-b border-line mb-6">
         <div className="flex items-center gap-0">
           {(
             [
@@ -463,8 +456,8 @@ export function DomainDetail({ domain }: DomainDetailProps) {
               type="button"
               className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors ${
                 activeTab === tab.key
-                  ? "border-[#F0F0F0] text-[#F0F0F0]"
-                  : "border-transparent text-[#A1A4A5] hover:text-[#F0F0F0]"
+                  ? "border-[#F0F0F0] text-fg"
+                  : "border-transparent text-fg-2 hover:text-fg"
               }`}
               onClick={() => setActiveTab(tab.key)}
               data-state={activeTab === tab.key ? "active" : "inactive"}
@@ -492,7 +485,7 @@ function CopyButton({ value }: { value: string }) {
     <button
       type="button"
       aria-label="Copy to clipboard"
-      className="ml-1 p-0.5 text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors inline-flex items-center"
+      className="ml-1 p-0.5 text-fg-2 hover:text-fg transition-colors inline-flex items-center"
       onClick={() => {
         navigator.clipboard.writeText(value);
         setCopied(true);
@@ -538,23 +531,23 @@ function DNSRecordTable({
   return (
     <table className="w-full">
       <thead>
-        <tr className="border-b border-[rgba(176,199,217,0.145)]">
-          <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+        <tr className="border-b border-line">
+          <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
             Type
           </th>
-          <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+          <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
             Name
           </th>
-          <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+          <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
             Content
           </th>
-          <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+          <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
             TTL
           </th>
-          <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+          <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
             Priority
           </th>
-          <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+          <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
             Status
           </th>
         </tr>
@@ -563,27 +556,23 @@ function DNSRecordTable({
         {rows.map((record) => (
           <tr
             key={`${record.type}-${record.name}-${record.value.slice(0, 20)}`}
-            className="border-b border-[rgba(176,199,217,0.145)] last:border-b-0"
+            className="border-b border-line last:border-b-0"
           >
-            <td className="px-3 py-2 text-[14px] text-[#F0F0F0]">
-              {record.type}
-            </td>
-            <td className="px-3 py-2 font-mono text-[12px] text-[#F0F0F0]">
+            <td className="px-3 py-2 text-[14px] text-fg">{record.type}</td>
+            <td className="px-3 py-2 font-mono text-[12px] text-fg">
               <span className="flex items-center gap-1">
                 <span className="max-w-[180px] truncate">{record.name}</span>
                 <CopyButton value={record.name} />
               </span>
             </td>
-            <td className="px-3 py-2 font-mono text-[12px] text-[#F0F0F0] max-w-[200px]">
+            <td className="px-3 py-2 font-mono text-[12px] text-fg max-w-[200px]">
               <span className="flex items-center gap-1">
                 <span className="truncate">{record.value}</span>
                 <CopyButton value={record.value} />
               </span>
             </td>
-            <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
-              {record.ttl}
-            </td>
-            <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+            <td className="px-3 py-2 text-[14px] text-fg-2">{record.ttl}</td>
+            <td className="px-3 py-2 text-[14px] text-fg-2">
               {record.priority ?? "—"}
             </td>
             <td className="px-3 py-2">
@@ -598,7 +587,7 @@ function DNSRecordTable({
           <tr>
             <td
               colSpan={6}
-              className="px-3 py-8 text-center text-[14px] text-[#A1A4A5]"
+              className="px-3 py-8 text-center text-[14px] text-fg-2"
             >
               No DNS records
             </td>
@@ -679,12 +668,10 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
   );
 
   return (
-    <div className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-6">
+    <div className="bg-bg-3 border border-line rounded-lg p-6">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[18px] font-semibold text-[#F0F0F0]">
-            DNS Records
-          </h2>
+          <h2 className="text-[18px] font-semibold text-fg">DNS Records</h2>
           {autoConfigureError && (
             <p className="mt-2 text-[12px] text-red-400" role="alert">
               {autoConfigureError}
@@ -695,7 +682,7 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
           type="button"
           onClick={handleAutoConfigure}
           disabled={autoConfiguring}
-          className="px-3 py-2 rounded-md border border-[rgba(176,199,217,0.145)] text-[13px] font-medium text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-3 py-2 rounded-md border border-line text-[13px] font-medium text-fg hover:bg-bg-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {autoConfiguring ? "Configuring…" : "Auto configure"}
         </button>
@@ -703,7 +690,7 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
 
       {/* Section 1: Domain Verification (DKIM) */}
       <div className="mb-8">
-        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-1">
+        <h3 className="text-[14px] font-semibold text-fg mb-1">
           Domain Verification
         </h3>
         <p className="text-[13px] text-blue-400 mb-4">DKIM</p>
@@ -711,11 +698,9 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
       </div>
 
       {/* Section 2: Enable Sending (SPF) */}
-      <div className="mb-8 border-t border-[rgba(176,199,217,0.145)] pt-6">
+      <div className="mb-8 border-t border-line pt-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[14px] font-semibold text-[#F0F0F0]">
-            Enable Sending
-          </h3>
+          <h3 className="text-[14px] font-semibold text-fg">Enable Sending</h3>
           <button
             type="button"
             role="switch"
@@ -723,7 +708,7 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
             data-testid="sending-toggle"
             data-state={sendingEnabled ? "checked" : "unchecked"}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              sendingEnabled ? "bg-[#4ade80]" : "bg-[rgba(176,199,217,0.2)]"
+              sendingEnabled ? "bg-[#4ade80]" : "bg-white/20"
             }`}
             onClick={() => {
               const newVal = !sendingEnabled;
@@ -744,11 +729,9 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
       </div>
 
       {/* Section 3: DMARC guidance */}
-      <div className="mb-8 border-t border-[rgba(176,199,217,0.145)] pt-6">
-        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-1">
-          DMARC Policy
-        </h3>
-        <p className="text-[13px] text-[#A1A4A5] mb-4">
+      <div className="mb-8 border-t border-line pt-6">
+        <h3 className="text-[14px] font-semibold text-fg mb-1">DMARC Policy</h3>
+        <p className="text-[13px] text-fg-2 mb-4">
           Publish this starter TXT record so receivers can evaluate SPF and DKIM
           alignment before you enforce a stricter policy.
         </p>
@@ -758,11 +741,11 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
       </div>
 
       {/* Section 4: Tracking CNAME */}
-      <div className="mb-8 border-t border-[rgba(176,199,217,0.145)] pt-6">
-        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-1">
+      <div className="mb-8 border-t border-line pt-6">
+        <h3 className="text-[14px] font-semibold text-fg mb-1">
           Tracking CNAME
         </h3>
-        <p className="text-[13px] text-[#A1A4A5] mb-4">
+        <p className="text-[13px] text-fg-2 mb-4">
           Point this CNAME at your OpenSend tracking endpoint to use branded
           click and open tracking URLs.
         </p>
@@ -772,9 +755,9 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
       </div>
 
       {/* Section 5: Enable Receiving */}
-      <div className="border-t border-[rgba(176,199,217,0.145)] pt-6">
+      <div className="border-t border-line pt-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[14px] font-semibold text-[#F0F0F0]">
+          <h3 className="text-[14px] font-semibold text-fg">
             Enable Receiving
           </h3>
           <button
@@ -784,7 +767,7 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
             data-testid="receiving-toggle"
             data-state={receivingEnabled ? "checked" : "unchecked"}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              receivingEnabled ? "bg-[#4ade80]" : "bg-[rgba(176,199,217,0.2)]"
+              receivingEnabled ? "bg-[#4ade80]" : "bg-white/20"
             }`}
             onClick={() => {
               const newVal = !receivingEnabled;
@@ -886,17 +869,15 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
   ]);
 
   return (
-    <div className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-6">
-      <h2 className="text-[18px] font-semibold text-[#F0F0F0] mb-6">
-        Configuration
-      </h2>
+    <div className="bg-bg-3 border border-line rounded-lg p-6">
+      <h2 className="text-[18px] font-semibold text-fg mb-6">Configuration</h2>
 
       <div className="space-y-8">
         <div>
-          <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-2">
+          <h3 className="text-[14px] font-semibold text-fg mb-2">
             Click Tracking
           </h3>
-          <p className="text-[13px] text-[#A1A4A5] mb-3 max-w-[600px]">
+          <p className="text-[13px] text-fg-2 mb-3 max-w-[600px]">
             To track clicks, OpenSend rewrites links in your HTML email. When
             recipients open a link, they visit your OpenSend tracking endpoint
             and are immediately redirected to the destination URL.
@@ -908,7 +889,7 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
             aria-checked={clickTracking}
             data-state={clickTracking ? "checked" : "unchecked"}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              clickTracking ? "bg-[#4ade80]" : "bg-[rgba(176,199,217,0.2)]"
+              clickTracking ? "bg-[#4ade80]" : "bg-white/20"
             }`}
             onClick={() => {
               const newVal = !clickTracking;
@@ -924,16 +905,14 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
           </button>
         </div>
 
-        <div className="border-t border-[rgba(176,199,217,0.145)] pt-8">
+        <div className="border-t border-line pt-8">
           <div className="flex items-center gap-2 mb-2">
-            <h3 className="text-[14px] font-semibold text-[#F0F0F0]">
-              Open Tracking
-            </h3>
-            <span className="text-[11px] text-[#A1A4A5] bg-[rgba(176,199,217,0.1)] px-2 py-0.5 rounded">
+            <h3 className="text-[14px] font-semibold text-fg">Open Tracking</h3>
+            <span className="text-[11px] text-fg-2 bg-white/10 px-2 py-0.5 rounded">
               Not Recommended
             </span>
           </div>
-          <p className="text-[13px] text-[#A1A4A5] mb-3 max-w-[600px]">
+          <p className="text-[13px] text-fg-2 mb-3 max-w-[600px]">
             To track opens, OpenSend inserts a 1x1 transparent pixel at the end
             of your email. This is not recommended as it can negatively impact
             deliverability.
@@ -945,7 +924,7 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
             aria-checked={openTracking}
             data-state={openTracking ? "checked" : "unchecked"}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              openTracking ? "bg-[#4ade80]" : "bg-[rgba(176,199,217,0.2)]"
+              openTracking ? "bg-[#4ade80]" : "bg-white/20"
             }`}
             onClick={() => {
               const newVal = !openTracking;
@@ -961,19 +940,16 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
           </button>
         </div>
 
-        <div className="border-t border-[rgba(176,199,217,0.145)] pt-8">
-          <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-2">
+        <div className="border-t border-line pt-8">
+          <h3 className="text-[14px] font-semibold text-fg mb-2">
             Custom Tracking Subdomain
           </h3>
-          <p className="text-[13px] text-[#A1A4A5] mb-3 max-w-[600px]">
+          <p className="text-[13px] text-fg-2 mb-3 max-w-[600px]">
             Optional. Enter a single DNS label such as{" "}
-            <span className="font-mono text-[#F0F0F0]">links</span>. OpenSend
-            will show a CNAME for{" "}
-            <span className="font-mono text-[#F0F0F0]">
-              links.{domain.name}
-            </span>{" "}
-            in DNS Records so your tracking URLs can stay on your branded
-            domain.
+            <span className="font-mono text-fg">links</span>. OpenSend will show
+            a CNAME for{" "}
+            <span className="font-mono text-fg">links.{domain.name}</span> in
+            DNS Records so your tracking URLs can stay on your branded domain.
           </p>
           <div className="flex max-w-[420px] items-center gap-2">
             <input
@@ -982,7 +958,7 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
               value={trackingSubdomain}
               onChange={(event) => setTrackingSubdomain(event.target.value)}
               placeholder="links"
-              className="min-w-0 flex-1 px-3 py-2 bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg text-[#F0F0F0] text-[14px] placeholder:text-[#52525b] focus:outline-none focus:border-[rgba(176,199,217,0.3)]"
+              className="min-w-0 flex-1 px-3 py-2 bg-bg-3 border border-line rounded-lg text-fg text-[14px] placeholder:text-fg-4 focus:outline-none focus:border-line-3"
             />
             <button
               type="button"
@@ -1000,9 +976,9 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
           )}
         </div>
 
-        <div className="border-t border-[rgba(176,199,217,0.145)] pt-8">
-          <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-2">TLS</h3>
-          <p className="text-[13px] text-[#A1A4A5] mb-3 max-w-[600px]">
+        <div className="border-t border-line pt-8">
+          <h3 className="text-[14px] font-semibold text-fg mb-2">TLS</h3>
+          <p className="text-[13px] text-fg-2 mb-3 max-w-[600px]">
             Opportunistic TLS attempts a secure connection but falls back to
             unencrypted if unavailable. Enforced TLS requires a secure
             connection and rejects delivery if TLS is not supported.
@@ -1011,7 +987,7 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
             data-testid="tls-select"
             value={tls}
             onChange={(e) => handleTlsChange(e.target.value)}
-            className="appearance-none bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg px-3 py-2 text-[14px] text-[#F0F0F0] focus:outline-none focus:border-[rgba(176,199,217,0.3)] cursor-pointer min-w-[200px]"
+            className="appearance-none bg-bg-3 border border-line rounded-lg px-3 py-2 text-[14px] text-fg focus:outline-none focus:border-line-3 cursor-pointer min-w-[200px]"
           >
             <option value="opportunistic">Opportunistic</option>
             <option value="enforced">Enforced</option>

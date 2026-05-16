@@ -64,14 +64,14 @@ export function AutomationBuilder({ mode }: Props) {
         <div>
           <Link
             href="/automations"
-            className="text-[12px] text-[#A1A4A5] hover:text-[#F0F0F0]"
+            className="text-[12px] text-fg-2 hover:text-fg"
           >
             &larr; All automations
           </Link>
-          <h1 className="mt-2 text-2xl font-semibold text-[#F0F0F0]">
+          <h1 className="mt-2 text-2xl font-semibold text-fg">
             New automation
           </h1>
-          <p className="mt-1 text-[13px] text-[#A1A4A5]">
+          <p className="mt-1 text-[13px] text-fg-2">
             Build a trigger path with optional delay, one advanced step, email,
             and end.
           </p>

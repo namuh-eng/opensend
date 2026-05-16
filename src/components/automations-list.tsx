@@ -132,7 +132,7 @@ export function AutomationsList() {
         <input
           type="text"
           placeholder="Search..."
-          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)]"
+          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
           onChange={(e) => handleSearchChange(e.target.value)}
         />
 
@@ -140,7 +140,7 @@ export function AutomationsList() {
           <button
             type="button"
             onClick={() => setStatusOpen((v) => !v)}
-            className="h-9 px-3 text-[13px] border border-[rgba(176,199,217,0.145)] rounded-md text-[#A1A4A5] hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors flex items-center gap-1.5 min-w-[140px]"
+            className="h-9 px-3 text-[13px] border border-line rounded-md text-fg-2 hover:text-fg hover:border-line-3 transition-colors flex items-center gap-1.5 min-w-[140px]"
           >
             <span>
               {statusFilter ? capitalize(statusFilter) : "All Statuses"}
@@ -161,7 +161,7 @@ export function AutomationsList() {
           {statusOpen ? (
             <div
               role="menu"
-              className="absolute top-full left-0 mt-1 w-[180px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1"
+              className="absolute top-full left-0 mt-1 w-[180px] bg-bg-card border border-line rounded-md shadow-lg z-50 py-1"
             >
               <button
                 type="button"
@@ -170,7 +170,7 @@ export function AutomationsList() {
                   setStatusFilter("");
                   setStatusOpen(false);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-[rgba(176,199,217,0.08)] transition-colors ${!statusFilter ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/[0.08] transition-colors ${!statusFilter ? "text-fg" : "text-fg-2"}`}
               >
                 All Statuses
               </button>
@@ -183,7 +183,7 @@ export function AutomationsList() {
                     setStatusFilter(s);
                     setStatusOpen(false);
                   }}
-                  className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-[rgba(176,199,217,0.08)] transition-colors ${statusFilter === s ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                  className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/[0.08] transition-colors ${statusFilter === s ? "text-fg" : "text-fg-2"}`}
                 >
                   {capitalize(s)}
                 </button>
@@ -222,15 +222,15 @@ export function AutomationsList() {
       ) : null}
 
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-[14px] text-[#A1A4A5]">
+        <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
           Loading automations...
         </div>
       ) : automations.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-6">
-          <h3 className="text-[16px] font-semibold text-[#F0F0F0] mb-2">
+          <h3 className="text-[16px] font-semibold text-fg mb-2">
             No automations
           </h3>
-          <p className="text-[14px] text-[#A1A4A5] text-center max-w-[420px] mb-6">
+          <p className="text-[14px] text-fg-2 text-center max-w-[420px] mb-6">
             Trigger an email when a custom event happens. Start with a linear
             flow: trigger → delay → send_email.
           </p>
@@ -246,23 +246,23 @@ export function AutomationsList() {
         <>
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[rgba(176,199,217,0.145)]">
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+              <tr className="border-b border-line">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Name
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Status
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Trigger event
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Steps
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Last run
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Updated
                 </th>
                 <th className="w-10 px-3 py-2" />
@@ -272,9 +272,9 @@ export function AutomationsList() {
               {automations.map((a) => (
                 <tr
                   key={a.id}
-                  className="border-b border-[rgba(176,199,217,0.145)] hover:bg-[rgba(24,25,28,0.5)] transition-colors group"
+                  className="border-b border-line hover:bg-bg-2 transition-colors group"
                 >
-                  <td className="px-3 py-2 text-[14px] text-[#F0F0F0]">
+                  <td className="px-3 py-2 text-[14px] text-fg">
                     <Link
                       href={`/automations/${a.id}`}
                       className="hover:underline"
@@ -282,18 +282,18 @@ export function AutomationsList() {
                       {a.name}
                     </Link>
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {capitalize(a.status)}
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {a.trigger_event_name ?? (
-                      <span className="text-[#666]">—</span>
+                      <span className="text-fg-4">—</span>
                     )}
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {a.step_count}
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {a.last_run ? (
                       <span
                         title={new Date(a.last_run.created_at).toLocaleString()}
@@ -302,11 +302,11 @@ export function AutomationsList() {
                         {formatRelativeTime(a.last_run.created_at)}
                       </span>
                     ) : (
-                      <span className="text-[#666]">No runs</span>
+                      <span className="text-fg-4">No runs</span>
                     )}
                   </td>
                   <td
-                    className="px-3 py-2 text-[14px] text-[#A1A4A5]"
+                    className="px-3 py-2 text-[14px] text-fg-2"
                     title={new Date(a.updated_at).toLocaleString()}
                   >
                     {formatRelativeTime(a.updated_at)}
@@ -319,7 +319,7 @@ export function AutomationsList() {
                         onClick={() =>
                           setActionMenuId(actionMenuId === a.id ? null : a.id)
                         }
-                        className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors opacity-0 group-hover:opacity-100"
+                        className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100"
                       >
                         <svg
                           aria-hidden="true"
@@ -334,29 +334,29 @@ export function AutomationsList() {
                         </svg>
                       </button>
                       {actionMenuId === a.id ? (
-                        <div className="absolute right-0 top-full mt-1 w-[200px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1">
+                        <div className="absolute right-0 top-full mt-1 w-[200px] bg-bg-card border border-line rounded-md shadow-lg z-50 py-1">
                           <button
                             type="button"
                             onClick={() => {
                               router.push(`/automations/${a.id}`);
                               setActionMenuId(null);
                             }}
-                            className="w-full px-3 py-1.5 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                            className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => handleToggleEnabled(a)}
-                            className="w-full px-3 py-1.5 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                            className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                           >
                             {a.status === "enabled" ? "Disable" : "Enable"}
                           </button>
-                          <div className="my-1 border-t border-[rgba(176,199,217,0.145)]" />
+                          <div className="my-1 border-t border-line" />
                           <button
                             type="button"
                             onClick={() => handleDelete(a)}
-                            className="w-full px-3 py-1.5 text-left text-[13px] text-red-400 hover:bg-[rgba(176,199,217,0.08)] hover:text-red-300 transition-colors"
+                            className="w-full px-3 py-1.5 text-left text-[13px] text-red-400 hover:bg-white/[0.08] hover:text-red-300 transition-colors"
                           >
                             Remove
                           </button>
@@ -368,7 +368,7 @@ export function AutomationsList() {
               ))}
             </tbody>
           </table>
-          <div className="mt-3 text-[13px] text-[#A1A4A5]">
+          <div className="mt-3 text-[13px] text-fg-2">
             {total} {total === 1 ? "automation" : "automations"}
           </div>
         </>

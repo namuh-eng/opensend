@@ -68,11 +68,9 @@ function formatPercent(value: number): string {
 
 function MetricCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-[rgba(176,199,217,0.145)] p-3">
-      <div className="text-[12px] text-[#A1A4A5]">{label}</div>
-      <div className="mt-1 text-[18px] font-semibold text-[#F0F0F0]">
-        {value}
-      </div>
+    <div className="rounded-md border border-line p-3">
+      <div className="text-[12px] text-fg-2">{label}</div>
+      <div className="mt-1 text-[18px] font-semibold text-fg">{value}</div>
     </div>
   );
 }
@@ -189,18 +187,16 @@ export function AutomationRunsList({ automationId }: Props) {
 
   return (
     <div>
-      <section className="mb-5 rounded-lg border border-[rgba(176,199,217,0.145)] p-4">
+      <section className="mb-5 rounded-lg border border-line p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-[14px] font-semibold text-[#F0F0F0]">
-              Run metrics
-            </h3>
-            <p className="mt-1 text-[12px] text-[#A1A4A5]">
+            <h3 className="text-[14px] font-semibold text-fg">Run metrics</h3>
+            <p className="mt-1 text-[12px] text-fg-2">
               Aggregated from the automation run metrics endpoint.
             </p>
           </div>
           {metricsLoading ? (
-            <span className="text-[12px] text-[#666]">Loading metrics...</span>
+            <span className="text-[12px] text-fg-4">Loading metrics...</span>
           ) : null}
         </div>
         {metricsError ? (
@@ -232,7 +228,7 @@ export function AutomationRunsList({ automationId }: Props) {
               />
             </div>
             {metrics.failed_steps.length > 0 ? (
-              <div className="text-[12px] text-[#A1A4A5]">
+              <div className="text-[12px] text-fg-2">
                 Top failed steps:{" "}
                 {metrics.failed_steps
                   .map((step) => `${step.step_key} (${step.count})`)
@@ -248,7 +244,7 @@ export function AutomationRunsList({ automationId }: Props) {
           <button
             type="button"
             onClick={() => setStatusOpen((v) => !v)}
-            className="flex h-9 min-w-[140px] items-center gap-1.5 rounded-md border border-[rgba(176,199,217,0.145)] px-3 text-[13px] text-[#A1A4A5] transition-colors hover:border-[rgba(176,199,217,0.3)] hover:text-[#F0F0F0]"
+            className="flex h-9 min-w-[140px] items-center gap-1.5 rounded-md border border-line px-3 text-[13px] text-fg-2 transition-colors hover:border-line-3 hover:text-fg"
           >
             <span>
               {statusFilter ? capitalize(statusFilter) : "All Statuses"}
@@ -269,7 +265,7 @@ export function AutomationRunsList({ automationId }: Props) {
           {statusOpen ? (
             <div
               role="menu"
-              className="absolute top-full left-0 z-50 mt-1 w-[200px] rounded-md border border-[rgba(176,199,217,0.145)] bg-[#0a0a0a] py-1 shadow-lg"
+              className="absolute top-full left-0 z-50 mt-1 w-[200px] rounded-md border border-line bg-bg-card py-1 shadow-lg"
             >
               <button
                 type="button"
@@ -278,7 +274,7 @@ export function AutomationRunsList({ automationId }: Props) {
                   setStatusFilter("");
                   setStatusOpen(false);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-[rgba(176,199,217,0.08)] ${!statusFilter ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                className={`w-full px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-white/[0.08] ${!statusFilter ? "text-fg" : "text-fg-2"}`}
               >
                 All Statuses
               </button>
@@ -291,7 +287,7 @@ export function AutomationRunsList({ automationId }: Props) {
                     setStatusFilter(s);
                     setStatusOpen(false);
                   }}
-                  className={`w-full px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-[rgba(176,199,217,0.08)] ${statusFilter === s ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                  className={`w-full px-3 py-1.5 text-left text-[13px] transition-colors hover:bg-white/[0.08] ${statusFilter === s ? "text-fg" : "text-fg-2"}`}
                 >
                   {capitalize(s)}
                 </button>
@@ -302,7 +298,7 @@ export function AutomationRunsList({ automationId }: Props) {
         <button
           type="button"
           onClick={refreshAll}
-          className="h-9 rounded-md border border-[rgba(176,199,217,0.145)] px-3 text-[13px] text-[#A1A4A5] transition-colors hover:border-[rgba(176,199,217,0.3)] hover:text-[#F0F0F0]"
+          className="h-9 rounded-md border border-line px-3 text-[13px] text-fg-2 transition-colors hover:border-line-3 hover:text-fg"
         >
           Refresh
         </button>
@@ -318,15 +314,15 @@ export function AutomationRunsList({ automationId }: Props) {
       ) : null}
 
       {loading ? (
-        <div className="flex items-center justify-center py-12 text-[14px] text-[#A1A4A5]">
+        <div className="flex items-center justify-center py-12 text-[14px] text-fg-2">
           Loading runs...
         </div>
       ) : runs.length === 0 ? (
-        <div className="rounded-md border border-dashed border-[rgba(176,199,217,0.145)] py-12 px-6 text-center">
-          <h3 className="mb-1 text-[14px] font-semibold text-[#F0F0F0]">
+        <div className="rounded-md border border-dashed border-line py-12 px-6 text-center">
+          <h3 className="mb-1 text-[14px] font-semibold text-fg">
             No runs yet
           </h3>
-          <p className="text-[13px] text-[#A1A4A5]">
+          <p className="text-[13px] text-fg-2">
             Send a matching event with `POST /api/events/send` to trigger this
             automation.
           </p>
@@ -334,26 +330,26 @@ export function AutomationRunsList({ automationId }: Props) {
       ) : (
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[rgba(176,199,217,0.145)]">
-              <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+            <tr className="border-b border-line">
+              <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
                 Status
               </th>
-              <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+              <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
                 Started
               </th>
-              <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+              <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
                 Duration
               </th>
-              <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+              <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
                 Current step
               </th>
-              <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+              <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
                 Failed step
               </th>
-              <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+              <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
                 Failure reason
               </th>
-              <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5]">
+              <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2">
                 Actions
               </th>
             </tr>
@@ -364,9 +360,9 @@ export function AutomationRunsList({ automationId }: Props) {
               return (
                 <tr
                   key={run.id}
-                  className="border-b border-[rgba(176,199,217,0.145)] transition-colors hover:bg-[rgba(24,25,28,0.5)]"
+                  className="border-b border-line transition-colors hover:bg-bg-2"
                 >
-                  <td className="px-3 py-2 text-[14px] text-[#F0F0F0]">
+                  <td className="px-3 py-2 text-[14px] text-fg">
                     <Link
                       href={`/automations/${automationId}/runs/${run.id}`}
                       className="hover:underline"
@@ -375,7 +371,7 @@ export function AutomationRunsList({ automationId }: Props) {
                     </Link>
                   </td>
                   <td
-                    className="px-3 py-2 text-[14px] text-[#A1A4A5]"
+                    className="px-3 py-2 text-[14px] text-fg-2"
                     title={
                       run.started_at
                         ? new Date(run.started_at).toLocaleString()
@@ -388,10 +384,10 @@ export function AutomationRunsList({ automationId }: Props) {
                         ? `Scheduled ${formatRelativeTime(run.next_step_at)}`
                         : formatRelativeTime(run.created_at)}
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {formatDuration(run.duration_ms)}
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {run.current_step_key ?? "—"}
                   </td>
                   <td className="px-3 py-2 text-[14px] text-red-300">
@@ -400,7 +396,7 @@ export function AutomationRunsList({ automationId }: Props) {
                   <td className="max-w-[280px] truncate px-3 py-2 text-[14px] text-red-300">
                     {run.failure_reason ?? "—"}
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {cancellable ? (
                       <button
                         type="button"
