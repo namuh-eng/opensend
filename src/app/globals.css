@@ -354,6 +354,18 @@ hr.line {
   }
 }
 
+@keyframes shell-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.75);
+  }
+}
+
 @media (max-width: 900px) {
   .landing-root .hero-grid,
   .landing-root .sh-grid {
