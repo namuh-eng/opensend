@@ -163,23 +163,23 @@ export function WebhooksList({
           onAction={viewCreatedEndpoint}
         >
           <div className="space-y-4">
-            <p className="text-[13px] text-[#A1A4A5]">
+            <p className="text-[13px] text-fg-2">
               Your endpoint is active and ready to receive subscribed events.
               Copy the signing secret now; it is only shown once.
             </p>
             <div>
-              <p className="mb-1 text-[12px] uppercase tracking-wider text-white/40">
+              <p className="mb-1 text-[12px] uppercase tracking-wider text-fg-3">
                 Endpoint
               </p>
-              <code className="block rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-2 text-[13px] text-[#F0F0F0] break-all">
+              <code className="block rounded-md border border-line bg-bg-3 px-3 py-2 text-[13px] text-fg break-all">
                 {createdWebhook.endpoint}
               </code>
             </div>
             <div>
-              <p className="mb-1 text-[12px] uppercase tracking-wider text-white/40">
+              <p className="mb-1 text-[12px] uppercase tracking-wider text-fg-3">
                 Signing secret
               </p>
-              <code className="block rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-2 text-[13px] text-[#F0F0F0] break-all">
+              <code className="block rounded-md border border-line bg-bg-3 px-3 py-2 text-[13px] text-fg break-all">
                 {createdWebhook.signingSecret ?? "Unavailable"}
               </code>
             </div>
@@ -201,7 +201,7 @@ export function WebhooksList({
           <div>
             <label
               htmlFor="webhook-endpoint"
-              className="mb-1.5 block text-[13px] text-[#F0F0F0]"
+              className="mb-1.5 block text-[13px] text-fg"
             >
               Endpoint URL
             </label>
@@ -211,23 +211,23 @@ export function WebhooksList({
               value={endpoint}
               onChange={(event) => setEndpoint(event.target.value)}
               placeholder="https://example.com/webhooks/opensend"
-              className="w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-2 text-[14px] text-[#F0F0F0] outline-none placeholder:text-[#52525b] focus:border-[rgba(176,199,217,0.3)]"
+              className="w-full rounded-md border border-line bg-bg-3 px-3 py-2 text-[14px] text-fg outline-none placeholder:text-fg-4 focus:border-line-3"
             />
           </div>
 
           <fieldset>
-            <legend className="mb-2 text-[13px] text-[#F0F0F0]">Events</legend>
-            <div className="grid max-h-60 gap-2 overflow-y-auto rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] p-3 sm:grid-cols-2">
+            <legend className="mb-2 text-[13px] text-fg">Events</legend>
+            <div className="grid max-h-60 gap-2 overflow-y-auto rounded-md border border-line bg-bg-2 p-3 sm:grid-cols-2">
               {supportedEventTypes.map((eventType) => (
                 <label
                   key={eventType}
-                  className="flex items-center gap-2 text-[13px] text-[#A1A4A5]"
+                  className="flex items-center gap-2 text-[13px] text-fg-2"
                 >
                   <input
                     type="checkbox"
                     checked={selectedEvents.includes(eventType)}
                     onChange={() => toggleEvent(eventType)}
-                    className="h-4 w-4 rounded border-white/20 bg-transparent"
+                    className="h-4 w-4 rounded border-line-2 bg-transparent"
                   />
                   <span>{eventType}</span>
                 </label>
@@ -236,7 +236,7 @@ export function WebhooksList({
           </fieldset>
 
           {error && (
-            <p role="alert" className="text-[13px] text-red-400">
+            <p role="alert" className="text-[13px] text-red">
               {error}
             </p>
           )}
@@ -248,11 +248,11 @@ export function WebhooksList({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-[#F0F0F0]">Webhooks</h1>
+        <h1 className="text-2xl font-semibold text-fg">Webhooks</h1>
         <button
           type="button"
           onClick={openCreateModal}
-          className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-[13px] font-medium text-black transition-colors hover:bg-gray-200"
+          className="btn btn-primary btn-sm"
         >
           <svg
             aria-hidden="true"
@@ -267,8 +267,8 @@ export function WebhooksList({
         </button>
       </div>
 
-      <section className="rounded-lg border border-white/5 bg-black p-6">
-        <h2 className="text-sm font-medium uppercase tracking-wider text-white/40">
+      <section className="rounded-lg border border-line bg-bg-card p-6">
+        <h2 className="text-sm font-medium uppercase tracking-wider text-fg-3">
           Supported events
         </h2>
         <div
@@ -278,7 +278,7 @@ export function WebhooksList({
           {supportedEventTypes.map((eventType) => (
             <span
               key={eventType}
-              className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-xs text-[#F0F0F0]"
+              className="rounded-full border border-line-2 bg-white/[0.03] px-3 py-1 text-xs text-fg"
             >
               {eventType}
             </span>
@@ -286,28 +286,28 @@ export function WebhooksList({
         </div>
       </section>
 
-      <div className="overflow-hidden rounded-lg border border-white/5 bg-black">
-        <table className="min-w-full divide-y divide-white/5">
+      <div className="overflow-hidden rounded-lg border border-line bg-bg-card">
+        <table className="min-w-full divide-y divide-line">
           <thead>
             <tr>
-              <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-white/40">
+              <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-fg-3">
                 Endpoint
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-white/40">
+              <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-fg-3">
                 Status
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-white/40">
+              <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-fg-3">
                 Events
               </th>
-              <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-white/40">
+              <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-wider text-fg-3">
                 Created
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/5">
+          <tbody className="divide-y divide-line">
             {webhooks.map((webhook) => (
               <tr key={webhook.id} className="hover:bg-white/[0.02]">
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-[#F0F0F0]">
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-fg">
                   <Link
                     href={`/webhooks/${webhook.id}`}
                     className="hover:underline"
@@ -320,7 +320,7 @@ export function WebhooksList({
                     status={webhook.status === "active" ? "active" : "failed"}
                   />
                 </td>
-                <td className="px-6 py-4 text-sm text-white/40">
+                <td className="px-6 py-4 text-sm text-fg-3">
                   {webhook.eventTypes
                     .filter((eventType) =>
                       supportedEventTypes.includes(
@@ -330,7 +330,7 @@ export function WebhooksList({
                     .map((eventType) => formatEventType(eventType))
                     .join(", ")}
                 </td>
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-white/40">
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-fg-3">
                   {new Date(webhook.createdAt).toLocaleDateString()}
                 </td>
               </tr>
@@ -339,14 +339,14 @@ export function WebhooksList({
               <tr>
                 <td
                   colSpan={4}
-                  className="px-6 py-12 text-center text-sm text-white/40"
+                  className="px-6 py-12 text-center text-sm text-fg-3"
                 >
                   <div className="flex flex-col items-center gap-3">
                     <span>No webhooks configured.</span>
                     <button
                       type="button"
                       onClick={openCreateModal}
-                      className="rounded-md border border-white/10 px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] transition-colors hover:bg-white/[0.06]"
+                      className="btn btn-ghost btn-sm"
                     >
                       Add your first endpoint
                     </button>
