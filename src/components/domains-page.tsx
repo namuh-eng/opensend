@@ -132,7 +132,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
         <button
           type="button"
           onClick={() => setShowAddModal(true)}
-          className="px-3 py-1.5 bg-white text-black text-[13px] font-medium rounded-lg hover:bg-white/[0.12] transition-colors"
+          className="btn btn-primary btn-sm"
         >
           Add domain
         </button>

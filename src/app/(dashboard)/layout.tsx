@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import { CommandPaletteProvider } from "@/components/dashboard-shell/command-palette";
 import { Sidebar } from "@/components/dashboard-shell/sidebar";
 import { TopBar } from "@/components/dashboard-shell/topbar";
 import { auth } from "@/lib/auth";
@@ -34,37 +35,39 @@ export default async function DashboardLayout({
   const userEmail = user?.email ?? "";
 
   return (
-    <div className="flex min-h-screen bg-bg">
-      <Sidebar
-        billingEnabled={billingEnabled}
-        userName={userName}
-        userEmail={userEmail}
-        userInitials={initials(user?.name, user?.email)}
-      />
-      <main className="flex min-h-screen flex-1 flex-col">
-        <TopBar />
-        <div className="flex-1">{children}</div>
-        <footer className="flex items-center justify-end gap-4 border-t border-line px-6 py-3">
-          <a
-            href="mailto:feedback@example.com?subject=Opensend%20Feedback"
-            className="text-[13px] text-fg-3 transition-colors hover:text-fg"
-          >
-            Feedback
-          </a>
-          <a
-            href="mailto:help@example.com?subject=Opensend%20Help"
-            className="text-[13px] text-fg-3 transition-colors hover:text-fg"
-          >
-            Help
-          </a>
-          <Link
-            href="/docs"
-            className="text-[13px] text-fg-3 transition-colors hover:text-fg"
-          >
-            Docs
-          </Link>
-        </footer>
-      </main>
-    </div>
+    <CommandPaletteProvider>
+      <div className="flex min-h-screen bg-bg">
+        <Sidebar
+          billingEnabled={billingEnabled}
+          userName={userName}
+          userEmail={userEmail}
+          userInitials={initials(user?.name, user?.email)}
+        />
+        <main className="flex min-h-screen flex-1 flex-col">
+          <TopBar />
+          <div className="flex-1">{children}</div>
+          <footer className="flex items-center justify-end gap-4 border-t border-line px-6 py-3">
+            <a
+              href="mailto:feedback@example.com?subject=Opensend%20Feedback"
+              className="text-[13px] text-fg-3 transition-colors hover:text-fg"
+            >
+              Feedback
+            </a>
+            <a
+              href="mailto:help@example.com?subject=Opensend%20Help"
+              className="text-[13px] text-fg-3 transition-colors hover:text-fg"
+            >
+              Help
+            </a>
+            <Link
+              href="/docs"
+              className="text-[13px] text-fg-3 transition-colors hover:text-fg"
+            >
+              Docs
+            </Link>
+          </footer>
+        </main>
+      </div>
+    </CommandPaletteProvider>
   );
 }

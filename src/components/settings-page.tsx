@@ -203,7 +203,7 @@ SMTP_PASS=os_YOUR_API_KEY`}
             unsubscribe link.
           </p>
 
-          <div className="border border-line rounded-lg overflow-hidden bg-white">
+          <div className="border border-line rounded-lg overflow-hidden bg-bg-card">
             <div className="p-8 flex flex-col items-center justify-center min-h-[400px]">
               <div className="max-w-md w-full text-center">
                 <h2 className="text-xl font-semibold text-fg mb-2">
