@@ -34,7 +34,7 @@ const PLANS: Plan[] = [
     blurb: "For tinkering and side projects.",
     monthly: 0,
     yearly: 0,
-    quota: "10,000 emails/mo",
+    quota: "5,000 API + broadcast emails/mo",
     domains: "1 verified domain",
     keys: "2 API keys",
     cta: "Get started",
@@ -54,16 +54,16 @@ const PLANS: Plan[] = [
     blurb: "For small teams shipping production email.",
     monthly: 19,
     yearly: 15,
-    quota: "50,000 emails/mo",
-    domains: "5 verified domains",
+    quota: "55,000 API + broadcast emails/mo",
+    domains: "10 verified domains",
     keys: "10 API keys",
     cta: "Start Starter",
     ctaStyle: "ghost",
     ctaHref: HOSTED_SIGNIN_URL,
     perks: [
       "Everything in Free",
-      "Higher SES quota allocation",
-      "Broadcast & audience segments",
+      "API sends + broadcast fanout",
+      "Contacts, segments, and broadcasts",
       "Email automations",
       "Email support · 48h",
     ],
@@ -71,19 +71,19 @@ const PLANS: Plan[] = [
   {
     slug: "growth",
     name: "Growth",
-    blurb: "For teams scaling to millions.",
-    monthly: 79,
-    yearly: 65,
-    quota: "500,000 emails/mo",
-    domains: "25 verified domains",
-    keys: "50 API keys",
+    blurb: "For domain-heavy teams growing broadcast and API volume.",
+    monthly: 99,
+    yearly: 79,
+    quota: "120,000 API + broadcast emails/mo",
+    domains: "1,000 verified domains",
+    keys: "25 API keys",
     cta: "Start Growth",
     ctaStyle: "primary",
     ctaHref: HOSTED_SIGNIN_URL,
     featured: true,
     perks: [
       "Everything in Starter",
-      "Dedicated IPs (add-on)",
+      "Advanced broadcast and audience workflows",
       "Custom Return-Path domains",
       "Audit log & SSO (Google)",
       "Priority support · 12h",
@@ -139,9 +139,9 @@ const FAQ: Array<[string, string]> = [
 ];
 
 const COMPARE_ROWS: string[][] = [
-  ["Monthly emails", "10k", "50k", "500k", "Unlimited"],
-  ["Verified domains", "1", "5", "25", "Unlimited"],
-  ["API keys", "2", "10", "50", "Unlimited"],
+  ["Monthly emails", "5k", "55k", "120k", "Unlimited"],
+  ["Verified domains", "1", "10", "1,000", "Unlimited"],
+  ["API keys", "2", "10", "25", "Unlimited"],
   ["Webhooks", "✓", "✓", "✓", "✓"],
   ["Broadcasts", "—", "✓", "✓", "✓"],
   ["Automations", "—", "✓", "✓", "✓"],
@@ -955,7 +955,7 @@ export function PricingPage({
             }}
           >
             <span className="pill">
-              <span className="dot" /> simple pricing · cancel anytime
+              <span className="dot" /> one plan · API sends + broadcasts
             </span>
             <h1 className="title-l" style={{ maxWidth: 820 }}>
               Pay for sending,
@@ -965,8 +965,9 @@ export function PricingPage({
               </span>
             </h1>
             <p className="body" style={{ maxWidth: 580 }}>
-              Start free. Upgrade when your volume grows. Or self-host the same
-              source for free forever — opensend is ELv2 either way.
+              One plan covers API sends, broadcasts, contacts, and domains. Or
+              self-host the same source for free forever — opensend is ELv2
+              either way.
             </p>
 
             <form

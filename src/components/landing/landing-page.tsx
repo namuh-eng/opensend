@@ -681,7 +681,7 @@ function Hero() {
 
 function StatsBar() {
   const stats: Array<[string, string]> = [
-    ["10k+", "sends/mo · free tier"],
+    ["5k+", "sends/mo · free tier"],
     ["<1.4s", "p50 send → delivered"],
     ["Resend", "API parity"],
     ["ELv2", "free to self-host"],
@@ -1229,7 +1229,7 @@ function CompareSection() {
   const rows: Array<[string, string, string]> = [
     ["Where it runs", "Managed at opensend.dev", "Your infrastructure"],
     ["Setup", "Sign in with Google", "docker compose up -d"],
-    ["Pricing", "Free 10k/mo, $19+ paid", "You pay AWS SES only"],
+    ["Pricing", "Free 5k/mo, $19+ paid", "You pay AWS SES only"],
     ["Data residency", "us-east-1 / eu-west-1", "Wherever you run it"],
     ["SES quota", "Shared, soft caps", "Your own account"],
     ["Best for", "Teams that want zero ops", "Teams that want full control"],
