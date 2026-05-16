@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useCommandPalette } from "./command-palette";
 import { Icon, type IconName } from "./icons";
 
 type NavItem = {
@@ -170,10 +171,12 @@ function WorkspaceSwitcher({
 }
 
 function CommandSearch() {
+  const { open } = useCommandPalette();
   return (
     <button
       type="button"
-      className="mx-3 mt-3 flex h-8 items-center gap-2 rounded-md border border-line-2 bg-white/[0.02] px-2.5 text-[13px] text-fg-3 transition-colors hover:bg-white/[0.04]"
+      onClick={open}
+      className="mx-3 mt-3 flex h-8 items-center gap-2 rounded-md border border-line-2 bg-white/[0.02] px-2.5 text-[13px] text-fg-3 transition-colors hover:bg-white/[0.04] hover:text-fg-2"
     >
       <span className="inline-flex h-3.5 w-3.5 text-fg-3">
         <Icon.search />
