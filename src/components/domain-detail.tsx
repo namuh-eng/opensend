@@ -402,7 +402,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
         </p>
 
         {isVerified && (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[rgba(74,222,128,0.08)] border border-accent/30 mb-6">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-accent/10 border border-accent/30 mb-6">
             <svg
               aria-hidden="true"
               width="18"
@@ -456,7 +456,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
               type="button"
               className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors ${
                 activeTab === tab.key
-                  ? "border-[#F0F0F0] text-fg"
+                  ? "border-accent text-fg"
                   : "border-transparent text-fg-2 hover:text-fg"
               }`}
               onClick={() => setActiveTab(tab.key)}
@@ -708,7 +708,7 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
             data-testid="sending-toggle"
             data-state={sendingEnabled ? "checked" : "unchecked"}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              sendingEnabled ? "bg-[#4ade80]" : "bg-white/20"
+              sendingEnabled ? "bg-accent" : "bg-white/20"
             }`}
             onClick={() => {
               const newVal = !sendingEnabled;
@@ -767,7 +767,7 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
             data-testid="receiving-toggle"
             data-state={receivingEnabled ? "checked" : "unchecked"}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              receivingEnabled ? "bg-[#4ade80]" : "bg-white/20"
+              receivingEnabled ? "bg-accent" : "bg-white/20"
             }`}
             onClick={() => {
               const newVal = !receivingEnabled;
@@ -889,7 +889,7 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
             aria-checked={clickTracking}
             data-state={clickTracking ? "checked" : "unchecked"}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              clickTracking ? "bg-[#4ade80]" : "bg-white/20"
+              clickTracking ? "bg-accent" : "bg-white/20"
             }`}
             onClick={() => {
               const newVal = !clickTracking;
@@ -924,7 +924,7 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
             aria-checked={openTracking}
             data-state={openTracking ? "checked" : "unchecked"}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              openTracking ? "bg-[#4ade80]" : "bg-white/20"
+              openTracking ? "bg-accent" : "bg-white/20"
             }`}
             onClick={() => {
               const newVal = !openTracking;

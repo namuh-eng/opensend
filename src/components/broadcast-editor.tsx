@@ -1200,7 +1200,7 @@ function BlockRenderer({
       );
     case "quote":
       return (
-        <div className="border-l-2 border-[#A1A4A5] pl-4">
+        <div className="border-l-2 border-fg-2 pl-4">
           <textarea
             value={block.content}
             onChange={(e) => onUpdate(e.target.value)}

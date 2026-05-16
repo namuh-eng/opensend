@@ -288,7 +288,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
             value={newDomain}
             onChange={(e) => setNewDomain(e.target.value)}
             placeholder="yourdomain.com"
-            className="w-full px-3 py-2 bg-bg-3 border border-line rounded-lg text-fg text-[14px] placeholder:text-fg-4 focus:outline-none focus:border-[#3b82f6]"
+            className="w-full px-3 py-2 bg-bg-3 border border-line rounded-lg text-fg text-[14px] placeholder:text-fg-4 focus:outline-none focus:border-blue"
           />
           <button
             type="button"
@@ -316,7 +316,7 @@ export function DomainsPage({ domains }: DomainsPageProps) {
                 value={trackingSubdomain}
                 onChange={(e) => setTrackingSubdomain(e.target.value)}
                 placeholder="links"
-                className="w-full px-3 py-2 bg-bg-3 border border-line rounded-lg text-fg text-[14px] placeholder:text-fg-4 focus:outline-none focus:border-[#3b82f6]"
+                className="w-full px-3 py-2 bg-bg-3 border border-line rounded-lg text-fg text-[14px] placeholder:text-fg-4 focus:outline-none focus:border-blue"
               />
             </div>
           )}

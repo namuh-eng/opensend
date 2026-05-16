@@ -574,7 +574,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
               type="button"
               className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
                 activeTab === tab.key
-                  ? "border-[#F0F0F0] text-fg"
+                  ? "border-accent text-fg"
                   : "border-transparent text-fg-2 hover:text-fg"
               }`}
               onClick={() => setActiveTab(tab.key)}

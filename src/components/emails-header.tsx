@@ -52,7 +52,7 @@ export function EmailsHeader({ activeTab, apiKeys = [] }: EmailsHeaderProps) {
               >
                 {tab.label}
                 {isActive && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#F0F0F0]" />
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-accent" />
                 )}
               </Link>
             );

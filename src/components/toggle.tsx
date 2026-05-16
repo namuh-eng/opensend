@@ -30,7 +30,7 @@ export function Toggle({
           className={`pointer-events-none block h-[16px] w-[16px] rounded-full shadow-sm transition-transform mt-[2px] ${
             checked
               ? "translate-x-[18px] bg-black"
-              : "translate-x-[2px] bg-[#A1A4A5]"
+              : "translate-x-[2px] bg-fg-2"
           }`}
         />
       </button>

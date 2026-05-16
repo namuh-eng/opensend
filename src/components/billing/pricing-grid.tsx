@@ -86,7 +86,7 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
               key={plan.id}
               className={`flex flex-col rounded-lg border p-6 ${
                 isCurrent
-                  ? "border-purple-500/60 bg-[rgba(88,28,135,0.12)]"
+                  ? "border-purple-500/60 bg-violet/15"
                   : "border-line bg-bg-3"
               }`}
               data-testid={`pricing-card-${plan.slug}`}

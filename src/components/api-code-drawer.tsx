@@ -742,7 +742,7 @@ export function ApiCodeDrawer({ open, onClose, context }: ApiCodeDrawerProps) {
               >
                 {tab.label}
                 {isActive && (
-                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#F0F0F0]" />
+                  <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-accent" />
                 )}
               </button>
             );
