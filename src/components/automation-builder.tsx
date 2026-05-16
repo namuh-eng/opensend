@@ -80,7 +80,7 @@ export function AutomationBuilder({ mode }: Props) {
           type="button"
           onClick={handleSubmit}
           disabled={!canSave}
-          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-white/[0.12] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? "Saving..." : "Create automation"}
         </button>

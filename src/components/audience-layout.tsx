@@ -54,7 +54,7 @@ export function AudienceLayout({ stats, children }: AudienceLayoutProps) {
           <button
             type="button"
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-100 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-medium bg-white text-black rounded-md hover:bg-white/[0.08] transition-colors"
           >
             <svg
               width="14"

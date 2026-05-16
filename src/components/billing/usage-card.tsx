@@ -12,7 +12,7 @@ type MaybeKnownUsageMetric = { used: number | null; limit: number };
 
 function thresholdColor(threshold: ReturnType<typeof getUsageThreshold>) {
   if (threshold === "critical") return "bg-red-500";
-  if (threshold === "warn") return "bg-amber-500";
+  if (threshold === "warn") return "bg-amber";
   return "bg-blue-500";
 }
 

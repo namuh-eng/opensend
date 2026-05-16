@@ -143,7 +143,7 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
       </div>
       {error ? (
         <p
-          className="text-[13px] text-amber-300"
+          className="text-[13px] text-amber"
           role="alert"
           data-testid="pricing-grid-error"
         >

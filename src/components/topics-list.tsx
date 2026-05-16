@@ -123,7 +123,7 @@ export function TopicsList() {
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 transition-colors"
+          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-white/[0.12] transition-colors"
         >
           Create topic
         </button>
@@ -148,7 +148,7 @@ export function TopicsList() {
             <button
               type="button"
               onClick={() => setShowModal(true)}
-              className="px-4 py-2 rounded-md text-[13px] font-medium bg-white text-black hover:bg-gray-200 transition-colors"
+              className="btn btn-primary"
             >
               Create topic
             </button>
@@ -288,10 +288,10 @@ export function TopicsList() {
         </div>
         <div className="bg-white rounded-b-lg p-8">
           <div className="max-w-[400px] mx-auto text-center">
-            <h2 className="text-[20px] font-semibold text-gray-900 mb-2">
+            <h2 className="text-[20px] font-semibold text-fg mb-2">
               Subscription Preferences
             </h2>
-            <p className="text-[14px] text-gray-600 mb-6">
+            <p className="text-[14px] text-fg-2 mb-6">
               Manage your email subscription preferences below.
             </p>
             <div className="space-y-3 text-left">
@@ -301,7 +301,7 @@ export function TopicsList() {
                   .map((t) => (
                     <label
                       key={t.id}
-                      className="flex items-start gap-3 p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-50"
+                      className="flex items-start gap-3 p-3 border border-line-2 rounded-lg cursor-pointer hover:bg-white/[0.04]"
                     >
                       <input
                         type="checkbox"
@@ -310,11 +310,11 @@ export function TopicsList() {
                         disabled
                       />
                       <div>
-                        <div className="text-[14px] font-medium text-gray-900">
+                        <div className="text-[14px] font-medium text-fg">
                           {t.name}
                         </div>
                         {t.description && (
-                          <div className="text-[13px] text-gray-500 mt-0.5">
+                          <div className="text-[13px] text-fg-3 mt-0.5">
                             {t.description}
                           </div>
                         )}
@@ -322,7 +322,7 @@ export function TopicsList() {
                     </label>
                   ))
               ) : (
-                <div className="text-center text-[14px] text-gray-400 py-4">
+                <div className="text-center text-[14px] text-fg-3 py-4">
                   No public topics to display
                 </div>
               )}
@@ -547,7 +547,7 @@ function CreateTopicModal({
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50"
+            className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-white/[0.12] transition-colors disabled:opacity-50"
           >
             Add
           </button>

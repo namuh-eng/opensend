@@ -380,7 +380,7 @@ export function TemplatesList() {
           type="button"
           onClick={handleCreate}
           disabled={creating}
-          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-70 transition-colors flex items-center gap-1.5"
+          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-white/[0.12] disabled:cursor-not-allowed disabled:opacity-70 transition-colors flex items-center gap-1.5"
         >
           <svg
             aria-hidden="true"
@@ -433,9 +433,9 @@ export function TemplatesList() {
               <Link href={`/templates/${t.id}/editor`}>
                 <div className="aspect-[4/3] bg-white flex items-start justify-start p-4 cursor-pointer">
                   <div className="w-3/4 space-y-2 pt-2">
-                    <div className="h-1.5 bg-gray-200 rounded w-full" />
-                    <div className="h-1.5 bg-gray-200 rounded w-3/4" />
-                    <div className="h-1.5 bg-gray-200 rounded w-1/2" />
+                    <div className="h-1.5 bg-white/[0.12] rounded w-full" />
+                    <div className="h-1.5 bg-white/[0.12] rounded w-3/4" />
+                    <div className="h-1.5 bg-white/[0.12] rounded w-1/2" />
                   </div>
                 </div>
               </Link>

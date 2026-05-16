@@ -21,11 +21,7 @@ export function EmptyState({
         {description}
       </p>
       {actionLabel && onAction && (
-        <button
-          type="button"
-          className="px-4 py-2 rounded-md text-[13px] font-medium bg-white text-black hover:bg-gray-200 transition-colors"
-          onClick={onAction}
-        >
+        <button type="button" className="btn btn-primary" onClick={onAction}>
           {actionLabel}
         </button>
       )}

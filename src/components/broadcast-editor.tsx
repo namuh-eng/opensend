@@ -420,7 +420,7 @@ export function BroadcastEditor({
             className={`h-8 px-4 text-[13px] font-medium rounded-md transition-colors ${
               reviewOpen
                 ? "bg-white text-black"
-                : "bg-white text-black hover:bg-gray-200"
+                : "bg-fg text-bg hover:bg-white"
             }`}
           >
             Review

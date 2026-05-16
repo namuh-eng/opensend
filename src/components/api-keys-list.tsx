@@ -217,7 +217,7 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
             />
             <button
               type="button"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-white text-black hover:bg-gray-200 transition-colors"
+              className="btn btn-primary btn-sm"
               onClick={() => setCreateOpen(true)}
             >
               <svg
@@ -359,7 +359,7 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
         <h1 className="text-2xl font-semibold text-fg">API Keys</h1>
         <button
           type="button"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-white text-black hover:bg-gray-200 transition-colors"
+          className="btn btn-primary btn-sm"
           onClick={() => setCreateOpen(true)}
         >
           <svg

@@ -80,7 +80,7 @@ export function Modal({
               className={`px-3 py-1.5 rounded-md text-[13px] font-medium transition-colors ${
                 actionVariant === "destructive"
                   ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-white text-black hover:bg-gray-200"
+                  : "bg-fg text-bg hover:bg-white"
               } ${actionDisabled ? "opacity-50 cursor-not-allowed" : ""}`}
               onClick={onAction}
             >

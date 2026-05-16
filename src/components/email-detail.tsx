@@ -345,7 +345,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
       {email.suppression && (
         <div
           data-testid="suppression-guidance"
-          className="mb-8 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4"
+          className="mb-8 rounded-xl border border-amber/30 bg-amber/10 p-4"
         >
           <div className="flex items-center gap-2 mb-2">
             <StatusBadge status="Suppressed" variant="warning" />
@@ -456,7 +456,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
                       className={clsx(
                         "w-2 h-2 rounded-full mt-1.5 shrink-0",
                         event.type === "delivered" || event.type === "sent"
-                          ? "bg-emerald-500"
+                          ? "bg-accent"
                           : event.type === "bounced" || event.type === "failed"
                             ? "bg-red-500"
                             : "bg-blue-500",

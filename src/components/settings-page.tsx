@@ -206,10 +206,10 @@ SMTP_PASS=os_YOUR_API_KEY`}
           <div className="border border-line rounded-lg overflow-hidden bg-white">
             <div className="p-8 flex flex-col items-center justify-center min-h-[400px]">
               <div className="max-w-md w-full text-center">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                <h2 className="text-xl font-semibold text-fg mb-2">
                   Unsubscribe
                 </h2>
-                <p className="text-gray-600 text-sm mb-6">
+                <p className="text-fg-2 text-sm mb-6">
                   You have been unsubscribed from this mailing list. You will no
                   longer receive emails from this sender.
                 </p>
@@ -225,9 +225,7 @@ SMTP_PASS=os_YOUR_API_KEY`}
                   </svg>
                   Successfully unsubscribed
                 </div>
-                <p className="text-gray-400 text-xs mt-6">
-                  Powered by Opensend
-                </p>
+                <p className="text-fg-3 text-xs mt-6">Powered by Opensend</p>
               </div>
             </div>
           </div>

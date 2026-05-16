@@ -118,7 +118,7 @@ export function PropertiesList() {
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 transition-colors"
+          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-white/[0.12] transition-colors"
         >
           Add property
         </button>
@@ -398,7 +398,7 @@ function AddPropertyModal({
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50"
+            className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-white/[0.12] transition-colors disabled:opacity-50"
           >
             Add
           </button>

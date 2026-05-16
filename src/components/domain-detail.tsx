@@ -402,7 +402,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
         </p>
 
         {isVerified && (
-          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[rgba(74,222,128,0.08)] border border-[rgba(74,222,128,0.2)] mb-6">
+          <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[rgba(74,222,128,0.08)] border border-accent/30 mb-6">
             <svg
               aria-hidden="true"
               width="18"
@@ -964,7 +964,7 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
               type="button"
               onClick={handleTrackingSubdomainSave}
               disabled={savingTrackingSubdomain}
-              className="px-3 py-2 rounded-lg bg-white text-black text-[13px] font-medium hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-2 rounded-lg bg-white text-black text-[13px] font-medium hover:bg-white/[0.12] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingTrackingSubdomain ? "Saving…" : "Save"}
             </button>

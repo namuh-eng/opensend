@@ -110,7 +110,7 @@ export function CurrentPlanCard({ plan, subscription }: CurrentPlanCardProps) {
             </span>
             {subscription?.cancelAtPeriodEnd ? (
               <span
-                className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-300"
+                className="rounded-full bg-amber/15 px-2 py-0.5 text-amber"
                 data-testid="cancel-at-period-end-badge"
               >
                 Cancels at period end
@@ -134,7 +134,7 @@ export function CurrentPlanCard({ plan, subscription }: CurrentPlanCardProps) {
         </button>
       </div>
       {error ? (
-        <p className="mt-4 text-[12px] text-amber-300" role="alert">
+        <p className="mt-4 text-[12px] text-amber" role="alert">
           {error}
         </p>
       ) : null}
