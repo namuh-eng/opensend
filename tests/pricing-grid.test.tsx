@@ -15,7 +15,7 @@ const plans: PricingPlan[] = [
     slug: "free",
     name: "Free",
     monthlyPriceCents: 0,
-    monthlyEmailQuota: 10000,
+    monthlyEmailQuota: 5000,
     maxDomains: 1,
     maxApiKeys: 2,
   },
@@ -24,8 +24,8 @@ const plans: PricingPlan[] = [
     slug: "starter",
     name: "Starter",
     monthlyPriceCents: 1900,
-    monthlyEmailQuota: 50000,
-    maxDomains: 5,
+    monthlyEmailQuota: 55000,
+    maxDomains: 10,
     maxApiKeys: 10,
   },
 ];
@@ -56,5 +56,19 @@ describe("PricingGrid", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ plan_id: "plan_starter" }),
     });
+  });
+
+  it("renders dashboard plans with the marketing pricing card treatment", () => {
+    render(<PricingGrid plans={plans} currentPlanId="plan_free" />);
+
+    expect(screen.getByTestId("pricing-card-free").textContent).toContain(
+      "For tinkering and side projects.",
+    );
+    expect(screen.getByTestId("pricing-card-free").textContent).toContain(
+      "5,000 API + broadcast emails/mo",
+    );
+    expect(screen.getByTestId("pricing-card-starter").textContent).toContain(
+      "Change to $19 / mo",
+    );
   });
 });

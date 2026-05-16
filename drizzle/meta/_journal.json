@@ -127,6 +127,13 @@
       "when": 1778508359779,
       "tag": "0017_email_idempotency_key_256",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1778970539716,
+      "tag": "0020_pricing_catalog_20260516",
+      "breakpoints": true
     }
   ]
 }

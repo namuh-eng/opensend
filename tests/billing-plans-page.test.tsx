@@ -91,7 +91,7 @@ describe("authenticated billing plans page", () => {
         slug: "free",
         name: "Free",
         monthlyPriceCents: 0,
-        monthlyEmailQuota: 10000,
+        monthlyEmailQuota: 5000,
         maxDomains: 1,
         maxApiKeys: 2,
       },
@@ -100,8 +100,8 @@ describe("authenticated billing plans page", () => {
         slug: "starter",
         name: "Starter",
         monthlyPriceCents: 1900,
-        monthlyEmailQuota: 50000,
-        maxDomains: 5,
+        monthlyEmailQuota: 55000,
+        maxDomains: 10,
         maxApiKeys: 10,
       },
     ]);
@@ -123,6 +123,10 @@ describe("authenticated billing plans page", () => {
     const result = await Page();
     render(result as React.ReactElement);
 
+    expect(screen.getByRole("dialog", { name: "Plans" })).toBeDefined();
+    expect(
+      screen.getByRole("link", { name: "Close plans" }).getAttribute("href"),
+    ).toBe("/settings/billing");
     expect(screen.getByRole("heading", { name: "Plans" })).toBeDefined();
     expect(
       screen.getByTestId("pricing-grid").getAttribute("data-current-plan-id"),
@@ -135,7 +139,7 @@ describe("authenticated billing plans page", () => {
             slug: "free",
             name: "Free",
             monthlyPriceCents: 0,
-            monthlyEmailQuota: 10000,
+            monthlyEmailQuota: 5000,
             maxDomains: 1,
             maxApiKeys: 2,
           },
@@ -144,8 +148,8 @@ describe("authenticated billing plans page", () => {
             slug: "starter",
             name: "Starter",
             monthlyPriceCents: 1900,
-            monthlyEmailQuota: 50000,
-            maxDomains: 5,
+            monthlyEmailQuota: 55000,
+            maxDomains: 10,
             maxApiKeys: 10,
           },
         ],

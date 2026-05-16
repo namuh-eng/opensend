@@ -35,9 +35,9 @@ describe("planRepo.ensureFreePlan", () => {
       slug: "free",
       name: "Free",
       monthlyPriceCents: 0,
-      monthlyEmailQuota: 3000,
+      monthlyEmailQuota: 5000,
       maxDomains: 1,
-      maxApiKeys: 3,
+      maxApiKeys: 2,
       isPublic: true,
     };
     mockInsertReturning.mockResolvedValue([inserted]);
@@ -53,9 +53,9 @@ describe("planRepo.ensureFreePlan", () => {
       slug: "free",
       name: "Free",
       monthlyPriceCents: 0,
-      monthlyEmailQuota: 3000,
+      monthlyEmailQuota: 5000,
       maxDomains: 1,
-      maxApiKeys: 3,
+      maxApiKeys: 2,
       isPublic: true,
     });
     expect(mockOnConflictDoNothing).toHaveBeenCalledOnce();
