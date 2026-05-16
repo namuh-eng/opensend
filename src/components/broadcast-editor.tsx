@@ -419,7 +419,7 @@ export function BroadcastEditor({
             onClick={() => setReviewOpen(!reviewOpen)}
             className={`h-8 px-4 text-[13px] font-medium rounded-md transition-colors ${
               reviewOpen
-                ? "bg-white text-black"
+                ? "bg-accent text-accent-ink"
                 : "bg-fg text-bg hover:bg-white"
             }`}
           >
@@ -1281,7 +1281,7 @@ function BlockRenderer({
             type="text"
             value={block.content || "Button"}
             onChange={(e) => onUpdate(e.target.value)}
-            className="bg-white text-black px-6 py-2 rounded-md text-[14px] font-medium text-center border-none outline-none min-w-[120px]"
+            className="btn btn-primary min-w-[120px] text-center"
           />
         </div>
       );

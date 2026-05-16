@@ -319,7 +319,7 @@ export function AddContactModal({
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="px-3 py-1.5 text-[13px] font-medium bg-white text-black rounded-md hover:bg-white/[0.08] transition-colors disabled:opacity-50"
+            className="btn btn-primary btn-sm disabled:opacity-50"
           >
             {submitting ? "Adding..." : "Add"}
           </button>

@@ -582,7 +582,7 @@ export function BroadcastsList({
         <button
           type="button"
           onClick={handleCreateEmail}
-          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-white/[0.12] transition-colors flex items-center gap-1.5"
+          className="btn btn-primary"
         >
           <svg
             aria-hidden="true"
@@ -616,7 +616,7 @@ export function BroadcastsList({
           <button
             type="button"
             onClick={fetchBroadcasts}
-            className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-white/[0.12] transition-colors"
+            className="btn btn-primary"
           >
             Retry
           </button>

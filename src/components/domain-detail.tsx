@@ -964,7 +964,7 @@ function ConfigurationTab({ domain }: { domain: DomainDetailData }) {
               type="button"
               onClick={handleTrackingSubdomainSave}
               disabled={savingTrackingSubdomain}
-              className="px-3 py-2 rounded-lg bg-white text-black text-[13px] font-medium hover:bg-white/[0.12] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn btn-primary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingTrackingSubdomain ? "Saving…" : "Save"}
             </button>

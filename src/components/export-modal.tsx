@@ -134,7 +134,7 @@ export function ExportModal({ open, onClose }: ExportModalProps) {
                   onClick={() => toggleStatus(opt.value)}
                   className={`px-2.5 py-1 text-[12px] rounded-full border transition-colors ${
                     isSelected
-                      ? "bg-white text-black border-white"
+                      ? "bg-accent text-accent-ink border-accent"
                       : "text-fg-2 border-line hover:text-fg hover:border-line-3"
                   }`}
                 >
