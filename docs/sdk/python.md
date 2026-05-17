@@ -1,21 +1,27 @@
 # Python SDK
 
 OpenSend includes a minimal first-party Python SDK package at
-[`packages/python-sdk`](../../packages/python-sdk) for Resend-shaped
-transactional email sends.
+[`packages/python-sdk`](../../packages/python-sdk) for transactional email sends
+with a familiar API surface.
 
-Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+Use your OpenSend API key (`os_...`) with OpenSend as a Resend alternative.
+Selected alias compatibility remains available for migration-oriented code.
 
 ## Install
 
-From this repository:
+From this repository before the PyPI release:
 
 ```bash
 python -m pip install ./packages/python-sdk
 ```
 
-The package metadata is prepared for future publishing as `opensend`, but this
-change does not publish to PyPI.
+After `opensend==0.1.0` is published to PyPI, install with:
+
+```bash
+python -m pip install opensend==0.1.0
+```
+
+Until that publish happens, use the repository install shown above.
 
 ## Configure
 
@@ -26,7 +32,7 @@ export OPENSEND_API_KEY="os_your_api_key"
 export OPENSEND_BASE_URL="http://localhost:3015" # optional for self-hosting
 ```
 
-If `OPENSEND_BASE_URL` is unset, the SDK targets `https://api.opensend.com`.
+If `OPENSEND_BASE_URL` is unset, the SDK targets `https://opensend.namuh.co`.
 
 ## Send
 
