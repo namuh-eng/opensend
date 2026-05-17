@@ -2,7 +2,7 @@
   <h1 align="center">Opensend</h1>
   <p align="center">
     Open-source email infrastructure for developers.<br />
-    Resend-compatible APIs, a full dashboard, and self-hosted delivery on your AWS SES quota.
+    A hosted cloud service, self-hosted delivery on AWS SES, and familiar email APIs.
   </p>
   <p align="center">
     <a href="https://github.com/namuh-eng/opensend/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-ELv2-blue" alt="License" /></a>
@@ -29,14 +29,14 @@
 
 ## What is Opensend?
 
-Opensend is a self-hostable email platform with the developer experience of Resend: REST APIs, SDKs, React email templates, domain verification, webhooks, broadcasts, automations, analytics, and an admin dashboard.
+Opensend is an open-source Resend alternative for transactional and product email. Use OpenSend Cloud for managed sending, or self-host on your own AWS SES quota. It includes REST APIs, SDKs, React email templates, domain verification, webhooks, broadcasts, automations, analytics, and an admin dashboard.
 
-Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+Use your OpenSend API key (`os_...`) with OpenSend Cloud or your self-hosted deployment.
 
 Use Opensend when you want:
 
 - **Control** — run email infrastructure on your own cloud and AWS SES quota.
-- **Compatibility** — move Resend-shaped sends, audiences, and webhooks with minimal code changes.
+- **Familiar APIs** — use send, audience, suppression, and webhook primitives that feel familiar if you have used modern email platforms.
 - **A real dashboard** — manage the Today overview, domains, API keys, broadcasts, automations, templates, audiences, logs, audit trails, billing, and metrics.
 - **First-party docs** — ship a local docs hub, OpenAPI schema, LLM index, SDK guides, and MCP guidance from this repo.
 - **Open deployment** — Docker Compose for local/self-hosted installs, with production guides for split app + ingester deployments.
@@ -174,7 +174,7 @@ Never commit `.env`, API keys, bearer tokens, database URLs with real passwords,
 ## Features
 
 - **REST API** — send single or batch emails with API-key auth and idempotency keys.
-- **Resend-compatible surface** — transactional sends, audiences/contacts, suppressions, and webhook semantics shaped for easy migration.
+- **Resend alternative** — transactional sends, audiences/contacts, suppressions, and webhook semantics with familiar email-platform primitives.
 - **SDKs** — first-party TypeScript, Python, Go, and Ruby packages.
 - **React email templates** — pass React components via the TypeScript SDK, or use registry-controlled dashboard starters with shared-renderer previews (see [docs/react-email-templates.md](docs/react-email-templates.md)).
 - **Domain verification** — DKIM, SPF, DMARC, click tracking, and custom return paths, with Cloudflare automation.
@@ -254,7 +254,7 @@ import os
 import opensend
 
 opensend.api_key = os.environ["OPENSEND_API_KEY"]
-opensend.base_url = os.environ.get("OPENSEND_BASE_URL", "https://api.opensend.com")
+opensend.base_url = os.environ.get("OPENSEND_BASE_URL", "https://opensend.namuh.co")
 
 email = opensend.Emails.send({
     "from": "hello@yourdomain.com",
@@ -451,7 +451,7 @@ ruby -I packages/ruby-sdk/lib packages/ruby-sdk/test/opensend_test.rb
 - [x] Team support with multi-tenant auth and organization invites
 - [x] Built-in open/click analytics
 - [x] Additional webhook event types: opened, clicked, complained, delivery delayed
-- [x] Resend-compatible audiences/contact slices
+- [x] Audience/contact API slices
 - [ ] SMTP relay support without AWS SES
 
 ## Contributing
