@@ -134,7 +134,7 @@
 - [Self Hosting](https://api.opensend.com/docs/self-hosting.md): Run OpenSend yourself.
 - [Send emails with Bun](https://api.opensend.com/docs/send-with-bun.md): Use the TypeScript SDK from Bun.
 - [Send emails with Express](https://api.opensend.com/docs/send-with-express.md): Send email from an Express API route.
-- [Send emails with Go](https://api.opensend.com/docs/send-with-go.md): Send email from Go where the Go SDK package is available.
+- [Send emails with Go](https://api.opensend.com/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.
 - [Send emails with Hono](https://api.opensend.com/docs/send-with-hono.md): Send email from Hono.
 - [Send emails with Next.js](https://api.opensend.com/docs/send-with-nextjs.md): Send email from a Next.js route handler or server action.
 - [Send emails with Node.js](https://api.opensend.com/docs/send-with-nodejs.md): Send email from Node.js using the TypeScript SDK.

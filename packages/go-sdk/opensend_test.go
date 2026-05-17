@@ -109,8 +109,8 @@ func TestNewClientDefaultsToHostedBaseURL(t *testing.T) {
 	client, err := NewClient(
 		"os_default",
 		WithHTTPClient(testHTTPClient(t, func(req *http.Request) (*http.Response, error) {
-			if got := req.URL.String(); got != "https://api.opensend.com/emails" {
-				t.Fatalf("url = %s, want https://api.opensend.com/emails", got)
+			if got := req.URL.String(); got != "https://opensend.namuh.co/emails" {
+				t.Fatalf("url = %s, want https://opensend.namuh.co/emails", got)
 			}
 			return jsonResponse(http.StatusOK, `{"id":"email_default"}`), nil
 		})),
