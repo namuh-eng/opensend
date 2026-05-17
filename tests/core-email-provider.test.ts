@@ -35,6 +35,9 @@ vi.mock("@aws-sdk/client-sesv2", () => ({
 
 describe("EmailProviderService", () => {
   const previousAccessKey = process.env.AWS_ACCESS_KEY_ID;
+  const previousSecretKey = process.env.AWS_SECRET_ACCESS_KEY;
+  const previousProfile = process.env.AWS_PROFILE;
+  const previousNodeEnv = process.env.NODE_ENV;
 
   beforeEach(() => {
     vi.resetModules();
@@ -48,6 +51,22 @@ describe("EmailProviderService", () => {
       process.env.AWS_ACCESS_KEY_ID = undefined;
     } else {
       process.env.AWS_ACCESS_KEY_ID = previousAccessKey;
+    }
+    if (previousSecretKey === undefined) {
+      process.env.AWS_SECRET_ACCESS_KEY = undefined;
+    } else {
+      process.env.AWS_SECRET_ACCESS_KEY = previousSecretKey;
+    }
+    if (previousProfile === undefined) {
+      process.env.AWS_PROFILE = undefined;
+    } else {
+      process.env.AWS_PROFILE = previousProfile;
+    }
+    if (previousNodeEnv === undefined) {
+      (process.env as Record<string, string | undefined>).NODE_ENV = undefined;
+    } else {
+      (process.env as Record<string, string | undefined>).NODE_ENV =
+        previousNodeEnv;
     }
   });
 
@@ -114,6 +133,30 @@ describe("EmailProviderService", () => {
     expect(mockSesClient).toHaveBeenCalledTimes(1);
     expect(mockSesClient).toHaveBeenCalledWith({ region: "eu-west-1" });
     expect(mockSend).toHaveBeenCalledTimes(4);
+  });
+
+  it("uses the SES client in production without static AWS access key env vars", async () => {
+    (process.env as Record<string, string | undefined>).NODE_ENV = "production";
+    process.env.AWS_ACCESS_KEY_ID = undefined;
+    process.env.AWS_SECRET_ACCESS_KEY = undefined;
+    process.env.AWS_PROFILE = undefined;
+    mockSend.mockResolvedValueOnce({ MessageId: "ecs-role-message" });
+
+    const { EmailProviderService } = await import(
+      "../packages/core/src/services/emailProvider"
+    );
+    const provider = new EmailProviderService();
+
+    await expect(
+      provider.sendEmail({
+        from: "hello@example.com",
+        to: ["user@example.com"],
+        subject: "Hello",
+        html: "<p>Hello</p>",
+      }),
+    ).resolves.toEqual({ id: "ecs-role-message" });
+
+    expect(mockSend).toHaveBeenCalledTimes(1);
   });
 
   it("defaults SES client selection to us-east-1", async () => {

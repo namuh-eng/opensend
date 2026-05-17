@@ -48,8 +48,7 @@ const hasAwsCredentials =
   !!process.env.AWS_PROFILE ||
   existsSync(join(process.env.HOME ?? "", ".aws", "credentials"));
 
-const useDomainDevStub =
-  process.env.NODE_ENV === "development" && !hasAwsCredentials;
+const useDevStub = process.env.NODE_ENV === "development" && !hasAwsCredentials;
 
 const DEFAULT_SES_REGION = "us-east-1";
 
@@ -118,7 +117,7 @@ export class EmailProviderService {
             ReplyToAddresses: params.replyTo,
           });
 
-    if (!process.env.AWS_ACCESS_KEY_ID) {
+    if (useDevStub) {
       console.log(
         `[DEV] SES send skipped in ${normalizeSesRegion(params.region)}: ${params.subject} to ${params.to.join(", ")}`,
       );
@@ -135,7 +134,7 @@ export class EmailProviderService {
   ): Promise<EmailProviderGetDomainIdentityResult> {
     if (!domain) throw new Error("domain is required");
 
-    if (useDomainDevStub) {
+    if (useDevStub) {
       return { verified: false, dkimStatus: "NOT_STARTED", dkimTokens: [] };
     }
 
@@ -156,7 +155,7 @@ export class EmailProviderService {
   ): Promise<void> {
     if (!domain) throw new Error("domain is required");
 
-    if (useDomainDevStub) {
+    if (useDevStub) {
       console.log(
         `[DEV] Would delete SES identity for domain: ${domain} in ${normalizeSesRegion(options.region)}`,
       );
@@ -192,7 +191,7 @@ export class EmailProviderService {
   ): Promise<EmailProviderCreateDomainIdentityResult> {
     const keypair = generateDkimKeypair(userId);
 
-    if (useDomainDevStub) {
+    if (useDevStub) {
       console.log(
         `[DEV] Would create SES EXTERNAL identity for ${domain} in ${normalizeSesRegion(region)} (selector ${keypair.selector})`,
       );
@@ -249,7 +248,7 @@ export class EmailProviderService {
     domain: string,
     region?: string,
   ): Promise<EmailProviderCreateDomainIdentityResult> {
-    if (useDomainDevStub) {
+    if (useDevStub) {
       console.log(
         `[DEV] Would create SES identity for domain: ${domain} in ${normalizeSesRegion(region)}`,
       );
