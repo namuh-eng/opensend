@@ -73,7 +73,7 @@ test("pricing billing toggle updates selected period and plan prices", async ({
   await expect(page.getByTestId("plan-starter")).toContainText(
     /\$\s*19\s*\/mo/,
   );
-  await expect(page.getByTestId("plan-growth")).toContainText(/\$\s*79\s*\/mo/);
+  await expect(page.getByTestId("plan-growth")).toContainText(/\$\s*99\s*\/mo/);
 
   await page.getByTestId("billing-yearly").click();
 
@@ -85,7 +85,7 @@ test("pricing billing toggle updates selected period and plan prices", async ({
   await expect(page.getByTestId("plan-starter")).toContainText(
     /\$\s*15\s*\/mo/,
   );
-  await expect(page.getByTestId("plan-growth")).toContainText(/\$\s*65\s*\/mo/);
+  await expect(page.getByTestId("plan-growth")).toContainText(/\$\s*79\s*\/mo/);
 });
 
 test("unauthenticated dashboard routes remain protected", async ({ page }) => {
