@@ -148,6 +148,13 @@
       "when": 1778970539716,
       "tag": "0020_pricing_catalog_20260516",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1778976000000,
+      "tag": "0021_monthly_pricing_tiers_20260517",
+      "breakpoints": true
     }
   ]
 }

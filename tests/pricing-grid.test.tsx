@@ -21,7 +21,7 @@ const plans: PricingPlan[] = [
   },
   {
     id: "plan_starter",
-    slug: "starter",
+    slug: "cloud_starter_55k_monthly",
     name: "Starter",
     monthlyPriceCents: 1900,
     monthlyEmailQuota: 55000,
@@ -68,7 +68,7 @@ describe("PricingGrid", () => {
       "5,000 API + broadcast emails/mo",
     );
     expect(screen.getByTestId("pricing-card-starter").textContent).toContain(
-      "Change to $19 / mo",
+      "Change to Starter ($19 / mo)",
     );
   });
 });
