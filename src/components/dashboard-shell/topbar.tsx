@@ -111,19 +111,6 @@ export function TopBar({ action, rightExtras }: TopBarProps) {
       </nav>
       <div className="flex items-center gap-2">
         {rightExtras}
-        <button
-          type="button"
-          className="btn btn-ghost btn-icon btn-sm relative"
-          aria-label="Notifications"
-        >
-          <span className="inline-flex h-3.5 w-3.5">
-            <Icon.bell />
-          </span>
-          <span
-            className="absolute right-1.5 top-1.5 h-[5px] w-[5px] rounded-full bg-accent"
-            aria-hidden
-          />
-        </button>
         {action}
       </div>
     </header>

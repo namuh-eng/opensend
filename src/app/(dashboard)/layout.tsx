@@ -45,7 +45,7 @@ export default async function DashboardLayout({
         />
         <main className="flex min-h-screen flex-1 flex-col">
           <TopBar />
-          <div className="flex-1">{children}</div>
+          <div className="flex-1 px-6 py-6">{children}</div>
           <footer className="flex items-center justify-end gap-4 border-t border-line px-6 py-3">
             <a
               href="mailto:feedback@example.com?subject=Opensend%20Feedback"

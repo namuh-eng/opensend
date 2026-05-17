@@ -1,8 +1,9 @@
 "use client";
 
+import { authClient } from "@/lib/auth-client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useCommandPalette } from "./command-palette";
 import { Icon, type IconName } from "./icons";
 
@@ -31,7 +32,7 @@ type SidebarProps = {
 const GROUPS: NavGroup[] = [
   {
     label: "Overview",
-    items: [{ href: "/", label: "Today", icon: "overview" }],
+    items: [{ href: "/today", label: "Today", icon: "overview" }],
   },
   {
     label: "Send",
@@ -69,7 +70,6 @@ const GROUPS: NavGroup[] = [
 ];
 
 function isItemActive(pathname: string, href: string): boolean {
-  if (href === "/") return pathname === "/";
   if (href === "/settings") {
     return pathname === "/settings";
   }
@@ -196,8 +196,43 @@ function UserFooter({
   email: string;
   initials: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick(e: MouseEvent) {
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await authClient.signOut();
+    } finally {
+      router.push("/auth");
+      router.refresh();
+    }
+  }
+
   return (
-    <div className="flex items-center gap-2.5 border-t border-line p-2.5">
+    <div
+      ref={wrapperRef}
+      className="relative flex items-center gap-2.5 border-t border-line p-2.5"
+    >
       <span
         className="flex h-[26px] w-[26px] items-center justify-center rounded-full text-[11px] font-semibold text-white"
         style={{
@@ -214,11 +249,41 @@ function UserFooter({
         type="button"
         className="inline-flex h-7 w-7 items-center justify-center rounded text-fg-3 transition-colors hover:bg-white/[0.04] hover:text-fg-2"
         aria-label="Account menu"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
       >
         <span className="inline-flex h-3.5 w-3.5">
           <Icon.more />
         </span>
       </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute bottom-full left-2 right-2 z-30 mb-1 overflow-hidden rounded-card border border-line-2 bg-bg-card shadow-2xl"
+        >
+          <Link
+            href="/settings"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-[13px] text-fg-2 transition-colors hover:bg-white/[0.04] hover:text-fg"
+          >
+            <span className="inline-flex h-3.5 w-3.5 text-fg-3">
+              <Icon.settings />
+            </span>
+            Settings
+          </Link>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="flex w-full items-center gap-2 border-t border-line px-3 py-2 text-left text-[13px] text-fg-2 transition-colors hover:bg-white/[0.04] hover:text-fg disabled:opacity-60"
+          >
+            {signingOut ? "Signing out…" : "Sign out"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
