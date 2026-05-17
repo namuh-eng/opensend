@@ -14,7 +14,7 @@ import (
 
 const (
 	// DefaultBaseURL is the hosted OpenSend API origin used when no base URL is configured.
-	DefaultBaseURL = "https://api.opensend.com"
+	DefaultBaseURL = "https://opensend.namuh.co"
 	userAgent      = "opensend-go/0.1.0"
 )
 
@@ -129,7 +129,7 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("opensend: API request failed with status %d", e.StatusCode)
 }
 
-// Send posts req to OpenSend's Resend-compatible transactional send endpoint.
+// Send posts req to OpenSend's transactional send endpoint with a familiar /emails API shape.
 func (c *Client) Send(ctx context.Context, req SendRequest) (*SendResponse, error) {
 	if c == nil {
 		return nil, errors.New("opensend client is nil")

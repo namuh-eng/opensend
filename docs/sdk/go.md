@@ -1,15 +1,15 @@
 # Go SDK
 
 OpenSend includes a minimal first-party Go SDK package at
-[`packages/go-sdk`](../../packages/go-sdk) for Resend-shaped transactional email
-sends.
+[`packages/go-sdk`](../../packages/go-sdk) for transactional email sends
+through OpenSend's familiar email API.
 
-Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+Use your OpenSend API key (`os_...`) with OpenSend's familiar email API surface.
 
 ## Install
 
 ```bash
-go get github.com/namuh-eng/opensend/packages/go-sdk
+go get github.com/namuh-eng/opensend/packages/go-sdk@v0.1.0
 ```
 
 ## Configure
@@ -21,7 +21,7 @@ export OPENSEND_API_KEY="os_your_api_key"
 export OPENSEND_BASE_URL="http://localhost:3026" # optional for self-hosting
 ```
 
-If `OPENSEND_BASE_URL` is unset, the SDK targets `https://api.opensend.com`.
+If `OPENSEND_BASE_URL` is unset, the SDK targets `https://opensend.namuh.co`.
 
 ## Send
 
