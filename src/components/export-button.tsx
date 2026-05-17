@@ -12,7 +12,7 @@ export function ExportButton({ onClick, disabled = false }: ExportButtonProps) {
       aria-label="Export"
       onClick={onClick}
       disabled={disabled}
-      className="flex items-center justify-center w-8 h-8 rounded-[8px] border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] text-[#A1A4A5] hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+      className="flex items-center justify-center w-8 h-8 rounded-[8px] border border-line bg-bg-3 text-fg-2 hover:text-fg hover:border-line-3 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
     >
       <svg
         aria-hidden="true"

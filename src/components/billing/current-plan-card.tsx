@@ -84,42 +84,40 @@ export function CurrentPlanCard({ plan, subscription }: CurrentPlanCardProps) {
 
   return (
     <div
-      className="rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.6)] p-6"
+      className="rounded-lg border border-line bg-bg-3 p-6"
       data-testid="billing-current-plan-card"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-[16px] font-semibold text-[#F0F0F0]">
-            Current plan
-          </h2>
+          <h2 className="text-[16px] font-semibold text-fg">Current plan</h2>
           <div className="mt-2 flex items-baseline gap-3">
             <span
-              className="text-[22px] font-semibold text-[#F0F0F0]"
+              className="text-[22px] font-semibold text-fg"
               data-testid="current-plan-name"
             >
               {plan.name}
             </span>
-            <span className="text-[14px] text-[#A1A4A5]">
+            <span className="text-[14px] text-fg-2">
               {formatPrice(plan.monthlyPriceCents)}
             </span>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px]">
             <span
-              className="rounded-full border border-[rgba(176,199,217,0.145)] px-2 py-0.5 capitalize text-[#A1A4A5]"
+              className="rounded-full border border-line px-2 py-0.5 capitalize text-fg-2"
               data-testid="current-plan-status"
             >
               {subscription ? formatStatus(subscription.status) : "Free tier"}
             </span>
             {subscription?.cancelAtPeriodEnd ? (
               <span
-                className="rounded-full bg-amber-500/15 px-2 py-0.5 text-amber-300"
+                className="rounded-full bg-amber/15 px-2 py-0.5 text-amber"
                 data-testid="cancel-at-period-end-badge"
               >
                 Cancels at period end
               </span>
             ) : null}
             {periodEnd ? (
-              <span className="text-[#A1A4A5]" data-testid="current-period-end">
+              <span className="text-fg-2" data-testid="current-period-end">
                 Renews {periodEnd}
               </span>
             ) : null}
@@ -129,14 +127,14 @@ export function CurrentPlanCard({ plan, subscription }: CurrentPlanCardProps) {
           type="button"
           onClick={handleManage}
           disabled={pending}
-          className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] transition-colors hover:bg-[rgba(24,25,28,1)] disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card disabled:cursor-not-allowed disabled:opacity-50"
           data-testid="manage-billing-button"
         >
           {pending ? "Opening…" : "Manage Billing"}
         </button>
       </div>
       {error ? (
-        <p className="mt-4 text-[12px] text-amber-300" role="alert">
+        <p className="mt-4 text-[12px] text-amber" role="alert">
           {error}
         </p>
       ) : null}

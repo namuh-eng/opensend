@@ -29,7 +29,9 @@ function isUsageData(value: unknown): value is UsageData {
     typeof candidate.marketing.contactsLimit === "number" &&
     typeof candidate.marketing.segmentsUsed === "number" &&
     typeof candidate.marketing.segmentsLimit === "number" &&
-    candidate.marketing.broadcastsLimit === "Unlimited" &&
+    typeof candidate.marketing.broadcastsUsed === "number" &&
+    (candidate.marketing.broadcastsLimit === "Unlimited" ||
+      typeof candidate.marketing.broadcastsLimit === "number") &&
     typeof candidate.team === "object" &&
     candidate.team !== null &&
     typeof candidate.team.domainsUsed === "number" &&
@@ -38,12 +40,20 @@ function isUsageData(value: unknown): value is UsageData {
   );
 }
 
-const SMTP_CREDENTIALS = [
-  { label: "Host", value: "smtp.opensend.com" },
-  { label: "Port", value: "465" },
-  { label: "Username", value: "resend" },
-  { label: "Password", value: "YOUR_API_KEY" },
-];
+interface SmtpConfig {
+  host: string;
+  port: string;
+  user: string;
+}
+
+function buildSmtpCredentials(config: SmtpConfig) {
+  return [
+    { label: "Host", value: config.host },
+    { label: "Port", value: config.port },
+    { label: "Username", value: config.user },
+    { label: "Password", value: "YOUR_API_KEY" },
+  ];
+}
 
 const DEFAULT_USAGE: UsageData = {
   plan: { name: "Free", slug: "free" },
@@ -58,6 +68,7 @@ const DEFAULT_USAGE: UsageData = {
     contactsLimit: 1000,
     segmentsUsed: 0,
     segmentsLimit: 3,
+    broadcastsUsed: 0,
     broadcastsLimit: "Unlimited",
   },
   team: { domainsUsed: 0, domainsLimit: 1, rateLimit: 2 },
@@ -65,11 +76,14 @@ const DEFAULT_USAGE: UsageData = {
 
 interface SettingsPageProps {
   billingEnabled?: boolean;
+  smtpConfig?: SmtpConfig | null;
 }
 
 export function SettingsPage({
   billingEnabled = false,
+  smtpConfig = null,
 }: SettingsPageProps = {}) {
+  const smtpCredentials = smtpConfig ? buildSmtpCredentials(smtpConfig) : null;
   const [activeTab, setActiveTab] = useState<
     "usage" | "smtp" | "team" | "unsubscribe" | "billing" | "documents"
   >("usage");
@@ -102,10 +116,10 @@ export function SettingsPage({
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-[#F0F0F0] mb-6">Settings</h1>
+      <h1 className="text-2xl font-semibold text-fg mb-6">Settings</h1>
 
       {/* Tabs */}
-      <div className="border-b border-[rgba(176,199,217,0.145)] mb-6 overflow-x-auto">
+      <div className="border-b border-line mb-6 overflow-x-auto">
         <div className="flex items-center gap-0 min-w-max">
           {tabs.map((tab) => (
             <button
@@ -113,8 +127,8 @@ export function SettingsPage({
               type="button"
               className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors ${
                 activeTab === tab.key
-                  ? "border-[#F0F0F0] text-[#F0F0F0]"
-                  : "border-transparent text-[#A1A4A5] hover:text-[#F0F0F0]"
+                  ? "border-accent text-fg"
+                  : "border-transparent text-fg-2 hover:text-fg"
               }`}
               onClick={() => setActiveTab(tab.key)}
               data-state={activeTab === tab.key ? "active" : "inactive"}
@@ -133,45 +147,59 @@ export function SettingsPage({
       {/* SMTP Tab */}
       {activeTab === "smtp" && (
         <div>
-          <p className="text-[14px] text-[#A1A4A5] mb-6">
-            Use these credentials to send emails via SMTP. The password is your
-            API key.
-          </p>
+          {smtpCredentials && smtpConfig ? (
+            <>
+              <p className="text-[14px] text-fg-2 mb-6">
+                Use these credentials to send emails via SMTP. The password is
+                your API key.
+              </p>
 
-          <div className="border border-[rgba(176,199,217,0.145)] rounded-lg overflow-hidden">
-            {SMTP_CREDENTIALS.map((cred, i) => (
-              <div
-                key={cred.label}
-                className={`flex items-center justify-between px-4 py-3 ${
-                  i < SMTP_CREDENTIALS.length - 1
-                    ? "border-b border-[rgba(176,199,217,0.145)]"
-                    : ""
-                }`}
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  <span className="text-[12px] font-medium text-[#A1A4A5] tracking-wider w-24 shrink-0">
-                    {cred.label.toUpperCase()}
-                  </span>
-                  <span className="text-[14px] text-[#F0F0F0] font-mono truncate">
-                    {cred.value}
-                  </span>
-                </div>
-                <CopyToClipboard value={cred.value} />
+              <div className="border border-line rounded-lg overflow-hidden">
+                {smtpCredentials.map((cred, i) => (
+                  <div
+                    key={cred.label}
+                    className={`flex items-center justify-between px-4 py-3 ${
+                      i < smtpCredentials.length - 1
+                        ? "border-b border-line"
+                        : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <span className="text-[12px] font-medium text-fg-2 tracking-wider w-24 shrink-0">
+                        {cred.label.toUpperCase()}
+                      </span>
+                      <span className="text-[14px] text-fg font-mono truncate">
+                        {cred.value}
+                      </span>
+                    </div>
+                    <CopyToClipboard value={cred.value} />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className="mt-6 p-4 bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg">
-            <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-2">
-              EXAMPLE CONFIGURATION
-            </p>
-            <pre className="text-[13px] text-[#F0F0F0] font-mono whitespace-pre-wrap">
-              {`SMTP_HOST=smtp.opensend.com
-SMTP_PORT=465
-SMTP_USER=resend
-SMTP_PASS=os_YOUR_API_KEY`}
-            </pre>
-          </div>
+              <div className="mt-6 p-4 bg-bg-3 border border-line rounded-lg">
+                <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-2">
+                  EXAMPLE CONFIGURATION
+                </p>
+                <pre className="text-[13px] text-fg font-mono whitespace-pre-wrap">
+                  {`SMTP_HOST=${smtpConfig.host}
+SMTP_PORT=${smtpConfig.port}
+SMTP_USER=${smtpConfig.user}
+SMTP_PASS=YOUR_API_KEY`}
+                </pre>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-line p-8">
+              <p className="text-[14px] text-fg-2">
+                SMTP is not configured for this installation. Set{" "}
+                <code className="font-mono text-fg">SMTP_HOST</code>,{" "}
+                <code className="font-mono text-fg">SMTP_PORT</code>, and{" "}
+                <code className="font-mono text-fg">SMTP_USER</code> in your
+                environment to expose SMTP credentials here.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -180,14 +208,14 @@ SMTP_PASS=os_YOUR_API_KEY`}
 
       {/* Billing Tab → dedicated page */}
       {activeTab === "billing" && (
-        <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-[rgba(176,199,217,0.145)] p-8">
-          <p className="text-[14px] text-[#A1A4A5]">
+        <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-line p-8">
+          <p className="text-[14px] text-fg-2">
             Billing has its own dedicated page with current plan, usage, and
             management actions.
           </p>
           <Link
             href="/settings/billing"
-            className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] hover:bg-[rgba(24,25,28,1)]"
+            className="rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] font-medium text-fg hover:bg-bg-card"
           >
             Open billing
           </Link>
@@ -200,18 +228,18 @@ SMTP_PASS=os_YOUR_API_KEY`}
       {/* Unsubscribe Tab */}
       {activeTab === "unsubscribe" && (
         <div>
-          <p className="text-[14px] text-[#A1A4A5] mb-6">
+          <p className="text-[14px] text-fg-2 mb-6">
             Preview the unsubscribe page shown to recipients when they click the
             unsubscribe link.
           </p>
 
-          <div className="border border-[rgba(176,199,217,0.145)] rounded-lg overflow-hidden bg-white">
+          <div className="border border-line rounded-lg overflow-hidden bg-bg-card">
             <div className="p-8 flex flex-col items-center justify-center min-h-[400px]">
               <div className="max-w-md w-full text-center">
-                <h2 className="text-xl font-semibold text-gray-900 mb-2">
+                <h2 className="text-xl font-semibold text-fg mb-2">
                   Unsubscribe
                 </h2>
-                <p className="text-gray-600 text-sm mb-6">
+                <p className="text-fg-2 text-sm mb-6">
                   You have been unsubscribed from this mailing list. You will no
                   longer receive emails from this sender.
                 </p>
@@ -227,9 +255,7 @@ SMTP_PASS=os_YOUR_API_KEY`}
                   </svg>
                   Successfully unsubscribed
                 </div>
-                <p className="text-gray-400 text-xs mt-6">
-                  Powered by Opensend
-                </p>
+                <p className="text-fg-3 text-xs mt-6">Powered by Opensend</p>
               </div>
             </div>
           </div>

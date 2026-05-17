@@ -285,6 +285,7 @@ describe("dashboard aggregate service", () => {
         contactsLimit: 1000,
         segmentsUsed: 4,
         segmentsLimit: 3,
+        broadcastsUsed: 0,
         broadcastsLimit: "Unlimited",
       },
       team: {

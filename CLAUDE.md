@@ -50,6 +50,14 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 - `bun run db:seed` — seed sample data
 - `docker compose up -d` — full stack with Postgres + auto-migration
 
+
+## Documentation Standards
+- Public docs must be OpenSend-owned first-party content. Do not route users to Resend docs or other competitor docs from OpenSend docs pages, `llms.txt`, examples, or public navigation. Use competitor docs only as private/internal parity inspiration.
+- Canonical LLM documentation lives at `/docs/llms.txt`. Root `/llms.txt` may redirect there, but do not maintain a separate root LLM corpus.
+- Public markdown docs live under `public/docs/**/*.md` and must be indexed from `/docs/llms.txt` in the same style as a markdown documentation corpus. When adding a public API, SDK, dashboard feature, webhook event, automation feature, or operational guide, add/update the matching `.md` page and `/docs/llms.txt` entry in the same change.
+- `/docs` should present OpenSend as a complete first-party product surface: quickstart, OpenAPI, API groups, SDKs, MCP/LLM guidance, self-hosting, deliverability, webhooks, receiving, automations, logs, exports, suppressions, and troubleshooting. Do not leave implemented routes/features undocumented.
+- Keep docs truthful to the repo. If a feature is partial or operator-only, label it clearly instead of implying full hosted parity. Prefer route/file/OpenAPI evidence over aspirational copy.
+
 ## Quality Standards
 - TypeScript strict mode, no `any` types
 - Every feature: at least one Vitest unit test AND at least one Playwright E2E test

@@ -22,7 +22,7 @@ export function Toggle({
         data-state={checked ? "checked" : "unchecked"}
         disabled={disabled}
         className={`relative inline-flex h-[20px] w-[36px] shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 disabled:opacity-50 disabled:cursor-not-allowed ${
-          checked ? "bg-white" : "bg-[rgba(176,199,217,0.25)]"
+          checked ? "bg-white" : "bg-white/25"
         }`}
         onClick={() => onChange(!checked)}
       >
@@ -30,11 +30,11 @@ export function Toggle({
           className={`pointer-events-none block h-[16px] w-[16px] rounded-full shadow-sm transition-transform mt-[2px] ${
             checked
               ? "translate-x-[18px] bg-black"
-              : "translate-x-[2px] bg-[#A1A4A5]"
+              : "translate-x-[2px] bg-fg-2"
           }`}
         />
       </button>
-      <span className="text-[14px] text-[#F0F0F0]">{label}</span>
+      <span className="text-[14px] text-fg">{label}</span>
     </div>
   );
 }

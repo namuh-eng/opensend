@@ -1,26 +1,59 @@
 import { type SQL, and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/client";
-import { contacts, domains, emails, segments } from "../db/schema";
-import { FREE_PLAN_DEFAULTS } from "../dto";
+import { contacts, domains, emails, plans, segments } from "../db/schema";
+import { FREE_PLAN_DEFAULTS, FREE_PLAN_SLUG } from "../dto";
 
-// Fallback display limits for installations without an active billing summary.
-// Keep plan-backed values tied to FREE_PLAN_DEFAULTS so the fallback cannot
-// drift from the Free plan rows created by quota enforcement and planRepo.
+// Last-resort fallback used only when the plans table is empty (cold start
+// before ensureFreePlan has run). All real values live on the Free plan row.
 export const DASHBOARD_USAGE_LIMITS = {
   transactional: {
     monthlyLimit: FREE_PLAN_DEFAULTS.monthlyEmailQuota,
-    dailyLimit: 100,
+    dailyLimit: FREE_PLAN_DEFAULTS.dailyEmailQuota,
   },
   marketing: {
-    contactsLimit: 1000,
-    segmentsLimit: 3,
-    broadcastsLimit: "Unlimited",
+    contactsLimit: FREE_PLAN_DEFAULTS.maxContacts,
+    segmentsLimit: FREE_PLAN_DEFAULTS.maxSegments,
+    broadcastsLimit: FREE_PLAN_DEFAULTS.maxBroadcasts as number | null,
   },
   team: {
     domainsLimit: FREE_PLAN_DEFAULTS.maxDomains,
-    rateLimit: 2,
+    rateLimit: FREE_PLAN_DEFAULTS.ratePerSecond,
   },
 } as const;
+
+export type PlanUsageLimits = {
+  name: string;
+  slug: string;
+  monthlyEmailQuota: number;
+  dailyEmailQuota: number;
+  maxDomains: number;
+  maxContacts: number;
+  maxSegments: number;
+  maxBroadcasts: number | null;
+  ratePerSecond: number;
+};
+
+async function defaultLoadPlanLimits(): Promise<PlanUsageLimits | null> {
+  try {
+    const row = await db.query.plans.findFirst({
+      where: eq(plans.slug, FREE_PLAN_SLUG),
+    });
+    if (!row) return null;
+    return {
+      name: row.name,
+      slug: row.slug,
+      monthlyEmailQuota: row.monthlyEmailQuota,
+      dailyEmailQuota: row.dailyEmailQuota,
+      maxDomains: row.maxDomains,
+      maxContacts: row.maxContacts,
+      maxSegments: row.maxSegments,
+      maxBroadcasts: row.maxBroadcasts,
+      ratePerSecond: row.ratePerSecond,
+    };
+  } catch {
+    return null;
+  }
+}
 
 const EVENT_TYPE_TO_STATUS: Record<string, string[]> = {
   received: ["delivered", "opened", "clicked"],
@@ -128,6 +161,7 @@ export type DashboardAggregateRepository = {
 
 export type DashboardAggregateServiceDependencies = {
   repository?: DashboardAggregateRepository;
+  loadPlanLimits?: () => Promise<PlanUsageLimits | null>;
 };
 
 export type GetDashboardMetricsInput = DashboardMetricsBaseInput & {
@@ -181,7 +215,8 @@ export type DashboardUsagePayload = {
     contactsLimit: number;
     segmentsUsed: number;
     segmentsLimit: number;
-    broadcastsLimit: typeof DASHBOARD_USAGE_LIMITS.marketing.broadcastsLimit;
+    broadcastsUsed: number;
+    broadcastsLimit: number | "Unlimited";
   };
   team: {
     domainsUsed: number;
@@ -384,6 +419,7 @@ function getUsageBounds(now: Date): DashboardUsageCountInput {
 
 export function createDashboardAggregateService({
   repository = defaultDashboardAggregateRepository,
+  loadPlanLimits = defaultLoadPlanLimits,
 }: DashboardAggregateServiceDependencies = {}) {
   return {
     async getMetrics(
@@ -459,30 +495,54 @@ export function createDashboardAggregateService({
     },
 
     async getUsage(now = new Date()): Promise<DashboardUsagePayload> {
-      const counts = await repository.countUsage(getUsageBounds(now));
+      const [counts, plan] = await Promise.all([
+        repository.countUsage(getUsageBounds(now)),
+        loadPlanLimits(),
+      ]);
+
+      const monthlyLimit =
+        plan?.monthlyEmailQuota ??
+        DASHBOARD_USAGE_LIMITS.transactional.monthlyLimit;
+      const dailyLimit =
+        plan?.dailyEmailQuota ??
+        DASHBOARD_USAGE_LIMITS.transactional.dailyLimit;
+      const contactsLimit =
+        plan?.maxContacts ?? DASHBOARD_USAGE_LIMITS.marketing.contactsLimit;
+      const segmentsLimit =
+        plan?.maxSegments ?? DASHBOARD_USAGE_LIMITS.marketing.segmentsLimit;
+      const broadcastsRaw = plan
+        ? plan.maxBroadcasts
+        : DASHBOARD_USAGE_LIMITS.marketing.broadcastsLimit;
+      const broadcastsLimit: number | "Unlimited" =
+        broadcastsRaw === null ? "Unlimited" : broadcastsRaw;
+      const domainsLimit =
+        plan?.maxDomains ?? DASHBOARD_USAGE_LIMITS.team.domainsLimit;
+      const rateLimit =
+        plan?.ratePerSecond ?? DASHBOARD_USAGE_LIMITS.team.rateLimit;
 
       return {
         plan: {
-          name: FREE_PLAN_DEFAULTS.name,
-          slug: FREE_PLAN_DEFAULTS.slug,
+          name: plan?.name ?? FREE_PLAN_DEFAULTS.name,
+          slug: plan?.slug ?? FREE_PLAN_DEFAULTS.slug,
         },
         transactional: {
           monthlyUsed: counts.monthlyEmails,
-          monthlyLimit: DASHBOARD_USAGE_LIMITS.transactional.monthlyLimit,
+          monthlyLimit,
           dailyUsed: counts.dailyEmails,
-          dailyLimit: DASHBOARD_USAGE_LIMITS.transactional.dailyLimit,
+          dailyLimit,
         },
         marketing: {
           contactsUsed: counts.contacts,
-          contactsLimit: DASHBOARD_USAGE_LIMITS.marketing.contactsLimit,
+          contactsLimit,
           segmentsUsed: counts.segments,
-          segmentsLimit: DASHBOARD_USAGE_LIMITS.marketing.segmentsLimit,
-          broadcastsLimit: DASHBOARD_USAGE_LIMITS.marketing.broadcastsLimit,
+          segmentsLimit,
+          broadcastsUsed: 0,
+          broadcastsLimit,
         },
         team: {
           domainsUsed: counts.domains,
-          domainsLimit: DASHBOARD_USAGE_LIMITS.team.domainsLimit,
-          rateLimit: DASHBOARD_USAGE_LIMITS.team.rateLimit,
+          domainsLimit,
+          rateLimit,
         },
       };
     },

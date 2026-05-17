@@ -342,11 +342,11 @@ export function BroadcastEditor({
   return (
     <div className="flex flex-col h-full min-h-screen bg-black">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 h-[52px] border-b border-[rgba(176,199,217,0.145)]">
+      <div className="flex items-center justify-between px-4 h-[52px] border-b border-line">
         <div className="flex items-center gap-2">
           <Link
             href="/broadcasts"
-            className="p-1.5 rounded hover:bg-[rgba(176,199,217,0.08)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+            className="p-1.5 rounded hover:bg-white/[0.08] text-fg-2 hover:text-fg transition-colors"
             aria-label="Back to broadcasts"
           >
             <svg
@@ -364,11 +364,11 @@ export function BroadcastEditor({
           </Link>
           <Link
             href="/broadcasts"
-            className="text-[13px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+            className="text-[13px] text-fg-2 hover:text-fg transition-colors"
           >
             Broadcasts
           </Link>
-          <span className="text-[13px] text-[#666]">/</span>
+          <span className="text-[13px] text-fg-4">/</span>
           <input
             type="text"
             value={name}
@@ -377,9 +377,9 @@ export function BroadcastEditor({
               autoSave({ name: e.target.value });
             }}
             onBlur={() => autoSave({ name })}
-            className="text-[13px] text-[#F0F0F0] bg-transparent border-none outline-none font-medium min-w-[80px] max-w-[300px]"
+            className="text-[13px] text-fg bg-transparent border-none outline-none font-medium min-w-[80px] max-w-[300px]"
           />
-          <span className="text-[11px] px-2 py-0.5 rounded bg-[rgba(176,199,217,0.08)] text-[#A1A4A5] font-medium">
+          <span className="text-[11px] px-2 py-0.5 rounded bg-white/[0.08] text-fg-2 font-medium">
             {statusLabel}
           </span>
         </div>
@@ -390,8 +390,8 @@ export function BroadcastEditor({
             aria-label="Page style"
             className={`h-8 px-3 text-[13px] font-medium border rounded-md transition-colors flex items-center gap-1.5 ${
               sidebarOpen
-                ? "text-[#F0F0F0] border-[rgba(176,199,217,0.3)] bg-[rgba(176,199,217,0.08)]"
-                : "text-[#A1A4A5] border-[rgba(176,199,217,0.145)] hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)]"
+                ? "text-fg border-line-3 bg-white/[0.08]"
+                : "text-fg-2 border-line hover:text-fg hover:border-line-3"
             }`}
           >
             <svg
@@ -410,7 +410,7 @@ export function BroadcastEditor({
           </button>
           <button
             type="button"
-            className="h-8 px-3 text-[13px] font-medium text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] rounded-md hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors flex items-center gap-1.5"
+            className="h-8 px-3 text-[13px] font-medium text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 transition-colors flex items-center gap-1.5"
           >
             Test email
           </button>
@@ -419,8 +419,8 @@ export function BroadcastEditor({
             onClick={() => setReviewOpen(!reviewOpen)}
             className={`h-8 px-4 text-[13px] font-medium rounded-md transition-colors ${
               reviewOpen
-                ? "bg-white text-black"
-                : "bg-white text-black hover:bg-gray-200"
+                ? "bg-accent text-accent-ink"
+                : "bg-fg text-bg hover:bg-white"
             }`}
           >
             Review
@@ -435,8 +435,8 @@ export function BroadcastEditor({
             {/* Form fields */}
             <div className="space-y-0">
               {/* From */}
-              <div className="flex items-start border-b border-[rgba(176,199,217,0.08)] py-3 relative">
-                <span className="text-[13px] text-[#A1A4A5] w-[100px] pt-1 shrink-0">
+              <div className="flex items-start border-b border-line py-3 relative">
+                <span className="text-[13px] text-fg-2 w-[100px] pt-1 shrink-0">
                   From
                 </span>
                 <div className="flex-1 relative">
@@ -450,10 +450,10 @@ export function BroadcastEditor({
                     }}
                     onFocus={() => setFromFocused(true)}
                     onBlur={() => setTimeout(() => setFromFocused(false), 200)}
-                    className="w-full text-[14px] text-[#F0F0F0] bg-transparent border-none outline-none placeholder-[#666]"
+                    className="w-full text-[14px] text-fg bg-transparent border-none outline-none placeholder-[#666]"
                   />
                   {fromFocused && fromSuggestions.length > 0 && (
-                    <div className="absolute top-full left-0 mt-1 w-full bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1">
+                    <div className="absolute top-full left-0 mt-1 w-full bg-bg-card border border-line rounded-md shadow-lg z-50 py-1">
                       {fromSuggestions.map((s) => (
                         <button
                           key={s}
@@ -469,7 +469,7 @@ export function BroadcastEditor({
                             });
                             setFromFocused(false);
                           }}
-                          className="w-full px-3 py-1.5 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                          className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                         >
                           {s}
                         </button>
@@ -481,7 +481,7 @@ export function BroadcastEditor({
                   <button
                     type="button"
                     onClick={() => setShowReplyTo(true)}
-                    className="text-[13px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors shrink-0 ml-2"
+                    className="text-[13px] text-fg-2 hover:text-fg transition-colors shrink-0 ml-2"
                   >
                     Reply-To
                   </button>
@@ -490,8 +490,8 @@ export function BroadcastEditor({
 
               {/* Reply-To (toggleable) */}
               {showReplyTo && (
-                <div className="flex items-start border-b border-[rgba(176,199,217,0.08)] py-3">
-                  <span className="text-[13px] text-[#A1A4A5] w-[100px] pt-1 shrink-0">
+                <div className="flex items-start border-b border-line py-3">
+                  <span className="text-[13px] text-fg-2 w-[100px] pt-1 shrink-0">
                     Reply-To
                   </span>
                   <input
@@ -504,20 +504,20 @@ export function BroadcastEditor({
                         replyTo: e.target.value,
                       });
                     }}
-                    className="flex-1 text-[14px] text-[#F0F0F0] bg-transparent border-none outline-none placeholder-[#666]"
+                    className="flex-1 text-[14px] text-fg bg-transparent border-none outline-none placeholder-[#666]"
                   />
                 </div>
               )}
 
               {/* To */}
-              <div className="flex items-start border-b border-[rgba(176,199,217,0.08)] py-3 relative">
-                <span className="text-[13px] text-[#A1A4A5] w-[100px] pt-1 shrink-0">
+              <div className="flex items-start border-b border-line py-3 relative">
+                <span className="text-[13px] text-fg-2 w-[100px] pt-1 shrink-0">
                   To
                 </span>
                 <div className="flex-1 relative">
                   {segmentId && selectedSegment ? (
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[14px] text-[#F0F0F0] bg-[rgba(176,199,217,0.08)] px-2 py-0.5 rounded inline-flex items-center gap-1">
+                      <span className="text-[14px] text-fg bg-white/[0.08] px-2 py-0.5 rounded inline-flex items-center gap-1">
                         {selectedSegment.name}
                         <button
                           type="button"
@@ -528,7 +528,7 @@ export function BroadcastEditor({
                               segmentId: null,
                             });
                           }}
-                          className="text-[#A1A4A5] hover:text-[#F0F0F0] ml-0.5"
+                          className="text-fg-2 hover:text-fg ml-0.5"
                         >
                           &times;
                         </button>
@@ -545,10 +545,10 @@ export function BroadcastEditor({
                         onBlur={() =>
                           setTimeout(() => setToFocused(false), 200)
                         }
-                        className="w-full text-[14px] text-[#F0F0F0] bg-transparent border-none outline-none placeholder-[#666]"
+                        className="w-full text-[14px] text-fg bg-transparent border-none outline-none placeholder-[#666]"
                       />
                       {toFocused && filteredSegments.length > 0 && (
-                        <div className="absolute top-full left-0 mt-1 w-full bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1">
+                        <div className="absolute top-full left-0 mt-1 w-full bg-bg-card border border-line rounded-md shadow-lg z-50 py-1">
                           {filteredSegments.map((seg) => (
                             <button
                               key={seg.id}
@@ -562,7 +562,7 @@ export function BroadcastEditor({
                                 });
                                 setToFocused(false);
                               }}
-                              className="w-full px-3 py-1.5 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                              className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                             >
                               {seg.name}
                             </button>
@@ -576,7 +576,7 @@ export function BroadcastEditor({
                   <button
                     type="button"
                     onClick={() => setShowWhen(true)}
-                    className="text-[13px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors shrink-0 ml-2"
+                    className="text-[13px] text-fg-2 hover:text-fg transition-colors shrink-0 ml-2"
                   >
                     When
                   </button>
@@ -585,8 +585,8 @@ export function BroadcastEditor({
 
               {/* When (toggleable) */}
               {showWhen && (
-                <div className="flex items-start border-b border-[rgba(176,199,217,0.08)] py-3">
-                  <span className="text-[13px] text-[#A1A4A5] w-[100px] pt-1 shrink-0">
+                <div className="flex items-start border-b border-line py-3">
+                  <span className="text-[13px] text-fg-2 w-[100px] pt-1 shrink-0">
                     When
                   </span>
                   <input
@@ -600,24 +600,24 @@ export function BroadcastEditor({
                           : null,
                       });
                     }}
-                    className="flex-1 text-[14px] text-[#F0F0F0] bg-transparent border-none outline-none [color-scheme:dark]"
+                    className="flex-1 text-[14px] text-fg bg-transparent border-none outline-none [color-scheme:dark]"
                   />
                 </div>
               )}
 
               {/* Subscribe to */}
               <div
-                className="flex items-start border-b border-[rgba(176,199,217,0.08)] py-3 relative"
+                className="flex items-start border-b border-line py-3 relative"
                 ref={topicDropdownRef}
               >
-                <span className="text-[13px] text-[#A1A4A5] w-[100px] pt-1 shrink-0">
+                <span className="text-[13px] text-fg-2 w-[100px] pt-1 shrink-0">
                   Subscribe to
                 </span>
                 <div className="flex-1 relative">
                   <button
                     type="button"
                     onClick={() => setTopicDropdownOpen(!topicDropdownOpen)}
-                    className="flex items-center gap-1 text-[14px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+                    className="flex items-center gap-1 text-[14px] text-fg-2 hover:text-fg transition-colors"
                   >
                     <span>
                       {selectedTopic ? selectedTopic.name : "Select a topic"}
@@ -635,7 +635,7 @@ export function BroadcastEditor({
                     </svg>
                   </button>
                   {topicDropdownOpen && (
-                    <div className="absolute top-full left-0 mt-1 w-[240px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1">
+                    <div className="absolute top-full left-0 mt-1 w-[240px] bg-bg-card border border-line rounded-md shadow-lg z-50 py-1">
                       <button
                         type="button"
                         onMouseDown={(e) => {
@@ -644,7 +644,7 @@ export function BroadcastEditor({
                           autoSave({ topicId: null });
                           setTopicDropdownOpen(false);
                         }}
-                        className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-[rgba(176,199,217,0.08)] transition-colors ${!topicId ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                        className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/[0.08] transition-colors ${!topicId ? "text-fg" : "text-fg-2"}`}
                       >
                         None
                       </button>
@@ -660,7 +660,7 @@ export function BroadcastEditor({
                             });
                             setTopicDropdownOpen(false);
                           }}
-                          className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-[rgba(176,199,217,0.08)] transition-colors ${topicId === t.id ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                          className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/[0.08] transition-colors ${topicId === t.id ? "text-fg" : "text-fg-2"}`}
                         >
                           {t.name}
                         </button>
@@ -671,8 +671,8 @@ export function BroadcastEditor({
               </div>
 
               {/* Subject */}
-              <div className="flex items-start border-b border-[rgba(176,199,217,0.08)] py-3">
-                <span className="text-[13px] text-[#A1A4A5] w-[100px] pt-1 shrink-0">
+              <div className="flex items-start border-b border-line py-3">
+                <span className="text-[13px] text-fg-2 w-[100px] pt-1 shrink-0">
                   Subject
                 </span>
                 <div className="flex-1 flex items-center">
@@ -686,13 +686,13 @@ export function BroadcastEditor({
                         subject: e.target.value,
                       });
                     }}
-                    className="flex-1 text-[14px] text-[#F0F0F0] bg-transparent border-none outline-none placeholder-[#666]"
+                    className="flex-1 text-[14px] text-fg bg-transparent border-none outline-none placeholder-[#666]"
                   />
                   {!showPreviewText && (
                     <button
                       type="button"
                       onClick={() => setShowPreviewText(true)}
-                      className="text-[13px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors shrink-0 ml-2"
+                      className="text-[13px] text-fg-2 hover:text-fg transition-colors shrink-0 ml-2"
                     >
                       Preview text
                     </button>
@@ -702,8 +702,8 @@ export function BroadcastEditor({
 
               {/* Preview text (toggleable) */}
               {showPreviewText && (
-                <div className="flex items-start border-b border-[rgba(176,199,217,0.08)] py-3">
-                  <span className="text-[13px] text-[#A1A4A5] w-[100px] pt-1 shrink-0">
+                <div className="flex items-start border-b border-line py-3">
+                  <span className="text-[13px] text-fg-2 w-[100px] pt-1 shrink-0">
                     Preview text
                   </span>
                   <input
@@ -717,7 +717,7 @@ export function BroadcastEditor({
                         previewText: e.target.value,
                       });
                     }}
-                    className="flex-1 text-[14px] text-[#F0F0F0] bg-transparent border-none outline-none placeholder-[#666]"
+                    className="flex-1 text-[14px] text-fg bg-transparent border-none outline-none placeholder-[#666]"
                   />
                 </div>
               )}
@@ -727,14 +727,14 @@ export function BroadcastEditor({
             <div className="mt-8 relative">
               <div
                 data-testid="block-editor"
-                className="min-h-[400px] border border-[rgba(176,199,217,0.08)] rounded-lg p-4 relative"
+                className="min-h-[400px] border border-line rounded-lg p-4 relative"
                 onKeyDown={handleEditorKeyDown}
                 // biome-ignore lint/a11y/noNoninteractiveTabindex: editor needs keyboard focus for slash commands
                 tabIndex={0}
                 aria-label="Content editor"
               >
                 {blocks.length === 0 && !slashMenuOpen && (
-                  <p className="text-[14px] text-[#666]">
+                  <p className="text-[14px] text-fg-4">
                     Press &apos;/&apos; for commands
                   </p>
                 )}
@@ -750,7 +750,7 @@ export function BroadcastEditor({
                       <button
                         type="button"
                         onClick={() => removeBlock(block.id)}
-                        className="p-0.5 text-[#666] hover:text-red-400 text-xs"
+                        className="p-0.5 text-fg-4 hover:text-red-400 text-xs"
                         title="Remove block"
                       >
                         <svg
@@ -779,7 +779,7 @@ export function BroadcastEditor({
                 {slashMenuOpen && (
                   <div
                     ref={slashMenuRef}
-                    className="absolute left-4 z-50 w-[280px] max-h-[360px] overflow-y-auto bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-lg shadow-xl"
+                    className="absolute left-4 z-50 w-[280px] max-h-[360px] overflow-y-auto bg-bg-card border border-line rounded-lg shadow-xl"
                     style={{
                       top:
                         blocks.length > 0
@@ -789,7 +789,7 @@ export function BroadcastEditor({
                   >
                     {SLASH_MENU_ITEMS.map((category) => (
                       <div key={category.category}>
-                        <div className="px-3 py-1.5 text-[11px] font-semibold text-[#666] uppercase tracking-wider">
+                        <div className="px-3 py-1.5 text-[11px] font-semibold text-fg-4 uppercase tracking-wider">
                           {category.category}
                         </div>
                         {category.items.map((item) => (
@@ -797,9 +797,9 @@ export function BroadcastEditor({
                             key={item.type}
                             type="button"
                             onClick={() => insertBlock(item.type)}
-                            className="w-full px-3 py-2 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors flex items-center gap-2.5"
+                            className="w-full px-3 py-2 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors flex items-center gap-2.5"
                           >
-                            <span className="w-6 h-6 flex items-center justify-center rounded bg-[rgba(176,199,217,0.06)] text-[11px] font-mono shrink-0">
+                            <span className="w-6 h-6 flex items-center justify-center rounded bg-white/[0.06] text-[11px] font-mono shrink-0">
                               {item.icon}
                             </span>
                             {item.label}
@@ -815,7 +815,7 @@ export function BroadcastEditor({
               <div className="flex items-center gap-3 mt-3">
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 text-[13px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+                  className="flex items-center gap-1.5 text-[13px] text-fg-2 hover:text-fg transition-colors"
                 >
                   <svg
                     width="14"
@@ -833,7 +833,7 @@ export function BroadcastEditor({
                 </button>
                 <button
                   type="button"
-                  className="flex items-center gap-1.5 text-[13px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+                  className="flex items-center gap-1.5 text-[13px] text-fg-2 hover:text-fg transition-colors"
                 >
                   <svg
                     width="14"
@@ -869,10 +869,10 @@ export function BroadcastEditor({
       {reviewOpen && (
         <div
           data-testid="review-panel"
-          className="border-t border-[rgba(176,199,217,0.145)] bg-[#0a0a0a] px-6 py-5"
+          className="border-t border-line bg-bg-card px-6 py-5"
         >
           <div className="max-w-[500px] mx-auto">
-            <h3 className="text-[16px] font-semibold text-[#F0F0F0] mb-4">
+            <h3 className="text-[16px] font-semibold text-fg mb-4">
               Ready to send?
             </h3>
 
@@ -953,11 +953,7 @@ export function BroadcastEditor({
                       />
                     </svg>
                   )}
-                  <span
-                    className={
-                      item.passed ? "text-[#A1A4A5]" : "text-[#F0F0F0]"
-                    }
-                  >
+                  <span className={item.passed ? "text-fg-2" : "text-fg"}>
                     {item.label}
                   </span>
                 </div>
@@ -965,7 +961,7 @@ export function BroadcastEditor({
             </div>
 
             {/* Slide to send */}
-            <div className="flex items-center gap-3 bg-[rgba(176,199,217,0.04)] border border-[rgba(176,199,217,0.1)] rounded-lg px-4 py-3">
+            <div className="flex items-center gap-3 bg-white/[0.03] border border-line rounded-lg px-4 py-3">
               <svg
                 width="16"
                 height="16"
@@ -973,7 +969,7 @@ export function BroadcastEditor({
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
-                className="text-[#A1A4A5] shrink-0"
+                className="text-fg-2 shrink-0"
                 aria-hidden="true"
               >
                 <line x1="22" y1="2" x2="11" y2="13" />
@@ -1005,9 +1001,9 @@ export function BroadcastEditor({
                   if (sliderValue < 100) setSliderValue(0);
                 }}
                 aria-label="Slide to send"
-                className="flex-1 h-2 appearance-none bg-[rgba(176,199,217,0.1)] rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:active:cursor-grabbing"
+                className="flex-1 h-2 appearance-none bg-white/10 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:active:cursor-grabbing"
               />
-              <span className="text-[13px] text-[#A1A4A5] shrink-0 min-w-[100px]">
+              <span className="text-[13px] text-fg-2 shrink-0 min-w-[100px]">
                 Slide to send
               </span>
             </div>
@@ -1016,9 +1012,9 @@ export function BroadcastEditor({
       )}
 
       {/* Bottom Toolbar */}
-      <div className="border-t border-[rgba(176,199,217,0.145)] bg-[#0a0a0a]">
+      <div className="border-t border-line bg-bg-card">
         {/* Toolbar tabs */}
-        <div className="flex items-center border-b border-[rgba(176,199,217,0.08)] px-4">
+        <div className="flex items-center border-b border-line px-4">
           {(
             [
               { key: "text", label: "Text" },
@@ -1033,8 +1029,8 @@ export function BroadcastEditor({
               onClick={() => setActiveToolbarTab(tab.key)}
               className={`px-3 py-2.5 text-[13px] font-medium transition-colors relative ${
                 activeToolbarTab === tab.key
-                  ? "text-[#F0F0F0]"
-                  : "text-[#666] hover:text-[#A1A4A5]"
+                  ? "text-fg"
+                  : "text-fg-4 hover:text-fg-2"
               }`}
             >
               {tab.label}
@@ -1065,13 +1061,13 @@ export function BroadcastEditor({
                   key={btn.title}
                   type="button"
                   title={btn.title}
-                  className="w-8 h-8 flex items-center justify-center rounded text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                 >
                   <span className={btn.style}>{btn.icon}</span>
                 </button>
               ))}
 
-              <span className="w-px h-5 bg-[rgba(176,199,217,0.1)] mx-1" />
+              <span className="w-px h-5 bg-white/10 mx-1" />
 
               {/* Alignment */}
               {[
@@ -1083,13 +1079,13 @@ export function BroadcastEditor({
                   key={btn.title}
                   type="button"
                   title={btn.title}
-                  className="w-8 h-8 flex items-center justify-center rounded text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                 >
                   {btn.icon}
                 </button>
               ))}
 
-              <span className="w-px h-5 bg-[rgba(176,199,217,0.1)] mx-1" />
+              <span className="w-px h-5 bg-white/10 mx-1" />
 
               {/* Lists */}
               {[
@@ -1100,7 +1096,7 @@ export function BroadcastEditor({
                   key={btn.title}
                   type="button"
                   title={btn.title}
-                  className="w-8 h-8 flex items-center justify-center rounded text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                  className="w-8 h-8 flex items-center justify-center rounded text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                 >
                   {btn.icon}
                 </button>
@@ -1112,11 +1108,11 @@ export function BroadcastEditor({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="h-8 px-3 text-[13px] text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] rounded-md hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors"
+                className="h-8 px-3 text-[13px] text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 transition-colors"
               >
                 Upload image
               </button>
-              <span className="text-[12px] text-[#666]">or drag and drop</span>
+              <span className="text-[12px] text-fg-4">or drag and drop</span>
             </div>
           )}
 
@@ -1127,7 +1123,7 @@ export function BroadcastEditor({
                   key={item.type}
                   type="button"
                   onClick={() => insertBlock(item.type)}
-                  className="h-8 px-3 text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] rounded transition-colors flex items-center gap-1.5"
+                  className="h-8 px-3 text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg rounded transition-colors flex items-center gap-1.5"
                 >
                   <span className="text-[11px] font-mono">{item.icon}</span>
                   {item.label}
@@ -1150,7 +1146,7 @@ export function BroadcastEditor({
                     };
                     setBlocks((prev) => [...prev, newBlock]);
                   }}
-                  className="h-8 px-2.5 text-[12px] font-mono text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] rounded border border-[rgba(176,199,217,0.1)] transition-colors"
+                  className="h-8 px-2.5 text-[12px] font-mono text-fg-2 hover:bg-white/[0.08] hover:text-fg rounded border border-line transition-colors"
                 >
                   {v.label}
                 </button>
@@ -1179,7 +1175,7 @@ function BlockRenderer({
           value={block.content}
           onChange={(e) => onUpdate(e.target.value)}
           placeholder="Title"
-          className="w-full bg-transparent border-none outline-none text-[28px] font-bold text-[#F0F0F0] placeholder-[#444]"
+          className="w-full bg-transparent border-none outline-none text-[28px] font-bold text-fg placeholder-[#444]"
         />
       );
     case "subtitle":
@@ -1189,7 +1185,7 @@ function BlockRenderer({
           value={block.content}
           onChange={(e) => onUpdate(e.target.value)}
           placeholder="Subtitle"
-          className="w-full bg-transparent border-none outline-none text-[20px] font-semibold text-[#ccc] placeholder-[#444]"
+          className="w-full bg-transparent border-none outline-none text-[20px] font-semibold text-fg-2 placeholder-[#444]"
         />
       );
     case "heading":
@@ -1199,18 +1195,18 @@ function BlockRenderer({
           value={block.content}
           onChange={(e) => onUpdate(e.target.value)}
           placeholder="Heading"
-          className="w-full bg-transparent border-none outline-none text-[18px] font-semibold text-[#F0F0F0] placeholder-[#444]"
+          className="w-full bg-transparent border-none outline-none text-[18px] font-semibold text-fg placeholder-[#444]"
         />
       );
     case "quote":
       return (
-        <div className="border-l-2 border-[#A1A4A5] pl-4">
+        <div className="border-l-2 border-fg-2 pl-4">
           <textarea
             value={block.content}
             onChange={(e) => onUpdate(e.target.value)}
             placeholder="Quote"
             rows={2}
-            className="w-full bg-transparent border-none outline-none text-[14px] italic text-[#ccc] placeholder-[#444] resize-none"
+            className="w-full bg-transparent border-none outline-none text-[14px] italic text-fg-2 placeholder-[#444] resize-none"
           />
         </div>
       );
@@ -1221,39 +1217,39 @@ function BlockRenderer({
           onChange={(e) => onUpdate(e.target.value)}
           placeholder="Code"
           rows={4}
-          className="w-full bg-[rgba(176,199,217,0.04)] border border-[rgba(176,199,217,0.1)] rounded-md p-3 font-mono text-[13px] text-[#F0F0F0] placeholder-[#444] resize-none outline-none"
+          className="w-full bg-white/[0.03] border border-line rounded-md p-3 font-mono text-[13px] text-fg placeholder-[#444] resize-none outline-none"
         />
       );
     case "bullet_list":
       return (
         <div className="flex items-start gap-2">
-          <span className="text-[#A1A4A5] mt-0.5">&#8226;</span>
+          <span className="text-fg-2 mt-0.5">&#8226;</span>
           <input
             type="text"
             value={block.content}
             onChange={(e) => onUpdate(e.target.value)}
             placeholder="List item"
-            className="flex-1 bg-transparent border-none outline-none text-[14px] text-[#F0F0F0] placeholder-[#444]"
+            className="flex-1 bg-transparent border-none outline-none text-[14px] text-fg placeholder-[#444]"
           />
         </div>
       );
     case "numbered_list":
       return (
         <div className="flex items-start gap-2">
-          <span className="text-[#A1A4A5] mt-0.5">1.</span>
+          <span className="text-fg-2 mt-0.5">1.</span>
           <input
             type="text"
             value={block.content}
             onChange={(e) => onUpdate(e.target.value)}
             placeholder="List item"
-            className="flex-1 bg-transparent border-none outline-none text-[14px] text-[#F0F0F0] placeholder-[#444]"
+            className="flex-1 bg-transparent border-none outline-none text-[14px] text-fg placeholder-[#444]"
           />
         </div>
       );
     case "image":
       return (
-        <div className="border border-dashed border-[rgba(176,199,217,0.2)] rounded-lg p-8 text-center">
-          <p className="text-[13px] text-[#666]">
+        <div className="border border-dashed border-line-2 rounded-lg p-8 text-center">
+          <p className="text-[13px] text-fg-4">
             Click to upload or drag and drop an image
           </p>
         </div>
@@ -1265,7 +1261,7 @@ function BlockRenderer({
           value={block.content}
           onChange={(e) => onUpdate(e.target.value)}
           placeholder="Paste YouTube URL..."
-          className="w-full bg-[rgba(176,199,217,0.04)] border border-[rgba(176,199,217,0.1)] rounded-md px-3 py-2 text-[13px] text-[#F0F0F0] placeholder-[#444] outline-none"
+          className="w-full bg-white/[0.03] border border-line rounded-md px-3 py-2 text-[13px] text-fg placeholder-[#444] outline-none"
         />
       );
     case "twitter":
@@ -1275,7 +1271,7 @@ function BlockRenderer({
           value={block.content}
           onChange={(e) => onUpdate(e.target.value)}
           placeholder="Paste X/Twitter URL..."
-          className="w-full bg-[rgba(176,199,217,0.04)] border border-[rgba(176,199,217,0.1)] rounded-md px-3 py-2 text-[13px] text-[#F0F0F0] placeholder-[#444] outline-none"
+          className="w-full bg-white/[0.03] border border-line rounded-md px-3 py-2 text-[13px] text-fg placeholder-[#444] outline-none"
         />
       );
     case "button":
@@ -1285,38 +1281,38 @@ function BlockRenderer({
             type="text"
             value={block.content || "Button"}
             onChange={(e) => onUpdate(e.target.value)}
-            className="bg-white text-black px-6 py-2 rounded-md text-[14px] font-medium text-center border-none outline-none min-w-[120px]"
+            className="btn btn-primary min-w-[120px] text-center"
           />
         </div>
       );
     case "divider":
-      return <hr className="border-t border-[rgba(176,199,217,0.15)] my-2" />;
+      return <hr className="border-t border-line-2 my-2" />;
     case "section":
       return (
-        <div className="border border-[rgba(176,199,217,0.1)] rounded-lg p-4 min-h-[60px]">
-          <p className="text-[12px] text-[#666]">Section block</p>
+        <div className="border border-line rounded-lg p-4 min-h-[60px]">
+          <p className="text-[12px] text-fg-4">Section block</p>
         </div>
       );
     case "columns":
       return (
         <div className="grid grid-cols-2 gap-3">
-          <div className="border border-[rgba(176,199,217,0.1)] rounded-lg p-3 min-h-[60px]">
-            <p className="text-[12px] text-[#666]">Column 1</p>
+          <div className="border border-line rounded-lg p-3 min-h-[60px]">
+            <p className="text-[12px] text-fg-4">Column 1</p>
           </div>
-          <div className="border border-[rgba(176,199,217,0.1)] rounded-lg p-3 min-h-[60px]">
-            <p className="text-[12px] text-[#666]">Column 2</p>
+          <div className="border border-line rounded-lg p-3 min-h-[60px]">
+            <p className="text-[12px] text-fg-4">Column 2</p>
           </div>
         </div>
       );
     case "social_links":
       return (
         <div className="flex items-center justify-center gap-3 py-2">
-          <span className="text-[13px] text-[#A1A4A5]">Social Links</span>
+          <span className="text-[13px] text-fg-2">Social Links</span>
         </div>
       );
     case "unsubscribe_footer":
       return (
-        <div className="text-center py-3 text-[12px] text-[#666]">
+        <div className="text-center py-3 text-[12px] text-fg-4">
           <a href="{{{RESEND_UNSUBSCRIBE_URL}}}" className="underline">
             Unsubscribe
           </a>
@@ -1329,12 +1325,12 @@ function BlockRenderer({
           onChange={(e) => onUpdate(e.target.value)}
           placeholder="<html>...</html>"
           rows={6}
-          className="w-full bg-[rgba(176,199,217,0.04)] border border-[rgba(176,199,217,0.1)] rounded-md p-3 font-mono text-[13px] text-[#F0F0F0] placeholder-[#444] resize-none outline-none"
+          className="w-full bg-white/[0.03] border border-line rounded-md p-3 font-mono text-[13px] text-fg placeholder-[#444] resize-none outline-none"
         />
       );
     case "variable":
       return (
-        <span className="inline-block px-2 py-1 bg-[rgba(176,199,217,0.08)] rounded text-[13px] font-mono text-[#A1A4A5] border border-[rgba(176,199,217,0.1)]">
+        <span className="inline-block px-2 py-1 bg-white/[0.08] rounded text-[13px] font-mono text-fg-2 border border-line">
           {block.content}
         </span>
       );
@@ -1345,7 +1341,7 @@ function BlockRenderer({
           onChange={(e) => onUpdate(e.target.value)}
           placeholder="Type something..."
           rows={2}
-          className="w-full bg-transparent border-none outline-none text-[14px] text-[#F0F0F0] placeholder-[#444] resize-none"
+          className="w-full bg-transparent border-none outline-none text-[14px] text-fg placeholder-[#444] resize-none"
         />
       );
   }

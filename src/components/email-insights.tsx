@@ -130,14 +130,14 @@ function InsightAccordion({ item }: { item: InsightItem }) {
   const isWarning = item.status === "needs_attention";
 
   return (
-    <div className="border-b border-[rgba(176,199,217,0.145)] last:border-b-0">
+    <div className="border-b border-line last:border-b-0">
       <button
         type="button"
-        className="w-full flex items-center gap-3 py-3 px-4 text-left hover:bg-[rgba(24,25,28,0.5)] transition-colors"
+        className="w-full flex items-center gap-3 py-3 px-4 text-left hover:bg-bg-2 transition-colors"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >
-        <span className="text-[13px] text-[#A1A4A5] shrink-0">
+        <span className="text-[13px] text-fg-2 shrink-0">
           {expanded ? "\u25BC" : "\u25B6"}
         </span>
         {isWarning ? (
@@ -163,12 +163,12 @@ function InsightAccordion({ item }: { item: InsightItem }) {
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
           </svg>
         )}
-        <span className="text-[14px] text-[#F0F0F0]">{item.name}</span>
+        <span className="text-[14px] text-fg">{item.name}</span>
       </button>
       {expanded && (
         <div
           data-testid={`insight-detail-${item.id}`}
-          className="px-4 pb-3 pl-14 text-[13px] text-[#A1A4A5] leading-relaxed"
+          className="px-4 pb-3 pl-14 text-[13px] text-fg-2 leading-relaxed"
         >
           {item.details}
         </div>
@@ -189,10 +189,10 @@ export function EmailInsights({ from, html, text }: EmailInsightsProps) {
     <div className="min-h-[300px]" data-testid="email-insights">
       {needsAttention.length > 0 && (
         <div data-testid="needs-attention-section" className="mb-6">
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-2 px-4">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-2 px-4">
             NEEDS ATTENTION
           </p>
-          <div className="border border-[rgba(176,199,217,0.145)] rounded-lg overflow-hidden">
+          <div className="border border-line rounded-lg overflow-hidden">
             {needsAttention.map((item) => (
               <InsightAccordion key={item.id} item={item} />
             ))}
@@ -201,10 +201,10 @@ export function EmailInsights({ from, html, text }: EmailInsightsProps) {
       )}
       {doingGreat.length > 0 && (
         <div data-testid="doing-great-section">
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-2 px-4">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-2 px-4">
             DOING GREAT
           </p>
-          <div className="border border-[rgba(176,199,217,0.145)] rounded-lg overflow-hidden">
+          <div className="border border-line rounded-lg overflow-hidden">
             {doingGreat.map((item) => (
               <InsightAccordion key={item.id} item={item} />
             ))}

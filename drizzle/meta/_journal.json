@@ -155,6 +155,13 @@
       "when": 1778976000000,
       "tag": "0021_monthly_pricing_tiers_20260517",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1778982844528,
+      "tag": "0022_pink_vampiro",
+      "breakpoints": true
     }
   ]
 }

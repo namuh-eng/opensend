@@ -36,8 +36,13 @@ describe("planRepo.ensureFreePlan", () => {
       name: "Free",
       monthlyPriceCents: 0,
       monthlyEmailQuota: 5000,
+      dailyEmailQuota: 100,
       maxDomains: 1,
       maxApiKeys: 2,
+      maxContacts: 1000,
+      maxSegments: 3,
+      maxBroadcasts: null,
+      ratePerSecond: 2,
       isPublic: true,
     };
     mockInsertReturning.mockResolvedValue([inserted]);
@@ -54,8 +59,13 @@ describe("planRepo.ensureFreePlan", () => {
       name: "Free",
       monthlyPriceCents: 0,
       monthlyEmailQuota: 5000,
+      dailyEmailQuota: 100,
       maxDomains: 1,
       maxApiKeys: 2,
+      maxContacts: 1000,
+      maxSegments: 3,
+      maxBroadcasts: null,
+      ratePerSecond: 2,
       isPublic: true,
     });
     expect(mockOnConflictDoNothing).toHaveBeenCalledOnce();

@@ -35,12 +35,12 @@ export function TeamTab() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-2">
-          <p className="text-[14px] text-[#A1A4A5]">
+          <p className="text-[14px] text-fg-2">
             View your team members and their access levels.
           </p>
           <p
             id="team-actions-unavailable"
-            className="max-w-2xl text-[13px] text-[#A1A4A5]"
+            className="max-w-2xl text-[13px] text-fg-2"
           >
             Team invitations and role editing are not available in OpenSend yet.
             These controls are disabled until member management is ready.
@@ -48,7 +48,7 @@ export function TeamTab() {
         </div>
         <button
           type="button"
-          className="h-9 shrink-0 cursor-not-allowed rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(176,199,217,0.08)] px-4 text-[13px] font-medium text-[#A1A4A5] opacity-70"
+          className="h-9 shrink-0 cursor-not-allowed rounded-md border border-line bg-white/[0.08] px-4 text-[13px] font-medium text-fg-2 opacity-70"
           disabled
           aria-describedby="team-actions-unavailable"
           title="Team invitations are not available yet."
@@ -57,17 +57,17 @@ export function TeamTab() {
         </button>
       </div>
 
-      <div className="border border-[rgba(176,199,217,0.145)] rounded-lg overflow-hidden">
+      <div className="border border-line rounded-lg overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.3)]">
-              <th className="px-4 py-3 text-left text-[11px] font-medium text-[#A1A4A5] tracking-wider uppercase">
+            <tr className="border-b border-line bg-bg-2">
+              <th className="px-4 py-3 text-left text-[11px] font-medium text-fg-2 tracking-wider uppercase">
                 Member
               </th>
-              <th className="px-4 py-3 text-left text-[11px] font-medium text-[#A1A4A5] tracking-wider uppercase">
+              <th className="px-4 py-3 text-left text-[11px] font-medium text-fg-2 tracking-wider uppercase">
                 Role
               </th>
-              <th className="px-4 py-3 text-left text-[11px] font-medium text-[#A1A4A5] tracking-wider uppercase">
+              <th className="px-4 py-3 text-left text-[11px] font-medium text-fg-2 tracking-wider uppercase">
                 Status
               </th>
               <th className="px-4 py-3 text-right" />
@@ -77,20 +77,20 @@ export function TeamTab() {
             {members.map((member) => (
               <tr
                 key={member.id}
-                className="border-b border-[rgba(176,199,217,0.145)] last:border-0 hover:bg-[rgba(24,25,28,0.5)] transition-colors"
+                className="border-b border-line last:border-0 hover:bg-bg-2 transition-colors"
               >
                 <td className="px-4 py-4">
                   <div className="flex flex-col">
-                    <span className="text-[14px] text-[#F0F0F0] font-medium">
+                    <span className="text-[14px] text-fg font-medium">
                       {member.name}
                     </span>
-                    <span className="text-[12px] text-[#A1A4A5]">
+                    <span className="text-[12px] text-fg-2">
                       {member.email}
                     </span>
                   </div>
                 </td>
                 <td className="px-4 py-4">
-                  <span className="text-[13px] text-[#F0F0F0] capitalize">
+                  <span className="text-[13px] text-fg capitalize">
                     {member.role}
                   </span>
                 </td>
@@ -103,7 +103,7 @@ export function TeamTab() {
                 <td className="px-4 py-4 text-right">
                   <button
                     type="button"
-                    className="cursor-not-allowed text-[12px] text-[#6F7377] opacity-70"
+                    className="cursor-not-allowed text-[12px] text-fg-3 opacity-70"
                     disabled
                     aria-describedby="team-actions-unavailable"
                     aria-label={`Edit ${member.name} unavailable`}

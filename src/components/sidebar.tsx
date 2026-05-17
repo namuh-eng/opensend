@@ -319,13 +319,13 @@ export function Sidebar({ billingEnabled = false }: SidebarProps = {}) {
   };
 
   return (
-    <aside className="fixed left-0 top-0 bottom-0 w-[250px] bg-black flex flex-col border-r border-[rgba(176,199,217,0.145)]">
+    <aside className="fixed left-0 top-0 bottom-0 w-[250px] bg-black flex flex-col border-r border-line">
       {/* Team switcher */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-[rgba(176,199,217,0.145)]">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-line">
         <div className="w-6 h-6 rounded bg-purple-600 flex items-center justify-center text-[11px] font-semibold text-white">
           f
         </div>
-        <span className="text-[13px] font-medium text-[#F0F0F0] flex-1 truncate">
+        <span className="text-[13px] font-medium text-fg flex-1 truncate">
           My Team
         </span>
         <svg
@@ -359,8 +359,8 @@ export function Sidebar({ billingEnabled = false }: SidebarProps = {}) {
               data-active={isActive ? "true" : undefined}
               className={`flex items-center gap-3 px-3 py-[6px] rounded-md text-[13px] font-medium transition-colors ${
                 isActive
-                  ? "text-[#F0F0F0] bg-[rgba(24,25,28,0.88)]"
-                  : "text-[#A1A4A5] hover:text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)]"
+                  ? "text-fg bg-bg-3"
+                  : "text-fg-2 hover:text-fg hover:bg-bg-2"
               }`}
             >
               {item.icon}
@@ -371,12 +371,12 @@ export function Sidebar({ billingEnabled = false }: SidebarProps = {}) {
       </nav>
 
       {/* User section */}
-      <div className="px-4 py-3 border-t border-[rgba(176,199,217,0.145)]">
+      <div className="px-4 py-3 border-t border-line">
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-semibold text-white">
             {userInitial}
           </div>
-          <span className="text-[12px] text-[#A1A4A5] truncate flex-1">
+          <span className="text-[12px] text-fg-2 truncate flex-1">
             {userLabel}
           </span>
         </div>
@@ -389,7 +389,7 @@ export function Sidebar({ billingEnabled = false }: SidebarProps = {}) {
           type="button"
           onClick={handleSignOut}
           disabled={isSigningOut}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-[rgba(176,199,217,0.145)] px-3 py-2 text-[13px] font-medium text-[#A1A4A5] transition-colors hover:bg-[rgba(24,25,28,0.5)] hover:text-[#F0F0F0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-md border border-line px-3 py-2 text-[13px] font-medium text-fg-2 transition-colors hover:bg-bg-2 hover:text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple-500 disabled:cursor-not-allowed disabled:opacity-50"
           aria-busy={isSigningOut}
         >
           <svg

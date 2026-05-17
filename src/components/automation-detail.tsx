@@ -120,7 +120,7 @@ export function AutomationDetail({ automationId }: Props) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-16 text-[14px] text-[#A1A4A5]">
+      <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
         Loading automation...
       </div>
     );
@@ -129,15 +129,15 @@ export function AutomationDetail({ automationId }: Props) {
   if (notFound) {
     return (
       <div className="max-w-3xl mx-auto py-16 text-center">
-        <h2 className="text-[18px] font-semibold text-[#F0F0F0] mb-2">
+        <h2 className="text-[18px] font-semibold text-fg mb-2">
           Automation not found
         </h2>
-        <p className="text-[14px] text-[#A1A4A5] mb-6">
+        <p className="text-[14px] text-fg-2 mb-6">
           It may have been deleted, or the link may be stale.
         </p>
         <Link
           href="/automations"
-          className="text-[13px] text-[#A1A4A5] hover:text-[#F0F0F0] underline"
+          className="text-[13px] text-fg-2 hover:text-fg underline"
         >
           Back to automations
         </Link>
@@ -151,14 +151,14 @@ export function AutomationDetail({ automationId }: Props) {
         <div>
           <Link
             href="/automations"
-            className="text-[12px] text-[#A1A4A5] hover:text-[#F0F0F0]"
+            className="text-[12px] text-fg-2 hover:text-fg"
           >
             &larr; All automations
           </Link>
-          <h1 className="mt-2 text-2xl font-semibold text-[#F0F0F0]">
+          <h1 className="mt-2 text-2xl font-semibold text-fg">
             {state.name || "Untitled automation"}
           </h1>
-          <p className="mt-1 text-[13px] text-[#A1A4A5]">
+          <p className="mt-1 text-[13px] text-fg-2">
             Status: {capitalize(state.status)}
             {automation
               ? ` · Updated ${formatRelativeTime((automation as ApiAutomation & { updated_at?: string }).updated_at ?? new Date().toISOString())}`
@@ -169,7 +169,7 @@ export function AutomationDetail({ automationId }: Props) {
           <button
             type="button"
             onClick={handleDelete}
-            className="h-9 px-3 text-[13px] font-medium border border-[rgba(176,199,217,0.145)] text-[#A1A4A5] rounded-md hover:text-red-300 hover:border-red-500/40"
+            className="h-9 px-3 text-[13px] font-medium border border-line text-fg-2 rounded-md hover:text-red-300 hover:border-red-500/40"
           >
             Delete
           </button>
@@ -177,7 +177,7 @@ export function AutomationDetail({ automationId }: Props) {
             type="button"
             onClick={handleSave}
             disabled={!canSave}
-            className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn btn-primary disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "Saving..." : "Save changes"}
           </button>
@@ -196,14 +196,14 @@ export function AutomationDetail({ automationId }: Props) {
       <div
         role="tablist"
         aria-label="Automation sections"
-        className="mb-6 flex gap-1 border-b border-[rgba(176,199,217,0.145)]"
+        className="mb-6 flex gap-1 border-b border-line"
       >
         <button
           type="button"
           role="tab"
           aria-selected={tab === "steps"}
           onClick={() => setTab("steps")}
-          className={`-mb-px px-3 py-2 text-[13px] font-medium border-b-2 transition-colors ${tab === "steps" ? "border-white text-[#F0F0F0]" : "border-transparent text-[#A1A4A5] hover:text-[#F0F0F0]"}`}
+          className={`-mb-px px-3 py-2 text-[13px] font-medium border-b-2 transition-colors ${tab === "steps" ? "border-white text-fg" : "border-transparent text-fg-2 hover:text-fg"}`}
         >
           Steps
         </button>
@@ -212,7 +212,7 @@ export function AutomationDetail({ automationId }: Props) {
           role="tab"
           aria-selected={tab === "runs"}
           onClick={() => setTab("runs")}
-          className={`-mb-px px-3 py-2 text-[13px] font-medium border-b-2 transition-colors ${tab === "runs" ? "border-white text-[#F0F0F0]" : "border-transparent text-[#A1A4A5] hover:text-[#F0F0F0]"}`}
+          className={`-mb-px px-3 py-2 text-[13px] font-medium border-b-2 transition-colors ${tab === "runs" ? "border-white text-fg" : "border-transparent text-fg-2 hover:text-fg"}`}
         >
           Runs
         </button>

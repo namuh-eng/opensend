@@ -181,17 +181,15 @@ export function AddContactModal({
       }}
       onKeyDown={() => {}}
     >
-      <div className="w-full max-w-md bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-lg shadow-xl">
+      <div className="w-full max-w-md bg-bg-card border border-line rounded-lg shadow-xl">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[rgba(176,199,217,0.145)]">
-          <h2 className="text-[16px] font-semibold text-[#F0F0F0]">
-            Add contacts
-          </h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-line">
+          <h2 className="text-[16px] font-semibold text-fg">Add contacts</h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+            className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
           >
             <svg
               width="16"
@@ -216,7 +214,7 @@ export function AddContactModal({
           <div>
             <label
               htmlFor="add-contact-emails"
-              className="block text-[13px] font-medium text-[#F0F0F0] mb-1.5"
+              className="block text-[13px] font-medium text-fg mb-1.5"
             >
               Email addresses
             </label>
@@ -226,9 +224,9 @@ export function AddContactModal({
               onChange={(e) => setEmailText(e.target.value)}
               placeholder="foo@gmail.com, bar@gmail.com"
               rows={4}
-              className="w-full px-3 py-2 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)] resize-none"
+              className="w-full px-3 py-2 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3 resize-none"
             />
-            <p className="mt-1 text-[12px] text-[#A1A4A5]">
+            <p className="mt-1 text-[12px] text-fg-2">
               Use commas or line breaks to separate multiple email addresses.
             </p>
             {submitError && (
@@ -242,7 +240,7 @@ export function AddContactModal({
           <div>
             <label
               htmlFor="add-contact-segments"
-              className="block text-[13px] font-medium text-[#F0F0F0] mb-1.5"
+              className="block text-[13px] font-medium text-fg mb-1.5"
             >
               Segments
             </label>
@@ -252,13 +250,13 @@ export function AddContactModal({
                 {selectedSegments.map((s) => (
                   <span
                     key={s.id}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 text-[12px] bg-[rgba(176,199,217,0.1)] border border-[rgba(176,199,217,0.145)] rounded text-[#F0F0F0]"
+                    className="inline-flex items-center gap-1 px-2 py-0.5 text-[12px] bg-white/10 border border-line rounded text-fg"
                   >
                     {s.name}
                     <button
                       type="button"
                       onClick={() => removeSegment(s.id)}
-                      className="text-[#A1A4A5] hover:text-[#F0F0F0]"
+                      className="text-fg-2 hover:text-fg"
                     >
                       <svg
                         width="12"
@@ -287,17 +285,17 @@ export function AddContactModal({
                 }}
                 onFocus={() => setSegmentDropdownOpen(true)}
                 placeholder="Search segments..."
-                className="w-full h-9 px-3 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)]"
+                className="w-full h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
               />
 
               {segmentDropdownOpen && filteredSegments.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-[#1a1a1a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50">
+                <div className="absolute top-full left-0 right-0 mt-1 max-h-40 overflow-y-auto bg-bg-2 border border-line rounded-md shadow-lg z-50">
                   {filteredSegments.map((s) => (
                     <button
                       key={s.id}
                       type="button"
                       onClick={() => addSegment(s)}
-                      className="w-full text-left px-3 py-2 text-[13px] text-[#F0F0F0] hover:bg-[rgba(176,199,217,0.1)] transition-colors"
+                      className="w-full text-left px-3 py-2 text-[13px] text-fg hover:bg-white/10 transition-colors"
                     >
                       {s.name}
                     </button>
@@ -309,11 +307,11 @@ export function AddContactModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[rgba(176,199,217,0.145)]">
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-line">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-[13px] font-medium text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] rounded-md hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors"
+            className="px-3 py-1.5 text-[13px] font-medium text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 transition-colors"
           >
             Cancel
           </button>
@@ -321,7 +319,7 @@ export function AddContactModal({
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="px-3 py-1.5 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-100 transition-colors disabled:opacity-50"
+            className="btn btn-primary btn-sm disabled:opacity-50"
           >
             {submitting ? "Adding..." : "Add"}
           </button>

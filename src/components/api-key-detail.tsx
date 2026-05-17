@@ -118,15 +118,12 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
   return (
     <div>
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 mb-6 text-[13px] text-[#A1A4A5]">
-        <Link
-          href="/api-keys"
-          className="hover:text-[#F0F0F0] transition-colors"
-        >
+      <div className="flex items-center gap-2 mb-6 text-[13px] text-fg-2">
+        <Link href="/api-keys" className="hover:text-fg transition-colors">
           API Keys
         </Link>
         <span>/</span>
-        <span className="text-[#F0F0F0]">API Key</span>
+        <span className="text-fg">API Key</span>
       </div>
 
       {/* Header with icon, name, and actions */}
@@ -135,7 +132,7 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
           {/* Lock icon */}
           <div
             data-testid="key-icon"
-            className="w-16 h-16 rounded-xl bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] flex items-center justify-center"
+            className="w-16 h-16 rounded-xl bg-bg-3 border border-line flex items-center justify-center"
           >
             <svg
               aria-hidden="true"
@@ -153,10 +150,8 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
             </svg>
           </div>
           <div>
-            <p className="text-[13px] text-[#A1A4A5]">API Key</p>
-            <h1 className="text-2xl font-semibold text-[#F0F0F0]">
-              {currentName}
-            </h1>
+            <p className="text-[13px] text-fg-2">API Key</p>
+            <h1 className="text-2xl font-semibold text-fg">{currentName}</h1>
           </div>
         </div>
 
@@ -165,7 +160,7 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
           <button
             type="button"
             aria-label="More actions"
-            className="p-2 rounded-md border border-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)] transition-colors"
+            className="p-2 rounded-md border border-line text-fg-2 hover:text-fg hover:bg-bg-2 transition-colors"
             onClick={() => setActionsOpen(!actionsOpen)}
           >
             <svg
@@ -181,10 +176,10 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
             </svg>
           </button>
           {actionsOpen && (
-            <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-[rgba(176,199,217,0.145)] bg-[#0a0a0a] shadow-xl z-20 py-1">
+            <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-line bg-bg-card shadow-xl z-20 py-1">
               <button
                 type="button"
-                className="w-full text-left px-3 py-2 text-[13px] text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)]"
+                className="w-full text-left px-3 py-2 text-[13px] text-fg hover:bg-bg-2"
                 onClick={() => {
                   setActionsOpen(false);
                   setEditName(currentName);
@@ -195,15 +190,15 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
               </button>
               <Link
                 href="/docs"
-                className="block px-3 py-2 text-[13px] text-[#F0F0F0] hover:bg-[rgba(24,25,28,0.5)]"
+                className="block px-3 py-2 text-[13px] text-fg hover:bg-bg-2"
                 onClick={() => setActionsOpen(false)}
               >
                 Go to docs
               </Link>
-              <div className="border-t border-[rgba(176,199,217,0.145)] my-1" />
+              <div className="border-t border-line my-1" />
               <button
                 type="button"
-                className="w-full text-left px-3 py-2 text-[13px] text-red-400 hover:bg-[rgba(24,25,28,0.5)]"
+                className="w-full text-left px-3 py-2 text-[13px] text-red-400 hover:bg-bg-2"
                 onClick={() => {
                   setActionsOpen(false);
                   setDeleteOpen(true);
@@ -220,67 +215,67 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
       <div className="grid grid-cols-4 gap-x-8 gap-y-6">
         {/* Row 1 */}
         <div>
-          <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-1">
             PERMISSION
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">
+          <p className="text-[14px] text-fg">
             {formatPermission(apiKey.permission)}
           </p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-1">
             DOMAIN
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">{apiKey.domainName}</p>
+          <p className="text-[14px] text-fg">{apiKey.domainName}</p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-1">
             TOTAL USES
           </p>
           <p className="text-[14px]">
             <a
               href={`/logs?api_key=${apiKey.id}`}
-              className="text-[#F0F0F0] hover:underline"
+              className="text-fg hover:underline"
             >
               {apiKey.totalUses} times
             </a>
           </p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-1">
             TOKEN
           </p>
-          <p className="text-[14px] text-[#A1A4A5] font-mono">
+          <p className="text-[14px] text-fg-2 font-mono">
             {apiKey.tokenPreview}
           </p>
         </div>
 
         {/* Row 2 */}
         <div>
-          <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-1">
             LAST USED
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">
+          <p className="text-[14px] text-fg">
             {apiKey.lastUsedAt
               ? formatRelativeTime(apiKey.lastUsedAt)
               : "Never"}
           </p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-1">
             CREATED
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">
+          <p className="text-[14px] text-fg">
             {formatRelativeTime(apiKey.createdAt)}
           </p>
         </div>
         <div>
-          <p className="text-[11px] font-semibold text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-semibold text-fg-2 tracking-wider mb-1">
             CREATOR
           </p>
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-full bg-[rgba(176,199,217,0.145)]" />
-            <p className="text-[14px] text-[#F0F0F0]">{apiKey.creatorEmail}</p>
+            <div className="w-5 h-5 rounded-full bg-white/[0.14]" />
+            <p className="text-[14px] text-fg">{apiKey.creatorEmail}</p>
           </div>
         </div>
       </div>
@@ -298,7 +293,7 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
           <div>
             <label
               htmlFor="edit-name"
-              className="block text-[13px] text-[#F0F0F0] mb-1.5"
+              className="block text-[13px] text-fg mb-1.5"
             >
               Name
             </label>
@@ -307,13 +302,13 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
               type="text"
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              className="w-full bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md py-2 px-3 text-[14px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors"
+              className="w-full bg-transparent border border-line rounded-md py-2 px-3 text-[14px] text-fg outline-none focus:border-line-3 transition-colors"
             />
           </div>
           <div>
             <label
               htmlFor="edit-permission"
-              className="block text-[13px] text-[#F0F0F0] mb-1.5"
+              className="block text-[13px] text-fg mb-1.5"
             >
               Permission
             </label>
@@ -325,7 +320,7 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
                   e.target.value as "full_access" | "sending_access",
                 )
               }
-              className="w-full bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-md py-2 px-3 text-[14px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors appearance-none cursor-pointer"
+              className="w-full bg-bg-3 border border-line rounded-md py-2 px-3 text-[14px] text-fg outline-none focus:border-line-3 transition-colors appearance-none cursor-pointer"
             >
               <option value="full_access">Full access</option>
               <option value="sending_access">Sending access</option>
@@ -334,7 +329,7 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
           <div>
             <label
               htmlFor="edit-domain"
-              className="block text-[13px] text-[#F0F0F0] mb-1.5"
+              className="block text-[13px] text-fg mb-1.5"
             >
               Domain
             </label>
@@ -343,7 +338,7 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
               value={editDomainId}
               onChange={(e) => setEditDomainId(e.target.value)}
               disabled={editPermission === "full_access"}
-              className={`w-full bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-md py-2 px-3 text-[14px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors appearance-none cursor-pointer ${editPermission === "full_access" ? "opacity-50 cursor-not-allowed" : ""}`}
+              className={`w-full bg-bg-3 border border-line rounded-md py-2 px-3 text-[14px] text-fg outline-none focus:border-line-3 transition-colors appearance-none cursor-pointer ${editPermission === "full_access" ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               <option value="">All Domains</option>
               {domains.map((d) => (
@@ -365,7 +360,7 @@ export function ApiKeyDetail({ apiKey, domains }: ApiKeyDetailProps) {
         onAction={handleDelete}
         actionVariant="destructive"
       >
-        <p className="text-[13px] text-[#A1A4A5]">
+        <p className="text-[13px] text-fg-2">
           Are you sure you want to delete this API key? This action cannot be
           undone.
         </p>

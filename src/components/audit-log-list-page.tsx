@@ -133,10 +133,10 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
       header: "Actor",
       render: (row: AuditLogRow) => (
         <div className="flex flex-col">
-          <span className="text-[13px] text-[#F0F0F0]">
+          <span className="text-[13px] text-fg">
             {row.actorEmail || row.actorId}
           </span>
-          <span className="text-[11px] uppercase tracking-wide text-[#A1A4A5]">
+          <span className="text-[11px] uppercase tracking-wide text-fg-2">
             {label(row.actorType)}
           </span>
         </div>
@@ -147,9 +147,7 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
       header: "Action",
       sortable: true,
       render: (row: AuditLogRow) => (
-        <span className="font-mono text-[13px] text-[#F0F0F0]">
-          {row.action}
-        </span>
+        <span className="font-mono text-[13px] text-fg">{row.action}</span>
       ),
     },
     {
@@ -157,10 +155,10 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
       header: "Target",
       render: (row: AuditLogRow) => (
         <div className="flex flex-col">
-          <span className="text-[13px] capitalize text-[#F0F0F0]">
+          <span className="text-[13px] capitalize text-fg">
             {label(row.targetType)}
           </span>
-          <span className="font-mono text-[11px] text-[#A1A4A5]">
+          <span className="font-mono text-[11px] text-fg-2">
             {row.targetId}
           </span>
         </div>
@@ -172,7 +170,7 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
       sortable: true,
       render: (row: AuditLogRow) => (
         <div className="flex flex-col">
-          <span className="text-[13px] capitalize text-[#F0F0F0]">
+          <span className="text-[13px] capitalize text-fg">
             {label(row.source)}
           </span>
           {row.sourceApiKeyId ? (
@@ -191,7 +189,7 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
       header: "Created",
       sortable: true,
       render: (row: AuditLogRow) => (
-        <span className="text-[13px] text-[#A1A4A5]">
+        <span className="text-[13px] text-fg-2">
           {formatDate(row.createdAt)}
         </span>
       ),
@@ -200,7 +198,7 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
       key: "metadata",
       header: "Metadata",
       render: (row: AuditLogRow) => (
-        <code className="block max-w-xs truncate text-[12px] text-[#A1A4A5]">
+        <code className="block max-w-xs truncate text-[12px] text-fg-2">
           {formatMetadata(row.metadata)}
         </code>
       ),
@@ -211,8 +209,8 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
     <div>
       <div className="mb-6 flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-[#F0F0F0]">Audit Log</h1>
-          <p className="mt-1 text-[14px] text-[#A1A4A5]">
+          <h1 className="text-2xl font-semibold text-fg">Audit Log</h1>
+          <p className="mt-1 text-[14px] text-fg-2">
             Durable account activity for security-sensitive changes. API request
             troubleshooting remains on the Logs page.
           </p>
@@ -220,7 +218,7 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
         <button
           type="button"
           onClick={handleExport}
-          className="h-9 rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(176,199,217,0.145)] px-4 text-[13px] font-medium text-[#F0F0F0] transition-colors hover:bg-[rgba(176,199,217,0.2)]"
+          className="h-9 rounded-md border border-line bg-white/[0.14] px-4 text-[13px] font-medium text-fg transition-colors hover:bg-white/20"
         >
           Export CSV
         </button>
@@ -240,7 +238,7 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
             updateFilters({ q: value });
           }}
           placeholder="Search audit log by actor, action, target, or metadata"
-          className="min-w-[320px] rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] text-[#F0F0F0] focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
+          className="min-w-[320px] rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] text-fg focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
         />
 
         <select
@@ -251,7 +249,7 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
             setAction(value);
             updateFilters({ action: value === "all" ? "" : value });
           }}
-          className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] text-[#F0F0F0]"
+          className="rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] text-fg"
         >
           <option value="all">All actions</option>
           {ACTION_OPTIONS.map((option) => (
@@ -269,7 +267,7 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
             setTargetType(value);
             updateFilters({ targetType: value === "all" ? "" : value });
           }}
-          className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] text-[#F0F0F0]"
+          className="rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] text-fg"
         >
           <option value="all">All targets</option>
           {TARGET_OPTIONS.map((option) => (
@@ -287,7 +285,7 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
             setSource(value);
             updateFilters({ source: value === "all" ? "" : value });
           }}
-          className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] text-[#F0F0F0]"
+          className="rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] text-fg"
         >
           <option value="all">All sources</option>
           {SOURCE_OPTIONS.map((option) => (
@@ -297,7 +295,7 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
           ))}
         </select>
 
-        <label className="flex items-center gap-2 text-[12px] text-[#A1A4A5]">
+        <label className="flex items-center gap-2 text-[12px] text-fg-2">
           From
           <input
             type="date"
@@ -307,11 +305,11 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
               setDateFrom(value);
               updateFilters({ after: value });
             }}
-            className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] text-[#F0F0F0]"
+            className="rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] text-fg"
           />
         </label>
 
-        <label className="flex items-center gap-2 text-[12px] text-[#A1A4A5]">
+        <label className="flex items-center gap-2 text-[12px] text-fg-2">
           To
           <input
             type="date"
@@ -321,12 +319,12 @@ export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {
               setDateTo(value);
               updateFilters({ before: value });
             }}
-            className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] text-[#F0F0F0]"
+            className="rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] text-fg"
           />
         </label>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[rgba(176,199,217,0.145)]">
+      <div className="overflow-hidden rounded-lg border border-line">
         <DataTable
           columns={columns}
           rows={events}

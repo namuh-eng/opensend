@@ -72,7 +72,7 @@ function formatDateLabel(dateStr: string): string {
 function DeliverabilityChart({ data }: { data: DailyDataPoint[] }) {
   if (data.length === 0) {
     return (
-      <div className="h-[200px] flex items-center justify-center text-[#A1A4A5] text-[13px]">
+      <div className="h-[200px] flex items-center justify-center text-fg-2 text-[13px]">
         No data for this period
       </div>
     );
@@ -210,17 +210,16 @@ function DomainBreakdownTable({
   if (breakdown.length === 0) return null;
 
   return (
-    <div className="mt-4 border-t border-[rgba(176,199,217,0.1)] pt-4">
+    <div className="mt-4 border-t border-line pt-4">
       {breakdown.map((entry) => (
         <div
           key={entry.domain}
           className="flex items-center justify-between py-2"
         >
-          <span className="text-[13px] text-[#F0F0F0]">
-            {entry.domain}{" "}
-            <span className="text-[#A1A4A5]">({entry.count})</span>
+          <span className="text-[13px] text-fg">
+            {entry.domain} <span className="text-fg-2">({entry.count})</span>
           </span>
-          <span className="flex items-center gap-1.5 text-[13px] text-[#F0F0F0]">
+          <span className="flex items-center gap-1.5 text-[13px] text-fg">
             {entry.rate === 100 && (
               <svg
                 aria-hidden="true"
@@ -258,10 +257,10 @@ export function DeliverabilitySection({
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-8">
           <div>
-            <div className="text-[11px] font-semibold tracking-wider text-[#A1A4A5] uppercase">
+            <div className="text-[11px] font-semibold tracking-wider text-fg-2 uppercase">
               Emails
             </div>
-            <div className="text-2xl font-semibold text-[#F0F0F0]">
+            <div className="text-2xl font-semibold text-fg">
               {loading ? "—" : data.totalEmails}
             </div>
           </div>
@@ -275,7 +274,7 @@ export function DeliverabilitySection({
 
       {/* Chart */}
       {loading ? (
-        <div className="h-[200px] flex items-center justify-center text-[#A1A4A5] text-[13px]">
+        <div className="h-[200px] flex items-center justify-center text-fg-2 text-[13px]">
           Loading...
         </div>
       ) : (
