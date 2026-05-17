@@ -43,52 +43,47 @@ export function PricingTierSelector({
   selectedSlug,
   onChange,
 }: PricingTierSelectorProps) {
-  const selectedIndex = Math.max(
-    0,
-    PRICING_SELECTOR_TIERS.findIndex((tier) => tier.slug === selectedSlug),
-  );
-
   return (
     <div
-      aria-label="Included monthly volume"
+      data-testid="pricing-tier-selector"
+      aria-label="OpenSend monthly package"
       style={{
-        width: "min(720px, 100%)",
+        width: "min(900px, 100%)",
         display: "flex",
         flexDirection: "column",
-        gap: 10,
+        gap: 8,
+        alignItems: "center",
       }}
     >
       <div
+        className="mono"
         style={{
-          position: "relative",
-          height: 28,
-          display: "grid",
-          gridTemplateColumns: `repeat(${PRICING_SELECTOR_TIERS.length}, 1fr)`,
-          alignItems: "center",
+          fontSize: 11,
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+          color: "var(--fg-3)",
         }}
       >
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: "50%",
-            height: 1,
-            background: "var(--line-2)",
-          }}
-        />
-        <div
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            left: 0,
-            top: "50%",
-            height: 1,
-            width: `${(selectedIndex / (PRICING_SELECTOR_TIERS.length - 1)) * 100}%`,
-            background: "var(--fg-2)",
-          }}
-        />
+        Choose one pooled API + broadcast package
+      </div>
+      <fieldset
+        style={{
+          width: "100%",
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "center",
+          gap: 6,
+          padding: 6,
+          border: "1px solid var(--line-2)",
+          borderRadius: 18,
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018))",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+        }}
+      >
+        <legend className="sr-only">
+          Choose included monthly email package
+        </legend>
         {PRICING_SELECTOR_TIERS.map((tier) => {
           const active = tier.slug === selectedSlug;
           return (
@@ -99,56 +94,57 @@ export function PricingTierSelector({
               data-testid={`pricing-tier-${tier.slug}`}
               onClick={() => onChange(tier.slug)}
               style={{
-                position: "relative",
-                zIndex: 1,
-                justifySelf: "center",
-                width: active ? 12 : 7,
-                height: active ? 12 : 7,
-                padding: 0,
-                borderRadius: 99,
+                flex: "1 1 108px",
+                minWidth: 96,
+                maxWidth: 132,
+                minHeight: 52,
+                padding: "8px 10px",
+                borderRadius: 14,
                 border: active
-                  ? "2px solid var(--fg)"
-                  : "1px solid var(--fg-2)",
-                background: active ? "var(--fg)" : "var(--bg)",
+                  ? "1px solid color-mix(in oklch, var(--accent) 76%, white)"
+                  : "1px solid transparent",
+                background: active
+                  ? "linear-gradient(180deg, var(--accent), color-mix(in oklch, var(--accent) 82%, black))"
+                  : "rgba(255,255,255,0.02)",
+                color: active ? "var(--accent-ink)" : "var(--fg-2)",
                 cursor: "pointer",
-                boxShadow: active ? "0 0 0 4px rgba(255,255,255,0.08)" : "none",
+                boxShadow: active
+                  ? "0 12px 32px -18px var(--accent), inset 0 1px 0 rgba(255,255,255,0.32)"
+                  : "inset 0 1px 0 rgba(255,255,255,0.03)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 3,
+                transition:
+                  "background 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease",
               }}
             >
-              <span className="sr-only">{tier.selectorLabel}</span>
+              <span
+                className="mono"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  opacity: active ? 0.72 : 0.68,
+                }}
+              >
+                {tier.name}
+              </span>
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 600,
+                  letterSpacing: "-0.01em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {tier.selectorLabel}
+              </span>
             </button>
           );
         })}
-      </div>
-      <div
-        className="mono"
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(${PRICING_SELECTOR_TIERS.length}, 1fr)`,
-          gap: 8,
-          fontSize: 10,
-          color: "var(--fg-3)",
-          textAlign: "center",
-          textTransform: "uppercase",
-        }}
-      >
-        {PRICING_SELECTOR_TIERS.map((tier) => (
-          <button
-            key={tier.slug}
-            type="button"
-            onClick={() => onChange(tier.slug)}
-            style={{
-              border: "none",
-              background: "transparent",
-              color: tier.slug === selectedSlug ? "var(--fg)" : "var(--fg-3)",
-              cursor: "pointer",
-              fontSize: 10,
-              textTransform: "uppercase",
-            }}
-          >
-            {tier.selectorLabel}
-          </button>
-        ))}
-      </div>
+      </fieldset>
     </div>
   );
 }

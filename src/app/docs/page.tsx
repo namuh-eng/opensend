@@ -37,28 +37,28 @@ const OPENSEND_GUIDES: GuideCard[] = [
     title: "Authentication, base URL, and response codes",
     description:
       "Use os_ API keys with Bearer auth. Dashboard sessions are separate from API authentication.",
-    href: "#platform",
+    href: "/docs/api-reference/authentication.md",
   },
   {
     eyebrow: "Sending",
     title: "Send Email request model",
     description:
       "Send HTML or text email, schedule delivery, attach metadata, and protect retries with idempotency keys.",
-    href: "#emails",
+    href: "/docs/api-reference/emails/send-email.md",
   },
   {
     eyebrow: "SDK",
     title: "TypeScript SDK quickstart",
     description:
       "Install the opensend package, initialize the client, and send email from your application code.",
-    href: "#quickstart",
+    href: "/docs/send-with-nodejs.md",
   },
   {
     eyebrow: "AI clients",
     title: "LLM and MCP integration",
     description:
       "Use llms.txt, OpenAPI, and the MCP server to give agents a stable OpenSend control surface.",
-    href: "#llms",
+    href: "/docs/mcp-server.md",
   },
 ];
 
@@ -656,6 +656,65 @@ export default function DocsPage() {
                     highlighted API examples
                   </p>
                 </div>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="kicker">Docs corpus</p>
+                  <h2 className="title-m mt-2">
+                    Browse the full first-party markdown set
+                  </h2>
+                </div>
+                <a className="btn btn-ghost btn-sm" href="/docs/llms.txt">
+                  Full index
+                </a>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {[
+                  [
+                    "API reference",
+                    "/docs/api-reference/introduction.md",
+                    "Endpoints, auth, pagination, errors, quotas, and resource operations.",
+                  ],
+                  [
+                    "Email operations",
+                    "/docs/api-reference/emails/send-email.md",
+                    "Sending, batch, scheduling, attachments, receiving, tags, and idempotency.",
+                  ],
+                  [
+                    "Audience",
+                    "/docs/dashboard/audiences/contacts.md",
+                    "Contacts, segments, topics, properties, unsubscribes, and preferences.",
+                  ],
+                  [
+                    "Campaigns",
+                    "/docs/dashboard/broadcasts/introduction.md",
+                    "Broadcasts, templates, variables, versioning, and performance tracking.",
+                  ],
+                  [
+                    "Webhooks",
+                    "/docs/webhooks/introduction.md",
+                    "Event types, signed requests, retries, replays, and lifecycle payloads.",
+                  ],
+                  [
+                    "Operations",
+                    "/docs/self-hosting.md",
+                    "Self-hosting, ingester deploys, observability, security, and troubleshooting.",
+                  ],
+                ].map(([title, href, description]) => (
+                  <a
+                    key={href}
+                    href={href}
+                    className="rounded-card border border-line bg-bg-card p-4 transition hover:border-line-2 hover:bg-white/[0.04]"
+                  >
+                    <h3 className="text-[15px] font-medium text-fg">{title}</h3>
+                    <p className="mt-2 text-[13px] leading-6 text-fg-2">
+                      {description}
+                    </p>
+                  </a>
+                ))}
               </div>
             </section>
 

@@ -69,9 +69,13 @@ test("pricing quota selector updates predefined monthly tiers", async ({
   await expect(page.getByTestId("plan-starter")).toContainText(
     /\$\s*19\s*\/mo/,
   );
+
   await expect(page.getByTestId("plan-growth")).toContainText(/\$\s*99\s*\/mo/);
   await expect(page.getByTestId("plan-growth")).toContainText(
     "120,000 API + broadcast emails/mo",
+  );
+  await expect(page.getByTestId("pricing-tier-selector")).toContainText(
+    "Choose one pooled API + broadcast package",
   );
   await expect(page.getByTestId("billing-yearly")).toHaveCount(0);
 

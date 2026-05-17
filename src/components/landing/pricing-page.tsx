@@ -16,6 +16,7 @@ const GITHUB_URL = "https://github.com/namuh-eng/opensend";
 const DOCS_URL = "/docs";
 const HOSTED_SIGNIN_URL = "/auth";
 const SELF_HOST_URL = `${GITHUB_URL}#self-host`;
+
 const FAQ: Array<[string, string]> = [
   [
     "What happens if I exceed my quota?",
@@ -47,6 +48,7 @@ const COMPARE_ROWS: string[][] = [
   ["Monthly emails", "5k", "55k-100k", "120k-500k", "Unlimited"],
   ["Verified domains", "1", "10", "1,000", "Unlimited"],
   ["API keys", "2", "10", "25", "Unlimited"],
+
   ["Webhooks", "✓", "✓", "✓", "✓"],
   ["Broadcasts", "—", "✓", "✓", "✓"],
   ["Automations", "—", "✓", "✓", "✓"],
@@ -585,7 +587,7 @@ export function PricingPage() {
             }}
           >
             <span className="pill">
-              <span className="dot" /> one plan · API sends + broadcasts
+              <span className="dot" /> simple pricing · cancel anytime
             </span>
             <h1 className="title-l" style={{ maxWidth: 820 }}>
               Pay for sending,
@@ -595,9 +597,8 @@ export function PricingPage() {
               </span>
             </h1>
             <p className="body" style={{ maxWidth: 580 }}>
-              One plan covers API sends, broadcasts, contacts, and domains. Or
-              self-host the same source for free forever — opensend is ELv2
-              either way.
+              Start free. Upgrade when your volume grows. Or self-host the same
+              source for free forever — opensend is ELv2 either way.
             </p>
 
             <PricingTierSelector

@@ -58,9 +58,18 @@ describe("PricingGrid", () => {
     });
   });
 
-  it("renders dashboard plans with the marketing pricing card treatment", () => {
+  it("renders dashboard plans with the OpenSend package picker treatment", () => {
     render(<PricingGrid plans={plans} currentPlanId="plan_free" />);
 
+    expect(screen.getByTestId("pricing-tier-selector").textContent).toContain(
+      "Choose one pooled API + broadcast package",
+    );
+    expect(screen.getByTestId("pricing-tier-selector").textContent).toContain(
+      "Starter",
+    );
+    expect(screen.getByTestId("pricing-tier-selector").textContent).toContain(
+      "55k",
+    );
     expect(screen.getByTestId("pricing-card-free").textContent).toContain(
       "For tinkering and side projects.",
     );
