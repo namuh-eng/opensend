@@ -7,7 +7,7 @@ OpenSend is a REST API for sending, receiving, and operating email on infrastruc
 ## Base URL
 
 ```txt
-https://api.opensend.com
+https://opensend.namuh.co
 ```
 
 For local development, use the port configured by your app, usually:
