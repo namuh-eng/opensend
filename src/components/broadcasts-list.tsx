@@ -424,7 +424,7 @@ export function BroadcastsList({
         <input
           type="text"
           placeholder="Search..."
-          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)]"
+          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
           onChange={(e) => handleSearchChange(e.target.value)}
         />
 
@@ -436,7 +436,7 @@ export function BroadcastsList({
               setStatusDropdownOpen(!statusDropdownOpen);
               setAudienceDropdownOpen(false);
             }}
-            className="h-9 px-3 text-[13px] border border-[rgba(176,199,217,0.145)] rounded-md text-[#A1A4A5] hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors flex items-center gap-1.5 min-w-[130px]"
+            className="h-9 px-3 text-[13px] border border-line rounded-md text-fg-2 hover:text-fg hover:border-line-3 transition-colors flex items-center gap-1.5 min-w-[130px]"
           >
             <span>
               {statusFilter ? capitalize(statusFilter) : "All Statuses"}
@@ -457,7 +457,7 @@ export function BroadcastsList({
           {statusDropdownOpen && (
             <div
               role="menu"
-              className="absolute top-full left-0 mt-1 w-[180px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1"
+              className="absolute top-full left-0 mt-1 w-[180px] bg-bg-card border border-line rounded-md shadow-lg z-50 py-1"
             >
               <button
                 type="button"
@@ -467,7 +467,7 @@ export function BroadcastsList({
                   setStatusDropdownOpen(false);
                   setPage(1);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-[rgba(176,199,217,0.08)] transition-colors ${!statusFilter ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/[0.08] transition-colors ${!statusFilter ? "text-fg" : "text-fg-2"}`}
               >
                 All Statuses
               </button>
@@ -481,7 +481,7 @@ export function BroadcastsList({
                     setStatusDropdownOpen(false);
                     setPage(1);
                   }}
-                  className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-[rgba(176,199,217,0.08)] transition-colors ${statusFilter === s.toLowerCase() ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                  className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/[0.08] transition-colors ${statusFilter === s.toLowerCase() ? "text-fg" : "text-fg-2"}`}
                 >
                   {s}
                 </button>
@@ -498,7 +498,7 @@ export function BroadcastsList({
               setAudienceDropdownOpen(!audienceDropdownOpen);
               setStatusDropdownOpen(false);
             }}
-            className="h-9 px-3 text-[13px] border border-[rgba(176,199,217,0.145)] rounded-md text-[#A1A4A5] hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors flex items-center gap-1.5 min-w-[140px]"
+            className="h-9 px-3 text-[13px] border border-line rounded-md text-fg-2 hover:text-fg hover:border-line-3 transition-colors flex items-center gap-1.5 min-w-[140px]"
           >
             <span>
               {audienceFilter
@@ -522,7 +522,7 @@ export function BroadcastsList({
           {audienceDropdownOpen && (
             <div
               role="menu"
-              className="absolute top-full left-0 mt-1 w-[200px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1"
+              className="absolute top-full left-0 mt-1 w-[200px] bg-bg-card border border-line rounded-md shadow-lg z-50 py-1"
             >
               <button
                 type="button"
@@ -532,7 +532,7 @@ export function BroadcastsList({
                   setAudienceDropdownOpen(false);
                   setPage(1);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-[rgba(176,199,217,0.08)] transition-colors ${!audienceFilter ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/[0.08] transition-colors ${!audienceFilter ? "text-fg" : "text-fg-2"}`}
               >
                 All Audiences
               </button>
@@ -546,7 +546,7 @@ export function BroadcastsList({
                     setAudienceDropdownOpen(false);
                     setPage(1);
                   }}
-                  className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-[rgba(176,199,217,0.08)] transition-colors ${audienceFilter === seg.id ? "text-[#F0F0F0]" : "text-[#A1A4A5]"}`}
+                  className={`w-full px-3 py-1.5 text-left text-[13px] hover:bg-white/[0.08] transition-colors ${audienceFilter === seg.id ? "text-fg" : "text-fg-2"}`}
                 >
                   {seg.name}
                 </button>
@@ -561,7 +561,7 @@ export function BroadcastsList({
           type="button"
           onClick={handleExport}
           disabled={exportState.type === "loading"}
-          className="h-9 w-9 flex items-center justify-center border border-[rgba(176,199,217,0.145)] rounded-md text-[#A1A4A5] hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-9 w-9 flex items-center justify-center border border-line rounded-md text-fg-2 hover:text-fg hover:border-line-3 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Export"
         >
           <svg
@@ -582,7 +582,7 @@ export function BroadcastsList({
         <button
           type="button"
           onClick={handleCreateEmail}
-          className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 transition-colors flex items-center gap-1.5"
+          className="btn btn-primary"
         >
           <svg
             aria-hidden="true"
@@ -602,31 +602,31 @@ export function BroadcastsList({
 
       {/* Data table */}
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-[14px] text-[#A1A4A5]">
+        <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
           Loading broadcasts...
         </div>
       ) : error ? (
         <div className="flex flex-col items-center justify-center py-16 px-6">
-          <h3 className="text-[16px] font-semibold text-[#F0F0F0] mb-2">
+          <h3 className="text-[16px] font-semibold text-fg mb-2">
             Unable to load broadcasts
           </h3>
-          <p className="text-[14px] text-[#A1A4A5] text-center max-w-[420px] mb-6">
+          <p className="text-[14px] text-fg-2 text-center max-w-[420px] mb-6">
             {error}
           </p>
           <button
             type="button"
             onClick={fetchBroadcasts}
-            className="h-9 px-4 text-[13px] font-medium bg-white text-black rounded-md hover:bg-gray-200 transition-colors"
+            className="btn btn-primary"
           >
             Retry
           </button>
         </div>
       ) : broadcasts.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-6">
-          <h3 className="text-[16px] font-semibold text-[#F0F0F0] mb-2">
+          <h3 className="text-[16px] font-semibold text-fg mb-2">
             No broadcasts
           </h3>
-          <p className="text-[14px] text-[#A1A4A5] text-center max-w-[360px] mb-6">
+          <p className="text-[14px] text-fg-2 text-center max-w-[360px] mb-6">
             Send targeted emails to your audience with broadcasts.
           </p>
         </div>
@@ -634,7 +634,7 @@ export function BroadcastsList({
         <>
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[rgba(176,199,217,0.145)]">
+              <tr className="border-b border-line">
                 <th className="w-10 px-3 py-2 text-left">
                   <input
                     type="checkbox"
@@ -644,13 +644,13 @@ export function BroadcastsList({
                     aria-label="Select all"
                   />
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Name
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Status
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Created
                 </th>
                 <th className="w-10 px-3 py-2" />
@@ -660,7 +660,7 @@ export function BroadcastsList({
               {broadcasts.map((bc) => (
                 <tr
                   key={bc.id}
-                  className="border-b border-[rgba(176,199,217,0.145)] hover:bg-[rgba(24,25,28,0.5)] transition-colors group"
+                  className="border-b border-line hover:bg-bg-2 transition-colors group"
                 >
                   <td className="w-10 px-3 py-2">
                     <input
@@ -670,7 +670,7 @@ export function BroadcastsList({
                       className="accent-white rounded cursor-pointer"
                     />
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#F0F0F0]">
+                  <td className="px-3 py-2 text-[14px] text-fg">
                     <Link
                       href={`/broadcasts/${bc.id}/editor`}
                       className="hover:underline"
@@ -678,11 +678,11 @@ export function BroadcastsList({
                       {bc.name}
                     </Link>
                   </td>
-                  <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+                  <td className="px-3 py-2 text-[14px] text-fg-2">
                     {capitalize(bc.status)}
                   </td>
                   <td
-                    className="px-3 py-2 text-[14px] text-[#A1A4A5]"
+                    className="px-3 py-2 text-[14px] text-fg-2"
                     title={new Date(bc.createdAt).toLocaleString()}
                   >
                     {formatRelativeTime(bc.createdAt)}
@@ -695,7 +695,7 @@ export function BroadcastsList({
                         onClick={() =>
                           setActionMenuId(actionMenuId === bc.id ? null : bc.id)
                         }
-                        className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors opacity-0 group-hover:opacity-100"
+                        className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100"
                       >
                         <svg
                           aria-hidden="true"
@@ -710,36 +710,36 @@ export function BroadcastsList({
                         </svg>
                       </button>
                       {actionMenuId === bc.id && (
-                        <div className="absolute right-0 top-full mt-1 w-[200px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1">
+                        <div className="absolute right-0 top-full mt-1 w-[200px] bg-bg-card border border-line rounded-md shadow-lg z-50 py-1">
                           <button
                             type="button"
                             onClick={() => {
                               router.push(`/broadcasts/${bc.id}/editor`);
                               setActionMenuId(null);
                             }}
-                            className="w-full px-3 py-1.5 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                            className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDuplicate(bc)}
-                            className="w-full px-3 py-1.5 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                            className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                           >
                             Duplicate
                           </button>
                           <button
                             type="button"
                             onClick={() => setActionMenuId(null)}
-                            className="w-full px-3 py-1.5 text-left text-[13px] text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.08)] hover:text-[#F0F0F0] transition-colors"
+                            className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
                           >
                             Clone as template
                           </button>
-                          <div className="my-1 border-t border-[rgba(176,199,217,0.145)]" />
+                          <div className="my-1 border-t border-line" />
                           <button
                             type="button"
                             onClick={() => handleRemove(bc.id)}
-                            className="w-full px-3 py-1.5 text-left text-[13px] text-red-400 hover:bg-[rgba(176,199,217,0.08)] hover:text-red-300 transition-colors"
+                            className="w-full px-3 py-1.5 text-left text-[13px] text-red-400 hover:bg-white/[0.08] hover:text-red-300 transition-colors"
                           >
                             Remove
                           </button>
@@ -753,7 +753,7 @@ export function BroadcastsList({
           </table>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between mt-3 text-[13px] text-[#A1A4A5]">
+          <div className="flex items-center justify-between mt-3 text-[13px] text-fg-2">
             <span>
               Page {page} – {start} of {total} broadcasts – {limit} items
             </span>
@@ -764,7 +764,7 @@ export function BroadcastsList({
                   setLimit(Number(e.target.value));
                   setPage(1);
                 }}
-                className="h-7 px-2 text-[12px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded text-[#A1A4A5] outline-none cursor-pointer"
+                className="h-7 px-2 text-[12px] bg-transparent border border-line rounded text-fg-2 outline-none cursor-pointer"
               >
                 <option value={40}>40</option>
                 <option value={80}>80</option>
@@ -774,7 +774,7 @@ export function BroadcastsList({
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-2 py-1 rounded border border-[rgba(176,199,217,0.145)] disabled:opacity-30 hover:border-[rgba(176,199,217,0.3)] transition-colors"
+                className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
               >
                 &larr;
               </button>
@@ -782,7 +782,7 @@ export function BroadcastsList({
                 type="button"
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="px-2 py-1 rounded border border-[rgba(176,199,217,0.145)] disabled:opacity-30 hover:border-[rgba(176,199,217,0.3)] transition-colors"
+                className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
               >
                 &rarr;
               </button>

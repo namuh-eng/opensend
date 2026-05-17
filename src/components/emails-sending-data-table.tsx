@@ -87,10 +87,10 @@ export function EmailsSendingDataTable({
 
     return (
       <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-        <p className="text-[14px] font-medium text-[#F0F0F0]">
+        <p className="text-[14px] font-medium text-fg">
           No emails match your filters
         </p>
-        <p className="max-w-[360px] text-[13px] leading-5 text-[#A1A4A5]">
+        <p className="max-w-[360px] text-[13px] leading-5 text-fg-3">
           Adjust your search, status, or date filters to find sent emails.
         </p>
       </div>
@@ -100,20 +100,20 @@ export function EmailsSendingDataTable({
   return (
     <table className="w-full">
       <thead>
-        <tr className="border-b border-[rgba(176,199,217,0.145)]">
-          <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+        <tr className="border-b border-line">
+          <th className="mono px-4 py-2.5 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
             To
           </th>
-          <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+          <th className="mono px-4 py-2.5 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
             Status
           </th>
-          <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+          <th className="mono px-4 py-2.5 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
             Subject
           </th>
-          <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+          <th className="mono px-4 py-2.5 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
             Sent
           </th>
-          <th className="w-10 px-3 py-2" />
+          <th className="w-10 px-4 py-2.5" />
         </tr>
       </thead>
       <tbody>
@@ -132,17 +132,14 @@ function EmailsFirstRunEmptyState() {
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
       <div className="space-y-2">
-        <h2 className="text-[18px] font-semibold text-[#F0F0F0]">
+        <h2 className="text-[18px] font-semibold text-fg">
           No sent emails yet
         </h2>
-        <p className="max-w-[420px] text-[14px] leading-6 text-[#A1A4A5]">
+        <p className="max-w-[420px] text-[14px] leading-6 text-fg-3">
           Start sending emails to see insights and previews for every message.
         </p>
       </div>
-      <Link
-        href="/docs"
-        className="inline-flex h-9 items-center justify-center rounded-[8px] border border-[rgba(176,199,217,0.18)] px-4 text-[13px] font-medium text-[#F0F0F0] transition-colors hover:bg-[rgba(176,199,217,0.1)]"
-      >
+      <Link href="/docs" className="btn btn-ghost btn-sm">
         Go to docs
       </Link>
     </div>
@@ -156,38 +153,38 @@ function EmailRow({
   const displayedTimestamp = email.sentAt ?? email.createdAt;
 
   return (
-    <tr className="border-b border-[rgba(176,199,217,0.145)] hover:bg-[rgba(24,25,28,0.5)] transition-colors">
-      <td className="px-3 py-2 text-[14px] text-[#F0F0F0]">
-        <div className="flex items-center gap-2">
+    <tr className="border-b border-line transition-colors hover:bg-bg-2">
+      <td className="px-4 py-3 text-[13.5px] text-fg">
+        <div className="flex items-center gap-2.5">
           <div
             data-testid="email-avatar"
-            className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium text-white shrink-0"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-medium text-white"
             style={{ backgroundColor: getAvatarColor(primaryTo) }}
           >
             {primaryTo.charAt(0).toUpperCase()}
           </div>
           <Link
             href={`/emails/${email.id}`}
-            className="text-[#F0F0F0] hover:underline"
+            className="text-fg transition-colors hover:text-accent"
           >
             {primaryTo}
           </Link>
         </div>
       </td>
-      <td className="px-3 py-2">
+      <td className="px-4 py-3">
         <StatusBadge
           status={formatStatusLabel(email.lastEvent)}
           variant={getStatusVariant(email.lastEvent)}
         />
       </td>
-      <td className="px-3 py-2 text-[14px] text-[#F0F0F0]">{email.subject}</td>
+      <td className="px-4 py-3 text-[13.5px] text-fg-2">{email.subject}</td>
       <td
-        className="px-3 py-2 text-[14px] text-[#A1A4A5]"
+        className="mono px-4 py-3 text-[12px] text-fg-3"
         title={new Date(displayedTimestamp).toLocaleString()}
       >
         {formatRelativeTime(displayedTimestamp)}
       </td>
-      <td className="w-10 px-3 py-2 relative">
+      <td className="relative w-10 px-4 py-3">
         <RowActions />
       </td>
     </tr>
@@ -199,7 +196,7 @@ function RowActions() {
     <button
       type="button"
       aria-label="More actions"
-      className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+      className="btn btn-ghost btn-sm p-1"
     >
       <svg
         aria-hidden="true"

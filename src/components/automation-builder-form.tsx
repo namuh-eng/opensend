@@ -98,7 +98,7 @@ function AdvancedStepFields({
 }) {
   if (!state.advancedStepEnabled) {
     return (
-      <p className="text-[13px] text-[#666]">
+      <p className="text-[13px] text-fg-4">
         Keep the MVP linear path, or add one supported advanced step without
         changing the full canvas engine.
       </p>
@@ -109,19 +109,19 @@ function AdvancedStepFields({
     return (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         <label className="block md:col-span-1">
-          <span className="text-[13px] text-[#A1A4A5]">Left side</span>
+          <span className="text-[13px] text-fg-2">Left side</span>
           <input
             type="text"
             value={state.conditionLeft}
             onChange={(e) => update({ conditionLeft: e.target.value })}
             placeholder="event.plan"
-            className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+            className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
             aria-invalid={Boolean(findError(errors, "conditionLeft"))}
           />
           <FieldError errors={errors} field="conditionLeft" />
         </label>
         <label className="block">
-          <span className="text-[13px] text-[#A1A4A5]">Operator</span>
+          <span className="text-[13px] text-fg-2">Operator</span>
           <select
             value={state.conditionOperator}
             onChange={(e) =>
@@ -130,7 +130,7 @@ function AdvancedStepFields({
                   .value as AutomationFormState["conditionOperator"],
               })
             }
-            className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+            className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
           >
             <option value="equals">Equals</option>
             <option value="not_equals">Does not equal</option>
@@ -143,23 +143,23 @@ function AdvancedStepFields({
           </select>
         </label>
         <label className="block">
-          <span className="text-[13px] text-[#A1A4A5]">Right value</span>
+          <span className="text-[13px] text-fg-2">Right value</span>
           <input
             type="text"
             value={state.conditionRight}
             disabled={state.conditionOperator === "exists"}
             onChange={(e) => update({ conditionRight: e.target.value })}
             placeholder="pro"
-            className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)] disabled:opacity-50"
+            className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3 disabled:opacity-50"
             aria-invalid={Boolean(findError(errors, "conditionRight"))}
           />
-          <span className="mt-1 block text-[12px] text-[#666]">
+          <span className="mt-1 block text-[12px] text-fg-4">
             true, false, null, and numbers are sent as scalar values; other
             input is sent as text.
           </span>
           <FieldError errors={errors} field="conditionRight" />
         </label>
-        <p className="md:col-span-3 text-[12px] text-[#A1A4A5]">
+        <p className="md:col-span-3 text-[12px] text-fg-2">
           Matching contacts follow the email path. Non-matches skip to End.
         </p>
       </div>
@@ -170,19 +170,19 @@ function AdvancedStepFields({
     return (
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <label className="block">
-          <span className="text-[13px] text-[#A1A4A5]">Event to wait for</span>
+          <span className="text-[13px] text-fg-2">Event to wait for</span>
           <input
             type="text"
             value={state.waitForEventName}
             onChange={(e) => update({ waitForEventName: e.target.value })}
             placeholder="invoice.paid"
-            className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+            className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
             aria-invalid={Boolean(findError(errors, "waitForEventName"))}
           />
           <FieldError errors={errors} field="waitForEventName" />
         </label>
         <label className="block">
-          <span className="text-[13px] text-[#A1A4A5]">
+          <span className="text-[13px] text-fg-2">
             Timeout seconds (optional)
           </span>
           <input
@@ -193,12 +193,12 @@ function AdvancedStepFields({
               update({ waitForEventTimeoutSeconds: e.target.value })
             }
             placeholder="86400"
-            className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+            className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
             aria-invalid={Boolean(
               findError(errors, "waitForEventTimeoutSeconds"),
             )}
           />
-          <span className="mt-1 block text-[12px] text-[#666]">
+          <span className="mt-1 block text-[12px] text-fg-4">
             Leave blank to wait indefinitely. Max 30 days.
           </span>
           <FieldError errors={errors} field="waitForEventTimeoutSeconds" />
@@ -212,19 +212,19 @@ function AdvancedStepFields({
       <div className="space-y-3">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <label className="block">
-            <span className="text-[13px] text-[#A1A4A5]">Email</span>
+            <span className="text-[13px] text-fg-2">Email</span>
             <input
               type="email"
               value={state.contactUpdateEmail}
               onChange={(e) => update({ contactUpdateEmail: e.target.value })}
               placeholder="optional"
-              className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+              className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
               aria-invalid={Boolean(findError(errors, "contactUpdateEmail"))}
             />
             <FieldError errors={errors} field="contactUpdateEmail" />
           </label>
           <label className="block">
-            <span className="text-[13px] text-[#A1A4A5]">Unsubscribed</span>
+            <span className="text-[13px] text-fg-2">Unsubscribed</span>
             <select
               value={state.contactUpdateUnsubscribed}
               onChange={(e) =>
@@ -233,7 +233,7 @@ function AdvancedStepFields({
                     .value as AutomationFormState["contactUpdateUnsubscribed"],
                 })
               }
-              className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+              className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
             >
               <option value="">Leave unchanged</option>
               <option value="false">Subscribed</option>
@@ -241,7 +241,7 @@ function AdvancedStepFields({
             </select>
           </label>
           <label className="block">
-            <span className="text-[13px] text-[#A1A4A5]">First name</span>
+            <span className="text-[13px] text-fg-2">First name</span>
             <input
               type="text"
               value={state.contactUpdateFirstName}
@@ -249,11 +249,11 @@ function AdvancedStepFields({
                 update({ contactUpdateFirstName: e.target.value })
               }
               placeholder="optional"
-              className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+              className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
             />
           </label>
           <label className="block">
-            <span className="text-[13px] text-[#A1A4A5]">Last name</span>
+            <span className="text-[13px] text-fg-2">Last name</span>
             <input
               type="text"
               value={state.contactUpdateLastName}
@@ -261,14 +261,12 @@ function AdvancedStepFields({
                 update({ contactUpdateLastName: e.target.value })
               }
               placeholder="optional"
-              className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+              className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
             />
           </label>
         </div>
         <label className="block">
-          <span className="text-[13px] text-[#A1A4A5]">
-            Custom properties JSON
-          </span>
+          <span className="text-[13px] text-fg-2">Custom properties JSON</span>
           <textarea
             value={state.contactUpdatePropertiesJson}
             onChange={(e) =>
@@ -276,12 +274,12 @@ function AdvancedStepFields({
             }
             placeholder={'{"plan":"pro","score":42}'}
             rows={3}
-            className="mt-1 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 py-2 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+            className="mt-1 w-full rounded-md border border-line bg-transparent px-3 py-2 text-[13px] text-fg outline-none focus:border-line-3"
             aria-invalid={Boolean(
               findError(errors, "contactUpdatePropertiesJson"),
             )}
           />
-          <span className="mt-1 block text-[12px] text-[#666]">
+          <span className="mt-1 block text-[12px] text-fg-4">
             Reserved identity, segment, topic, and unsubscribe keys are blocked
             from properties.
           </span>
@@ -294,16 +292,16 @@ function AdvancedStepFields({
   if (state.advancedStepType === "add_to_segment") {
     return (
       <label className="block">
-        <span className="text-[13px] text-[#A1A4A5]">Segment ID</span>
+        <span className="text-[13px] text-fg-2">Segment ID</span>
         <input
           type="text"
           value={state.addToSegmentId}
           onChange={(e) => update({ addToSegmentId: e.target.value })}
           placeholder="00000000-0000-0000-0000-000000000000"
-          className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+          className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
           aria-invalid={Boolean(findError(errors, "addToSegmentId"))}
         />
-        <span className="mt-1 block text-[12px] text-[#666]">
+        <span className="mt-1 block text-[12px] text-fg-4">
           This uses the existing segment UUID contract; no segment is created
           here.
         </span>
@@ -393,22 +391,22 @@ export function AutomationBuilderForm({
 
   return (
     <div className="space-y-6">
-      <div className="space-y-4 rounded-lg border border-[rgba(176,199,217,0.145)] p-5">
-        <h2 className="text-[14px] font-semibold text-[#F0F0F0]">Settings</h2>
+      <div className="space-y-4 rounded-lg border border-line p-5">
+        <h2 className="text-[14px] font-semibold text-fg">Settings</h2>
         <label className="block">
-          <span className="text-[13px] text-[#A1A4A5]">Name</span>
+          <span className="text-[13px] text-fg-2">Name</span>
           <input
             type="text"
             value={state.name}
             onChange={(e) => update({ name: e.target.value })}
-            className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+            className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
             aria-invalid={Boolean(findError(errors, "name"))}
           />
           <FieldError errors={errors} field="name" />
         </label>
         {showStatus ? (
           <label className="block">
-            <span className="text-[13px] text-[#A1A4A5]">Status</span>
+            <span className="text-[13px] text-fg-2">Status</span>
             <select
               value={state.status}
               onChange={(e) =>
@@ -416,7 +414,7 @@ export function AutomationBuilderForm({
                   status: e.target.value as AutomationFormState["status"],
                 })
               }
-              className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+              className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
             >
               <option value="draft">Draft</option>
               <option value="enabled">Enabled</option>
@@ -427,45 +425,37 @@ export function AutomationBuilderForm({
       </div>
 
       <ol className="space-y-3" aria-label="Automation steps">
-        <li
-          className="rounded-lg border border-[rgba(176,199,217,0.145)] p-5"
-          data-step="trigger"
-        >
+        <li className="rounded-lg border border-line p-5" data-step="trigger">
           <div className="mb-3 flex items-center gap-3">
-            <span className="rounded-full border border-[rgba(176,199,217,0.3)] px-2 py-0.5 text-[11px] font-semibold text-[#A1A4A5]">
+            <span className="rounded-full border border-line-3 px-2 py-0.5 text-[11px] font-semibold text-fg-2">
               1
             </span>
-            <h3 className="text-[14px] font-semibold text-[#F0F0F0]">
-              Trigger
-            </h3>
-            <span className="text-[12px] text-[#A1A4A5]">
+            <h3 className="text-[14px] font-semibold text-fg">Trigger</h3>
+            <span className="text-[12px] text-fg-2">
               Run when this custom event arrives
             </span>
           </div>
           <label className="block">
-            <span className="text-[13px] text-[#A1A4A5]">Event name</span>
+            <span className="text-[13px] text-fg-2">Event name</span>
             <input
               type="text"
               value={state.triggerEventName}
               onChange={(e) => update({ triggerEventName: e.target.value })}
               placeholder="user.signed_up"
-              className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+              className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
               aria-invalid={Boolean(findError(errors, "triggerEventName"))}
             />
             <FieldError errors={errors} field="triggerEventName" />
           </label>
         </li>
 
-        <li
-          className="rounded-lg border border-[rgba(176,199,217,0.145)] p-5"
-          data-step="delay"
-        >
+        <li className="rounded-lg border border-line p-5" data-step="delay">
           <div className="mb-3 flex items-center gap-3">
-            <span className="rounded-full border border-[rgba(176,199,217,0.3)] px-2 py-0.5 text-[11px] font-semibold text-[#A1A4A5]">
+            <span className="rounded-full border border-line-3 px-2 py-0.5 text-[11px] font-semibold text-fg-2">
               2
             </span>
-            <h3 className="text-[14px] font-semibold text-[#F0F0F0]">Delay</h3>
-            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-[12px] text-[#A1A4A5]">
+            <h3 className="text-[14px] font-semibold text-fg">Delay</h3>
+            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-[12px] text-fg-2">
               <input
                 type="checkbox"
                 checked={state.delayEnabled}
@@ -477,39 +467,34 @@ export function AutomationBuilderForm({
           </div>
           {state.delayEnabled ? (
             <label className="block">
-              <span className="text-[13px] text-[#A1A4A5]">Duration</span>
+              <span className="text-[13px] text-fg-2">Duration</span>
               <input
                 type="text"
                 value={state.delayDuration}
                 onChange={(e) => update({ delayDuration: e.target.value })}
                 placeholder="1 hour"
-                className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+                className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
                 aria-invalid={Boolean(findError(errors, "delayDuration"))}
               />
-              <span className="mt-1 block text-[12px] text-[#666]">
+              <span className="mt-1 block text-[12px] text-fg-4">
                 Examples: 30 minutes, 1 hour, 3 days. Max 30 days.
               </span>
               <FieldError errors={errors} field="delayDuration" />
             </label>
           ) : (
-            <p className="text-[13px] text-[#666]">
+            <p className="text-[13px] text-fg-4">
               Skip the delay to send immediately when the event arrives.
             </p>
           )}
         </li>
 
-        <li
-          className="rounded-lg border border-[rgba(176,199,217,0.145)] p-5"
-          data-step="advanced"
-        >
+        <li className="rounded-lg border border-line p-5" data-step="advanced">
           <div className="mb-3 flex items-center gap-3">
-            <span className="rounded-full border border-[rgba(176,199,217,0.3)] px-2 py-0.5 text-[11px] font-semibold text-[#A1A4A5]">
+            <span className="rounded-full border border-line-3 px-2 py-0.5 text-[11px] font-semibold text-fg-2">
               {stepNumber(state, "advanced")}
             </span>
-            <h3 className="text-[14px] font-semibold text-[#F0F0F0]">
-              Advanced step
-            </h3>
-            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-[12px] text-[#A1A4A5]">
+            <h3 className="text-[14px] font-semibold text-fg">Advanced step</h3>
+            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 text-[12px] text-fg-2">
               <input
                 type="checkbox"
                 checked={state.advancedStepEnabled}
@@ -524,7 +509,7 @@ export function AutomationBuilderForm({
           {state.advancedStepEnabled ? (
             <div className="mb-4">
               <label className="block">
-                <span className="text-[13px] text-[#A1A4A5]">Step type</span>
+                <span className="text-[13px] text-fg-2">Step type</span>
                 <select
                   value={state.advancedStepType}
                   onChange={(e) =>
@@ -534,7 +519,7 @@ export function AutomationBuilderForm({
                       contactDeleteConfirmed: false,
                     })
                   }
-                  className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+                  className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
                 >
                   {ADVANCED_STEP_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -543,7 +528,7 @@ export function AutomationBuilderForm({
                   ))}
                 </select>
               </label>
-              <p className="mt-2 text-[12px] text-[#666]">
+              <p className="mt-2 text-[12px] text-fg-4">
                 {
                   ADVANCED_STEP_OPTIONS.find(
                     (option) => option.value === state.advancedStepType,
@@ -557,28 +542,24 @@ export function AutomationBuilderForm({
 
         {includesSendEmail ? (
           <li
-            className="rounded-lg border border-[rgba(176,199,217,0.145)] p-5"
+            className="rounded-lg border border-line p-5"
             data-step="send_email"
           >
             <div className="mb-3 flex items-center gap-3">
-              <span className="rounded-full border border-[rgba(176,199,217,0.3)] px-2 py-0.5 text-[11px] font-semibold text-[#A1A4A5]">
+              <span className="rounded-full border border-line-3 px-2 py-0.5 text-[11px] font-semibold text-fg-2">
                 {stepNumber(state, "send")}
               </span>
-              <h3 className="text-[14px] font-semibold text-[#F0F0F0]">
-                Send email
-              </h3>
-              <span className="text-[12px] text-[#A1A4A5]">
+              <h3 className="text-[14px] font-semibold text-fg">Send email</h3>
+              <span className="text-[12px] text-fg-2">
                 Use a published template
               </span>
             </div>
             <label className="block">
-              <span className="text-[13px] text-[#A1A4A5]">
-                Published template
-              </span>
+              <span className="text-[13px] text-fg-2">Published template</span>
               <select
                 value={state.templateId}
                 onChange={(e) => update({ templateId: e.target.value })}
-                className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+                className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
                 aria-invalid={Boolean(findError(errors, "templateId"))}
               >
                 <option value="">
@@ -601,39 +582,33 @@ export function AutomationBuilderForm({
             </label>
             <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
               <label className="block">
-                <span className="text-[13px] text-[#A1A4A5]">
-                  From override
-                </span>
+                <span className="text-[13px] text-fg-2">From override</span>
                 <input
                   type="text"
                   value={state.fromOverride}
                   onChange={(e) => update({ fromOverride: e.target.value })}
                   placeholder="optional"
-                  className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+                  className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
                 />
               </label>
               <label className="block">
-                <span className="text-[13px] text-[#A1A4A5]">
-                  Subject override
-                </span>
+                <span className="text-[13px] text-fg-2">Subject override</span>
                 <input
                   type="text"
                   value={state.subjectOverride}
                   onChange={(e) => update({ subjectOverride: e.target.value })}
                   placeholder="optional"
-                  className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+                  className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
                 />
               </label>
               <label className="block md:col-span-2">
-                <span className="text-[13px] text-[#A1A4A5]">
-                  Reply-to override
-                </span>
+                <span className="text-[13px] text-fg-2">Reply-to override</span>
                 <input
                   type="text"
                   value={state.replyToOverride}
                   onChange={(e) => update({ replyToOverride: e.target.value })}
                   placeholder="optional"
-                  className="mt-1 h-9 w-full rounded-md border border-[rgba(176,199,217,0.145)] bg-transparent px-3 text-[13px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)]"
+                  className="mt-1 h-9 w-full rounded-md border border-line bg-transparent px-3 text-[13px] text-fg outline-none focus:border-line-3"
                 />
               </label>
             </div>
@@ -641,17 +616,15 @@ export function AutomationBuilderForm({
         ) : null}
 
         <li
-          className="rounded-lg border border-dashed border-[rgba(176,199,217,0.145)] p-5"
+          className="rounded-lg border border-dashed border-line p-5"
           data-step="end"
         >
           <div className="flex items-center gap-3">
-            <span className="rounded-full border border-[rgba(176,199,217,0.3)] px-2 py-0.5 text-[11px] font-semibold text-[#A1A4A5]">
+            <span className="rounded-full border border-line-3 px-2 py-0.5 text-[11px] font-semibold text-fg-2">
               {stepNumber(state, "end")}
             </span>
-            <h3 className="text-[14px] font-semibold text-[#F0F0F0]">End</h3>
-            <span className="text-[12px] text-[#A1A4A5]">
-              Run finishes here
-            </span>
+            <h3 className="text-[14px] font-semibold text-fg">End</h3>
+            <span className="text-[12px] text-fg-2">Run finishes here</span>
           </div>
         </li>
       </ol>

@@ -231,7 +231,7 @@ describe("StatusBadge", () => {
   it("applies default variant when not specified", () => {
     const { container } = render(<StatusBadge status="Unknown" />);
     const badge = container.firstElementChild;
-    expect(badge?.className).toContain("text-[#A1A4A5]");
+    expect(badge?.className).toContain("text-fg-2");
   });
 });
 

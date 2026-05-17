@@ -11,8 +11,13 @@ const freePlan: BillingPlanSummary = {
   name: "Free",
   monthlyPriceCents: 0,
   monthlyEmailQuota: 3000,
+  dailyEmailQuota: 100,
   maxDomains: 1,
   maxApiKeys: 2,
+  maxContacts: 1000,
+  maxSegments: 3,
+  maxBroadcasts: null,
+  ratePerSecond: 2,
   isPublic: true,
 };
 
@@ -23,8 +28,13 @@ const proSummary: BillingSummary = {
     name: "Pro",
     monthlyPriceCents: 2900,
     monthlyEmailQuota: 50000,
+    dailyEmailQuota: 5000,
     maxDomains: 10,
     maxApiKeys: 20,
+    maxContacts: 10000,
+    maxSegments: 50,
+    maxBroadcasts: null,
+    ratePerSecond: 10,
     isPublic: true,
   },
   subscription: {
@@ -57,6 +67,7 @@ const baseUsagePayload = {
     contactsLimit: 1000,
     segmentsUsed: 4,
     segmentsLimit: 3,
+    broadcastsUsed: 0,
     broadcastsLimit: "Unlimited" as const,
   },
   team: {
@@ -156,11 +167,19 @@ describe("billing summary service", () => {
       transactional: {
         ...baseUsagePayload.transactional,
         monthlyLimit: 50000,
+        dailyLimit: 5000,
+      },
+      marketing: {
+        ...baseUsagePayload.marketing,
+        contactsLimit: 10000,
+        segmentsLimit: 50,
+        broadcastsLimit: "Unlimited",
       },
       team: {
         ...baseUsagePayload.team,
         domainsUsed: 4,
         domainsLimit: 10,
+        rateLimit: 10,
       },
     });
     expect(loadSummary).toHaveBeenCalledWith("user-1");

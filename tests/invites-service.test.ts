@@ -10,11 +10,11 @@ describe("invites service", () => {
   it("lists all users through the member repository using the existing Team member response shape", async () => {
     let calls = 0;
     const repository: InviteMemberRepository = {
-      async listMembers() {
+      async listMembersForUser(userId: string) {
         calls += 1;
         return [
           {
-            id: "user-1",
+            id: userId,
             name: "Ada Lovelace",
             email: "ada@example.com",
             createdAt,
@@ -24,7 +24,7 @@ describe("invites service", () => {
     };
 
     const service = createInvitesService({ repository });
-    const response = await service.listMembers();
+    const response = await service.listMembers("user-1");
 
     expect(calls).toBe(1);
     expect(response).toEqual({

@@ -19,6 +19,7 @@ const defaultUsage = {
     contactsLimit: 1000,
     segmentsUsed: 1,
     segmentsLimit: 3,
+    broadcastsUsed: 0,
     broadcastsLimit: "Unlimited" as const,
   },
   team: {

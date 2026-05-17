@@ -110,7 +110,7 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
       render: (row) => (
         <button
           type="button"
-          className="text-[#F0F0F0] hover:underline text-left"
+          className="text-fg hover:underline text-left"
           onClick={(e) => {
             e.stopPropagation();
             router.push(`/api-keys/${row.id}`);
@@ -124,7 +124,7 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
       key: "tokenPreview",
       header: "Token",
       render: (row) => (
-        <span className="font-mono text-[#A1A4A5] text-[13px]">
+        <span className="font-mono text-fg-2 text-[13px]">
           {row.tokenPreview}
         </span>
       ),
@@ -208,7 +208,7 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
     return (
       <div>
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-semibold text-[#F0F0F0]">API Keys</h1>
+          <h1 className="text-2xl font-semibold text-fg">API Keys</h1>
           <div className="flex items-center gap-3">
             <ExportStatusMessage state={exportState} />
             <ExportButton
@@ -217,7 +217,7 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
             />
             <button
               type="button"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-white text-black hover:bg-gray-200 transition-colors"
+              className="btn btn-primary btn-sm"
               onClick={() => setCreateOpen(true)}
             >
               <svg
@@ -265,12 +265,12 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
           title="API Key Created"
         >
           <div className="space-y-4">
-            <p className="text-[13px] text-[#A1A4A5]">
+            <p className="text-[13px] text-fg-2">
               This key will never be shown again. Please copy it and store it
               securely.
             </p>
-            <div className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-md py-3 px-4">
-              <code className="text-[14px] text-[#F0F0F0] font-mono break-all">
+            <div className="bg-bg-3 border border-line rounded-md py-3 px-4">
+              <code className="text-[14px] text-fg font-mono break-all">
                 {createdToken}
               </code>
             </div>
@@ -292,7 +292,7 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
           <div>
             <label
               htmlFor="ak-name"
-              className="block text-[13px] text-[#F0F0F0] mb-1.5"
+              className="block text-[13px] text-fg mb-1.5"
             >
               Name
             </label>
@@ -302,13 +302,13 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="Your API Key name"
-              className="w-full bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md py-2 px-3 text-[14px] text-[#F0F0F0] placeholder-[#A1A4A5] outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors"
+              className="w-full bg-transparent border border-line rounded-md py-2 px-3 text-[14px] text-fg placeholder-[#A1A4A5] outline-none focus:border-line-3 transition-colors"
             />
           </div>
           <div>
             <label
               htmlFor="ak-permission"
-              className="block text-[13px] text-[#F0F0F0] mb-1.5"
+              className="block text-[13px] text-fg mb-1.5"
             >
               Permission
             </label>
@@ -320,7 +320,7 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
                   e.target.value as "full_access" | "sending_access",
                 )
               }
-              className="w-full bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-md py-2 px-3 text-[14px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors appearance-none cursor-pointer"
+              className="w-full bg-bg-3 border border-line rounded-md py-2 px-3 text-[14px] text-fg outline-none focus:border-line-3 transition-colors appearance-none cursor-pointer"
             >
               <option value="full_access">Full access</option>
               <option value="sending_access">Sending access</option>
@@ -329,7 +329,7 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
           <div>
             <label
               htmlFor="ak-domain"
-              className="block text-[13px] text-[#F0F0F0] mb-1.5"
+              className="block text-[13px] text-fg mb-1.5"
             >
               Domain
             </label>
@@ -338,7 +338,7 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
               value={newDomainId}
               onChange={(e) => setNewDomainId(e.target.value)}
               disabled={newPermission === "full_access"}
-              className={`w-full bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-md py-2 px-3 text-[14px] text-[#F0F0F0] outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors appearance-none cursor-pointer ${newPermission === "full_access" ? "opacity-50 cursor-not-allowed" : ""}`}
+              className={`w-full bg-bg-3 border border-line rounded-md py-2 px-3 text-[14px] text-fg outline-none focus:border-line-3 transition-colors appearance-none cursor-pointer ${newPermission === "full_access" ? "opacity-50 cursor-not-allowed" : ""}`}
             >
               <option value="">All Domains</option>
               {domains.map((d) => (
@@ -356,10 +356,10 @@ export function ApiKeysList({ keys, domains }: ApiKeysListProps) {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-[#F0F0F0]">API Keys</h1>
+        <h1 className="text-2xl font-semibold text-fg">API Keys</h1>
         <button
           type="button"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[13px] font-medium bg-white text-black hover:bg-gray-200 transition-colors"
+          className="btn btn-primary btn-sm"
           onClick={() => setCreateOpen(true)}
         >
           <svg

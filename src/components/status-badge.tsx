@@ -8,7 +8,7 @@ const variantStyles: Record<string, string> = {
   error: "text-red-400 bg-red-400/10",
   warning: "text-yellow-400 bg-yellow-400/10",
   info: "text-blue-400 bg-blue-400/10",
-  default: "text-[#A1A4A5] bg-[rgba(176,199,217,0.08)]",
+  default: "text-fg-2 bg-white/[0.08]",
 };
 
 export function StatusBadge({ status, variant = "default" }: StatusBadgeProps) {

@@ -69,7 +69,7 @@ describe("Domains Page", () => {
     expect(failedBadge.className).toContain("red");
     // not_started = default (gray)
     const notStartedBadge = screen.getByText("Not Started");
-    expect(notStartedBadge.className).toContain("A1A4A5");
+    expect(notStartedBadge.className).toContain("fg-2");
   });
 
   it("renders region display with friendly name and code", () => {

@@ -32,8 +32,8 @@ export function Toast({
     <div
       className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-[14px] border ${
         type === "success"
-          ? "bg-[#0a2a1a] border-green-800 text-green-300"
-          : "bg-[#2a0a0a] border-red-800 text-red-300"
+          ? "bg-accent/10 border-green-800 text-green-300"
+          : "bg-red/10 border-red-800 text-red-300"
       }`}
       role="alert"
     >

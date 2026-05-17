@@ -2,6 +2,11 @@ import { randomBytes } from "node:crypto";
 import { webhookDeliveryRepo } from "../db/repositories/webhookDeliveryRepo";
 import { webhookRepo } from "../db/repositories/webhookRepo";
 import type { webhookDeliveries, webhooks } from "../db/schema";
+import {
+  UnsafeOutboundUrlError,
+  assertSafeOutboundUrl,
+} from "../security/url-safety";
+import { encryptWebhookSecret } from "../security/webhook-secret-crypto";
 
 type WebhookRow = typeof webhooks.$inferSelect;
 type WebhookInsert = typeof webhooks.$inferInsert;
@@ -103,7 +108,8 @@ export type WebhookServiceDependencies = {
 export type WebhookServiceErrorCode =
   | "not_found"
   | "disabled"
-  | "dispatch_failed";
+  | "dispatch_failed"
+  | "unsafe_url";
 
 export class WebhookServiceError extends Error {
   constructor(
@@ -169,13 +175,6 @@ function toWebhookDetail(
   };
 }
 
-function toWebhookCreateResult(row: WebhookRow): WebhookServiceCreateResult {
-  return {
-    ...toWebhookListItem(row),
-    signingSecret: row.signingSecret,
-  };
-}
-
 function buildUpdateData(input: UpdateWebhookInput): Partial<WebhookInsert> {
   const data: Partial<WebhookInsert> = {};
 
@@ -216,15 +215,31 @@ export function createWebhookService({
     async createWebhook(
       input: CreateWebhookInput,
     ): Promise<WebhookServiceCreateResult> {
-      const signingSecret = generateSigningSecret();
+      try {
+        await assertSafeOutboundUrl(input.endpoint, { context: "create" });
+      } catch (err) {
+        if (err instanceof UnsafeOutboundUrlError) {
+          throw new WebhookServiceError(
+            "unsafe_url",
+            `Webhook endpoint rejected: ${err.reason}`,
+          );
+        }
+        throw err;
+      }
+      const plaintextSecret = generateSigningSecret();
       const [row] = await repository.create({
         url: input.endpoint,
         eventTypes: input.events,
-        signingSecret,
+        signingSecretEnc: encryptWebhookSecret(plaintextSecret),
         userId: input.userId,
       });
 
-      return toWebhookCreateResult(row);
+      // The user sees the plaintext secret exactly once at creation time;
+      // afterwards only the (possibly encrypted) stored value is readable.
+      return {
+        ...toWebhookListItem(row),
+        signingSecret: plaintextSecret,
+      };
     },
 
     async getWebhook(
@@ -246,6 +261,19 @@ export function createWebhookService({
       userId: string,
       input: UpdateWebhookInput,
     ): Promise<WebhookServiceListItem | undefined> {
+      if (input.endpoint !== undefined) {
+        try {
+          await assertSafeOutboundUrl(input.endpoint, { context: "create" });
+        } catch (err) {
+          if (err instanceof UnsafeOutboundUrlError) {
+            throw new WebhookServiceError(
+              "unsafe_url",
+              `Webhook endpoint rejected: ${err.reason}`,
+            );
+          }
+          throw err;
+        }
+      }
       const [row] = await repository.update(id, userId, buildUpdateData(input));
       return row ? toWebhookListItem(row) : undefined;
     },

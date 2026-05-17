@@ -225,14 +225,14 @@ function InsightAccordion({ item }: { item: InsightItem }) {
   const isWarning = item.status === "needs_attention";
 
   return (
-    <div className="border-b border-[rgba(176,199,217,0.145)] last:border-b-0">
+    <div className="border-b border-line last:border-b-0">
       <button
         type="button"
-        className="w-full flex items-center gap-3 py-3 px-4 text-left hover:bg-[rgba(24,25,28,0.5)] transition-colors"
+        className="w-full flex items-center gap-3 py-3 px-4 text-left hover:bg-bg-2 transition-colors"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >
-        <span className="text-[13px] text-[#A1A4A5] shrink-0">
+        <span className="text-[13px] text-fg-2 shrink-0">
           {expanded ? "▼" : "▶"}
         </span>
         {isWarning ? (
@@ -258,12 +258,12 @@ function InsightAccordion({ item }: { item: InsightItem }) {
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
           </svg>
         )}
-        <span className="text-[14px] text-[#F0F0F0]">{item.name}</span>
+        <span className="text-[14px] text-fg">{item.name}</span>
       </button>
       {expanded && (
         <div
           data-testid={`insight-detail-${item.id}`}
-          className="px-4 pb-3 pl-14 text-[13px] text-[#A1A4A5] leading-relaxed"
+          className="px-4 pb-3 pl-14 text-[13px] text-fg-2 leading-relaxed"
         >
           {item.details}
         </div>
@@ -301,7 +301,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
       <div className="flex items-start gap-4 mb-8">
         <div
           data-testid="email-envelope-icon"
-          className="w-14 h-14 rounded-xl bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] flex items-center justify-center shrink-0"
+          className="w-14 h-14 rounded-xl bg-bg-3 border border-line flex items-center justify-center shrink-0"
         >
           <svg
             aria-hidden="true"
@@ -316,8 +316,8 @@ export function EmailDetail({ email }: EmailDetailProps) {
           </svg>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[13px] text-[#A1A4A5] mb-0.5">Email</p>
-          <h1 className="text-[22px] font-semibold text-[#F0F0F0] truncate">
+          <p className="text-[13px] text-fg-2 mb-0.5">Email</p>
+          <h1 className="text-[22px] font-semibold text-fg truncate">
             {primaryTo}
           </h1>
         </div>
@@ -325,7 +325,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
           <button
             type="button"
             aria-label="More actions"
-            className="p-2 rounded-lg hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+            className="p-2 rounded-lg hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
           >
             <svg
               aria-hidden="true"
@@ -345,11 +345,11 @@ export function EmailDetail({ email }: EmailDetailProps) {
       {email.suppression && (
         <div
           data-testid="suppression-guidance"
-          className="mb-8 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4"
+          className="mb-8 rounded-xl border border-amber/30 bg-amber/10 p-4"
         >
           <div className="flex items-center gap-2 mb-2">
             <StatusBadge status="Suppressed" variant="warning" />
-            <span className="text-[13px] text-[#F0F0F0]">
+            <span className="text-[13px] text-fg">
               {email.suppression.email} is suppressed for this account because
               it{" "}
               {email.suppression.reason === "bounced"
@@ -358,7 +358,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
               .
             </span>
           </div>
-          <p className="text-[13px] text-[#A1A4A5] leading-relaxed">
+          <p className="text-[13px] text-fg-2 leading-relaxed">
             OpenSend will skip future sends to this recipient for your account
             until an operator removes the suppression. If the recipient bounces
             or complains again after removal, OpenSend will suppress it again.
@@ -371,25 +371,25 @@ export function EmailDetail({ email }: EmailDetailProps) {
       {/* Metadata Grid */}
       <div className="grid grid-cols-4 gap-6 mb-8">
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             FROM
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">{email.from}</p>
+          <p className="text-[14px] text-fg">{email.from}</p>
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             SUBJECT
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">{email.subject}</p>
+          <p className="text-[14px] text-fg">{email.subject}</p>
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             TO
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">{primaryTo}</p>
+          <p className="text-[14px] text-fg">{primaryTo}</p>
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             ID
           </p>
           <CopyToClipboard value={email.id} />
@@ -399,7 +399,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
       {/* Tags and Headers */}
       <div className="grid grid-cols-2 gap-8 mb-8">
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-2">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-2">
             TAGS
           </p>
           <div className="flex flex-wrap gap-2">
@@ -407,31 +407,30 @@ export function EmailDetail({ email }: EmailDetailProps) {
               email.tags.map((tag) => (
                 <div
                   key={`${tag.name}:${tag.value}`}
-                  className="px-2 py-0.5 bg-[rgba(176,199,217,0.1)] border border-[rgba(176,199,217,0.145)] rounded text-[12px] text-[#F0F0F0]"
+                  className="px-2 py-0.5 bg-white/10 border border-line rounded text-[12px] text-fg"
                 >
-                  <span className="text-[#A1A4A5]">{tag.name}:</span>{" "}
-                  {tag.value}
+                  <span className="text-fg-2">{tag.name}:</span> {tag.value}
                 </div>
               ))
             ) : (
-              <span className="text-[13px] text-[#666]">None</span>
+              <span className="text-[13px] text-fg-4">None</span>
             )}
           </div>
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-2">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-2">
             CUSTOM HEADERS
           </p>
           <div className="space-y-1">
             {Object.keys(email.headers).length > 0 ? (
               Object.entries(email.headers).map(([key, value]) => (
                 <div key={key} className="text-[12px] font-mono">
-                  <span className="text-[#A1A4A5]">{key}:</span>{" "}
-                  <span className="text-[#F0F0F0]">{value}</span>
+                  <span className="text-fg-2">{key}:</span>{" "}
+                  <span className="text-fg">{value}</span>
                 </div>
               ))
             ) : (
-              <span className="text-[13px] text-[#666]">None</span>
+              <span className="text-[13px] text-fg-4">None</span>
             )}
           </div>
         </div>
@@ -439,7 +438,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
 
       {/* Email Events */}
       <div className="mb-8">
-        <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-4">
+        <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-4">
           EMAIL EVENT TRACE
         </p>
         <div className="space-y-3" data-testid="event-timeline">
@@ -449,7 +448,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
               return (
                 <div
                   key={event.id}
-                  className="rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] px-4 py-3 text-[13px] group"
+                  className="rounded-lg border border-line bg-bg-2 px-4 py-3 text-[13px] group"
                   data-testid="event-trace-row"
                 >
                   <div className="flex items-start gap-3">
@@ -457,7 +456,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
                       className={clsx(
                         "w-2 h-2 rounded-full mt-1.5 shrink-0",
                         event.type === "delivered" || event.type === "sent"
-                          ? "bg-emerald-500"
+                          ? "bg-accent"
                           : event.type === "bounced" || event.type === "failed"
                             ? "bg-red-500"
                             : "bg-blue-500",
@@ -466,22 +465,22 @@ export function EmailDetail({ email }: EmailDetailProps) {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                         <span
-                          className="text-[#F0F0F0] font-medium"
+                          className="text-fg font-medium"
                           data-testid="event-badge"
                         >
                           {formatStatusLabel(event.type)}
                         </span>
-                        <span className="text-[#666]">
+                        <span className="text-fg-4">
                           {formatEventTimestamp(event.timestamp)}
                         </span>
                         <span
-                          className="font-mono text-[11px] text-[#A1A4A5]"
+                          className="font-mono text-[11px] text-fg-2"
                           data-testid="event-id"
                         >
                           event_id: {event.id}
                         </span>
                       </div>
-                      <p className="mt-1 text-[#D6D6D6]">{event.summary}</p>
+                      <p className="mt-1 text-fg">{event.summary}</p>
                       {details.length > 0 && (
                         <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-2">
                           {details.map(([key, value]) => (
@@ -489,10 +488,10 @@ export function EmailDetail({ email }: EmailDetailProps) {
                               key={key}
                               className="min-w-0 font-mono text-[11px]"
                             >
-                              <dt className="inline text-[#666]">
+                              <dt className="inline text-fg-4">
                                 {formatDetailLabel(key)}:
                               </dt>{" "}
-                              <dd className="inline break-words text-[#A1A4A5]">
+                              <dd className="inline break-words text-fg-2">
                                 {formatDetailValue(value)}
                               </dd>
                             </div>
@@ -505,7 +504,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
               );
             })
           ) : (
-            <div className="py-4 px-4 rounded-lg bg-[rgba(24,25,28,0.5)] border border-dashed border-[rgba(176,199,217,0.145)] text-center text-[13px] text-[#666]">
+            <div className="py-4 px-4 rounded-lg bg-bg-2 border border-dashed border-line text-center text-[13px] text-fg-4">
               No events recorded yet
             </div>
           )}
@@ -515,17 +514,17 @@ export function EmailDetail({ email }: EmailDetailProps) {
       {/* Associated Logs */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider">
             ASSOCIATED LOGS
           </p>
           <Link
             href={`/logs?q=${encodeURIComponent(email.id)}`}
-            className="text-[12px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+            className="text-[12px] text-fg-2 hover:text-fg transition-colors"
           >
             View all logs
           </Link>
         </div>
-        <p className="mb-3 text-[12px] text-[#666]">
+        <p className="mb-3 text-[12px] text-fg-4">
           Showing request logs linked to this message by the same email_id.
         </p>
         <div className="space-y-3" data-testid="associated-logs">
@@ -534,16 +533,16 @@ export function EmailDetail({ email }: EmailDetailProps) {
               <Link
                 key={log.id}
                 href={`/logs/${log.id}`}
-                className="flex items-center gap-3 rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] px-4 py-3 text-[13px] hover:bg-[rgba(24,25,28,0.8)] transition-colors"
+                className="flex items-center gap-3 rounded-lg border border-line bg-bg-2 px-4 py-3 text-[13px] hover:bg-bg-3 transition-colors"
               >
                 <StatusBadge status={log.method.toUpperCase()} variant="info" />
-                <span className="font-mono text-[#F0F0F0] truncate flex-1">
+                <span className="font-mono text-fg truncate flex-1">
                   {log.endpoint || "-"}
                 </span>
-                <span className="font-mono text-[11px] text-[#A1A4A5]">
+                <span className="font-mono text-[11px] text-fg-2">
                   same email_id
                 </span>
-                <span className="font-mono text-[11px] text-[#666]">
+                <span className="font-mono text-[11px] text-fg-4">
                   log_id: {log.id}
                 </span>
                 <StatusBadge
@@ -553,14 +552,14 @@ export function EmailDetail({ email }: EmailDetailProps) {
               </Link>
             ))
           ) : (
-            <div className="py-4 px-4 rounded-lg bg-[rgba(24,25,28,0.5)] border border-dashed border-[rgba(176,199,217,0.145)] text-center text-[13px] text-[#666]">
+            <div className="py-4 px-4 rounded-lg bg-bg-2 border border-dashed border-line text-center text-[13px] text-fg-4">
               No associated API request logs yet
             </div>
           )}
         </div>
       </div>
 
-      <div className="border-b border-[rgba(176,199,217,0.145)] mb-4">
+      <div className="border-b border-line mb-4">
         <div className="flex items-center gap-0">
           {(
             [
@@ -575,15 +574,15 @@ export function EmailDetail({ email }: EmailDetailProps) {
               type="button"
               className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
                 activeTab === tab.key
-                  ? "border-[#F0F0F0] text-[#F0F0F0]"
-                  : "border-transparent text-[#A1A4A5] hover:text-[#F0F0F0]"
+                  ? "border-accent text-fg"
+                  : "border-transparent text-fg-2 hover:text-fg"
               }`}
               onClick={() => setActiveTab(tab.key)}
               data-state={activeTab === tab.key ? "active" : "inactive"}
             >
               {tab.label}
               {tab.key === "insights" && needsAttention.length > 0 && (
-                <span className="inline-flex items-center justify-center w-5 h-5 text-[11px] font-medium bg-[rgba(176,199,217,0.145)] rounded-full">
+                <span className="inline-flex items-center justify-center w-5 h-5 text-[11px] font-medium bg-white/[0.14] rounded-full">
                   {needsAttention.length}
                 </span>
               )}
@@ -594,7 +593,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
               type="button"
               data-testid="tab-copy-button"
               aria-label="Copy content"
-              className="p-2 rounded-lg hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+              className="p-2 rounded-lg hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
               onClick={handleCopyTabContent}
             >
               <svg
@@ -619,10 +618,10 @@ export function EmailDetail({ email }: EmailDetailProps) {
         <div className="min-h-[300px]">
           {needsAttention.length > 0 && (
             <div data-testid="needs-attention-section" className="mb-6">
-              <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-2 px-4">
+              <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-2 px-4">
                 NEEDS ATTENTION
               </p>
-              <div className="border border-[rgba(176,199,217,0.145)] rounded-lg overflow-hidden">
+              <div className="border border-line rounded-lg overflow-hidden">
                 {needsAttention.map((item) => (
                   <InsightAccordion key={item.id} item={item} />
                 ))}
@@ -631,10 +630,10 @@ export function EmailDetail({ email }: EmailDetailProps) {
           )}
           {doingGreat.length > 0 && (
             <div data-testid="doing-great-section">
-              <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-2 px-4">
+              <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-2 px-4">
                 DOING GREAT
               </p>
-              <div className="border border-[rgba(176,199,217,0.145)] rounded-lg overflow-hidden">
+              <div className="border border-line rounded-lg overflow-hidden">
                 {doingGreat.map((item) => (
                   <InsightAccordion key={item.id} item={item} />
                 ))}

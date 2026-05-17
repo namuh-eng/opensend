@@ -10,6 +10,7 @@ import {
 import { ComplainRateSection } from "@/components/complain-rate-section";
 import { DateRangePicker } from "@/components/date-range-picker";
 import { DeliverabilitySection } from "@/components/deliverability-section";
+import { Card } from "@/components/ui-new";
 import { useCallback, useEffect, useState } from "react";
 
 // ── Date range preset → API param mapping ───────────────────────────
@@ -124,24 +125,21 @@ export function MetricSection({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div
-      data-section=""
-      className="rounded-[12px] border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)]"
-    >
+    <Card padding="none">
       <button
         type="button"
         onClick={() => setOpen(!open)}
         className="flex w-full items-center justify-between px-5 py-4"
       >
         <div className="flex items-center gap-6">
-          <span className="text-[11px] font-semibold tracking-wider text-[#A1A4A5] uppercase">
-            {title}
+          <span className="kicker">{title}</span>
+          <span className="serif text-[36px] leading-none tracking-tight text-fg">
+            {value}
           </span>
-          <span className="text-3xl font-semibold text-[#F0F0F0]">{value}</span>
         </div>
         <div className="flex items-center gap-2">
           {infoButton && (
-            <span className="text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors">
+            <span className="text-fg-3 hover:text-fg transition-colors">
               <svg
                 aria-hidden="true"
                 width="16"
@@ -165,16 +163,18 @@ export function MetricSection({
             height="16"
             viewBox="0 0 24 24"
             fill="none"
-            stroke="#A1A4A5"
+            stroke="currentColor"
             strokeWidth="2"
-            className={`transition-transform ${open ? "" : "-rotate-90"}`}
+            className={`text-fg-3 transition-transform ${open ? "" : "-rotate-90"}`}
           >
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </div>
       </button>
-      {open && children && <div className="px-5 pb-5">{children}</div>}
-    </div>
+      {open && children && (
+        <div className="border-t border-line px-5 pb-5 pt-4">{children}</div>
+      )}
+    </Card>
   );
 }
 
@@ -247,7 +247,7 @@ export function MetricsPage() {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-[#F0F0F0]">Metrics</h1>
+        <h1 className="text-2xl font-semibold text-fg">Metrics</h1>
         <div className="flex items-center gap-2">
           <ComboboxFilter
             options={domainOptions}
@@ -325,7 +325,7 @@ export function MetricsPage() {
       </div>
 
       {/* Footer */}
-      <div className="mt-4 text-[12px] text-[#A1A4A5]">
+      <div className="mt-4 text-[12px] text-fg-2">
         Data is updated every 15 minutes. Last updated {lastUpdatedStr}.
       </div>
     </div>

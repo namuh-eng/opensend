@@ -46,7 +46,7 @@ function ActionsDropdown({
       <button
         type="button"
         aria-label="More actions"
-        className="p-2 rounded-lg hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+        className="p-2 rounded-lg hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
         onClick={() => setOpen(!open)}
       >
         <svg
@@ -62,10 +62,10 @@ function ActionsDropdown({
         </svg>
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-40 bg-[#1a1a1a] border border-[rgba(176,199,217,0.145)] rounded-md shadow-lg z-50 py-1">
+        <div className="absolute right-0 top-full mt-1 w-40 bg-bg-2 border border-line rounded-md shadow-lg z-50 py-1">
           <button
             type="button"
-            className="w-full text-left px-3 py-2 text-[13px] text-[#F0F0F0] hover:bg-[rgba(176,199,217,0.1)] transition-colors"
+            className="w-full text-left px-3 py-2 text-[13px] text-fg hover:bg-white/10 transition-colors"
             onClick={() => {
               setOpen(false);
               onEdit();
@@ -73,10 +73,10 @@ function ActionsDropdown({
           >
             Edit contact
           </button>
-          <div className="border-t border-[rgba(176,199,217,0.145)] my-1" />
+          <div className="border-t border-line my-1" />
           <button
             type="button"
-            className="w-full text-left px-3 py-2 text-[13px] text-red-400 hover:bg-[rgba(176,199,217,0.1)] transition-colors"
+            className="w-full text-left px-3 py-2 text-[13px] text-red-400 hover:bg-white/10 transition-colors"
             onClick={() => {
               setOpen(false);
               onDelete();
@@ -104,8 +104,8 @@ export function ContactDetail({ contact }: ContactDetailProps) {
           {contact.email.charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[13px] text-[#A1A4A5] mb-0.5">Contact</p>
-          <h1 className="text-[22px] font-semibold text-[#F0F0F0] truncate">
+          <p className="text-[13px] text-fg-2 mb-0.5">Contact</p>
+          <h1 className="text-[22px] font-semibold text-fg truncate">
             {contact.email}
           </h1>
         </div>
@@ -115,24 +115,24 @@ export function ContactDetail({ contact }: ContactDetailProps) {
       {/* Metadata row 1 */}
       <div className="grid grid-cols-4 gap-6 mb-6">
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             EMAIL ADDRESS
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">{contact.email}</p>
+          <p className="text-[14px] text-fg">{contact.email}</p>
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             CREATED
           </p>
           <p
-            className="text-[14px] text-[#F0F0F0]"
+            className="text-[14px] text-fg"
             title={new Date(contact.createdAt).toLocaleString()}
           >
             {formatRelativeTime(contact.createdAt)}
           </p>
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             STATUS
           </p>
           <StatusBadge
@@ -143,7 +143,7 @@ export function ContactDetail({ contact }: ContactDetailProps) {
           />
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             ID
           </p>
           <CopyToClipboard value={contact.id} />
@@ -153,7 +153,7 @@ export function ContactDetail({ contact }: ContactDetailProps) {
       {/* Metadata row 2 */}
       <div className="grid grid-cols-4 gap-6 mb-8">
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             SEGMENTS
           </p>
           {contact.segments.length > 0 ? (
@@ -161,18 +161,18 @@ export function ContactDetail({ contact }: ContactDetailProps) {
               {contact.segments.map((seg) => (
                 <span
                   key={seg.id}
-                  className="inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-medium text-[#F0F0F0] bg-[rgba(176,199,217,0.08)]"
+                  className="inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-medium text-fg bg-white/[0.08]"
                 >
                   {seg.name}
                 </span>
               ))}
             </div>
           ) : (
-            <p className="text-[14px] text-[#A1A4A5]">No segments</p>
+            <p className="text-[14px] text-fg-2">No segments</p>
           )}
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             TOPICS
           </p>
           {contact.topics.length > 0 ? (
@@ -180,45 +180,41 @@ export function ContactDetail({ contact }: ContactDetailProps) {
               {contact.topics.map((topic) => (
                 <span
                   key={topic.id}
-                  className="inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-medium text-[#F0F0F0] bg-[rgba(176,199,217,0.08)]"
+                  className="inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-medium text-fg bg-white/[0.08]"
                 >
                   {topic.name}
                 </span>
               ))}
             </div>
           ) : (
-            <p className="text-[14px] text-[#A1A4A5]">No topics</p>
+            <p className="text-[14px] text-fg-2">No topics</p>
           )}
         </div>
       </div>
 
       {/* Properties */}
       <div className="mb-8">
-        <h2 className="text-[18px] font-semibold text-[#F0F0F0] mb-4">
-          Properties
-        </h2>
+        <h2 className="text-[18px] font-semibold text-fg mb-4">Properties</h2>
         {propertyEntries.length > 0 ? (
           <div className="grid grid-cols-4 gap-6">
             {propertyEntries.map(([key, value]) => (
               <div key={key}>
-                <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+                <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
                   {key.toUpperCase()}
                 </p>
-                <p className="text-[14px] text-[#F0F0F0]">{value}</p>
+                <p className="text-[14px] text-fg">{value}</p>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-[14px] text-[#A1A4A5]">No properties</p>
+          <p className="text-[14px] text-fg-2">No properties</p>
         )}
       </div>
 
       {/* Activity */}
       <div>
-        <h2 className="text-[18px] font-semibold text-[#F0F0F0] mb-4">
-          Activity
-        </h2>
-        <div className="bg-[rgba(24,25,28,0.5)] border border-[rgba(176,199,217,0.145)] rounded-lg p-4">
+        <h2 className="text-[18px] font-semibold text-fg mb-4">Activity</h2>
+        <div className="bg-bg-2 border border-line rounded-lg p-4">
           {contact.activity.length > 0 ? (
             <div className="space-y-4">
               {contact.activity.map((event) => (
@@ -226,25 +222,23 @@ export function ContactDetail({ contact }: ContactDetailProps) {
                   key={`${event.type}-${event.timestamp}`}
                   className="flex items-center gap-3"
                 >
-                  <div className="w-6 h-6 rounded-full bg-[rgba(176,199,217,0.145)] flex items-center justify-center shrink-0">
-                    <span className="text-[10px] text-[#A1A4A5] font-medium">
-                      O
-                    </span>
+                  <div className="w-6 h-6 rounded-full bg-white/[0.14] flex items-center justify-center shrink-0">
+                    <span className="text-[10px] text-fg-2 font-medium">O</span>
                   </div>
-                  <span className="text-[14px] text-[#F0F0F0] font-medium">
+                  <span className="text-[14px] text-fg font-medium">
                     {event.type}
                   </span>
-                  <span className="text-[13px] text-[#A1A4A5]">
+                  <span className="text-[13px] text-fg-2">
                     {formatRelativeTime(event.timestamp)}
                   </span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-[14px] text-[#A1A4A5]">No activity</p>
+            <p className="text-[14px] text-fg-2">No activity</p>
           )}
         </div>
-        <p className="text-[12px] text-[#A1A4A5] mt-2">
+        <p className="text-[12px] text-fg-2 mt-2">
           Activity data may take a few seconds to update.
         </p>
       </div>

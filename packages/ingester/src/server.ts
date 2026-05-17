@@ -1,8 +1,12 @@
 import app from "./index";
 import { queueWorker } from "./queue-worker";
+import { runIngesterStartupChecks } from "./startup-checks";
+
+runIngesterStartupChecks();
 
 const DEFAULT_PORT = 3016;
-const DEFAULT_HOST = "0.0.0.0";
+const DEFAULT_HOST =
+  process.env.NODE_ENV === "production" ? "127.0.0.1" : "0.0.0.0";
 
 const rawPort = Bun.env.PORT ?? process.env.PORT;
 const parsedPort = rawPort ? Number(rawPort) : DEFAULT_PORT;

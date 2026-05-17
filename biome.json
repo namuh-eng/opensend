@@ -31,7 +31,9 @@
       ".omx",
       "drizzle",
       "*.d.ts",
-      "public"
+      "public",
+      "opensend-new-design",
+      ".claude"
     ]
   }
 }

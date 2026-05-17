@@ -11,7 +11,7 @@ export default async function Home() {
   const session = await getServerSession();
 
   if (shouldRedirectRootToDashboard(session)) {
-    redirect("/emails");
+    redirect("/today");
   }
 
   const githubStars = await getOpenSendGithubStars();

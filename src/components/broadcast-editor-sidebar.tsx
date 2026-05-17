@@ -165,11 +165,11 @@ function CollapsibleSection({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="border-b border-[rgba(176,199,217,0.08)]">
+    <div className="border-b border-line">
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-4 py-2.5 text-[12px] font-semibold text-[#A1A4A5] uppercase tracking-wider hover:bg-[rgba(176,199,217,0.04)] transition-colors"
+        className="w-full flex items-center justify-between px-4 py-2.5 text-[12px] font-semibold text-fg-2 uppercase tracking-wider hover:bg-white/[0.03] transition-colors"
       >
         {title}
         <svg
@@ -216,10 +216,10 @@ function NumInput({
         min={min}
         max={max}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full h-7 px-2 text-[12px] text-[#F0F0F0] bg-[rgba(176,199,217,0.06)] border border-[rgba(176,199,217,0.1)] rounded outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+        className="w-full h-7 px-2 text-[12px] text-fg bg-white/[0.06] border border-line rounded outline-none focus:border-line-3 transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
       />
       {suffix && (
-        <span className="absolute right-2 text-[10px] text-[#666] pointer-events-none">
+        <span className="absolute right-2 text-[10px] text-fg-4 pointer-events-none">
           {suffix}
         </span>
       )}
@@ -245,13 +245,13 @@ function ColorInput({
         data-testid={testId}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-7 h-7 rounded border border-[rgba(176,199,217,0.1)] cursor-pointer bg-transparent p-0"
+        className="w-7 h-7 rounded border border-line cursor-pointer bg-transparent p-0"
       />
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="flex-1 h-7 px-2 text-[12px] text-[#F0F0F0] bg-[rgba(176,199,217,0.06)] border border-[rgba(176,199,217,0.1)] rounded outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors font-mono"
+        className="flex-1 h-7 px-2 text-[12px] text-fg bg-white/[0.06] border border-line rounded outline-none focus:border-line-3 transition-colors font-mono"
       />
     </div>
   );
@@ -265,7 +265,7 @@ function Row({
 }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-2 mb-2">
-      <span className="text-[11px] text-[#888] shrink-0 w-[80px]">{label}</span>
+      <span className="text-[11px] text-fg-3 shrink-0 w-[80px]">{label}</span>
       <div className="flex-1 max-w-[160px]">{children}</div>
     </div>
   );
@@ -326,10 +326,10 @@ export function BroadcastEditorSidebar({
   return (
     <div
       data-testid="editor-right-sidebar"
-      className="w-[300px] h-full border-l border-[rgba(176,199,217,0.145)] bg-[#0a0a0a] flex flex-col shrink-0 overflow-hidden"
+      className="w-[300px] h-full border-l border-line bg-bg-card flex flex-col shrink-0 overflow-hidden"
     >
       {/* Sidebar header */}
-      <div className="flex items-center justify-between px-4 h-[44px] border-b border-[rgba(176,199,217,0.08)] shrink-0">
+      <div className="flex items-center justify-between px-4 h-[44px] border-b border-line shrink-0">
         <div className="flex items-center gap-1">
           {(
             [
@@ -344,8 +344,8 @@ export function BroadcastEditorSidebar({
               onClick={() => setActivePanel(tab.key)}
               className={`px-2 py-1 text-[11px] font-medium rounded transition-colors ${
                 activePanel === tab.key
-                  ? "text-[#F0F0F0] bg-[rgba(176,199,217,0.1)]"
-                  : "text-[#666] hover:text-[#A1A4A5]"
+                  ? "text-fg bg-white/10"
+                  : "text-fg-4 hover:text-fg-2"
               }`}
             >
               {tab.label}
@@ -356,7 +356,7 @@ export function BroadcastEditorSidebar({
           type="button"
           onClick={onClose}
           aria-label="Close sidebar"
-          className="p-1 rounded text-[#666] hover:text-[#F0F0F0] hover:bg-[rgba(176,199,217,0.08)] transition-colors"
+          className="p-1 rounded text-fg-4 hover:text-fg hover:bg-white/[0.08] transition-colors"
         >
           <svg
             width="14"
@@ -439,7 +439,7 @@ function PageStylePanel({
       <CollapsibleSection title="Body">
         {/* Layout options */}
         <div className="mb-3">
-          <span className="text-[11px] text-[#888] block mb-1.5">Layout</span>
+          <span className="text-[11px] text-fg-3 block mb-1.5">Layout</span>
           <div className="flex gap-1">
             {(["full", "centered", "narrow"] as const).map((layout) => (
               <button
@@ -449,8 +449,8 @@ function PageStylePanel({
                 onClick={() => onUpdateBody({ layout })}
                 className={`flex-1 h-8 text-[11px] rounded border transition-colors ${
                   style.body.layout === layout
-                    ? "border-white/30 text-[#F0F0F0] bg-[rgba(176,199,217,0.1)]"
-                    : "border-[rgba(176,199,217,0.1)] text-[#666] hover:text-[#A1A4A5]"
+                    ? "border-white/30 text-fg bg-white/10"
+                    : "border-line text-fg-4 hover:text-fg-2"
                 }`}
               >
                 {layout.charAt(0).toUpperCase() + layout.slice(1)}
@@ -488,7 +488,7 @@ function PageStylePanel({
                   height: val === "auto" ? "auto" : Number(val) || 0,
                 });
               }}
-              className="w-full h-7 px-2 text-[12px] text-[#F0F0F0] bg-[rgba(176,199,217,0.06)] border border-[rgba(176,199,217,0.1)] rounded outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors"
+              className="w-full h-7 px-2 text-[12px] text-fg bg-white/[0.06] border border-line rounded outline-none focus:border-line-3 transition-colors"
             />
           </div>
         </Row>
@@ -533,7 +533,7 @@ function PageStylePanel({
         <button
           type="button"
           onClick={onSwitchToTheme}
-          className="w-full flex items-center justify-between h-8 px-3 text-[12px] text-[#A1A4A5] border border-[rgba(176,199,217,0.1)] rounded hover:border-[rgba(176,199,217,0.2)] hover:text-[#F0F0F0] transition-colors"
+          className="w-full flex items-center justify-between h-8 px-3 text-[12px] text-fg-2 border border-line rounded hover:border-line-2 hover:text-fg transition-colors"
         >
           Edit theme
           <svg
@@ -551,7 +551,7 @@ function PageStylePanel({
         <button
           type="button"
           onClick={onSwitchToCSS}
-          className="w-full flex items-center justify-between h-8 px-3 text-[12px] text-[#A1A4A5] border border-[rgba(176,199,217,0.1)] rounded hover:border-[rgba(176,199,217,0.2)] hover:text-[#F0F0F0] transition-colors"
+          className="w-full flex items-center justify-between h-8 px-3 text-[12px] text-fg-2 border border-line rounded hover:border-line-2 hover:text-fg transition-colors"
         >
           Global CSS
           <svg
@@ -594,8 +594,8 @@ function ThemePanel({
   return (
     <>
       {/* Presets */}
-      <div className="px-4 py-3 border-b border-[rgba(176,199,217,0.08)]">
-        <span className="text-[11px] text-[#888] block mb-2">Preset</span>
+      <div className="px-4 py-3 border-b border-line">
+        <span className="text-[11px] text-fg-3 block mb-2">Preset</span>
         <div className="flex gap-2">
           {(["minimal", "basic"] as const).map((preset) => (
             <button
@@ -606,8 +606,8 @@ function ThemePanel({
               onClick={() => switchTheme(preset)}
               className={`flex-1 h-9 text-[12px] font-medium rounded border transition-colors ${
                 style.theme === preset
-                  ? "border-white/30 text-[#F0F0F0] bg-[rgba(176,199,217,0.1)]"
-                  : "border-[rgba(176,199,217,0.1)] text-[#666] hover:text-[#A1A4A5]"
+                  ? "border-white/30 text-fg bg-white/10"
+                  : "border-line text-fg-4 hover:text-fg-2"
               }`}
             >
               {preset.charAt(0).toUpperCase() + preset.slice(1)}
@@ -646,7 +646,7 @@ function ThemePanel({
               onChange={(e) =>
                 onUpdateTextStyle(level.key, { fontWeight: e.target.value })
               }
-              className="w-full h-7 px-2 text-[12px] text-[#F0F0F0] bg-[rgba(176,199,217,0.06)] border border-[rgba(176,199,217,0.1)] rounded outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors"
+              className="w-full h-7 px-2 text-[12px] text-fg bg-white/[0.06] border border-line rounded outline-none focus:border-line-3 transition-colors"
             >
               {FONT_WEIGHTS.map((w) => (
                 <option key={w.value} value={w.value}>
@@ -682,7 +682,7 @@ function ThemePanel({
                   decoration: e.target.value as Decoration,
                 })
               }
-              className="w-full h-7 px-2 text-[12px] text-[#F0F0F0] bg-[rgba(176,199,217,0.06)] border border-[rgba(176,199,217,0.1)] rounded outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors"
+              className="w-full h-7 px-2 text-[12px] text-fg bg-white/[0.06] border border-line rounded outline-none focus:border-line-3 transition-colors"
             >
               <option value="none">None</option>
               <option value="underline">Underline</option>
@@ -711,14 +711,14 @@ function GlobalCSSPanel({
 
   return (
     <div className="px-4 py-3">
-      <span className="text-[11px] text-[#888] block mb-2">Quick insert</span>
+      <span className="text-[11px] text-fg-3 block mb-2">Quick insert</span>
       <div className="flex flex-wrap gap-1 mb-3">
         {Object.entries(QUICK_INSERTS).map(([label, snippet]) => (
           <button
             key={label}
             type="button"
             onClick={() => insertSnippet(snippet)}
-            className="h-7 px-2.5 text-[11px] font-mono text-[#A1A4A5] border border-[rgba(176,199,217,0.1)] rounded hover:border-[rgba(176,199,217,0.2)] hover:text-[#F0F0F0] transition-colors"
+            className="h-7 px-2.5 text-[11px] font-mono text-fg-2 border border-line rounded hover:border-line-2 hover:text-fg transition-colors"
           >
             {label}
           </button>
@@ -731,7 +731,7 @@ function GlobalCSSPanel({
         onChange={(e) => onUpdate({ globalCSS: e.target.value })}
         placeholder="/* Add custom CSS styles */&#10;p { color: red; }"
         rows={16}
-        className="w-full bg-[rgba(176,199,217,0.04)] border border-[rgba(176,199,217,0.1)] rounded-md p-3 font-mono text-[12px] text-[#F0F0F0] placeholder-[#444] resize-none outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors leading-relaxed"
+        className="w-full bg-white/[0.03] border border-line rounded-md p-3 font-mono text-[12px] text-fg placeholder-[#444] resize-none outline-none focus:border-line-3 transition-colors leading-relaxed"
         spellCheck={false}
       />
     </div>

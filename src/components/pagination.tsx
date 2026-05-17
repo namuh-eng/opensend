@@ -38,7 +38,7 @@ export function Pagination({
   }, [open, handleClickOutside]);
 
   return (
-    <div className="flex items-center justify-between px-3 py-2 text-[13px] text-[#A1A4A5]">
+    <div className="flex items-center justify-between px-3 py-2 text-[13px] text-fg-2">
       <span>
         Page {page} &ndash; {start} of {totalItems}{" "}
         {totalItems === 1 ? "item" : "items"}
@@ -47,7 +47,7 @@ export function Pagination({
         <div className="relative" ref={ref}>
           <button
             type="button"
-            className="flex items-center gap-1 px-2 py-1 rounded-md border border-[rgba(176,199,217,0.145)] hover:bg-[rgba(24,25,28,0.5)] transition-colors"
+            className="flex items-center gap-1 px-2 py-1 rounded-md border border-line hover:bg-bg-2 transition-colors"
             onClick={() => setOpen(!open)}
           >
             {pageSize} items
@@ -62,13 +62,13 @@ export function Pagination({
             </svg>
           </button>
           {open && (
-            <div className="absolute bottom-full mb-1 right-0 z-50 min-w-[120px] rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] py-1 shadow-lg">
+            <div className="absolute bottom-full mb-1 right-0 z-50 min-w-[120px] rounded-md border border-line bg-bg-3 py-1 shadow-lg">
               {PAGE_SIZES.map((size) => (
                 <button
                   key={size}
                   type="button"
-                  className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-[rgba(176,199,217,0.145)] transition-colors ${
-                    size === pageSize ? "text-[#F0F0F0]" : "text-[#A1A4A5]"
+                  className={`w-full text-left px-3 py-1.5 text-[13px] hover:bg-white/[0.14] transition-colors ${
+                    size === pageSize ? "text-fg" : "text-fg-2"
                   }`}
                   onClick={() => {
                     onPageSizeChange(size);
@@ -85,7 +85,7 @@ export function Pagination({
           type="button"
           aria-label="Previous page"
           disabled={page <= 1}
-          className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-1 rounded hover:bg-white/[0.14] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           onClick={() => onPageChange(page - 1)}
         >
           <svg
@@ -102,7 +102,7 @@ export function Pagination({
           type="button"
           aria-label="Next page"
           disabled={page >= totalPages}
-          className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          className="p-1 rounded hover:bg-white/[0.14] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           onClick={() => onPageChange(page + 1)}
         >
           <svg

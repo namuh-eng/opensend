@@ -93,16 +93,16 @@ function BounceInfoPanel({ onClose }: { onClose: () => void }) {
         }}
       />
       {/* Panel */}
-      <div className="relative w-full max-w-md bg-[#18191C] border-l border-[rgba(176,199,217,0.145)] p-6 overflow-y-auto">
+      <div className="relative w-full max-w-md bg-bg-3 border-l border-line p-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-[#F0F0F0]">
+          <h2 className="text-xl font-semibold text-fg">
             How Bounce Rate Works
           </h2>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+            className="text-fg-2 hover:text-fg transition-colors"
           >
             <svg
               aria-hidden="true"
@@ -121,65 +121,62 @@ function BounceInfoPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <p className="text-[13px] text-[#A1A4A5] mb-6">
+        <p className="text-[13px] text-fg-2 mb-6">
           A bounce happens when an email cannot be delivered, and is returned to
           the sender.
         </p>
 
-        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-3">
+        <h3 className="text-[14px] font-semibold text-fg mb-3">
           What are the types of bounces?
         </h3>
-        <ul className="space-y-2 mb-6 text-[13px] text-[#A1A4A5]">
+        <ul className="space-y-2 mb-6 text-[13px] text-fg-2">
           <li>
-            <span className="text-[#F0F0F0] font-medium">
+            <span className="text-fg font-medium">
               Permanent (hard bounce):
             </span>{" "}
             The recipient&apos;s mail server rejects the email and will never be
             delivered.
           </li>
           <li>
-            <span className="text-[#F0F0F0] font-medium">
+            <span className="text-fg font-medium">
               Transient (soft bounce):
             </span>{" "}
             The email was temporarily rejected due to a temporary issue (e.g.,
             full inbox, invalid email address).
           </li>
           <li>
-            <span className="text-[#F0F0F0] font-medium">
-              Undetermined (bounce):
-            </span>{" "}
+            <span className="text-fg font-medium">Undetermined (bounce):</span>{" "}
             The email was rejected due to an unknown reason.
           </li>
         </ul>
 
-        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-3">
+        <h3 className="text-[14px] font-semibold text-fg mb-3">
           What does risk level mean?
         </h3>
-        <p className="text-[13px] text-[#A1A4A5] mb-6">
-          Maintaining a bounce rate over{" "}
-          <strong className="text-[#F0F0F0]">4%</strong> may result in a
-          temporary pause in sending until it is reduced.
+        <p className="text-[13px] text-fg-2 mb-6">
+          Maintaining a bounce rate over <strong className="text-fg">4%</strong>{" "}
+          may result in a temporary pause in sending until it is reduced.
         </p>
 
-        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-3">
+        <h3 className="text-[14px] font-semibold text-fg mb-3">
           How is it calculated?
         </h3>
-        <div className="bg-[#0D0D0F] rounded-lg p-4 mb-6 font-mono text-[12px] text-[#A1A4A5]">
+        <div className="bg-bg-card rounded-lg p-4 mb-6 font-mono text-[12px] text-fg-2">
           <div>Bounce Rate = (Permanent</div>
           <div className="ml-16">+ Transient</div>
           <div className="ml-16">+ Undetermined Bounces)</div>
           <div className="ml-16">/ Emails Sent × 100</div>
         </div>
 
-        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-3">
+        <h3 className="text-[14px] font-semibold text-fg mb-3">
           Useful Articles
         </h3>
-        <div className="space-y-0 border-t border-[rgba(176,199,217,0.1)]">
+        <div className="space-y-0 border-t border-line">
           <a
             href="https://resend.com/docs/knowledge-base/tips-to-reduce-bounces"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-between py-3 border-b border-[rgba(176,199,217,0.1)] text-[13px] text-[#F0F0F0] hover:text-white transition-colors"
+            className="flex items-center justify-between py-3 border-b border-line text-[13px] text-fg hover:text-white transition-colors"
           >
             Tips to reduce bounces
             <svg
@@ -201,7 +198,7 @@ function BounceInfoPanel({ onClose }: { onClose: () => void }) {
             href="https://resend.com/docs/knowledge-base/email-bounces"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-between py-3 border-b border-[rgba(176,199,217,0.1)] text-[13px] text-[#F0F0F0] hover:text-white transition-colors"
+            className="flex items-center justify-between py-3 border-b border-line text-[13px] text-fg hover:text-white transition-colors"
           >
             Email Bounces
             <svg
@@ -230,7 +227,7 @@ function BounceInfoPanel({ onClose }: { onClose: () => void }) {
 function BounceRateChart({ data }: { data: DailyBouncePoint[] }) {
   if (data.length === 0) {
     return (
-      <div className="h-[200px] flex items-center justify-center text-[#A1A4A5] text-[13px]">
+      <div className="h-[200px] flex items-center justify-center text-fg-2 text-[13px]">
         No data for this period
       </div>
     );
@@ -379,16 +376,13 @@ function BounceBreakdownTable({
   ];
 
   return (
-    <div className="mt-4 border-t border-[rgba(176,199,217,0.1)] pt-4">
+    <div className="mt-4 border-t border-line pt-4">
       {rows.map((row) => (
         <div key={row.label} className="flex items-center justify-between py-2">
-          <a
-            href={baseHref}
-            className="text-[13px] text-[#F0F0F0] hover:underline"
-          >
+          <a href={baseHref} className="text-[13px] text-fg hover:underline">
             {row.label}
           </a>
-          <span className="text-[13px] text-[#F0F0F0]">{row.rate}%</span>
+          <span className="text-[13px] text-fg">{row.rate}%</span>
         </div>
       ))}
     </div>
@@ -412,7 +406,7 @@ export function BounceRateSection({
           type="button"
           aria-label="Bounce rate info"
           onClick={() => setInfoPanelOpen(true)}
-          className="text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+          className="text-fg-2 hover:text-fg transition-colors"
         >
           <svg
             aria-hidden="true"
@@ -434,7 +428,7 @@ export function BounceRateSection({
 
       {/* Chart */}
       {loading ? (
-        <div className="h-[200px] flex items-center justify-center text-[#A1A4A5] text-[13px]">
+        <div className="h-[200px] flex items-center justify-center text-fg-2 text-[13px]">
           Loading...
         </div>
       ) : (

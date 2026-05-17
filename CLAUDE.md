@@ -50,6 +50,14 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 - `bun run db:seed` — seed sample data
 - `docker compose up -d` — full stack with Postgres + auto-migration
 
+
+## Documentation Standards
+- Public docs must be OpenSend-owned first-party content. Do not route users to Resend docs or other competitor docs from OpenSend docs pages, `llms.txt`, examples, or public navigation. Use competitor docs only as private/internal parity inspiration.
+- Canonical LLM documentation lives at `/docs/llms.txt`. Root `/llms.txt` may redirect there, but do not maintain a separate root LLM corpus.
+- Public markdown docs live under `public/docs/**/*.md` and must be indexed from `/docs/llms.txt` in the same style as a markdown documentation corpus. When adding a public API, SDK, dashboard feature, webhook event, automation feature, or operational guide, add/update the matching `.md` page and `/docs/llms.txt` entry in the same change.
+- `/docs` should present OpenSend as a complete first-party product surface: quickstart, OpenAPI, API groups, SDKs, MCP/LLM guidance, self-hosting, deliverability, webhooks, receiving, automations, logs, exports, suppressions, and troubleshooting. Do not leave implemented routes/features undocumented.
+- Keep docs truthful to the repo. If a feature is partial or operator-only, label it clearly instead of implying full hosted parity. Prefer route/file/OpenAPI evidence over aspirational copy.
+
 ## Quality Standards
 - TypeScript strict mode, no `any` types
 - Every feature: at least one Vitest unit test AND at least one Playwright E2E test
@@ -78,6 +86,16 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 - **Local dev**: use `.env` (gitignored). Production deployments should source secrets from a secrets manager (AWS Secrets Manager, Doppler, Vault, etc.) and inject them at runtime.
 - `scripts/` is largely gitignored because infra scripts carry environment-specific values. Do not re-commit them.
 - **Rate limiting** is enforced via Next.js middleware (`src/middleware.ts`) on all `/api/*` routes with tiered limits (strictest on email sending).
+- **Production-required env vars** (boot fails or logs hard warnings without these — see `.env.example`):
+  - `UNSUBSCRIBE_SECRET` and `TRACKING_SECRET` — dedicated HMAC keys (>=16 chars). No fallback to `BETTER_AUTH_SECRET`.
+  - `WEBHOOK_SECRET_ENCRYPTION_KEY` — AES-256 key for webhook signing-secret at rest. New rows store only the encrypted envelope; legacy plaintext rows still resolve until rotated.
+  - `DKIM_ENCRYPTION_KEY` (+ versioned `DKIM_ENCRYPTION_KEY_V<n>` and `DKIM_KEY_VERSION`) — rotate without re-encrypting in place.
+  - `BETTER_AUTH_TRUSTED_ORIGINS` — comma-separated allowlist; required to prevent CSRF.
+  - `TRUSTED_PROXY_HOPS` — N rightmost `X-Forwarded-For` hops to trust. `0` for direct exposure; `1` behind a single proxy (ALB, Cloudflare).
+  - `POSTGRES_PASSWORD` — required by `docker-compose.yml` (`${POSTGRES_PASSWORD:?...}`); no default.
+- **SSRF defense lives in `@opensend/core/security/url-safety`**. Always call `assertSafeOutboundUrl(url, { context })` at both creation AND dispatch (DNS-rebind defense). The dispatcher in `packages/ingester/src/dispatcher.ts` already does this — keep it that way.
+- **CSV exports go through `escapeCsvValue` in `src/lib/dashboard-export-types.ts`**. It prefixes `=, +, -, @, \t, \r` with `'` to neutralize Excel/Sheets formula injection. Never bypass when building a new export.
+- **Auth-style string comparison must use `timingSafeStringEqual`** from `@opensend/core/security/timing-safe`, not `===`. Used by cron token, ingester job token, and webhook signature verification.
 
 ## Production Gotchas (must-know)
 - **Run migrations before redeploying app code that expects new columns**. The migrator runs `src/lib/db/migrate.ts` via the Drizzle migrator API. If a dashboard list page works but a detail page 404s, suspect swallowed DB/schema errors before assuming a missing route.

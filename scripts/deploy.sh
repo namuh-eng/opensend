@@ -38,6 +38,8 @@ MIGRATOR_IMAGE_TAG="${MIGRATOR_IMAGE_TAG:-${IMAGE_TAG}-migrator}"
 MIGRATOR_TASK_FAMILY="${MIGRATOR_TASK_FAMILY:-${PRODUCT}-migrator}"
 APP_LOG_GROUP="${APP_LOG_GROUP:-/ecs/${APP_SERVICE}}"
 APP_LOG_STREAM_PREFIX="${APP_LOG_STREAM_PREFIX:-app}"
+WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID="${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID:-${PRODUCT}/webhook/secret-encryption-key}"
+WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN="${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN:-}"
 
 ING_REPO="${PRODUCT}-ingester"
 ING_SERVICE="${PRODUCT}-ingester"
@@ -76,6 +78,19 @@ app_task_definition() {
     --output text
 }
 
+webhook_secret_encryption_key_secret_arn() {
+  if [[ -n "${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN}" ]]; then
+    printf "%s\n" "${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN}"
+    return
+  fi
+
+  aws secretsmanager describe-secret \
+    --secret-id "${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID}" \
+    --region "${AWS_REGION}" \
+    --query 'ARN' \
+    --output text
+}
+
 write_service_network_configuration() {
   local output_file="$1"
 
@@ -85,6 +100,90 @@ write_service_network_configuration() {
     --region "${AWS_REGION}" \
     --query 'services[0].networkConfiguration' \
     --output json > "${output_file}"
+}
+
+write_app_task_definition() {
+  local base_task_definition="$1" app_image="$2" webhook_secret_arn="$3" output_file="$4"
+  local base_task_file
+  base_task_file="$(mktemp)"
+
+  aws ecs describe-task-definition \
+    --task-definition "${base_task_definition}" \
+    --region "${AWS_REGION}" \
+    --query 'taskDefinition' \
+    --output json > "${base_task_file}"
+
+  python3 - "${base_task_file}" "${app_image}" "${APP_CONTAINER_NAME}" "${webhook_secret_arn}" > "${output_file}" <<'PY'
+import copy
+import json
+import sys
+
+base_task_file, app_image, container_name, webhook_secret_arn = sys.argv[1:5]
+with open(base_task_file, "r", encoding="utf-8") as handle:
+    task = json.load(handle)
+
+allowed_task_keys = [
+    "taskRoleArn",
+    "executionRoleArn",
+    "networkMode",
+    "volumes",
+    "placementConstraints",
+    "requiresCompatibilities",
+    "cpu",
+    "memory",
+    "runtimePlatform",
+    "ephemeralStorage",
+    "proxyConfiguration",
+    "inferenceAccelerators",
+    "pidMode",
+    "ipcMode",
+]
+
+definition = {"family": task.get("family")}
+for key in allowed_task_keys:
+    value = task.get(key)
+    if value not in (None, [], {}):
+        definition[key] = value
+
+containers = copy.deepcopy(task.get("containerDefinitions") or [])
+selected = next(
+    (container for container in containers if container.get("name") == container_name),
+    None,
+)
+if selected is None:
+    raise SystemExit(f"base task definition has no {container_name!r} container")
+
+selected["image"] = app_image
+secrets = selected.setdefault("secrets", [])
+required_secret = {
+    "name": "WEBHOOK_SECRET_ENCRYPTION_KEY",
+    "valueFrom": webhook_secret_arn,
+}
+for index, secret in enumerate(secrets):
+    if secret.get("name") == required_secret["name"]:
+        secrets[index] = required_secret
+        break
+else:
+    secrets.append(required_secret)
+
+definition["containerDefinitions"] = containers
+json.dump(definition, sys.stdout)
+PY
+}
+
+register_app_task_definition() {
+  local app_image="$1" base_task_definition webhook_secret_arn task_file
+  base_task_definition="$(app_task_definition)"
+  webhook_secret_arn="$(webhook_secret_encryption_key_secret_arn)"
+  task_file="$(mktemp)"
+
+  write_app_task_definition "${base_task_definition}" "${app_image}" "${webhook_secret_arn}" "${task_file}"
+
+  aws ecs register-task-definition \
+    --cli-input-json "file://${task_file}" \
+    --region "${AWS_REGION}" \
+    --query 'taskDefinition.taskDefinitionArn' \
+    --output text
 }
 
 write_migrator_task_definition() {
@@ -240,15 +339,23 @@ run_migrations() {
 }
 
 redeploy() {
-  local service="$1"
+  local service="$1" task_definition="${2:-}"
   info "→ Force redeploy ECS service: ${service}"
-  aws ecs update-service \
+  local args=(
+    ecs update-service
     --cluster "${CLUSTER}" \
     --service "${service}" \
     --force-new-deployment \
-    --region "${AWS_REGION}" \
+    --region "${AWS_REGION}"
+  )
+  if [[ -n "${task_definition}" ]]; then
+    args+=(--task-definition "${task_definition}")
+  fi
+  args+=(
     --query 'service.deployments[0].{status:status,desired:desiredCount}' \
     --output table
+  )
+  aws "${args[@]}"
 }
 
 wait_stable() {
@@ -272,7 +379,12 @@ wait_stable() {
 }
 
 deploy_app() {
+  local app_image="${ECR_BASE}/${APP_REPO}:${IMAGE_TAG}"
   build_and_push "${APP_REPO}" "${APP_DOCKERFILE}" "${APP_TARGET}"
+
+  info "→ Register ECS app task definition"
+  APP_TASK_DEFINITION="$(register_app_task_definition "${app_image}")"
+  ok "  registered ${APP_TASK_DEFINITION}"
 }
 
 deploy_ingester() {
@@ -285,7 +397,7 @@ case "${target}" in
   app)
     deploy_app
     run_migrations
-    redeploy "${APP_SERVICE}"
+    redeploy "${APP_SERVICE}" "${APP_TASK_DEFINITION}"
     wait_stable "${APP_SERVICE}"
     ;;
   ingester)
@@ -301,7 +413,7 @@ case "${target}" in
     deploy_app
     deploy_ingester
     run_migrations
-    redeploy "${APP_SERVICE}"
+    redeploy "${APP_SERVICE}" "${APP_TASK_DEFINITION}"
     redeploy "${ING_SERVICE}"
     wait_stable "${APP_SERVICE}" &
     APP_PID=$!

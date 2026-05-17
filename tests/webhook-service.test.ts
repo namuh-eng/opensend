@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { decryptWebhookSecret } from "../packages/core/src/security/webhook-secret-crypto";
 import {
   type WebhookDeliveryRepository,
   type WebhookRepository,
@@ -21,7 +22,7 @@ function webhookRow(overrides: Partial<WebhookRow> = {}): WebhookRow {
     url: "https://example.com/webhook",
     eventTypes: ["email.sent"],
     status: "active",
-    signingSecret: "whsec_existing",
+    signingSecretEnc: null,
     createdAt: new Date("2026-05-04T00:00:00.000Z"),
     document: null,
     userId: null,
@@ -90,6 +91,17 @@ function createDeliveryRepository(
 }
 
 describe("webhook service", () => {
+  beforeEach(() => {
+    vi.stubEnv(
+      "WEBHOOK_SECRET_ENCRYPTION_KEY",
+      "test-encryption-key-1234567890ab",
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("lists with normalized pagination and maps public list fields", async () => {
     let listOptions: { userId: string; limit?: number; after?: string } | null =
       null;
@@ -160,8 +172,10 @@ describe("webhook service", () => {
       userId: "user-1",
       url: "https://example.com/created",
       eventTypes: ["email.delivered"],
-      signingSecret: "whsec_test_secret",
     });
+    expect(decryptWebhookSecret(inserted[0]?.signingSecretEnc ?? "")).toBe(
+      "whsec_test_secret",
+    );
     expect(result).toMatchObject({
       id: "created-webhook",
       endpoint: "https://example.com/created",

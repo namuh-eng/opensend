@@ -13,6 +13,10 @@ vi.mock("@opensend/core", () => ({
     findById: mockFindEventById,
   },
   signWebhookPayload: mockSignWebhookPayload,
+  assertSafeOutboundUrl: vi.fn(async () => {}),
+  UnsafeOutboundUrlError: class extends Error {},
+  resolveWebhookSigningSecret: (row: { signingSecretEnc: string | null }) =>
+    row.signingSecretEnc ?? "",
   toWebhookEventType: (eventType: string) => {
     const candidate = eventType.includes(".")
       ? eventType
@@ -98,7 +102,7 @@ describe("WebhookDispatcher", () => {
       id: "hook-1",
       url: "https://example.com/webhook",
       status: "active",
-      signingSecret: "whsec_test_secret",
+      signingSecretEnc: "whsec_test_secret",
     });
     mockFindEventById.mockResolvedValue({
       id: "event-1",
@@ -175,7 +179,7 @@ describe("WebhookDispatcher", () => {
       id: "hook-unsupported",
       url: "https://example.com/webhook",
       status: "active",
-      signingSecret: "whsec_test_secret",
+      signingSecretEnc: "whsec_test_secret",
     });
     mockFindEventById.mockResolvedValue({
       id: "event-unsupported",
@@ -222,7 +226,7 @@ describe("WebhookDispatcher", () => {
       id: "hook-2",
       url: "https://example.com/fail",
       status: "active",
-      signingSecret: "whsec_test_secret",
+      signingSecretEnc: "whsec_test_secret",
     });
     mockFindEventById.mockResolvedValue({
       id: "event-2",
@@ -274,7 +278,7 @@ describe("WebhookDispatcher", () => {
       id: "hook-later",
       url: "https://example.com/later-fail",
       status: "active",
-      signingSecret: "whsec_test_secret",
+      signingSecretEnc: "whsec_test_secret",
     });
     mockFindEventById.mockResolvedValue({
       id: "event-later",
@@ -326,7 +330,7 @@ describe("WebhookDispatcher", () => {
       id: "hook-error",
       url: "https://example.com/error",
       status: "active",
-      signingSecret: "whsec_test_secret",
+      signingSecretEnc: "whsec_test_secret",
     });
     mockFindEventById.mockResolvedValue({
       id: "event-error",
@@ -374,7 +378,7 @@ describe("WebhookDispatcher", () => {
       id: "hook-3",
       url: "https://example.com/timeout",
       status: "active",
-      signingSecret: "whsec_test_secret",
+      signingSecretEnc: "whsec_test_secret",
     });
     mockFindEventById.mockResolvedValue({
       id: "event-3",
@@ -423,7 +427,7 @@ describe("WebhookDispatcher", () => {
       id: "hook-4",
       url: "https://example.com/disabled",
       status: "disabled",
-      signingSecret: "whsec_test_secret",
+      signingSecretEnc: "whsec_test_secret",
     });
     const fetchMock = vi.fn();
     mockUpdate.mockImplementation(async (_id, data) => ({
@@ -475,13 +479,13 @@ describe("WebhookDispatcher", () => {
         id: "hook-a",
         url: "https://example.com/a",
         status: "active",
-        signingSecret: "whsec_test_secret",
+        signingSecretEnc: "whsec_test_secret",
       })
       .mockResolvedValueOnce({
         id: "hook-b",
         url: "https://example.com/b",
         status: "active",
-        signingSecret: "whsec_test_secret",
+        signingSecretEnc: "whsec_test_secret",
       });
     mockFindEventById
       .mockResolvedValueOnce({ id: "event-a", type: "delivered", payload: {} })

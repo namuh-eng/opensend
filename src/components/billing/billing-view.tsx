@@ -141,14 +141,14 @@ export function BillingView({ initial }: BillingViewProps) {
     <div className="space-y-6" data-testid="billing-view">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-[#F0F0F0]">Billing</h1>
-          <p className="mt-1 text-[13px] text-[#A1A4A5]">
+          <h1 className="text-2xl font-semibold text-fg">Billing</h1>
+          <p className="mt-1 text-[13px] text-fg-2">
             Review your current plan, usage, and billing details.
           </p>
         </div>
         <Link
           href="/settings/billing/plans"
-          className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] transition-colors hover:bg-[rgba(24,25,28,1)]"
+          className="rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
           data-testid="view-plans-link"
         >
           View plans

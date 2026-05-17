@@ -17,7 +17,7 @@ export async function GET() {
   }
 
   try {
-    const members = await invitesService.listMembers();
+    const members = await invitesService.listMembers(session.user.id);
     return NextResponse.json(members);
   } catch (error) {
     console.error("Failed to fetch members:", error);

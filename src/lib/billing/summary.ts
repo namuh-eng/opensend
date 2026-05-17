@@ -20,8 +20,13 @@ export interface BillingPlanSummary {
   name: string;
   monthlyPriceCents: number;
   monthlyEmailQuota: number;
+  dailyEmailQuota: number;
   maxDomains: number;
   maxApiKeys: number;
+  maxContacts: number;
+  maxSegments: number;
+  maxBroadcasts: number | null;
+  ratePerSecond: number;
   isPublic: boolean;
 }
 
@@ -115,24 +120,20 @@ function toIso(value: Date | null | undefined): string | null {
   return value ? value.toISOString() : null;
 }
 
-function toPlanSummary(row: {
-  id: string;
-  slug: string;
-  name: string;
-  monthlyPriceCents: number;
-  monthlyEmailQuota: number;
-  maxDomains: number;
-  maxApiKeys: number;
-  isPublic: boolean;
-}): BillingPlanSummary {
+function toPlanSummary(row: BillingPlanRow): BillingPlanSummary {
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
     monthlyPriceCents: row.monthlyPriceCents,
     monthlyEmailQuota: row.monthlyEmailQuota,
+    dailyEmailQuota: row.dailyEmailQuota,
     maxDomains: row.maxDomains,
     maxApiKeys: row.maxApiKeys,
+    maxContacts: row.maxContacts,
+    maxSegments: row.maxSegments,
+    maxBroadcasts: row.maxBroadcasts,
+    ratePerSecond: row.ratePerSecond,
     isPublic: row.isPublic,
   };
 }
@@ -335,6 +336,11 @@ export function createBillingSummaryService({
       const billingSummary = await loadSummary(userId);
       if (!billingSummary) return payload;
 
+      const broadcastsLimit: number | "Unlimited" =
+        billingSummary.plan.maxBroadcasts === null
+          ? "Unlimited"
+          : billingSummary.plan.maxBroadcasts;
+
       return {
         ...payload,
         plan: {
@@ -344,11 +350,19 @@ export function createBillingSummaryService({
         transactional: {
           ...payload.transactional,
           monthlyLimit: billingSummary.plan.monthlyEmailQuota,
+          dailyLimit: billingSummary.plan.dailyEmailQuota,
+        },
+        marketing: {
+          ...payload.marketing,
+          contactsLimit: billingSummary.plan.maxContacts,
+          segmentsLimit: billingSummary.plan.maxSegments,
+          broadcastsLimit,
         },
         team: {
           ...payload.team,
           domainsUsed: billingSummary.usage.domains.used,
           domainsLimit: billingSummary.usage.domains.limit,
+          rateLimit: billingSummary.plan.ratePerSecond,
         },
       };
     },

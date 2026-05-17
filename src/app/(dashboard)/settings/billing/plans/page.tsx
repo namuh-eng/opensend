@@ -26,15 +26,15 @@ export default async function PricingPage() {
     <div className="space-y-6" data-testid="pricing-page">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-[#F0F0F0]">Plans</h1>
-          <p className="mt-1 text-[13px] text-[#A1A4A5]">
+          <h1 className="text-2xl font-semibold text-fg">Plans</h1>
+          <p className="mt-1 text-[13px] text-fg-2">
             Pick the plan that fits your sending volume. You can upgrade or
             downgrade at any time.
           </p>
         </div>
         <Link
           href="/settings/billing"
-          className="rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] transition-colors hover:bg-[rgba(24,25,28,1)]"
+          className="rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
         >
           Back to billing
         </Link>

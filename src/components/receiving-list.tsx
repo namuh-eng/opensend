@@ -12,9 +12,7 @@ interface InboundDomain {
 export function ReceivingList({ domains }: { domains: InboundDomain[] }) {
   return (
     <div className="mt-8">
-      <h2 className="text-lg font-medium text-[#F0F0F0] mb-4">
-        Inbound Domains
-      </h2>
+      <h2 className="text-lg font-medium text-fg mb-4">Inbound Domains</h2>
       <div className="overflow-hidden rounded-lg border border-white/5 bg-black">
         <table className="min-w-full divide-y divide-white/5">
           <thead>
@@ -33,7 +31,7 @@ export function ReceivingList({ domains }: { domains: InboundDomain[] }) {
           <tbody className="divide-y divide-white/5">
             {domains.map((domain) => (
               <tr key={domain.id} className="hover:bg-white/[0.02]">
-                <td className="whitespace-nowrap px-6 py-4 text-sm text-[#F0F0F0]">
+                <td className="whitespace-nowrap px-6 py-4 text-sm text-fg">
                   {domain.name}
                 </td>
                 <td className="whitespace-nowrap px-6 py-4 text-sm">

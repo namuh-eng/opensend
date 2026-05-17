@@ -13,7 +13,7 @@ interface TabsProps {
 
 export function Tabs({ tabs, value, onChange }: TabsProps) {
   return (
-    <div className="flex items-center gap-0 border-b border-[rgba(176,199,217,0.145)]">
+    <div className="flex items-center gap-0 border-b border-line">
       {tabs.map((tab) => {
         const isActive = tab.value === value;
         return (
@@ -22,15 +22,13 @@ export function Tabs({ tabs, value, onChange }: TabsProps) {
             type="button"
             data-state={isActive ? "active" : "inactive"}
             className={`px-4 py-2 text-[14px] font-medium transition-colors relative ${
-              isActive
-                ? "text-[#F0F0F0]"
-                : "text-[#A1A4A5] hover:text-[#F0F0F0]"
+              isActive ? "text-fg" : "text-fg-2 hover:text-fg"
             }`}
             onClick={() => onChange(tab.value)}
           >
             {tab.label}
             {isActive && (
-              <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#F0F0F0]" />
+              <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-accent" />
             )}
           </button>
         );
