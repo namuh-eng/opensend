@@ -299,6 +299,8 @@ Full docs: [`packages/go-sdk/README.md`](./packages/go-sdk/README.md) and [`docs
 cd packages/ruby-sdk
 gem build opensend.gemspec
 gem install ./opensend-0.1.0.gem
+# After the RubyGems publish is complete:
+# gem install opensend
 ```
 
 ```ruby

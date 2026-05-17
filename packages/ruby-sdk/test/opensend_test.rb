@@ -44,6 +44,14 @@ class OpenSendRubySdkTest < Minitest::Test
     OpenSend.base_url = OpenSend::DEFAULT_BASE_URL
   end
 
+  def test_default_base_url_targets_opensend_cloud
+    assert_equal("https://opensend.namuh.co", OpenSend::DEFAULT_BASE_URL)
+    assert_equal(OpenSend::DEFAULT_BASE_URL, OpenSend.base_url)
+
+    client = OpenSend::Client.new(api_key: "os_default")
+    assert_equal(OpenSend::DEFAULT_BASE_URL, client.base_url)
+  end
+
   def test_module_level_send_serializes_payload_and_auth_header
     OpenSend.api_key "os_test"
     OpenSend.base_url @base_url

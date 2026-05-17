@@ -1,10 +1,12 @@
 # Ruby SDK
 
 OpenSend includes a minimal first-party Ruby SDK package at
-[`packages/ruby-sdk`](../../packages/ruby-sdk) for Resend-shaped transactional
-email sends.
+[`packages/ruby-sdk`](../../packages/ruby-sdk) for transactional
+email sends through OpenSend.
 
-Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+Use your OpenSend API key (`os_...`) with OpenSend's Ruby API surface.
+Existing Resend-style send calls can migrate through the alias documented
+below.
 
 ## Install
 
@@ -16,8 +18,9 @@ gem build opensend.gemspec
 gem install ./opensend-0.1.0.gem
 ```
 
-The gem metadata is prepared for future publishing as `opensend`, but this
-change does not publish to RubyGems.
+The gem metadata is ready for publishing as `opensend`. Until the RubyGems
+publish is complete, install the built gem from this repository. After
+publication, use `gem install opensend`.
 
 ## Configure
 
@@ -28,7 +31,7 @@ export OPENSEND_API_KEY="os_your_api_key"
 export OPENSEND_BASE_URL="http://localhost:3015" # optional for self-hosting
 ```
 
-If `OPENSEND_BASE_URL` is unset, the SDK targets `https://api.opensend.com`.
+If `OPENSEND_BASE_URL` is unset, the SDK targets `https://opensend.namuh.co`.
 
 ## Send
 
@@ -48,8 +51,8 @@ email = OpenSend::Emails.send(
 puts email.fetch("id")
 ```
 
-For migration-oriented code, `Resend` is an alias for `OpenSend` after requiring
-this package:
+For existing send code migrating to OpenSend, `Resend` is an alias for
+`OpenSend` after requiring this package:
 
 ```ruby
 require "opensend"

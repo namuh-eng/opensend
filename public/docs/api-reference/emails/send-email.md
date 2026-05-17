@@ -30,7 +30,7 @@ Optional fields include `cc`, `bcc`, `reply_to`, `headers`, `attachments`, `tags
 ## Example
 
 ```bash
-curl -X POST https://api.opensend.com/emails \
+curl -X POST https://opensend.namuh.co/emails \
   -H "Authorization: Bearer os_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: welcome-001" \

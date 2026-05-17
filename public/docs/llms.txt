@@ -2,168 +2,168 @@
 
 ## Docs
 
-- [Introduction](https://api.opensend.com/docs/api-reference/introduction.md): Core concepts for the OpenSend API.
-- [Authentication](https://api.opensend.com/docs/api-reference/authentication.md): How API key authentication works in OpenSend.
-- [Pagination](https://api.opensend.com/docs/api-reference/pagination.md): Pagination behavior for list endpoints.
-- [Errors](https://api.opensend.com/docs/api-reference/errors.md): Common OpenSend API error shapes and status codes.
-- [Usage Limits](https://api.opensend.com/docs/api-reference/rate-limit.md): Rate limits, quotas, and operational limits.
-- [Agent Email Inbox Skill](https://api.opensend.com/docs/agent-email-inbox-skill.md): Give agents an email inbox backed by OpenSend receiving flows.
-- [AI Onboarding](https://api.opensend.com/docs/ai-onboarding.md): Onboard coding agents to OpenSend.
-- [Create API Key](https://api.opensend.com/docs/api-reference/api-keys/create-api-key.md): Create a new API key.
-- [Delete API Key](https://api.opensend.com/docs/api-reference/api-keys/delete-api-key.md): Delete an API key.
-- [List API Keys](https://api.opensend.com/docs/api-reference/api-keys/list-api-keys.md): List API keys for the authenticated tenant.
-- [Create Broadcast](https://api.opensend.com/docs/api-reference/broadcasts/create-broadcast.md): Create a broadcast draft.
-- [Delete Broadcast](https://api.opensend.com/docs/api-reference/broadcasts/delete-broadcast.md): Delete a broadcast.
-- [Retrieve Broadcast](https://api.opensend.com/docs/api-reference/broadcasts/get-broadcast.md): Retrieve a broadcast.
-- [List Broadcasts](https://api.opensend.com/docs/api-reference/broadcasts/list-broadcasts.md): List broadcasts.
-- [Send Broadcast](https://api.opensend.com/docs/api-reference/broadcasts/send-broadcast.md): Send or schedule a broadcast.
-- [Update Broadcast](https://api.opensend.com/docs/api-reference/broadcasts/update-broadcast.md): Update a broadcast.
-- [Create Contact Property](https://api.opensend.com/docs/api-reference/contact-properties/create-contact-property.md): Create a custom contact property.
-- [Delete Contact Property](https://api.opensend.com/docs/api-reference/contact-properties/delete-contact-property.md): Delete a contact property.
-- [Retrieve Contact Property](https://api.opensend.com/docs/api-reference/contact-properties/get-contact-property.md): Retrieve a contact property.
-- [List Contact Properties](https://api.opensend.com/docs/api-reference/contact-properties/list-contact-properties.md): List contact properties.
-- [Update Contact Property](https://api.opensend.com/docs/api-reference/contact-properties/update-contact-property.md): Update a contact property.
-- [Add Contact to Segment](https://api.opensend.com/docs/api-reference/contacts/add-contact-to-segment.md): Add a contact to a segment.
-- [Create Contact](https://api.opensend.com/docs/api-reference/contacts/create-contact.md): Create an audience contact.
-- [Delete Contact Segment](https://api.opensend.com/docs/api-reference/contacts/delete-contact-segment.md): Remove a contact from a segment.
-- [Delete Contact](https://api.opensend.com/docs/api-reference/contacts/delete-contact.md): Delete a contact.
-- [Retrieve Contact Topics](https://api.opensend.com/docs/api-reference/contacts/get-contact-topics.md): Get topic subscriptions for a contact.
-- [Retrieve Contact](https://api.opensend.com/docs/api-reference/contacts/get-contact.md): Retrieve a contact by id or email where supported.
-- [List Contact Segments](https://api.opensend.com/docs/api-reference/contacts/list-contact-segments.md): List segments for a contact.
-- [List Contacts](https://api.opensend.com/docs/api-reference/contacts/list-contacts.md): List contacts.
-- [Update Contact Topics](https://api.opensend.com/docs/api-reference/contacts/update-contact-topics.md): Update topic subscriptions for a contact.
-- [Update Contact](https://api.opensend.com/docs/api-reference/contacts/update-contact.md): Update contact fields.
-- [Auto Configure Domain](https://api.opensend.com/docs/api-reference/domains/auto-configure-domain.md): Write DNS records through configured Cloudflare credentials.
-- [Create Domain](https://api.opensend.com/docs/api-reference/domains/create-domain.md): Add a sending domain.
-- [Delete Domain](https://api.opensend.com/docs/api-reference/domains/delete-domain.md): Delete a domain.
-- [Retrieve Domain](https://api.opensend.com/docs/api-reference/domains/get-domain.md): Retrieve a domain.
-- [List Domains](https://api.opensend.com/docs/api-reference/domains/list-domains.md): List domains.
-- [Update Domain](https://api.opensend.com/docs/api-reference/domains/update-domain.md): Update domain settings.
-- [Verify Domain](https://api.opensend.com/docs/api-reference/domains/verify-domain.md): Re-check DNS verification state.
-- [Cancel Email](https://api.opensend.com/docs/api-reference/emails/cancel-email.md): Cancel a scheduled email.
-- [List Sent Email Attachments](https://api.opensend.com/docs/api-reference/emails/list-email-attachments.md): List attachments for a sent email.
-- [List Sent Emails](https://api.opensend.com/docs/api-reference/emails/list-emails.md): List sent and queued emails for the authenticated tenant.
-- [List Received Email Attachments](https://api.opensend.com/docs/api-reference/emails/list-received-email-attachments.md): List attachments from a received email.
-- [List Received Emails](https://api.opensend.com/docs/api-reference/emails/list-received-emails.md): List inbound emails received by OpenSend.
-- [Retrieve Sent Email Attachment](https://api.opensend.com/docs/api-reference/emails/retrieve-email-attachment.md): Download or retrieve a sent email attachment.
-- [Retrieve Sent Email](https://api.opensend.com/docs/api-reference/emails/retrieve-email.md): Retrieve one sent email and its current state.
-- [Retrieve Received Email Attachment](https://api.opensend.com/docs/api-reference/emails/retrieve-received-email-attachment.md): Retrieve an inbound attachment.
-- [Retrieve Received Email](https://api.opensend.com/docs/api-reference/emails/retrieve-received-email.md): Retrieve one inbound email.
-- [Send Batch Emails](https://api.opensend.com/docs/api-reference/emails/send-batch-emails.md): Queue up to 100 emails in one request.
-- [Send Email](https://api.opensend.com/docs/api-reference/emails/send-email.md): Send one email through OpenSend.
-- [Update Scheduled Email](https://api.opensend.com/docs/api-reference/emails/update-email.md): Update a scheduled email before it is sent.
-- [List Events](https://api.opensend.com/docs/api-reference/events/list-events.md): List custom events.
-- [Send Custom Event](https://api.opensend.com/docs/api-reference/events/send.md): Send a custom event into OpenSend.
-- [List Logs](https://api.opensend.com/docs/api-reference/logs/list-logs.md): List API request logs.
-- [Retrieve Log](https://api.opensend.com/docs/api-reference/logs/retrieve-log.md): Retrieve one API request log.
-- [Create Segment](https://api.opensend.com/docs/api-reference/segments/create-segment.md): Create a segment.
-- [Delete Segment](https://api.opensend.com/docs/api-reference/segments/delete-segment.md): Delete a segment.
-- [Retrieve Segment](https://api.opensend.com/docs/api-reference/segments/get-segment.md): Retrieve a segment.
-- [List Segment Contacts](https://api.opensend.com/docs/api-reference/segments/list-segment-contacts.md): List contacts in a segment.
-- [List Segments](https://api.opensend.com/docs/api-reference/segments/list-segments.md): List segments.
-- [Delete Suppression](https://api.opensend.com/docs/api-reference/suppressions/delete-suppression.md): Remove a recipient from suppressions.
-- [List Suppressions](https://api.opensend.com/docs/api-reference/suppressions/list-suppressions.md): List suppressed recipients.
-- [Create Template](https://api.opensend.com/docs/api-reference/templates/create-template.md): Create a reusable template.
-- [Delete Template](https://api.opensend.com/docs/api-reference/templates/delete-template.md): Delete a template.
-- [Duplicate Template](https://api.opensend.com/docs/api-reference/templates/duplicate-template.md): Duplicate a template.
-- [Get Template](https://api.opensend.com/docs/api-reference/templates/get-template.md): Retrieve a template by id or alias.
-- [List Templates](https://api.opensend.com/docs/api-reference/templates/list-templates.md): List templates.
-- [Publish Template](https://api.opensend.com/docs/api-reference/templates/publish-template.md): Publish a draft template.
-- [Update Template](https://api.opensend.com/docs/api-reference/templates/update-template.md): Update a template.
-- [Create Topic](https://api.opensend.com/docs/api-reference/topics/create-topic.md): Create a subscription topic.
-- [Delete Topic](https://api.opensend.com/docs/api-reference/topics/delete-topic.md): Delete a topic.
-- [Retrieve Topic](https://api.opensend.com/docs/api-reference/topics/get-topic.md): Retrieve a topic.
-- [List Topics](https://api.opensend.com/docs/api-reference/topics/list-topics.md): List topics.
-- [Update Topic](https://api.opensend.com/docs/api-reference/topics/update-topic.md): Update a topic.
-- [Create Webhook](https://api.opensend.com/docs/api-reference/webhooks/create-webhook.md): Create a webhook endpoint.
-- [Delete Webhook](https://api.opensend.com/docs/api-reference/webhooks/delete-webhook.md): Delete a webhook.
-- [Retrieve Webhook](https://api.opensend.com/docs/api-reference/webhooks/get-webhook.md): Retrieve a webhook.
-- [List Webhooks](https://api.opensend.com/docs/api-reference/webhooks/list-webhooks.md): List webhook endpoints.
-- [Update Webhook](https://api.opensend.com/docs/api-reference/webhooks/update-webhook.md): Update a webhook.
-- [OpenSend CLI](https://api.opensend.com/docs/cli.md): Command-line workflows for OpenSend.
-- [Custom Event Schemas](https://api.opensend.com/docs/custom-event-schemas.md): Define and validate custom event payloads.
-- [Managing API Keys](https://api.opensend.com/docs/dashboard/api-keys/introduction.md): Manage OpenSend API keys in the dashboard.
-- [Managing Contacts](https://api.opensend.com/docs/dashboard/audiences/contacts.md): Manage contacts in the dashboard.
-- [Managing Unsubscribed Contacts](https://api.opensend.com/docs/dashboard/audiences/managing-unsubscribe-list.md): Understand unsubscribed contacts.
-- [Contact Properties](https://api.opensend.com/docs/dashboard/audiences/properties.md): Use custom properties on contacts.
-- [Condition](https://api.opensend.com/docs/dashboard/automations/condition.md): Branch automation runs.
-- [Delay](https://api.opensend.com/docs/dashboard/automations/delay.md): Pause automation execution.
-- [Using Automations](https://api.opensend.com/docs/dashboard/automations/introduction.md): Automate email workflows with custom events.
-- [Runs](https://api.opensend.com/docs/dashboard/automations/runs.md): Monitor automation executions.
-- [Send Email](https://api.opensend.com/docs/dashboard/automations/send-email.md): Send from an automation.
-- [Trigger](https://api.opensend.com/docs/dashboard/automations/trigger.md): Start automation runs.
-- [Wait for Event](https://api.opensend.com/docs/dashboard/automations/wait-for-event.md): Pause until an event arrives.
-- [Managing Broadcasts](https://api.opensend.com/docs/dashboard/broadcasts/introduction.md): Create, schedule, and inspect broadcasts.
-- [Broadcast Performance Tracking](https://api.opensend.com/docs/dashboard/broadcasts/performance-tracking.md): Track broadcast sends and metrics.
-- [DMARC](https://api.opensend.com/docs/dashboard/domains/dmarc.md): DMARC setup for sender domains.
-- [Managing Domains](https://api.opensend.com/docs/dashboard/domains/introduction.md): Domain verification and DNS setup.
-- [Open and Click Tracking](https://api.opensend.com/docs/dashboard/domains/tracking.md): Configure tracking domains and tracking behavior.
-- [Attachments](https://api.opensend.com/docs/dashboard/emails/attachments.md): How to send and inspect attachments.
-- [Custom Headers](https://api.opensend.com/docs/dashboard/emails/custom-headers.md): Attach custom headers to outbound email.
-- [Email Bounces](https://api.opensend.com/docs/dashboard/emails/email-bounces.md): Understand bounce handling.
-- [Email Suppressions](https://api.opensend.com/docs/dashboard/emails/email-suppressions.md): Understand suppressed recipients.
-- [Idempotency Keys](https://api.opensend.com/docs/dashboard/emails/idempotency-keys.md): Safely retry send requests.
-- [Schedule Email](https://api.opensend.com/docs/dashboard/emails/schedule-email.md): Schedule email delivery for later.
-- [Tags](https://api.opensend.com/docs/dashboard/emails/tags.md): Attach searchable identifiers to emails.
-- [Logs](https://api.opensend.com/docs/dashboard/logs/introduction.md): Troubleshoot API requests.
-- [Managing Segments](https://api.opensend.com/docs/dashboard/segments/introduction.md): Create and manage audience segments.
-- [Using Templates](https://api.opensend.com/docs/dashboard/templates/introduction.md): Store and reuse email templates.
-- [Template Variables](https://api.opensend.com/docs/dashboard/templates/template-variables.md): Use variables in templates.
-- [Template Version History](https://api.opensend.com/docs/dashboard/templates/version-history.md): Template lifecycle guidance.
-- [Topics](https://api.opensend.com/docs/dashboard/topics/introduction.md): Give recipients subscription preferences.
-- [Email Best Practices Skill](https://api.opensend.com/docs/email-best-practices-skill.md): Guardrails for production email systems.
-- [Examples](https://api.opensend.com/docs/examples.md): Example application patterns.
-- [Ingester Deployment](https://api.opensend.com/docs/ingester-deploy.md): Deploy the SES/SNS ingester and queue worker.
-- [Integrations](https://api.opensend.com/docs/integrations.md): Integration guidance.
-- [Cloudflare](https://api.opensend.com/docs/knowledge-base/cloudflare.md): Verify and configure domains with Cloudflare.
-- [GoDaddy](https://api.opensend.com/docs/knowledge-base/godaddy.md): Verify domains hosted on GoDaddy.
-- [How to Handle API Keys](https://api.opensend.com/docs/knowledge-base/how-to-handle-api-keys.md): API key storage guidance.
-- [Namecheap](https://api.opensend.com/docs/knowledge-base/namecheap.md): Verify domains hosted on Namecheap.
-- [AWS Route 53](https://api.opensend.com/docs/knowledge-base/route53.md): Verify domains hosted on Route 53.
-- [Domain and IP Warm-up Guide](https://api.opensend.com/docs/knowledge-base/warming-up.md): Warm up sending reputation.
-- [Unsupported Attachment Types](https://api.opensend.com/docs/knowledge-base/what-attachment-types-are-not-supported.md): Attachment safety guidance.
-- [What Counts as Email Consent?](https://api.opensend.com/docs/knowledge-base/what-counts-as-email-consent.md): Consent guidance for marketing sends.
-- [What if my domain is not verifying?](https://api.opensend.com/docs/knowledge-base/what-if-my-domain-is-not-verifying.md): Troubleshoot DNS verification.
-- [What Sending Feature Should I Use?](https://api.opensend.com/docs/knowledge-base/what-sending-feature-to-use.md): Choose emails, broadcasts, or automations.
-- [Why Are My Emails Going to Spam?](https://api.opensend.com/docs/knowledge-base/why-are-my-emails-going-to-spam.md): Deliverability troubleshooting.
-- [MCP Server](https://api.opensend.com/docs/mcp-server.md): Use OpenSend from MCP-compatible AI clients.
-- [Observability](https://api.opensend.com/docs/observability.md): Operate OpenSend in production.
-- [React Email Skill](https://api.opensend.com/docs/react-email-skill.md): Build HTML email with React components.
-- [Official SDKs](https://api.opensend.com/docs/sdks.md): OpenSend SDKs and packages.
-- [Security](https://api.opensend.com/docs/security.md): Security model overview.
-- [Self Hosting](https://api.opensend.com/docs/self-hosting.md): Run OpenSend yourself.
-- [Send emails with Bun](https://api.opensend.com/docs/send-with-bun.md): Use the TypeScript SDK from Bun.
-- [Send emails with Express](https://api.opensend.com/docs/send-with-express.md): Send email from an Express API route.
-- [Send emails with Go](https://api.opensend.com/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.
-- [Send emails with Hono](https://api.opensend.com/docs/send-with-hono.md): Send email from Hono.
-- [Send emails with Next.js](https://api.opensend.com/docs/send-with-nextjs.md): Send email from a Next.js route handler or server action.
-- [Send emails with Node.js](https://api.opensend.com/docs/send-with-nodejs.md): Send email from Node.js using the TypeScript SDK.
-- [Send emails with Python](https://api.opensend.com/docs/send-with-python.md): Send email from Python using the Python SDK.
-- [Send emails with Ruby](https://api.opensend.com/docs/send-with-ruby.md): Send email from Ruby where the Ruby SDK package is available.
-- [Send emails with SMTP](https://api.opensend.com/docs/send-with-smtp.md): SMTP integration status.
-- [contact.created](https://api.opensend.com/docs/webhooks/contacts/created.md): Webhook event emitted when a contact is created.
-- [contact.deleted](https://api.opensend.com/docs/webhooks/contacts/deleted.md): Webhook event emitted when a contact is deleted.
-- [contact.updated](https://api.opensend.com/docs/webhooks/contacts/updated.md): Webhook event emitted when a contact is updated.
-- [domain.created](https://api.opensend.com/docs/webhooks/domains/created.md): Webhook event emitted when a domain is created.
-- [domain.deleted](https://api.opensend.com/docs/webhooks/domains/deleted.md): Webhook event emitted when a domain is deleted.
-- [domain.updated](https://api.opensend.com/docs/webhooks/domains/updated.md): Webhook event emitted when a domain changes.
-- [email.bounced](https://api.opensend.com/docs/webhooks/emails/bounced.md): Webhook event emitted when an email bounces.
-- [email.clicked](https://api.opensend.com/docs/webhooks/emails/clicked.md): Webhook event emitted when tracking records a click.
-- [email.complained](https://api.opensend.com/docs/webhooks/emails/complained.md): Webhook event emitted when a recipient reports spam.
-- [email.delivered](https://api.opensend.com/docs/webhooks/emails/delivered.md): Webhook event emitted when delivery is confirmed.
-- [email.failed](https://api.opensend.com/docs/webhooks/emails/failed.md): Webhook event emitted when sending fails.
-- [email.opened](https://api.opensend.com/docs/webhooks/emails/opened.md): Webhook event emitted when tracking records an open.
-- [email.received](https://api.opensend.com/docs/webhooks/emails/received.md): Webhook event emitted when inbound email is received.
-- [email.sent](https://api.opensend.com/docs/webhooks/emails/sent.md): Webhook event emitted when an email is sent.
-- [Event Types](https://api.opensend.com/docs/webhooks/event-types.md): Supported webhook event names.
-- [Managing Webhooks](https://api.opensend.com/docs/webhooks/introduction.md): Receive real-time event notifications.
-- [Retries and Replays](https://api.opensend.com/docs/webhooks/retries-and-replays.md): Handle webhook delivery failures.
-- [Verify Webhook Requests](https://api.opensend.com/docs/webhooks/verify-webhooks-requests.md): Verify webhook signatures before trusting events.
+- [Introduction](https://opensend.namuh.co/docs/api-reference/introduction.md): Core concepts for the OpenSend API.
+- [Authentication](https://opensend.namuh.co/docs/api-reference/authentication.md): How API key authentication works in OpenSend.
+- [Pagination](https://opensend.namuh.co/docs/api-reference/pagination.md): Pagination behavior for list endpoints.
+- [Errors](https://opensend.namuh.co/docs/api-reference/errors.md): Common OpenSend API error shapes and status codes.
+- [Usage Limits](https://opensend.namuh.co/docs/api-reference/rate-limit.md): Rate limits, quotas, and operational limits.
+- [Agent Email Inbox Skill](https://opensend.namuh.co/docs/agent-email-inbox-skill.md): Give agents an email inbox backed by OpenSend receiving flows.
+- [AI Onboarding](https://opensend.namuh.co/docs/ai-onboarding.md): Onboard coding agents to OpenSend.
+- [Create API Key](https://opensend.namuh.co/docs/api-reference/api-keys/create-api-key.md): Create a new API key.
+- [Delete API Key](https://opensend.namuh.co/docs/api-reference/api-keys/delete-api-key.md): Delete an API key.
+- [List API Keys](https://opensend.namuh.co/docs/api-reference/api-keys/list-api-keys.md): List API keys for the authenticated tenant.
+- [Create Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/create-broadcast.md): Create a broadcast draft.
+- [Delete Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/delete-broadcast.md): Delete a broadcast.
+- [Retrieve Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/get-broadcast.md): Retrieve a broadcast.
+- [List Broadcasts](https://opensend.namuh.co/docs/api-reference/broadcasts/list-broadcasts.md): List broadcasts.
+- [Send Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/send-broadcast.md): Send or schedule a broadcast.
+- [Update Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/update-broadcast.md): Update a broadcast.
+- [Create Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/create-contact-property.md): Create a custom contact property.
+- [Delete Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/delete-contact-property.md): Delete a contact property.
+- [Retrieve Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/get-contact-property.md): Retrieve a contact property.
+- [List Contact Properties](https://opensend.namuh.co/docs/api-reference/contact-properties/list-contact-properties.md): List contact properties.
+- [Update Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/update-contact-property.md): Update a contact property.
+- [Add Contact to Segment](https://opensend.namuh.co/docs/api-reference/contacts/add-contact-to-segment.md): Add a contact to a segment.
+- [Create Contact](https://opensend.namuh.co/docs/api-reference/contacts/create-contact.md): Create an audience contact.
+- [Delete Contact Segment](https://opensend.namuh.co/docs/api-reference/contacts/delete-contact-segment.md): Remove a contact from a segment.
+- [Delete Contact](https://opensend.namuh.co/docs/api-reference/contacts/delete-contact.md): Delete a contact.
+- [Retrieve Contact Topics](https://opensend.namuh.co/docs/api-reference/contacts/get-contact-topics.md): Get topic subscriptions for a contact.
+- [Retrieve Contact](https://opensend.namuh.co/docs/api-reference/contacts/get-contact.md): Retrieve a contact by id or email where supported.
+- [List Contact Segments](https://opensend.namuh.co/docs/api-reference/contacts/list-contact-segments.md): List segments for a contact.
+- [List Contacts](https://opensend.namuh.co/docs/api-reference/contacts/list-contacts.md): List contacts.
+- [Update Contact Topics](https://opensend.namuh.co/docs/api-reference/contacts/update-contact-topics.md): Update topic subscriptions for a contact.
+- [Update Contact](https://opensend.namuh.co/docs/api-reference/contacts/update-contact.md): Update contact fields.
+- [Auto Configure Domain](https://opensend.namuh.co/docs/api-reference/domains/auto-configure-domain.md): Write DNS records through configured Cloudflare credentials.
+- [Create Domain](https://opensend.namuh.co/docs/api-reference/domains/create-domain.md): Add a sending domain.
+- [Delete Domain](https://opensend.namuh.co/docs/api-reference/domains/delete-domain.md): Delete a domain.
+- [Retrieve Domain](https://opensend.namuh.co/docs/api-reference/domains/get-domain.md): Retrieve a domain.
+- [List Domains](https://opensend.namuh.co/docs/api-reference/domains/list-domains.md): List domains.
+- [Update Domain](https://opensend.namuh.co/docs/api-reference/domains/update-domain.md): Update domain settings.
+- [Verify Domain](https://opensend.namuh.co/docs/api-reference/domains/verify-domain.md): Re-check DNS verification state.
+- [Cancel Email](https://opensend.namuh.co/docs/api-reference/emails/cancel-email.md): Cancel a scheduled email.
+- [List Sent Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-email-attachments.md): List attachments for a sent email.
+- [List Sent Emails](https://opensend.namuh.co/docs/api-reference/emails/list-emails.md): List sent and queued emails for the authenticated tenant.
+- [List Received Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-received-email-attachments.md): List attachments from a received email.
+- [List Received Emails](https://opensend.namuh.co/docs/api-reference/emails/list-received-emails.md): List inbound emails received by OpenSend.
+- [Retrieve Sent Email Attachment](https://opensend.namuh.co/docs/api-reference/emails/retrieve-email-attachment.md): Download or retrieve a sent email attachment.
+- [Retrieve Sent Email](https://opensend.namuh.co/docs/api-reference/emails/retrieve-email.md): Retrieve one sent email and its current state.
+- [Retrieve Received Email Attachment](https://opensend.namuh.co/docs/api-reference/emails/retrieve-received-email-attachment.md): Retrieve an inbound attachment.
+- [Retrieve Received Email](https://opensend.namuh.co/docs/api-reference/emails/retrieve-received-email.md): Retrieve one inbound email.
+- [Send Batch Emails](https://opensend.namuh.co/docs/api-reference/emails/send-batch-emails.md): Queue up to 100 emails in one request.
+- [Send Email](https://opensend.namuh.co/docs/api-reference/emails/send-email.md): Send one email through OpenSend.
+- [Update Scheduled Email](https://opensend.namuh.co/docs/api-reference/emails/update-email.md): Update a scheduled email before it is sent.
+- [List Events](https://opensend.namuh.co/docs/api-reference/events/list-events.md): List custom events.
+- [Send Custom Event](https://opensend.namuh.co/docs/api-reference/events/send.md): Send a custom event into OpenSend.
+- [List Logs](https://opensend.namuh.co/docs/api-reference/logs/list-logs.md): List API request logs.
+- [Retrieve Log](https://opensend.namuh.co/docs/api-reference/logs/retrieve-log.md): Retrieve one API request log.
+- [Create Segment](https://opensend.namuh.co/docs/api-reference/segments/create-segment.md): Create a segment.
+- [Delete Segment](https://opensend.namuh.co/docs/api-reference/segments/delete-segment.md): Delete a segment.
+- [Retrieve Segment](https://opensend.namuh.co/docs/api-reference/segments/get-segment.md): Retrieve a segment.
+- [List Segment Contacts](https://opensend.namuh.co/docs/api-reference/segments/list-segment-contacts.md): List contacts in a segment.
+- [List Segments](https://opensend.namuh.co/docs/api-reference/segments/list-segments.md): List segments.
+- [Delete Suppression](https://opensend.namuh.co/docs/api-reference/suppressions/delete-suppression.md): Remove a recipient from suppressions.
+- [List Suppressions](https://opensend.namuh.co/docs/api-reference/suppressions/list-suppressions.md): List suppressed recipients.
+- [Create Template](https://opensend.namuh.co/docs/api-reference/templates/create-template.md): Create a reusable template.
+- [Delete Template](https://opensend.namuh.co/docs/api-reference/templates/delete-template.md): Delete a template.
+- [Duplicate Template](https://opensend.namuh.co/docs/api-reference/templates/duplicate-template.md): Duplicate a template.
+- [Get Template](https://opensend.namuh.co/docs/api-reference/templates/get-template.md): Retrieve a template by id or alias.
+- [List Templates](https://opensend.namuh.co/docs/api-reference/templates/list-templates.md): List templates.
+- [Publish Template](https://opensend.namuh.co/docs/api-reference/templates/publish-template.md): Publish a draft template.
+- [Update Template](https://opensend.namuh.co/docs/api-reference/templates/update-template.md): Update a template.
+- [Create Topic](https://opensend.namuh.co/docs/api-reference/topics/create-topic.md): Create a subscription topic.
+- [Delete Topic](https://opensend.namuh.co/docs/api-reference/topics/delete-topic.md): Delete a topic.
+- [Retrieve Topic](https://opensend.namuh.co/docs/api-reference/topics/get-topic.md): Retrieve a topic.
+- [List Topics](https://opensend.namuh.co/docs/api-reference/topics/list-topics.md): List topics.
+- [Update Topic](https://opensend.namuh.co/docs/api-reference/topics/update-topic.md): Update a topic.
+- [Create Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/create-webhook.md): Create a webhook endpoint.
+- [Delete Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/delete-webhook.md): Delete a webhook.
+- [Retrieve Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/get-webhook.md): Retrieve a webhook.
+- [List Webhooks](https://opensend.namuh.co/docs/api-reference/webhooks/list-webhooks.md): List webhook endpoints.
+- [Update Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/update-webhook.md): Update a webhook.
+- [OpenSend CLI](https://opensend.namuh.co/docs/cli.md): Command-line workflows for OpenSend.
+- [Custom Event Schemas](https://opensend.namuh.co/docs/custom-event-schemas.md): Define and validate custom event payloads.
+- [Managing API Keys](https://opensend.namuh.co/docs/dashboard/api-keys/introduction.md): Manage OpenSend API keys in the dashboard.
+- [Managing Contacts](https://opensend.namuh.co/docs/dashboard/audiences/contacts.md): Manage contacts in the dashboard.
+- [Managing Unsubscribed Contacts](https://opensend.namuh.co/docs/dashboard/audiences/managing-unsubscribe-list.md): Understand unsubscribed contacts.
+- [Contact Properties](https://opensend.namuh.co/docs/dashboard/audiences/properties.md): Use custom properties on contacts.
+- [Condition](https://opensend.namuh.co/docs/dashboard/automations/condition.md): Branch automation runs.
+- [Delay](https://opensend.namuh.co/docs/dashboard/automations/delay.md): Pause automation execution.
+- [Using Automations](https://opensend.namuh.co/docs/dashboard/automations/introduction.md): Automate email workflows with custom events.
+- [Runs](https://opensend.namuh.co/docs/dashboard/automations/runs.md): Monitor automation executions.
+- [Send Email](https://opensend.namuh.co/docs/dashboard/automations/send-email.md): Send from an automation.
+- [Trigger](https://opensend.namuh.co/docs/dashboard/automations/trigger.md): Start automation runs.
+- [Wait for Event](https://opensend.namuh.co/docs/dashboard/automations/wait-for-event.md): Pause until an event arrives.
+- [Managing Broadcasts](https://opensend.namuh.co/docs/dashboard/broadcasts/introduction.md): Create, schedule, and inspect broadcasts.
+- [Broadcast Performance Tracking](https://opensend.namuh.co/docs/dashboard/broadcasts/performance-tracking.md): Track broadcast sends and metrics.
+- [DMARC](https://opensend.namuh.co/docs/dashboard/domains/dmarc.md): DMARC setup for sender domains.
+- [Managing Domains](https://opensend.namuh.co/docs/dashboard/domains/introduction.md): Domain verification and DNS setup.
+- [Open and Click Tracking](https://opensend.namuh.co/docs/dashboard/domains/tracking.md): Configure tracking domains and tracking behavior.
+- [Attachments](https://opensend.namuh.co/docs/dashboard/emails/attachments.md): How to send and inspect attachments.
+- [Custom Headers](https://opensend.namuh.co/docs/dashboard/emails/custom-headers.md): Attach custom headers to outbound email.
+- [Email Bounces](https://opensend.namuh.co/docs/dashboard/emails/email-bounces.md): Understand bounce handling.
+- [Email Suppressions](https://opensend.namuh.co/docs/dashboard/emails/email-suppressions.md): Understand suppressed recipients.
+- [Idempotency Keys](https://opensend.namuh.co/docs/dashboard/emails/idempotency-keys.md): Safely retry send requests.
+- [Schedule Email](https://opensend.namuh.co/docs/dashboard/emails/schedule-email.md): Schedule email delivery for later.
+- [Tags](https://opensend.namuh.co/docs/dashboard/emails/tags.md): Attach searchable identifiers to emails.
+- [Logs](https://opensend.namuh.co/docs/dashboard/logs/introduction.md): Troubleshoot API requests.
+- [Managing Segments](https://opensend.namuh.co/docs/dashboard/segments/introduction.md): Create and manage audience segments.
+- [Using Templates](https://opensend.namuh.co/docs/dashboard/templates/introduction.md): Store and reuse email templates.
+- [Template Variables](https://opensend.namuh.co/docs/dashboard/templates/template-variables.md): Use variables in templates.
+- [Template Version History](https://opensend.namuh.co/docs/dashboard/templates/version-history.md): Template lifecycle guidance.
+- [Topics](https://opensend.namuh.co/docs/dashboard/topics/introduction.md): Give recipients subscription preferences.
+- [Email Best Practices Skill](https://opensend.namuh.co/docs/email-best-practices-skill.md): Guardrails for production email systems.
+- [Examples](https://opensend.namuh.co/docs/examples.md): Example application patterns.
+- [Ingester Deployment](https://opensend.namuh.co/docs/ingester-deploy.md): Deploy the SES/SNS ingester and queue worker.
+- [Integrations](https://opensend.namuh.co/docs/integrations.md): Integration guidance.
+- [Cloudflare](https://opensend.namuh.co/docs/knowledge-base/cloudflare.md): Verify and configure domains with Cloudflare.
+- [GoDaddy](https://opensend.namuh.co/docs/knowledge-base/godaddy.md): Verify domains hosted on GoDaddy.
+- [How to Handle API Keys](https://opensend.namuh.co/docs/knowledge-base/how-to-handle-api-keys.md): API key storage guidance.
+- [Namecheap](https://opensend.namuh.co/docs/knowledge-base/namecheap.md): Verify domains hosted on Namecheap.
+- [AWS Route 53](https://opensend.namuh.co/docs/knowledge-base/route53.md): Verify domains hosted on Route 53.
+- [Domain and IP Warm-up Guide](https://opensend.namuh.co/docs/knowledge-base/warming-up.md): Warm up sending reputation.
+- [Unsupported Attachment Types](https://opensend.namuh.co/docs/knowledge-base/what-attachment-types-are-not-supported.md): Attachment safety guidance.
+- [What Counts as Email Consent?](https://opensend.namuh.co/docs/knowledge-base/what-counts-as-email-consent.md): Consent guidance for marketing sends.
+- [What if my domain is not verifying?](https://opensend.namuh.co/docs/knowledge-base/what-if-my-domain-is-not-verifying.md): Troubleshoot DNS verification.
+- [What Sending Feature Should I Use?](https://opensend.namuh.co/docs/knowledge-base/what-sending-feature-to-use.md): Choose emails, broadcasts, or automations.
+- [Why Are My Emails Going to Spam?](https://opensend.namuh.co/docs/knowledge-base/why-are-my-emails-going-to-spam.md): Deliverability troubleshooting.
+- [MCP Server](https://opensend.namuh.co/docs/mcp-server.md): Use OpenSend from MCP-compatible AI clients.
+- [Observability](https://opensend.namuh.co/docs/observability.md): Operate OpenSend in production.
+- [React Email Skill](https://opensend.namuh.co/docs/react-email-skill.md): Build HTML email with React components.
+- [Official SDKs](https://opensend.namuh.co/docs/sdks.md): OpenSend SDKs and packages.
+- [Security](https://opensend.namuh.co/docs/security.md): Security model overview.
+- [Self Hosting](https://opensend.namuh.co/docs/self-hosting.md): Run OpenSend yourself.
+- [Send emails with Bun](https://opensend.namuh.co/docs/send-with-bun.md): Use the TypeScript SDK from Bun.
+- [Send emails with Express](https://opensend.namuh.co/docs/send-with-express.md): Send email from an Express API route.
+- [Send emails with Go](https://opensend.namuh.co/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.
+- [Send emails with Hono](https://opensend.namuh.co/docs/send-with-hono.md): Send email from Hono.
+- [Send emails with Next.js](https://opensend.namuh.co/docs/send-with-nextjs.md): Send email from a Next.js route handler or server action.
+- [Send emails with Node.js](https://opensend.namuh.co/docs/send-with-nodejs.md): Send email from Node.js using the TypeScript SDK.
+- [Send emails with Python](https://opensend.namuh.co/docs/send-with-python.md): Send email from Python using the Python SDK.
+- [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK.
+- [Send emails with SMTP](https://opensend.namuh.co/docs/send-with-smtp.md): SMTP integration status.
+- [contact.created](https://opensend.namuh.co/docs/webhooks/contacts/created.md): Webhook event emitted when a contact is created.
+- [contact.deleted](https://opensend.namuh.co/docs/webhooks/contacts/deleted.md): Webhook event emitted when a contact is deleted.
+- [contact.updated](https://opensend.namuh.co/docs/webhooks/contacts/updated.md): Webhook event emitted when a contact is updated.
+- [domain.created](https://opensend.namuh.co/docs/webhooks/domains/created.md): Webhook event emitted when a domain is created.
+- [domain.deleted](https://opensend.namuh.co/docs/webhooks/domains/deleted.md): Webhook event emitted when a domain is deleted.
+- [domain.updated](https://opensend.namuh.co/docs/webhooks/domains/updated.md): Webhook event emitted when a domain changes.
+- [email.bounced](https://opensend.namuh.co/docs/webhooks/emails/bounced.md): Webhook event emitted when an email bounces.
+- [email.clicked](https://opensend.namuh.co/docs/webhooks/emails/clicked.md): Webhook event emitted when tracking records a click.
+- [email.complained](https://opensend.namuh.co/docs/webhooks/emails/complained.md): Webhook event emitted when a recipient reports spam.
+- [email.delivered](https://opensend.namuh.co/docs/webhooks/emails/delivered.md): Webhook event emitted when delivery is confirmed.
+- [email.failed](https://opensend.namuh.co/docs/webhooks/emails/failed.md): Webhook event emitted when sending fails.
+- [email.opened](https://opensend.namuh.co/docs/webhooks/emails/opened.md): Webhook event emitted when tracking records an open.
+- [email.received](https://opensend.namuh.co/docs/webhooks/emails/received.md): Webhook event emitted when inbound email is received.
+- [email.sent](https://opensend.namuh.co/docs/webhooks/emails/sent.md): Webhook event emitted when an email is sent.
+- [Event Types](https://opensend.namuh.co/docs/webhooks/event-types.md): Supported webhook event names.
+- [Managing Webhooks](https://opensend.namuh.co/docs/webhooks/introduction.md): Receive real-time event notifications.
+- [Retries and Replays](https://opensend.namuh.co/docs/webhooks/retries-and-replays.md): Handle webhook delivery failures.
+- [Verify Webhook Requests](https://opensend.namuh.co/docs/webhooks/verify-webhooks-requests.md): Verify webhook signatures before trusting events.
 
 ## OpenAPI Specs
 
-- [OpenAPI JSON](https://api.opensend.com/openapi.json)
-- [LLM Docs Index](https://api.opensend.com/docs/llms.txt)
+- [OpenAPI JSON](https://opensend.namuh.co/openapi.json)
+- [LLM Docs Index](https://opensend.namuh.co/docs/llms.txt)
 
 ## Agent guidance
 

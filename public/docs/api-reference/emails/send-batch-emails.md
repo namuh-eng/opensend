@@ -21,7 +21,7 @@ Send an array of email payloads. Use an `Idempotency-Key` header to make retries
 ## Example
 
 ```bash
-curl -X POST https://api.opensend.com/emails/batch \
+curl -X POST https://opensend.namuh.co/emails/batch \
   -H "Authorization: Bearer os_YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '[{"from":"Acme <news@example.com>","to":["a@example.com"],"subject":"A","html":"<p>A</p>"}]'
