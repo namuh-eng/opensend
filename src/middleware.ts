@@ -386,6 +386,8 @@ export async function middleware(request: NextRequest) {
       pathname === "/" ||
       pathname === "/auth" ||
       pathname === "/docs" ||
+      pathname.startsWith("/docs/") ||
+      pathname === "/llms.txt" ||
       pathname === "/openapi.json" ||
       pathname === "/landing" ||
       pathname.startsWith("/landing/") ||
