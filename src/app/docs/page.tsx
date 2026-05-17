@@ -28,7 +28,7 @@ type GuideCard = {
   href: string;
 };
 
-const BASE_URL = "https://api.opensend.com";
+const BASE_URL = "https://opensend.namuh.co";
 const DOCS_COUNT = 157;
 
 const OPENSEND_GUIDES: GuideCard[] = [
@@ -94,7 +94,7 @@ const MCP_EXAMPLE = `{
       "args": ["/path/to/opensend/packages/mcp/src/stdio.ts"],
       "env": {
         "OPENSEND_API_KEY": "os_YOUR_API_KEY",
-        "OPENSEND_API_BASE_URL": "https://api.opensend.com"
+        "OPENSEND_API_BASE_URL": "https://opensend.namuh.co"
       }
     }
   }
@@ -111,7 +111,7 @@ const API_SECTIONS: ApiSection[] = [
         path: "/emails",
         title: "Send an email",
         description:
-          "Accepts the Resend-compatible send body. Duplicate Idempotency-Key retries within 24 hours replay the original accepted id.",
+          "Accepts OpenSend send payloads with familiar compatibility aliases. Duplicate Idempotency-Key retries within 24 hours replay the original accepted id.",
         notes: ["Requires a verified sending domain for production traffic."],
         code: {
           node: `await resend.emails.send({
@@ -207,7 +207,7 @@ const API_SECTIONS: ApiSection[] = [
         description:
           "Operator/self-host Cloudflare token flow for writing the generated records automatically.",
         code: {
-          node: `await fetch("https://api.opensend.com/api/domains/domain_id/auto-configure", {
+          node: `await fetch("https://opensend.namuh.co/api/domains/domain_id/auto-configure", {
   method: "POST",
   headers: { Authorization: "Bearer " + apiKey },
 });`,
@@ -237,8 +237,7 @@ const API_SECTIONS: ApiSection[] = [
         method: "POST",
         path: "/contacts",
         title: "Create contact",
-        description:
-          "Create a contact through the Resend-compatible root alias.",
+        description: "Create a contact through the familiar root API alias.",
         code: {
           node: `await client.contacts.create({
   email: "jane@example.com",
@@ -348,7 +347,7 @@ const API_SECTIONS: ApiSection[] = [
         path: "/api-keys",
         title: "Create API key",
         description:
-          "Create scoped keys. OpenSend keys use the os_ prefix while preserving Resend-compatible API semantics.",
+          "Create scoped keys. OpenSend keys use the os_ prefix while preserving familiar API semantics.",
         code: {
           node: `await client.apiKeys.create({ name: "Production" });`,
           curl: `curl -X POST ${BASE_URL}/api-keys \\
@@ -364,7 +363,7 @@ const API_SECTIONS: ApiSection[] = [
         description:
           "Subscribe an HTTPS endpoint to signed delivery and lifecycle events.",
         code: {
-          node: `await fetch("https://api.opensend.com/api/webhooks", {
+          node: `await fetch("https://opensend.namuh.co/api/webhooks", {
   method: "POST",
   headers: {
     Authorization: "Bearer " + apiKey,
@@ -549,8 +548,8 @@ export default function DocsPage() {
               <div className="grid gap-0">
                 <div className="p-6 sm:p-8 lg:p-10">
                   <div className="pill success">
-                    <span className="dot" /> Resend-compatible · self-hosted on
-                    AWS SES
+                    <span className="dot" /> Familiar API · self-hosted on AWS
+                    SES
                   </div>
                   <h1 className="mt-6 text-[42px] font-medium leading-[0.96] tracking-[-0.04em] text-fg sm:text-[56px]">
                     Email API docs that agents and humans can actually use.

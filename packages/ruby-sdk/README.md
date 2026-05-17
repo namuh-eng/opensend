@@ -1,14 +1,16 @@
 # opensend Ruby SDK
 
 Minimal first-party Ruby SDK for OpenSend transactional email sends with a
-Resend-shaped API surface.
+familiar API surface.
 
-Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+Use your OpenSend API key (`os_...`) with OpenSend's Ruby API surface.
+Existing Resend-style send calls can migrate through the alias documented
+below.
 
 ## Installation
 
-This package is staged for future RubyGems publishing. From this repository
-today:
+This package is ready for RubyGems publishing. Until the RubyGems publish is
+complete, install the built gem from this repository:
 
 ```bash
 cd packages/ruby-sdk
@@ -16,7 +18,7 @@ gem build opensend.gemspec
 gem install ./opensend-0.1.0.gem
 ```
 
-After publication, the intended package install is:
+After `opensend` is published to RubyGems, install it with:
 
 ```bash
 gem install opensend
@@ -31,7 +33,7 @@ export OPENSEND_API_KEY="os_your_api_key"
 ```
 
 For self-hosted OpenSend, point the SDK at your deployment origin. The default
-hosted origin is `https://api.opensend.com`.
+hosted origin is `https://opensend.namuh.co`.
 
 ```bash
 export OPENSEND_BASE_URL="http://localhost:3015"
@@ -39,7 +41,8 @@ export OPENSEND_BASE_URL="http://localhost:3015"
 
 ## Send an email
 
-The module-level surface mirrors Resend's Ruby ergonomics:
+The module-level surface uses OpenSend while keeping familiar Ruby email-send
+ergonomics:
 
 ```ruby
 require "opensend"
@@ -57,7 +60,8 @@ email = OpenSend::Emails.send(
 puts email.fetch("id")
 ```
 
-`Resend` is also exported as an alias constant for migration-oriented code:
+`Resend` is also exported as an alias constant for existing send code migrating
+to OpenSend:
 
 ```ruby
 require "opensend"
@@ -108,10 +112,10 @@ end
 - Bearer API key auth
 - Configurable base URL
 - Structured API error envelope parsing
-- Resend alias constant for migration-oriented send code
+- Resend alias constant for existing send code migrating to OpenSend
 
 This first package intentionally does not implement batch sends, async jobs,
-attachments helpers, or the full Resend resource surface yet.
+attachments helpers, or full resource-surface parity yet.
 
 ## Tests
 

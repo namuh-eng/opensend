@@ -140,7 +140,7 @@ export const openApiDocument = {
     },
   },
   servers: [
-    { url: "https://api.opensend.com", description: "OpenSend API" },
+    { url: "https://opensend.namuh.co", description: "OpenSend API" },
     { url: "http://localhost:3015", description: "Local development" },
   ],
   tags: [

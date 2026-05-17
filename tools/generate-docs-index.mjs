@@ -4,7 +4,7 @@ import path from "node:path";
 
 const docsRoot = path.join(process.cwd(), "public", "docs");
 const publicBaseUrl =
-  process.env.OPENSEND_DOCS_PUBLIC_BASE_URL ?? "https://api.opensend.com/docs";
+  process.env.OPENSEND_DOCS_PUBLIC_BASE_URL ?? "https://opensend.namuh.co/docs";
 
 async function walk(dir) {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -91,8 +91,8 @@ lines.push(
   "",
   "## OpenAPI Specs",
   "",
-  "- [OpenAPI JSON](https://api.opensend.com/openapi.json)",
-  "- [LLM Docs Index](https://api.opensend.com/docs/llms.txt)",
+  "- [OpenAPI JSON](https://opensend.namuh.co/openapi.json)",
+  "- [LLM Docs Index](https://opensend.namuh.co/docs/llms.txt)",
   "",
   "## Agent guidance",
   "",
