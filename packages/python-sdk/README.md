@@ -1,22 +1,23 @@
 # opensend Python SDK
 
 Minimal first-party Python SDK for OpenSend transactional email sends with a
-Resend-shaped API surface.
+familiar email API surface.
 
-Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+Use your OpenSend API key (`os_...`) with OpenSend as a Resend alternative.
+The SDK keeps selected alias compatibility for migration-oriented code.
 
 ## Installation
 
-This package is staged for future PyPI publishing. From this repository today:
+From this repository before the PyPI release:
 
 ```bash
 python -m pip install ./packages/python-sdk
 ```
 
-After publication, the intended package install is:
+After `opensend==0.1.0` is published to PyPI, install with:
 
 ```bash
-python -m pip install opensend
+python -m pip install opensend==0.1.0
 ```
 
 ## Setup
@@ -28,7 +29,7 @@ export OPENSEND_API_KEY="os_your_api_key"
 ```
 
 For self-hosted OpenSend, point the SDK at your deployment origin. The default
-hosted origin is `https://api.opensend.com`.
+hosted origin is `https://opensend.namuh.co`.
 
 ```bash
 export OPENSEND_BASE_URL="http://localhost:3015"
@@ -36,7 +37,7 @@ export OPENSEND_BASE_URL="http://localhost:3015"
 
 ## Send an email
 
-The module-level surface mirrors Resend's Python ergonomics:
+The module-level surface keeps familiar Python email SDK ergonomics:
 
 ```python
 import os
@@ -57,7 +58,7 @@ print(email["id"])
 ```
 
 Python reserves `from` as a keyword argument name, but dictionary keys can still
-use the OpenSend/Resend JSON field name. If you prefer constructing dictionaries
+use the OpenSend JSON field name. If you prefer constructing dictionaries
 with Python identifiers, the SDK also accepts `from_` or `from_email` and sends
 that value as JSON `from`.
 
@@ -94,11 +95,12 @@ print(result["data"])
 ## Instance client
 
 ```python
-from opensend import OpenSend
+import os
+from opensend import DEFAULT_BASE_URL, OpenSend
 
 client = OpenSend(
     os.environ["OPENSEND_API_KEY"],
-    base_url=os.environ.get("OPENSEND_BASE_URL", "https://api.opensend.com"),
+    base_url=os.environ.get("OPENSEND_BASE_URL", DEFAULT_BASE_URL),
 )
 
 email = client.emails.send({
@@ -139,8 +141,7 @@ except opensend.OpenSendError as error:
 - Optional `idempotency_key=` request header
 - Typed request/response structures for transactional email sends
 
-This first package intentionally does not implement the full Resend resource
-surface yet.
+This first package intentionally does not implement every OpenSend API resource yet.
 
 ## Tests
 

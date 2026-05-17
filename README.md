@@ -30,12 +30,12 @@
 
 Opensend is a self-hostable email platform with REST APIs, SDKs, React email templates, domain verification, webhooks, broadcasts, automations, analytics, and an admin dashboard for teams that want an OpenSend-first Resend alternative.
 
-Use your OpenSend API key (`os_...`) with OpenSend's familiar email API surface.
+Use your OpenSend API key (`os_...`) with OpenSend's familiar email API surface and selected compatibility aliases for migration-oriented code.
 
 Use Opensend when you want:
 
 - **Control** — run email infrastructure on your own cloud and AWS SES quota.
-- **Familiar API** — move common sends, audiences, and webhooks with minimal code changes.
+- **Familiar API** — move common sends, audiences, and webhooks with minimal code changes where compatibility aliases are implemented.
 - **A real dashboard** — manage domains, API keys, broadcasts, automations, templates, audiences, logs, and metrics.
 - **Open deployment** — Docker Compose for local/self-hosted installs, with production guides for split app + ingester deployments.
 
@@ -239,7 +239,7 @@ import os
 import opensend
 
 opensend.api_key = os.environ["OPENSEND_API_KEY"]
-opensend.base_url = os.environ.get("OPENSEND_BASE_URL", "https://api.opensend.com")
+opensend.base_url = os.environ.get("OPENSEND_BASE_URL", opensend.DEFAULT_BASE_URL)
 
 email = opensend.Emails.send({
     "from": "hello@yourdomain.com",
