@@ -1,5 +1,4 @@
 import { PricingPage } from "@/components/landing/pricing-page";
-import type { BillingPeriod } from "@/components/landing/pricing-page";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -25,22 +24,6 @@ export const metadata: Metadata = {
   },
 };
 
-type PricingRouteProps = {
-  searchParams?: Promise<{
-    billing?: string | string[];
-  }>;
-};
-
-function parseBillingPeriod(
-  value: string | string[] | undefined,
-): BillingPeriod {
-  const billing = Array.isArray(value) ? value[0] : value;
-  return billing === "yearly" ? "yearly" : "monthly";
-}
-
-export default async function PricingRoute({
-  searchParams,
-}: PricingRouteProps = {}) {
-  const params = searchParams ? await searchParams : {};
-  return <PricingPage billing={parseBillingPeriod(params.billing)} />;
+export default function PricingRoute() {
+  return <PricingPage />;
 }

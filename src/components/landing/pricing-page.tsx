@@ -1,5 +1,14 @@
 "use client";
 
+import {
+  PricingPlanCard,
+  PricingTierSelector,
+} from "@/components/pricing/pricing-card";
+import {
+  DEFAULT_PRICING_TIER_SLUG,
+  type PricingTierSlug,
+  getPricingCardsForSelection,
+} from "@/components/pricing/pricing-catalog";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -7,110 +16,6 @@ const GITHUB_URL = "https://github.com/namuh-eng/opensend";
 const DOCS_URL = "/docs";
 const HOSTED_SIGNIN_URL = "/auth";
 const SELF_HOST_URL = `${GITHUB_URL}#self-host`;
-const CONTACT_URL = "mailto:hello@opensend.namuh.co";
-
-type Plan = {
-  slug: string;
-  name: string;
-  blurb: string;
-  monthly: number | string;
-  yearly: number | string;
-  quota: string;
-  domains: string;
-  keys: string;
-  cta: string;
-  ctaStyle: "primary" | "ghost";
-  ctaHref: string;
-  featured?: boolean;
-  perks: string[];
-};
-
-export type BillingPeriod = "monthly" | "yearly";
-
-const PLANS: Plan[] = [
-  {
-    slug: "free",
-    name: "Free",
-    blurb: "For tinkering and side projects.",
-    monthly: 0,
-    yearly: 0,
-    quota: "5,000 API + broadcast emails/mo",
-    domains: "1 verified domain",
-    keys: "2 API keys",
-    cta: "Get started",
-    ctaStyle: "ghost",
-    ctaHref: HOSTED_SIGNIN_URL,
-    perks: [
-      "Resend-compatible REST API",
-      "TypeScript SDK + React Email",
-      "HMAC-signed webhooks",
-      "Open/click analytics",
-      "Community support",
-    ],
-  },
-  {
-    slug: "starter",
-    name: "Starter",
-    blurb: "For small teams shipping production email.",
-    monthly: 19,
-    yearly: 15,
-    quota: "55,000 API + broadcast emails/mo",
-    domains: "10 verified domains",
-    keys: "10 API keys",
-    cta: "Start Starter",
-    ctaStyle: "ghost",
-    ctaHref: HOSTED_SIGNIN_URL,
-    perks: [
-      "Everything in Free",
-      "API sends + broadcast fanout",
-      "Contacts, segments, and broadcasts",
-      "Email automations",
-      "Email support · 48h",
-    ],
-  },
-  {
-    slug: "growth",
-    name: "Growth",
-    blurb: "For domain-heavy teams growing broadcast and API volume.",
-    monthly: 99,
-    yearly: 79,
-    quota: "120,000 API + broadcast emails/mo",
-    domains: "1,000 verified domains",
-    keys: "25 API keys",
-    cta: "Start Growth",
-    ctaStyle: "primary",
-    ctaHref: HOSTED_SIGNIN_URL,
-    featured: true,
-    perks: [
-      "Everything in Starter",
-      "Advanced broadcast and audience workflows",
-      "Custom Return-Path domains",
-      "Audit log & SSO (Google)",
-      "Priority support · 12h",
-    ],
-  },
-  {
-    slug: "scale",
-    name: "Scale",
-    blurb: "High-volume, regulated, custom needs.",
-    monthly: "Custom",
-    yearly: "Custom",
-    quota: "Unlimited (your SES)",
-    domains: "Unlimited",
-    keys: "Unlimited",
-    cta: "Talk to us",
-    ctaStyle: "ghost",
-    ctaHref: CONTACT_URL,
-    perks: [
-      "Everything in Growth",
-      "BYO AWS account",
-      "Dedicated infra & VPC peering",
-      "BAA / SOC 2 assistance",
-      "Slack channel · 1h SLA",
-    ],
-  },
-];
-
 const FAQ: Array<[string, string]> = [
   [
     "What happens if I exceed my quota?",
@@ -130,7 +35,7 @@ const FAQ: Array<[string, string]> = [
   ],
   [
     "Is there a yearly discount?",
-    "Yes — paying yearly saves roughly 20% on Starter and Growth. Toggle the switch above the plans.",
+    "Self-serve Cloud tiers are monthly so you can move with usage. Annual terms are handled through custom Scale agreements.",
   ],
   [
     "How do I cancel?",
@@ -139,7 +44,7 @@ const FAQ: Array<[string, string]> = [
 ];
 
 const COMPARE_ROWS: string[][] = [
-  ["Monthly emails", "5k", "55k", "120k", "Unlimited"],
+  ["Monthly emails", "5k", "55k-100k", "120k-500k", "Unlimited"],
   ["Verified domains", "1", "10", "1,000", "Unlimited"],
   ["API keys", "2", "10", "25", "Unlimited"],
   ["Webhooks", "✓", "✓", "✓", "✓"],
@@ -268,283 +173,6 @@ function TopNav() {
         </nav>
       </div>
     </header>
-  );
-}
-
-function CheckIcon({ accent }: { accent: boolean }) {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 14 14"
-      style={{
-        flex: "none",
-        marginTop: 3,
-        color: accent ? "var(--accent)" : "var(--fg)",
-      }}
-      aria-hidden="true"
-      focusable="false"
-    >
-      <title>included</title>
-      <path
-        d="M3 7.5l2.5 2.5L11 4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function PlanCard({
-  plan,
-  billing,
-}: {
-  plan: Plan;
-  billing: BillingPeriod;
-}) {
-  const isCustom = typeof plan.monthly === "string";
-  const eff =
-    billing === "yearly" && typeof plan.yearly === "number"
-      ? plan.yearly
-      : plan.monthly;
-  const showSave =
-    billing === "yearly" &&
-    typeof plan.yearly === "number" &&
-    typeof plan.monthly === "number" &&
-    plan.yearly < plan.monthly;
-
-  const ctaIsExternal =
-    plan.ctaHref.startsWith("mailto:") || plan.ctaHref.startsWith("http");
-
-  return (
-    <div
-      data-testid={`plan-${plan.slug}`}
-      style={{
-        position: "relative",
-        borderRadius: 14,
-        border: plan.featured
-          ? "1px solid color-mix(in oklch, var(--accent) 60%, transparent)"
-          : "1px solid var(--line-2)",
-        background: plan.featured
-          ? "linear-gradient(180deg, rgba(196,255,90,0.04) 0%, rgba(13,13,16,0.85) 60%)"
-          : "linear-gradient(180deg, #131318 0%, #0d0d11 100%)",
-        padding: "28px 26px 26px",
-        display: "flex",
-        flexDirection: "column",
-        gap: 18,
-        minHeight: 480,
-        boxShadow: plan.featured
-          ? "0 30px 60px -30px rgba(196,255,90,0.25)"
-          : "0 30px 60px -40px rgba(0,0,0,0.6)",
-      }}
-    >
-      {plan.featured && (
-        <span
-          style={{
-            position: "absolute",
-            top: -12,
-            right: 20,
-            padding: "4px 10px",
-            borderRadius: 99,
-            background: "var(--accent)",
-            color: "var(--accent-ink)",
-            fontFamily: "var(--landing-mono)",
-            fontSize: 11,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
-            boxShadow:
-              "0 0 0 1px rgba(196,255,90,0.35), 0 0 24px -4px rgba(196,255,90,0.5)",
-          }}
-        >
-          most popular
-        </span>
-      )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <span
-          className="mono"
-          style={{
-            fontSize: 11,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-            color: plan.featured ? "var(--accent)" : "var(--fg-3)",
-          }}
-        >
-          {plan.name.toLowerCase()}
-        </span>
-        <h3
-          style={{
-            margin: 0,
-            fontSize: 22,
-            fontWeight: 500,
-            letterSpacing: "-0.015em",
-          }}
-        >
-          {plan.name}
-        </h3>
-        <p style={{ margin: 0, color: "var(--fg-2)", fontSize: 13.5 }}>
-          {plan.blurb}
-        </p>
-      </div>
-
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: 8,
-          minHeight: 56,
-        }}
-      >
-        {isCustom ? (
-          <span
-            className="serif"
-            style={{ fontSize: 44, lineHeight: 1, letterSpacing: "-0.02em" }}
-          >
-            Let's talk
-          </span>
-        ) : (
-          <>
-            <span
-              style={{
-                fontSize: 12,
-                color: "var(--fg-3)",
-                fontFamily: "var(--landing-mono)",
-              }}
-            >
-              $
-            </span>
-            <span
-              style={{
-                fontSize: 44,
-                fontWeight: 500,
-                letterSpacing: "-0.025em",
-                lineHeight: 1,
-              }}
-            >
-              {eff}
-            </span>
-            <span
-              className="mono"
-              style={{ fontSize: 12, color: "var(--fg-3)" }}
-            >
-              /mo
-            </span>
-            {showSave && (
-              <span
-                style={{
-                  marginLeft: "auto",
-                  alignSelf: "center",
-                  fontFamily: "var(--landing-mono)",
-                  fontSize: 11,
-                  padding: "3px 8px",
-                  borderRadius: 6,
-                  background: "rgba(196,255,90,0.12)",
-                  color: "var(--accent)",
-                  border: "1px solid rgba(196,255,90,0.25)",
-                }}
-              >
-                billed yearly
-              </span>
-            )}
-          </>
-        )}
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr",
-          border: "1px solid var(--line)",
-          borderRadius: 10,
-          background: "rgba(255,255,255,0.015)",
-          overflow: "hidden",
-        }}
-      >
-        {[plan.quota, plan.domains, plan.keys].map((row, i) => {
-          const labels = ["quota", "domains", "keys"];
-          return (
-            <div
-              key={labels[i]}
-              className="mono"
-              style={{
-                padding: "9px 12px",
-                fontSize: 12,
-                color: "var(--fg-2)",
-                borderTop: i ? "1px solid var(--line)" : "none",
-                display: "flex",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={{ color: "var(--fg-3)" }}>{labels[i]}</span>
-              <span
-                style={{
-                  color:
-                    plan.featured && i === 0 ? "var(--accent)" : "var(--fg)",
-                }}
-              >
-                {row}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      <ul
-        style={{
-          listStyle: "none",
-          padding: 0,
-          margin: 0,
-          display: "flex",
-          flexDirection: "column",
-          gap: 9,
-        }}
-      >
-        {plan.perks.map((p) => (
-          <li
-            key={p}
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "flex-start",
-              fontSize: 13.5,
-              color: "var(--fg-2)",
-            }}
-          >
-            <CheckIcon accent={!!plan.featured} />
-            <span>{p}</span>
-          </li>
-        ))}
-      </ul>
-
-      <div style={{ marginTop: "auto" }}>
-        {ctaIsExternal ? (
-          <a
-            href={plan.ctaHref}
-            className={`btn btn-${plan.ctaStyle}`}
-            style={{ width: "100%" }}
-            rel={
-              plan.ctaHref.startsWith("http")
-                ? "noreferrer noopener"
-                : undefined
-            }
-            target={plan.ctaHref.startsWith("http") ? "_blank" : undefined}
-          >
-            {plan.cta}
-          </a>
-        ) : (
-          <Link
-            href={plan.ctaHref}
-            className={`btn btn-${plan.ctaStyle}`}
-            style={{ width: "100%" }}
-            data-testid={`cta-${plan.slug}`}
-          >
-            {plan.cta}
-          </Link>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -918,9 +546,11 @@ function MiniFooter() {
   );
 }
 
-export function PricingPage({
-  billing = "monthly",
-}: { billing?: BillingPeriod }) {
+export function PricingPage() {
+  const [selectedTierSlug, setSelectedTierSlug] = useState<PricingTierSlug>(
+    DEFAULT_PRICING_TIER_SLUG,
+  );
+
   return (
     <div className="landing-root">
       <div className="grain" aria-hidden="true" />
@@ -970,53 +600,10 @@ export function PricingPage({
               either way.
             </p>
 
-            <form
-              aria-label="Billing period"
-              action="/pricing"
-              method="get"
-              style={{
-                display: "inline-flex",
-                padding: 4,
-                borderRadius: 999,
-                border: "1px solid var(--line-2)",
-                background: "rgba(255,255,255,0.02)",
-                marginTop: 8,
-                marginInline: 0,
-                minWidth: 0,
-              }}
-            >
-              {(
-                [
-                  ["monthly", "Monthly"],
-                  ["yearly", "Yearly · save 20%"],
-                ] as const
-              ).map(([k, label]) => {
-                const active = billing === k;
-                return (
-                  <button
-                    key={k}
-                    type="submit"
-                    name="billing"
-                    value={k}
-                    aria-pressed={active}
-                    data-testid={`billing-${k}`}
-                    style={{
-                      padding: "7px 16px",
-                      borderRadius: 999,
-                      cursor: "pointer",
-                      border: "none",
-                      background: active ? "var(--fg)" : "transparent",
-                      color: active ? "var(--bg)" : "var(--fg-2)",
-                      fontSize: 13,
-                      fontWeight: 500,
-                      transition: "background 150ms ease, color 150ms ease",
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </form>
+            <PricingTierSelector
+              selectedSlug={selectedTierSlug}
+              onChange={setSelectedTierSlug}
+            />
           </div>
         </section>
 
@@ -1030,8 +617,12 @@ export function PricingPage({
                 gap: 18,
               }}
             >
-              {PLANS.map((p) => (
-                <PlanCard key={p.slug} plan={p} billing={billing} />
+              {getPricingCardsForSelection(selectedTierSlug).map((plan) => (
+                <PricingPlanCard
+                  key={plan.family}
+                  plan={plan}
+                  testId={`plan-${plan.family}`}
+                />
               ))}
             </div>
             <SelfHostLane />
