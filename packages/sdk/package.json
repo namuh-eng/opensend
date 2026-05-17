@@ -1,7 +1,7 @@
 {
   "name": "opensend",
-  "version": "1.0.0",
-  "description": "TypeScript SDK for the Opensend email API",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the OpenSend email API",
   "main": "dist/sdk/src/index.js",
   "types": "dist/sdk/src/index.d.ts",
   "exports": {
@@ -10,13 +10,25 @@
       "default": "./dist/sdk/src/index.js"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "bun run build"
   },
   "keywords": ["email", "api", "sdk", "resend"],
-  "license": "MIT",
+  "license": "Elastic-2.0",
+  "homepage": "https://opensend.namuh.co",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/namuh-eng/opensend.git",
+    "directory": "packages/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/namuh-eng/opensend/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "@types/react": "^19.2.14"
   },
