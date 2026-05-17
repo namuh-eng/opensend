@@ -127,7 +127,7 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-[#F0F0F0] bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-[12px] hover:border-[rgba(176,199,217,0.3)] transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-fg bg-bg-3 border border-line rounded-[12px] hover:border-line-3 transition-colors"
       >
         {formatDateRangeLabel(value)}
         <svg
@@ -143,14 +143,14 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
         </svg>
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 rounded-[12px] border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] shadow-lg backdrop-blur-sm flex">
+        <div className="absolute left-0 top-full mt-1 z-50 rounded-[12px] border border-line bg-bg-3 shadow-lg backdrop-blur-sm flex">
           {/* Presets */}
-          <div className="py-1 border-r border-[rgba(176,199,217,0.145)] min-w-[140px]">
+          <div className="py-1 border-r border-line min-w-[140px]">
             {DATE_RANGE_PRESETS.map((preset) => (
               <button
                 key={preset}
                 type="button"
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] text-[#F0F0F0] hover:bg-[rgba(176,199,217,0.145)] transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] text-fg hover:bg-white/[0.14] transition-colors"
                 onClick={() => {
                   onChange(preset);
                   setPendingRangeStart(null);
@@ -167,7 +167,7 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2.5"
-                    className="text-[#F0F0F0] flex-shrink-0"
+                    className="text-fg flex-shrink-0"
                   >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
@@ -182,7 +182,7 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
                 type="button"
                 aria-label="Previous month"
                 onClick={prevMonth}
-                className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+                className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
               >
                 <svg
                   aria-hidden="true"
@@ -196,14 +196,14 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
                   <polyline points="15 18 9 12 15 6" />
                 </svg>
               </button>
-              <span className="text-[13px] text-[#F0F0F0] font-medium">
+              <span className="text-[13px] text-fg font-medium">
                 {monthName}
               </span>
               <button
                 type="button"
                 aria-label="Next month"
                 onClick={nextMonth}
-                className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+                className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
               >
                 <svg
                   aria-hidden="true"
@@ -223,7 +223,7 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
               {DAY_HEADERS.map((d) => (
                 <div
                   key={d.key}
-                  className="text-center text-[11px] text-[#A1A4A5] py-1"
+                  className="text-center text-[11px] text-fg-2 py-1"
                 >
                   {d.label}
                 </div>
@@ -248,8 +248,8 @@ export function DateRangePicker({ value, onChange }: DateRangePickerProps) {
                     onClick={() => handleDayClick(day)}
                     className={`text-center text-[12px] py-1 cursor-pointer rounded transition-colors ${
                       inRange
-                        ? "bg-[rgba(176,199,217,0.2)] text-[#F0F0F0]"
-                        : "text-[#A1A4A5] hover:bg-[rgba(176,199,217,0.1)]"
+                        ? "bg-white/20 text-fg"
+                        : "text-fg-2 hover:bg-white/10"
                     } ${isPendingRangeStart(day) ? "ring-1 ring-[#F0F0F0]" : ""} ${isToday ? "font-bold" : ""}`}
                   >
                     {day}

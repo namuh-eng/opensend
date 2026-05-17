@@ -44,7 +44,7 @@ export function ComboboxFilter({
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-[#F0F0F0] bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-[12px] hover:border-[rgba(176,199,217,0.3)] transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-[13px] text-fg bg-bg-3 border border-line rounded-[12px] hover:border-line-3 transition-colors"
       >
         {selectedLabel}
         <svg
@@ -60,14 +60,14 @@ export function ComboboxFilter({
         </svg>
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 min-w-[220px] rounded-[12px] border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] shadow-lg backdrop-blur-sm">
-          <div className="p-2 border-b border-[rgba(176,199,217,0.145)]">
+        <div className="absolute left-0 top-full mt-1 z-50 min-w-[220px] rounded-[12px] border border-line bg-bg-3 shadow-lg backdrop-blur-sm">
+          <div className="p-2 border-b border-line">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search..."
-              className="w-full bg-transparent text-[13px] text-[#F0F0F0] placeholder-[#A1A4A5] outline-none"
+              className="w-full bg-transparent text-[13px] text-fg placeholder-[#A1A4A5] outline-none"
             />
           </div>
           <div className="py-1 max-h-[240px] overflow-y-auto">
@@ -75,7 +75,7 @@ export function ComboboxFilter({
               <button
                 key={opt.value}
                 type="button"
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] text-[#F0F0F0] hover:bg-[rgba(176,199,217,0.145)] transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-1.5 text-[13px] text-fg hover:bg-white/[0.14] transition-colors"
                 onClick={() => {
                   onChange(opt.value);
                   setOpen(false);
@@ -92,7 +92,7 @@ export function ComboboxFilter({
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2.5"
-                    className="text-[#F0F0F0] flex-shrink-0"
+                    className="text-fg flex-shrink-0"
                   >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
@@ -100,9 +100,7 @@ export function ComboboxFilter({
               </button>
             ))}
             {filtered.length === 0 && (
-              <div className="px-3 py-2 text-[13px] text-[#A1A4A5]">
-                No results
-              </div>
+              <div className="px-3 py-2 text-[13px] text-fg-2">No results</div>
             )}
           </div>
         </div>

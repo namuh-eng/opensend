@@ -78,7 +78,7 @@ export function LogDetail({ log }: { log: LogDetailData }) {
       {/* Back link */}
       <Link
         href="/logs"
-        className="inline-flex items-center gap-1 text-[13px] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors mb-6"
+        className="inline-flex items-center gap-1 text-[13px] text-fg-2 hover:text-fg transition-colors mb-6"
       >
         <svg
           aria-hidden="true"
@@ -99,7 +99,7 @@ export function LogDetail({ log }: { log: LogDetailData }) {
 
       {/* Header */}
       <div className="flex items-start gap-4 mb-8">
-        <div className="w-14 h-14 rounded-xl bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] flex items-center justify-center shrink-0">
+        <div className="w-14 h-14 rounded-xl bg-bg-3 border border-line flex items-center justify-center shrink-0">
           <svg
             aria-hidden="true"
             width="28"
@@ -116,8 +116,8 @@ export function LogDetail({ log }: { log: LogDetailData }) {
           </svg>
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[13px] text-[#A1A4A5] mb-0.5">Log</p>
-          <h1 className="text-[22px] font-semibold text-[#F0F0F0] truncate font-mono">
+          <p className="text-[13px] text-fg-2 mb-0.5">Log</p>
+          <h1 className="text-[22px] font-semibold text-fg truncate font-mono">
             {log.method.toUpperCase()} {log.path}
           </h1>
         </div>
@@ -126,21 +126,19 @@ export function LogDetail({ log }: { log: LogDetailData }) {
       {/* Metadata Grid */}
       <div className="grid grid-cols-3 gap-6 mb-8">
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             ENDPOINT
           </p>
-          <p className="text-[14px] text-[#F0F0F0] font-mono">{log.path}</p>
+          <p className="text-[14px] text-fg font-mono">{log.path}</p>
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             DATE
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">
-            {formatDate(log.createdAt)}
-          </p>
+          <p className="text-[14px] text-fg">{formatDate(log.createdAt)}</p>
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             STATUS
           </p>
           <StatusBadge
@@ -149,7 +147,7 @@ export function LogDetail({ log }: { log: LogDetailData }) {
           />
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             METHOD
           </p>
           <StatusBadge
@@ -158,31 +156,29 @@ export function LogDetail({ log }: { log: LogDetailData }) {
           />
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             DURATION
           </p>
-          <p className="text-[14px] text-[#F0F0F0]">
+          <p className="text-[14px] text-fg">
             {log.duration != null ? `${log.duration}ms` : "-"}
           </p>
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             API KEY
           </p>
-          <p className="text-[14px] text-[#F0F0F0] font-mono">
-            {log.apiKeyId ?? "-"}
-          </p>
+          <p className="text-[14px] text-fg font-mono">{log.apiKeyId ?? "-"}</p>
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             USER AGENT
           </p>
-          <p className="text-[14px] text-[#F0F0F0] font-mono break-all">
+          <p className="text-[14px] text-fg font-mono break-all">
             {log.userAgent ?? "-"}
           </p>
         </div>
         <div>
-          <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-1">
+          <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-1">
             ID
           </p>
           <CopyToClipboard value={log.id} />
@@ -191,11 +187,11 @@ export function LogDetail({ log }: { log: LogDetailData }) {
 
       {/* Request Body */}
       <div className="mb-6">
-        <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-3">
+        <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-3">
           REQUEST BODY
         </p>
-        <div className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-4 overflow-x-auto">
-          <pre className="text-[13px] text-[#F0F0F0] font-mono whitespace-pre-wrap">
+        <div className="bg-bg-3 border border-line rounded-lg p-4 overflow-x-auto">
+          <pre className="text-[13px] text-fg font-mono whitespace-pre-wrap">
             {log.requestBody
               ? JSON.stringify(log.requestBody, null, 2)
               : "No request body"}
@@ -205,11 +201,11 @@ export function LogDetail({ log }: { log: LogDetailData }) {
 
       {/* Response Body */}
       <div className="mb-6">
-        <p className="text-[11px] font-medium text-[#A1A4A5] tracking-wider mb-3">
+        <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-3">
           RESPONSE BODY
         </p>
-        <div className="bg-[rgba(24,25,28,0.88)] border border-[rgba(176,199,217,0.145)] rounded-lg p-4 overflow-x-auto">
-          <pre className="text-[13px] text-[#F0F0F0] font-mono whitespace-pre-wrap">
+        <div className="bg-bg-3 border border-line rounded-lg p-4 overflow-x-auto">
+          <pre className="text-[13px] text-fg font-mono whitespace-pre-wrap">
             {log.responseBody
               ? JSON.stringify(log.responseBody, null, 2)
               : "No response body"}

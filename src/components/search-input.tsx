@@ -15,7 +15,7 @@ export function SearchInput({
     <div className="relative flex items-center">
       <svg
         aria-hidden="true"
-        className="absolute left-3 text-[#A1A4A5] pointer-events-none"
+        className="absolute left-3 text-fg-2 pointer-events-none"
         width="14"
         height="14"
         viewBox="0 0 24 24"
@@ -33,7 +33,7 @@ export function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full bg-transparent border border-[rgba(176,199,217,0.145)] rounded-[12px] py-1.5 pl-9 pr-3 text-[13px] text-[#F0F0F0] placeholder-[#A1A4A5] outline-none focus:border-[rgba(176,199,217,0.3)] transition-colors"
+        className="w-full bg-transparent border border-line rounded-[12px] py-1.5 pl-9 pr-3 text-[13px] text-fg placeholder-[#A1A4A5] outline-none focus:border-line-3 transition-colors"
       />
     </div>
   );

@@ -26,7 +26,8 @@
     "db:seed": "tsx scripts/seed.ts",
     "dev:api": "bun run --cwd services/api dev",
     "start:api": "bun run --cwd services/api start",
-    "build:api": "bun run --cwd services/api build"
+    "build:api": "bun run --cwd services/api build",
+    "docs:generate": "node tools/generate-docs-index.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-eventbridge": "^3.1038.0",

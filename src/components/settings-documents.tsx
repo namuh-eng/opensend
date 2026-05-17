@@ -56,17 +56,14 @@ export function DocumentsTab() {
   return (
     <div className="space-y-4">
       {DOCUMENTS.map((doc) => (
-        <div
-          key={doc.title}
-          className="border border-[rgba(176,199,217,0.145)] rounded-lg p-6"
-        >
-          <h3 className="text-[15px] font-semibold text-[#F0F0F0] mb-3">
+        <div key={doc.title} className="border border-line rounded-lg p-6">
+          <h3 className="text-[15px] font-semibold text-fg mb-3">
             {doc.title}
           </h3>
           {doc.descriptions.map((desc) => (
             <p
               key={desc}
-              className="text-[14px] text-[#A1A4A5] mb-2 leading-relaxed"
+              className="text-[14px] text-fg-2 mb-2 leading-relaxed"
             >
               {desc}
             </p>
@@ -74,14 +71,14 @@ export function DocumentsTab() {
           {doc.status === "available" ? (
             <a
               href={doc.file}
-              className="mt-2 inline-flex items-center px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] bg-[rgba(176,199,217,0.08)] border border-[rgba(176,199,217,0.145)] rounded-md hover:bg-[rgba(176,199,217,0.15)] transition-colors"
+              className="mt-2 inline-flex items-center px-3 py-1.5 text-[13px] font-medium text-fg bg-white/[0.08] border border-line rounded-md hover:bg-white/[0.15] transition-colors"
               target="_blank"
               rel="noopener noreferrer"
             >
               Download
             </a>
           ) : (
-            <span className="mt-2 inline-flex items-center px-3 py-1.5 text-[13px] font-medium text-[#A1A4A5] bg-[rgba(176,199,217,0.04)] border border-dashed border-[rgba(176,199,217,0.145)] rounded-md">
+            <span className="mt-2 inline-flex items-center px-3 py-1.5 text-[13px] font-medium text-fg-2 bg-white/[0.03] border border-dashed border-line rounded-md">
               Unavailable
             </span>
           )}

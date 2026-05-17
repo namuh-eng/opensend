@@ -37,8 +37,13 @@ export const planRepo = {
         name: FREE_PLAN_DEFAULTS.name,
         monthlyPriceCents: FREE_PLAN_DEFAULTS.monthlyPriceCents,
         monthlyEmailQuota: FREE_PLAN_DEFAULTS.monthlyEmailQuota,
+        dailyEmailQuota: FREE_PLAN_DEFAULTS.dailyEmailQuota,
         maxDomains: FREE_PLAN_DEFAULTS.maxDomains,
         maxApiKeys: FREE_PLAN_DEFAULTS.maxApiKeys,
+        maxContacts: FREE_PLAN_DEFAULTS.maxContacts,
+        maxSegments: FREE_PLAN_DEFAULTS.maxSegments,
+        maxBroadcasts: FREE_PLAN_DEFAULTS.maxBroadcasts,
+        ratePerSecond: FREE_PLAN_DEFAULTS.ratePerSecond,
         isPublic: FREE_PLAN_DEFAULTS.isPublic,
       })
       .onConflictDoNothing({ target: plans.slug })

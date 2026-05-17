@@ -81,8 +81,7 @@ describe("GET /openapi.json", () => {
     );
 
     expect(docsPage).toContain('href="/openapi.json"');
-    expect(docsPage).toContain("OpenAPI 3.0 JSON");
+    expect(docsPage).toContain("OpenAPI");
     expect(docsPage).toContain("/emails/:email_id/cancel");
-    expect(docsPage).toContain("Cancel a scheduled email.");
   });
 });

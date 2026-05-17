@@ -88,16 +88,16 @@ function ComplainInfoPanel({ onClose }: { onClose: () => void }) {
         }}
       />
       {/* Panel */}
-      <div className="relative w-full max-w-md bg-[#18191C] border-l border-[rgba(176,199,217,0.145)] p-6 overflow-y-auto">
+      <div className="relative w-full max-w-md bg-bg-3 border-l border-line p-6 overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-[#F0F0F0]">
+          <h2 className="text-xl font-semibold text-fg">
             How Complain Rate Works
           </h2>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+            className="text-fg-2 hover:text-fg transition-colors"
           >
             <svg
               aria-hidden="true"
@@ -116,43 +116,42 @@ function ComplainInfoPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <p className="text-[13px] text-[#A1A4A5] mb-6">
+        <p className="text-[13px] text-fg-2 mb-6">
           A complaint happens when a recipient marks your email as spam or junk
           in their email client.
         </p>
 
-        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-3">
+        <h3 className="text-[14px] font-semibold text-fg mb-3">
           Why does it matter?
         </h3>
-        <p className="text-[13px] text-[#A1A4A5] mb-6">
+        <p className="text-[13px] text-fg-2 mb-6">
           High complaint rates signal to mailbox providers that your emails are
           unwanted. This can damage your sender reputation and lead to your
           emails being filtered to spam or blocked entirely.
         </p>
 
-        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-3">
+        <h3 className="text-[14px] font-semibold text-fg mb-3">
           What does risk level mean?
         </h3>
-        <p className="text-[13px] text-[#A1A4A5] mb-6">
+        <p className="text-[13px] text-fg-2 mb-6">
           Maintaining a complaint rate over{" "}
-          <strong className="text-[#F0F0F0]">0.1%</strong> may result in
-          deliverability issues. Major mailbox providers like Gmail recommend
-          keeping complaint rates below{" "}
-          <strong className="text-[#F0F0F0]">0.1%</strong> at all times.
+          <strong className="text-fg">0.1%</strong> may result in deliverability
+          issues. Major mailbox providers like Gmail recommend keeping complaint
+          rates below <strong className="text-fg">0.1%</strong> at all times.
         </p>
 
-        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-3">
+        <h3 className="text-[14px] font-semibold text-fg mb-3">
           How is it calculated?
         </h3>
-        <div className="bg-[#0D0D0F] rounded-lg p-4 mb-6 font-mono text-[12px] text-[#A1A4A5]">
+        <div className="bg-bg-card rounded-lg p-4 mb-6 font-mono text-[12px] text-fg-2">
           <div>Complain Rate = Complaints</div>
           <div className="ml-16">/ Emails Sent × 100</div>
         </div>
 
-        <h3 className="text-[14px] font-semibold text-[#F0F0F0] mb-3">
+        <h3 className="text-[14px] font-semibold text-fg mb-3">
           How to reduce complaints
         </h3>
-        <ul className="space-y-2 mb-6 text-[13px] text-[#A1A4A5]">
+        <ul className="space-y-2 mb-6 text-[13px] text-fg-2">
           <li>
             Only send to recipients who have opted in to receive your emails.
           </li>
@@ -176,7 +175,7 @@ function ComplainInfoPanel({ onClose }: { onClose: () => void }) {
 function ComplainRateChart({ data }: { data: DailyComplainPoint[] }) {
   if (data.length === 0) {
     return (
-      <div className="h-[200px] flex items-center justify-center text-[#A1A4A5] text-[13px]">
+      <div className="h-[200px] flex items-center justify-center text-fg-2 text-[13px]">
         No data for this period
       </div>
     );
@@ -304,12 +303,12 @@ function ComplainBreakdownTable({
   const rate = sent > 0 ? Math.round((complaints / sent) * 10000) / 100 : 0;
 
   return (
-    <div className="mt-4 border-t border-[rgba(176,199,217,0.1)] pt-4">
+    <div className="mt-4 border-t border-line pt-4">
       <div className="flex items-center justify-between py-2">
-        <a href={href} className="text-[13px] text-[#F0F0F0] hover:underline">
+        <a href={href} className="text-[13px] text-fg hover:underline">
           Complained
         </a>
-        <span className="text-[13px] text-[#F0F0F0]">{rate}%</span>
+        <span className="text-[13px] text-fg">{rate}%</span>
       </div>
     </div>
   );
@@ -332,7 +331,7 @@ export function ComplainRateSection({
           type="button"
           aria-label="Complain rate info"
           onClick={() => setInfoPanelOpen(true)}
-          className="text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors"
+          className="text-fg-2 hover:text-fg transition-colors"
         >
           <svg
             aria-hidden="true"
@@ -354,7 +353,7 @@ export function ComplainRateSection({
 
       {/* Chart */}
       {loading ? (
-        <div className="h-[200px] flex items-center justify-center text-[#A1A4A5] text-[13px]">
+        <div className="h-[200px] flex items-center justify-center text-fg-2 text-[13px]">
           Loading...
         </div>
       ) : (

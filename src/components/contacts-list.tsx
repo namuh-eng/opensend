@@ -117,7 +117,7 @@ export function ContactsList() {
         <input
           type="text"
           placeholder="Search by name, email, or multiple emails..."
-          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] placeholder-[#666] outline-none focus:border-[rgba(176,199,217,0.3)]"
+          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
           onChange={(e) => handleSearchChange(e.target.value)}
         />
 
@@ -127,7 +127,7 @@ export function ContactsList() {
             setSegmentFilter(e.target.value);
             setPage(1);
           }}
-          className="h-9 px-3 text-[13px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] outline-none cursor-pointer appearance-none pr-8"
+          className="h-9 px-3 text-[13px] bg-bg-card border border-line rounded-md text-fg outline-none cursor-pointer appearance-none pr-8"
           style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
             backgroundRepeat: "no-repeat",
@@ -143,7 +143,7 @@ export function ContactsList() {
             setStatusFilter(e.target.value);
             setPage(1);
           }}
-          className="h-9 px-3 text-[13px] bg-[#0a0a0a] border border-[rgba(176,199,217,0.145)] rounded-md text-[#F0F0F0] outline-none cursor-pointer appearance-none pr-8"
+          className="h-9 px-3 text-[13px] bg-bg-card border border-line rounded-md text-fg outline-none cursor-pointer appearance-none pr-8"
           style={{
             backgroundImage: `url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23666' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")`,
             backgroundRepeat: "no-repeat",
@@ -160,7 +160,7 @@ export function ContactsList() {
           type="button"
           onClick={handleExport}
           disabled={exportState.type === "loading"}
-          className="h-9 px-3 text-[13px] text-[#A1A4A5] border border-[rgba(176,199,217,0.145)] rounded-md hover:text-[#F0F0F0] hover:border-[rgba(176,199,217,0.3)] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-9 px-3 text-[13px] text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         >
           Export
         </button>
@@ -168,18 +168,18 @@ export function ContactsList() {
 
       {/* Data table */}
       {loading ? (
-        <div className="flex items-center justify-center py-16 text-[14px] text-[#A1A4A5]">
+        <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
           Loading contacts...
         </div>
       ) : contacts.length === 0 ? (
-        <div className="flex items-center justify-center py-16 text-[14px] text-[#A1A4A5]">
+        <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
           No contacts found
         </div>
       ) : (
         <>
           <table className="w-full">
             <thead>
-              <tr className="border-b border-[rgba(176,199,217,0.145)]">
+              <tr className="border-b border-line">
                 <th className="w-10 px-3 py-2 text-left">
                   <input
                     type="checkbox"
@@ -189,16 +189,16 @@ export function ContactsList() {
                     aria-label="Select all"
                   />
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Email
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Segments
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Status
                 </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-[#A1A4A5] tracking-normal">
+                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
                   Added
                 </th>
                 <th className="w-10 px-3 py-2" />
@@ -217,7 +217,7 @@ export function ContactsList() {
           </table>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between mt-3 text-[13px] text-[#A1A4A5]">
+          <div className="flex items-center justify-between mt-3 text-[13px] text-fg-2">
             <span>
               Page {page} – {start} of {total} contacts – {limit} items
             </span>
@@ -226,7 +226,7 @@ export function ContactsList() {
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-2 py-1 rounded border border-[rgba(176,199,217,0.145)] disabled:opacity-30 hover:border-[rgba(176,199,217,0.3)] transition-colors"
+                className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
               >
                 ←
               </button>
@@ -234,7 +234,7 @@ export function ContactsList() {
                 type="button"
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                className="px-2 py-1 rounded border border-[rgba(176,199,217,0.145)] disabled:opacity-30 hover:border-[rgba(176,199,217,0.3)] transition-colors"
+                className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
               >
                 →
               </button>
@@ -260,7 +260,7 @@ function ContactRow({
     .join(" ");
 
   return (
-    <tr className="border-b border-[rgba(176,199,217,0.145)] hover:bg-[rgba(24,25,28,0.5)] transition-colors group">
+    <tr className="border-b border-line hover:bg-bg-2 transition-colors group">
       <td className="w-10 px-3 py-2">
         <input
           type="checkbox"
@@ -270,7 +270,7 @@ function ContactRow({
           onClick={(e) => e.stopPropagation()}
         />
       </td>
-      <td className="px-3 py-2 text-[14px] text-[#F0F0F0]">
+      <td className="px-3 py-2 text-[14px] text-fg">
         <div className="flex items-center gap-2">
           <div
             className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-medium text-white shrink-0"
@@ -280,16 +280,16 @@ function ContactRow({
           </div>
           <Link
             href={`/audience/contacts/${contact.id}`}
-            className="text-[#F0F0F0] hover:underline"
+            className="text-fg hover:underline"
           >
             {contact.email}
           </Link>
           {displayName && (
-            <span className="text-[#A1A4A5] text-[13px]">{displayName}</span>
+            <span className="text-fg-2 text-[13px]">{displayName}</span>
           )}
         </div>
       </td>
-      <td className="px-3 py-2 text-[14px] text-[#A1A4A5]">
+      <td className="px-3 py-2 text-[14px] text-fg-2">
         {contact.segments.length > 0 ? contact.segments.join(", ") : "—"}
       </td>
       <td className="px-3 py-2">
@@ -301,7 +301,7 @@ function ContactRow({
         />
       </td>
       <td
-        className="px-3 py-2 text-[14px] text-[#A1A4A5]"
+        className="px-3 py-2 text-[14px] text-fg-2"
         title={new Date(contact.createdAt).toLocaleString()}
       >
         {formatRelativeTime(contact.createdAt)}
@@ -310,7 +310,7 @@ function ContactRow({
         <button
           type="button"
           aria-label="More actions"
-          className="p-1 rounded hover:bg-[rgba(176,199,217,0.145)] text-[#A1A4A5] hover:text-[#F0F0F0] transition-colors opacity-0 group-hover:opacity-100"
+          className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100"
         >
           <svg
             aria-hidden="true"

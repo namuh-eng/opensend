@@ -433,7 +433,13 @@ export const FREE_PLAN_DEFAULTS = {
   name: "Free",
   monthlyPriceCents: 0,
   monthlyEmailQuota: 5000,
+  dailyEmailQuota: 100,
   maxDomains: 1,
   maxApiKeys: 2,
+  maxContacts: 1000,
+  maxSegments: 3,
+  // null = unlimited
+  maxBroadcasts: null as number | null,
+  ratePerSecond: 2,
   isPublic: true,
 } as const;

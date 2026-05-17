@@ -661,8 +661,14 @@ export const plans = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     monthlyPriceCents: integer("monthly_price_cents").notNull().default(0),
     monthlyEmailQuota: integer("monthly_email_quota").notNull().default(0),
+    dailyEmailQuota: integer("daily_email_quota").notNull().default(0),
     maxDomains: integer("max_domains").notNull().default(0),
     maxApiKeys: integer("max_api_keys").notNull().default(0),
+    maxContacts: integer("max_contacts").notNull().default(0),
+    maxSegments: integer("max_segments").notNull().default(0),
+    // null = unlimited broadcasts
+    maxBroadcasts: integer("max_broadcasts"),
+    ratePerSecond: integer("rate_per_second").notNull().default(2),
     stripePriceId: varchar("stripe_price_id", { length: 255 }),
     isPublic: boolean("is_public").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })

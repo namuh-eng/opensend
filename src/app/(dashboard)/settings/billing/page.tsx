@@ -20,20 +20,20 @@ export default async function BillingSettingsPage() {
     return (
       <div className="max-w-2xl space-y-4">
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-[#F0F0F0]">Billing</h1>
-          <p className="text-[14px] text-[#A1A4A5]">
+          <h1 className="text-2xl font-semibold text-fg">Billing</h1>
+          <p className="text-[14px] text-fg-2">
             Billing is not enabled for this Opensend deployment.
           </p>
         </div>
-        <div className="rounded-lg border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.5)] p-4">
-          <p className="text-[13px] text-[#A1A4A5]">
+        <div className="rounded-lg border border-line bg-bg-2 p-4">
+          <p className="text-[13px] text-fg-2">
             Your dashboard is still available, but plan management and checkout
             are unavailable until the deployment owner configures billing.
           </p>
         </div>
         <Link
           href="/settings"
-          className="inline-flex rounded-md border border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.88)] px-3 py-1.5 text-[13px] font-medium text-[#F0F0F0] transition-colors hover:bg-[rgba(24,25,28,1)]"
+          className="inline-flex rounded-md border border-line bg-bg-3 px-3 py-1.5 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
         >
           Back to settings
         </Link>
@@ -45,8 +45,8 @@ export default async function BillingSettingsPage() {
   if (!summary) {
     return (
       <div className="space-y-3">
-        <h1 className="text-2xl font-semibold text-[#F0F0F0]">Billing</h1>
-        <p className="text-[14px] text-[#A1A4A5]">
+        <h1 className="text-2xl font-semibold text-fg">Billing</h1>
+        <p className="text-[14px] text-fg-2">
           No plan record was found. Run the database seed to create the Free
           plan.
         </p>
