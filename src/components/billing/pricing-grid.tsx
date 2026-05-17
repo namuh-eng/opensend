@@ -1,6 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import {
+  PricingPlanCard,
+  PricingTierSelector,
+} from "@/components/pricing/pricing-card";
+import {
+  DEFAULT_PRICING_TIER_SLUG,
+  type PricingDisplayPlan,
+  type PricingTierSlug,
+  findPricingTier,
+  getPricingCardsForSelection,
+  isPricingTierSlug,
+} from "@/components/pricing/pricing-catalog";
+import { useMemo, useState } from "react";
 
 export interface PricingPlan {
   id: string;
@@ -17,18 +29,32 @@ interface PricingGridProps {
   currentPlanId: string | null;
 }
 
-function formatPrice(cents: number) {
-  if (cents === 0) return "Free";
-  return `$${(cents / 100).toFixed(0)}`;
+function formatPrice(plan: PricingDisplayPlan) {
+  if (plan.monthlyPrice === null) return "custom";
+  if (plan.monthlyPrice === 0) return "Free";
+  return `$${plan.monthlyPrice}`;
 }
 
-function formatNumber(n: number) {
-  return n.toLocaleString("en-US");
+function defaultSelectedTier(
+  plans: PricingPlan[],
+  currentPlanId: string | null,
+) {
+  const current = plans.find((plan) => plan.id === currentPlanId);
+  if (current && isPricingTierSlug(current.slug)) return current.slug;
+  return DEFAULT_PRICING_TIER_SLUG;
 }
 
 export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
   const [pendingPlanId, setPendingPlanId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTierSlug, setSelectedTierSlug] = useState<PricingTierSlug>(
+    () => defaultSelectedTier(plans, currentPlanId),
+  );
+
+  const plansBySlug = useMemo(
+    () => new Map(plans.map((plan) => [plan.slug, plan] as const)),
+    [plans],
+  );
 
   if (plans.length === 0) {
     return (
@@ -76,68 +102,53 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
   };
 
   return (
-    <div className="space-y-4" data-testid="pricing-grid">
-      <div className="grid gap-4 md:grid-cols-3">
-        {plans.map((plan) => {
-          const isCurrent = plan.id === currentPlanId;
-          const isPending = pendingPlanId === plan.id;
+    <div
+      className="landing-root space-y-8"
+      data-testid="pricing-grid"
+      style={{ background: "transparent", minHeight: "auto" }}
+    >
+      <div className="flex justify-center">
+        <PricingTierSelector
+          selectedSlug={selectedTierSlug}
+          onChange={setSelectedTierSlug}
+        />
+      </div>
+      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-4">
+        {getPricingCardsForSelection(selectedTierSlug).map((displayPlan) => {
+          const dbPlan = plansBySlug.get(displayPlan.slug);
+          const current = dbPlan?.id === currentPlanId;
+          const pending = dbPlan ? pendingPlanId === dbPlan.id : false;
+          const persistedPlan = findPricingTier(displayPlan.slug);
+          const checkoutDisabled =
+            displayPlan.checkoutKind === "stripe" && !dbPlan;
+          const ctaLabel = current
+            ? "Current plan"
+            : checkoutDisabled
+              ? "Unavailable"
+              : displayPlan.checkoutKind === "stripe"
+                ? `Change to ${displayPlan.name} (${formatPrice(displayPlan)} / mo)`
+                : displayPlan.checkoutKind === "free"
+                  ? "Contact support"
+                  : displayPlan.cta;
+          const onAction = current
+            ? () => undefined
+            : dbPlan && displayPlan.checkoutKind === "stripe"
+              ? () => handleUpgrade(dbPlan.id)
+              : displayPlan.checkoutKind === "free"
+                ? () => undefined
+                : undefined;
+
           return (
-            <article
-              key={plan.id}
-              className={`flex flex-col rounded-lg border p-6 ${
-                isCurrent
-                  ? "border-purple-500/60 bg-violet/15"
-                  : "border-line bg-bg-3"
-              }`}
-              data-testid={`pricing-card-${plan.slug}`}
-              data-current={isCurrent ? "true" : undefined}
-            >
-              <header className="mb-4 flex items-baseline justify-between">
-                <h3 className="text-[18px] font-semibold text-fg">
-                  {plan.name}
-                </h3>
-                {isCurrent ? (
-                  <span
-                    className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-purple-200"
-                    data-testid={`pricing-card-${plan.slug}-current-badge`}
-                  >
-                    Current Plan
-                  </span>
-                ) : null}
-              </header>
-              <div className="mb-4">
-                <span className="text-[28px] font-semibold text-fg">
-                  {formatPrice(plan.monthlyPriceCents)}
-                </span>
-                {plan.monthlyPriceCents > 0 ? (
-                  <span className="ml-1 text-[13px] text-fg-2">/ month</span>
-                ) : null}
-              </div>
-              <ul className="mb-6 flex-1 space-y-2 text-[13px] text-fg-2">
-                <li>{formatNumber(plan.monthlyEmailQuota)} emails / month</li>
-                <li>
-                  {formatNumber(plan.maxDomains)}{" "}
-                  {plan.maxDomains === 1 ? "domain" : "domains"}
-                </li>
-                <li>
-                  {formatNumber(plan.maxApiKeys)} API{" "}
-                  {plan.maxApiKeys === 1 ? "key" : "keys"}
-                </li>
-              </ul>
-              <button
-                type="button"
-                disabled={isCurrent || isPending}
-                onClick={() => handleUpgrade(plan.id)}
-                className="rounded-md border border-line bg-bg-3 px-3 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card disabled:cursor-not-allowed disabled:opacity-50"
-                data-testid={`pricing-card-${plan.slug}-upgrade`}
-              >
-                {isCurrent
-                  ? "Current plan"
-                  : isPending
-                    ? "Opening checkout…"
-                    : "Upgrade"}
-              </button>
-            </article>
+            <PricingPlanCard
+              key={displayPlan.family}
+              plan={persistedPlan ?? displayPlan}
+              current={current}
+              pending={pending}
+              disabled={checkoutDisabled || displayPlan.checkoutKind === "free"}
+              ctaLabel={ctaLabel}
+              onAction={onAction}
+              testId={`pricing-card-${displayPlan.family}`}
+            />
           );
         })}
       </div>
