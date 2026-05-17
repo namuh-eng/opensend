@@ -54,8 +54,13 @@ describe("planRepo.ensureFreePlan", () => {
       name: "Free",
       monthlyPriceCents: 0,
       monthlyEmailQuota: 3000,
+      dailyEmailQuota: 100,
       maxDomains: 1,
       maxApiKeys: 3,
+      maxContacts: 1000,
+      maxSegments: 3,
+      maxBroadcasts: null,
+      ratePerSecond: 2,
       isPublic: true,
     });
     expect(mockOnConflictDoNothing).toHaveBeenCalledOnce();

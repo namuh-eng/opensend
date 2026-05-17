@@ -29,7 +29,9 @@ function isUsageData(value: unknown): value is UsageData {
     typeof candidate.marketing.contactsLimit === "number" &&
     typeof candidate.marketing.segmentsUsed === "number" &&
     typeof candidate.marketing.segmentsLimit === "number" &&
-    candidate.marketing.broadcastsLimit === "Unlimited" &&
+    typeof candidate.marketing.broadcastsUsed === "number" &&
+    (candidate.marketing.broadcastsLimit === "Unlimited" ||
+      typeof candidate.marketing.broadcastsLimit === "number") &&
     typeof candidate.team === "object" &&
     candidate.team !== null &&
     typeof candidate.team.domainsUsed === "number" &&
@@ -38,12 +40,20 @@ function isUsageData(value: unknown): value is UsageData {
   );
 }
 
-const SMTP_CREDENTIALS = [
-  { label: "Host", value: "smtp.opensend.com" },
-  { label: "Port", value: "465" },
-  { label: "Username", value: "resend" },
-  { label: "Password", value: "YOUR_API_KEY" },
-];
+interface SmtpConfig {
+  host: string;
+  port: string;
+  user: string;
+}
+
+function buildSmtpCredentials(config: SmtpConfig) {
+  return [
+    { label: "Host", value: config.host },
+    { label: "Port", value: config.port },
+    { label: "Username", value: config.user },
+    { label: "Password", value: "YOUR_API_KEY" },
+  ];
+}
 
 const DEFAULT_USAGE: UsageData = {
   plan: { name: "Free", slug: "free" },
@@ -58,6 +68,7 @@ const DEFAULT_USAGE: UsageData = {
     contactsLimit: 1000,
     segmentsUsed: 0,
     segmentsLimit: 3,
+    broadcastsUsed: 0,
     broadcastsLimit: "Unlimited",
   },
   team: { domainsUsed: 0, domainsLimit: 1, rateLimit: 2 },
@@ -65,11 +76,14 @@ const DEFAULT_USAGE: UsageData = {
 
 interface SettingsPageProps {
   billingEnabled?: boolean;
+  smtpConfig?: SmtpConfig | null;
 }
 
 export function SettingsPage({
   billingEnabled = false,
+  smtpConfig = null,
 }: SettingsPageProps = {}) {
+  const smtpCredentials = smtpConfig ? buildSmtpCredentials(smtpConfig) : null;
   const [activeTab, setActiveTab] = useState<
     "usage" | "smtp" | "team" | "unsubscribe" | "billing" | "documents"
   >("usage");
@@ -133,43 +147,59 @@ export function SettingsPage({
       {/* SMTP Tab */}
       {activeTab === "smtp" && (
         <div>
-          <p className="text-[14px] text-fg-2 mb-6">
-            Use these credentials to send emails via SMTP. The password is your
-            API key.
-          </p>
+          {smtpCredentials && smtpConfig ? (
+            <>
+              <p className="text-[14px] text-fg-2 mb-6">
+                Use these credentials to send emails via SMTP. The password is
+                your API key.
+              </p>
 
-          <div className="border border-line rounded-lg overflow-hidden">
-            {SMTP_CREDENTIALS.map((cred, i) => (
-              <div
-                key={cred.label}
-                className={`flex items-center justify-between px-4 py-3 ${
-                  i < SMTP_CREDENTIALS.length - 1 ? "border-b border-line" : ""
-                }`}
-              >
-                <div className="flex items-center gap-4 min-w-0">
-                  <span className="text-[12px] font-medium text-fg-2 tracking-wider w-24 shrink-0">
-                    {cred.label.toUpperCase()}
-                  </span>
-                  <span className="text-[14px] text-fg font-mono truncate">
-                    {cred.value}
-                  </span>
-                </div>
-                <CopyToClipboard value={cred.value} />
+              <div className="border border-line rounded-lg overflow-hidden">
+                {smtpCredentials.map((cred, i) => (
+                  <div
+                    key={cred.label}
+                    className={`flex items-center justify-between px-4 py-3 ${
+                      i < smtpCredentials.length - 1
+                        ? "border-b border-line"
+                        : ""
+                    }`}
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <span className="text-[12px] font-medium text-fg-2 tracking-wider w-24 shrink-0">
+                        {cred.label.toUpperCase()}
+                      </span>
+                      <span className="text-[14px] text-fg font-mono truncate">
+                        {cred.value}
+                      </span>
+                    </div>
+                    <CopyToClipboard value={cred.value} />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className="mt-6 p-4 bg-bg-3 border border-line rounded-lg">
-            <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-2">
-              EXAMPLE CONFIGURATION
-            </p>
-            <pre className="text-[13px] text-fg font-mono whitespace-pre-wrap">
-              {`SMTP_HOST=smtp.opensend.com
-SMTP_PORT=465
-SMTP_USER=resend
-SMTP_PASS=os_YOUR_API_KEY`}
-            </pre>
-          </div>
+              <div className="mt-6 p-4 bg-bg-3 border border-line rounded-lg">
+                <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-2">
+                  EXAMPLE CONFIGURATION
+                </p>
+                <pre className="text-[13px] text-fg font-mono whitespace-pre-wrap">
+                  {`SMTP_HOST=${smtpConfig.host}
+SMTP_PORT=${smtpConfig.port}
+SMTP_USER=${smtpConfig.user}
+SMTP_PASS=YOUR_API_KEY`}
+                </pre>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-line p-8">
+              <p className="text-[14px] text-fg-2">
+                SMTP is not configured for this installation. Set{" "}
+                <code className="font-mono text-fg">SMTP_HOST</code>,{" "}
+                <code className="font-mono text-fg">SMTP_PORT</code>, and{" "}
+                <code className="font-mono text-fg">SMTP_USER</code> in your
+                environment to expose SMTP credentials here.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

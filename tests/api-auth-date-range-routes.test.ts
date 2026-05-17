@@ -334,6 +334,7 @@ describe("route smoke coverage", () => {
                 contactsLimit: 1000,
                 segmentsUsed: Number(segmentCount),
                 segmentsLimit: 3,
+                broadcastsUsed: 0,
                 broadcastsLimit: "Unlimited",
               },
               team: {

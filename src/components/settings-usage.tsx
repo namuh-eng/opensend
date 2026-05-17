@@ -20,7 +20,8 @@ export interface UsageData {
     contactsLimit: number;
     segmentsUsed: number;
     segmentsLimit: number;
-    broadcastsLimit: "Unlimited";
+    broadcastsUsed: number;
+    broadcastsLimit: number | "Unlimited";
   };
   team: {
     domainsUsed: number;
@@ -258,7 +259,16 @@ export function UsageTab({
           used={usage.marketing.segmentsUsed}
           limit={usage.marketing.segmentsLimit}
         />
-        <QuotaRow label="Broadcasts limit" value="Unlimited" />
+        {usage.marketing.broadcastsLimit === "Unlimited" ? (
+          <QuotaRow label="Broadcasts limit" value="Unlimited" />
+        ) : (
+          <QuotaRow
+            label="Broadcasts limit"
+            value={`${formatNumber(usage.marketing.broadcastsUsed)} / ${formatNumber(usage.marketing.broadcastsLimit)}`}
+            used={usage.marketing.broadcastsUsed}
+            limit={usage.marketing.broadcastsLimit}
+          />
+        )}
       </QuotaSection>
 
       <QuotaSection
