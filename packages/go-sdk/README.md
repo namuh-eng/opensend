@@ -1,16 +1,16 @@
 # opensend Go SDK
 
 Minimal first-party Go SDK for OpenSend transactional email sends with a
-Resend-shaped first send surface.
+familiar first send surface for teams choosing OpenSend as a Resend alternative.
 
-Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+Use your OpenSend API key (`os_...`) with OpenSend's familiar email API surface.
 
 ## Installation
 
 From a Go module, install the package from this repository:
 
 ```bash
-go get github.com/namuh-eng/opensend/packages/go-sdk
+go get github.com/namuh-eng/opensend/packages/go-sdk@v0.1.0
 ```
 
 ## Setup
@@ -22,7 +22,7 @@ export OPENSEND_API_KEY="os_your_api_key"
 ```
 
 For self-hosted OpenSend, point the SDK at your deployment origin. The default
-hosted origin is `https://api.opensend.com`.
+hosted origin is `https://opensend.namuh.co`.
 
 ```bash
 export OPENSEND_BASE_URL="http://localhost:3026"
@@ -67,7 +67,7 @@ func main() {
 }
 ```
 
-`Send` posts to OpenSend's Resend-compatible `POST /emails` endpoint and returns
+`Send` posts to OpenSend's `POST /emails` endpoint and returns
 the accepted email id.
 
 ## Custom HTTP client
@@ -110,7 +110,7 @@ fmt.Println(email.ID)
 
 This first package intentionally does not implement attachments, templates,
 audiences, domains, framework examples, provider infrastructure, or the full
-Resend resource surface yet.
+broader email resource surface yet.
 
 ## Tests
 

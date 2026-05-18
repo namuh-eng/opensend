@@ -2,7 +2,7 @@
   <h1 align="center">Opensend</h1>
   <p align="center">
     Open-source email infrastructure for developers.<br />
-    A hosted cloud service, self-hosted delivery on AWS SES, and familiar email APIs.
+    OpenSend APIs with familiar email primitives, a full dashboard, and self-hosted delivery on your AWS SES quota.
   </p>
   <p align="center">
     <a href="https://github.com/namuh-eng/opensend/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-ELv2-blue" alt="License" /></a>
@@ -29,14 +29,14 @@
 
 ## What is Opensend?
 
-Opensend is an open-source Resend alternative for transactional and product email. Use OpenSend Cloud for managed sending, or self-host on your own AWS SES quota. It includes REST APIs, SDKs, React email templates, domain verification, webhooks, broadcasts, automations, analytics, and an admin dashboard.
+Opensend is a self-hostable email platform with REST APIs, SDKs, React email templates, domain verification, webhooks, broadcasts, automations, analytics, and an admin dashboard for teams that want an OpenSend-first Resend alternative.
 
-Use your OpenSend API key (`os_...`) with OpenSend Cloud or your self-hosted deployment.
+Use your OpenSend API key (`os_...`) with OpenSend's familiar email API surface and selected compatibility aliases for migration-oriented code.
 
 Use Opensend when you want:
 
 - **Control** — run email infrastructure on your own cloud and AWS SES quota.
-- **Familiar APIs** — use send, audience, suppression, and webhook primitives that feel familiar if you have used modern email platforms.
+- **Familiar API** — move common sends, audiences, and webhooks with minimal code changes where compatibility aliases are implemented.
 - **A real dashboard** — manage the Today overview, domains, API keys, broadcasts, automations, templates, audiences, logs, audit trails, billing, and metrics.
 - **First-party docs** — ship a local docs hub, OpenAPI schema, LLM index, SDK guides, and MCP guidance from this repo.
 - **Open deployment** — Docker Compose for local/self-hosted installs, with production guides for split app + ingester deployments.
@@ -174,7 +174,7 @@ Never commit `.env`, API keys, bearer tokens, database URLs with real passwords,
 ## Features
 
 - **REST API** — send single or batch emails with API-key auth and idempotency keys.
-- **Resend alternative** — transactional sends, audiences/contacts, suppressions, and webhook semantics with familiar email-platform primitives.
+- **OpenSend-first familiar API** — transactional sends, audiences/contacts, suppressions, and webhook semantics shaped for teams choosing a Resend alternative.
 - **SDKs** — first-party TypeScript, Python, Go, and Ruby packages.
 - **React email templates** — pass React components via the TypeScript SDK, or use registry-controlled dashboard starters with shared-renderer previews (see [docs/react-email-templates.md](docs/react-email-templates.md)).
 - **Domain verification** — DKIM, SPF, DMARC, click tracking, and custom return paths, with Cloudflare automation.
@@ -254,7 +254,7 @@ import os
 import opensend
 
 opensend.api_key = os.environ["OPENSEND_API_KEY"]
-opensend.base_url = os.environ.get("OPENSEND_BASE_URL", "https://opensend.namuh.co")
+opensend.base_url = os.environ.get("OPENSEND_BASE_URL", opensend.DEFAULT_BASE_URL)
 
 email = opensend.Emails.send({
     "from": "hello@yourdomain.com",
@@ -271,7 +271,7 @@ Full docs: [`packages/python-sdk/README.md`](./packages/python-sdk/README.md) an
 ### Go SDK
 
 ```bash
-go get github.com/namuh-eng/opensend/packages/go-sdk
+go get github.com/namuh-eng/opensend/packages/go-sdk@v0.1.0
 ```
 
 ```go
@@ -314,6 +314,8 @@ Full docs: [`packages/go-sdk/README.md`](./packages/go-sdk/README.md) and [`docs
 cd packages/ruby-sdk
 gem build opensend.gemspec
 gem install ./opensend-0.1.0.gem
+# After the RubyGems publish is complete:
+# gem install opensend
 ```
 
 ```ruby
@@ -451,7 +453,7 @@ ruby -I packages/ruby-sdk/lib packages/ruby-sdk/test/opensend_test.rb
 - [x] Team support with multi-tenant auth and organization invites
 - [x] Built-in open/click analytics
 - [x] Additional webhook event types: opened, clicked, complained, delivery delayed
-- [x] Audience/contact API slices
+- [x] Familiar audiences/contact API slices
 - [ ] SMTP relay support without AWS SES
 
 ## Contributing

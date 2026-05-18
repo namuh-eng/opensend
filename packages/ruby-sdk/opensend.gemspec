@@ -6,7 +6,7 @@ Gem::Specification.new do |spec|
   spec.name = "opensend"
   spec.version = OpenSend::VERSION
   spec.summary = "Ruby SDK for the OpenSend email API"
-  spec.description = "Minimal first-party Ruby SDK for OpenSend transactional email sends with a Resend-shaped API surface."
+  spec.description = "Minimal first-party Ruby SDK for OpenSend transactional email sends with a familiar API surface."
   spec.authors = ["OpenSend"]
   spec.homepage = "https://github.com/namuh-eng/opensend"
   # RubyGems 3.0 does not recognize Elastic-2.0 as SPDX, so keep builds warning-free

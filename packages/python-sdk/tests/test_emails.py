@@ -77,6 +77,10 @@ class OpenSendPythonSdkTests(unittest.TestCase):
         opensend.api_key = None
         opensend.base_url = opensend.DEFAULT_BASE_URL
 
+    def test_default_base_url_targets_opensend_cloud(self) -> None:
+        self.assertEqual(opensend.DEFAULT_BASE_URL, "https://opensend.namuh.co")
+        self.assertEqual(opensend.base_url, opensend.DEFAULT_BASE_URL)
+
     def test_module_level_send_serializes_payload_and_auth_header(self) -> None:
         opensend.api_key = "os_test"
         opensend.base_url = self.base_url

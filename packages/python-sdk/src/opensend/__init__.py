@@ -1,4 +1,4 @@
-"""Minimal Resend-shaped Python SDK for OpenSend transactional email sends."""
+"""Minimal OpenSend Python SDK for transactional email sends."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
-DEFAULT_BASE_URL = "https://api.opensend.com"
+DEFAULT_BASE_URL = "https://opensend.namuh.co"
 
 api_key: Optional[str] = None
 base_url: str = DEFAULT_BASE_URL
@@ -196,11 +196,11 @@ class OpenSend:
 
 
 class Resend(OpenSend):
-    """Resend-shaped alias for easier migration to OpenSend."""
+    """Alias client for code migrating from Resend to OpenSend."""
 
 
 class Emails:
-    """Module-level Resend-style email resource using ``opensend.api_key``."""
+    """Module-level email resource using ``opensend.api_key``."""
 
     SendParams = SendParams
     EmailResponse = EmailResponse

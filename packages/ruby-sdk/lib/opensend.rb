@@ -7,7 +7,7 @@ require "uri"
 require_relative "opensend/version"
 
 module OpenSend
-  DEFAULT_BASE_URL = "https://api.opensend.com"
+  DEFAULT_BASE_URL = "https://opensend.namuh.co"
   USER_AGENT = "opensend-ruby/#{VERSION}"
 
   class << self
