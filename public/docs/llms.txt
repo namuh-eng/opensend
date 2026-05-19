@@ -129,9 +129,9 @@
 - [MCP Server](https://opensend.namuh.co/docs/mcp-server.md): Use OpenSend from MCP-compatible AI clients.
 - [Observability](https://opensend.namuh.co/docs/observability.md): Operate OpenSend in production.
 - [React Email Skill](https://opensend.namuh.co/docs/react-email-skill.md): Build HTML email with React components.
-- [Official SDKs](https://opensend.namuh.co/docs/sdks.md): OpenSend SDKs and packages.
+- [Official SDKs](https://opensend.namuh.co/docs/sdks.md): OpenSend ships first-party SDK packages for application code and keeps /openapi.json available for generated clients.
 - [Security](https://opensend.namuh.co/docs/security.md): Security model overview.
-- [Self Hosting](https://opensend.namuh.co/docs/self-hosting.md): Run OpenSend yourself.
+- [Self Hosting](https://opensend.namuh.co/docs/self-hosting.md): Run OpenSend on your own infrastructure with Docker Compose, PostgreSQL, AWS SES/S3, and the standalone ingester service.
 - [Send emails with Bun](https://opensend.namuh.co/docs/send-with-bun.md): Use the TypeScript SDK from Bun.
 - [Send emails with Express](https://opensend.namuh.co/docs/send-with-express.md): Send email from an Express API route.
 - [Send emails with Go](https://opensend.namuh.co/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.

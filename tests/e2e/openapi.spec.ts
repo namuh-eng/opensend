@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("publishes the OpenAPI contract without sign-in", async ({
+test("publishes public OpenAPI and styled docs without sign-in", async ({
   page,
   request,
 }) => {
@@ -17,5 +17,32 @@ test("publishes the OpenAPI contract without sign-in", async ({
   expect(document.paths).toHaveProperty("/api/domains");
 
   await page.goto("/docs");
-  await expect(page.getByRole("link", { name: "/openapi.json" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Email infrastructure docs" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "OpenAPI" }).first(),
+  ).toHaveAttribute("href", "/openapi.json");
+  await expect(
+    page.getByRole("link", { name: "Self-hosting guide" }),
+  ).toHaveAttribute("href", "/docs/self-hosting");
+
+  await page.goto("/docs/self-hosting");
+  await expect(
+    page.getByRole("heading", { name: "Self Hosting" }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Reference topology" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Raw markdown" }),
+  ).toHaveAttribute("href", "/docs/self-hosting.md");
+
+  const llms = await request.get("/docs/llms.txt");
+  expect(llms.status()).toBe(200);
+  const llmsText = await llms.text();
+  expect(llmsText).toContain(
+    "https://opensend.namuh.co/docs/api-reference/introduction.md",
+  );
+  expect(llmsText).not.toContain("api.opensend.com");
 });
