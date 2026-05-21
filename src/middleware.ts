@@ -381,6 +381,12 @@ export async function middleware(request: NextRequest) {
     !isApiKeyAlias &&
     !isTemplateAlias
   ) {
+    // Logged-in users should never see the sign-in page — bounce them to the
+    // dashboard, mirroring the authenticated redirect on `/` (src/app/page.tsx).
+    if (pathname === "/auth" && getSessionCookie(request)) {
+      return NextResponse.redirect(new URL("/today", request.url));
+    }
+
     // Allow auth page, public landing page, and static assets
     if (
       pathname === "/" ||
