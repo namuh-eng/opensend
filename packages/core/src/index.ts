@@ -1,5 +1,6 @@
 export * from "./db/schema";
 export * from "./db/client";
+export * from "./db/repositories/dedicatedIpPoolRepo";
 export * from "./db/repositories/apiKeyRepo";
 export * from "./db/repositories/broadcastRepo";
 export * from "./db/repositories/contactRepo";
@@ -56,6 +57,7 @@ export * from "./services/logs";
 export * from "./services/auditEvents";
 export * from "./services/suppressions";
 export * from "./services/emailProvider";
+export * from "./services/configurationSet";
 export * from "./services/tracking";
 export * from "./services/trackingRoute";
 export * from "./services/sandboxTestRecipients";

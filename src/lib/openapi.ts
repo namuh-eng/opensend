@@ -196,6 +196,11 @@ export const openApiDocument = {
       name: "Receiving",
       description: "Retrieve inbound emails received by your domains.",
     },
+    {
+      name: "Dedicated IPs",
+      description:
+        "Create and manage dedicated IP pools for improved deliverability.",
+    },
   ],
   security: bearerSecurity,
   paths: {
@@ -1878,6 +1883,85 @@ export const openApiDocument = {
             description: "Automation run metrics.",
             content: jsonContent({
               $ref: "#/components/schemas/AutomationRunMetrics",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    // ── Dedicated IPs ─────────────────────────────────────────────
+    "/api/dedicated-ips": {
+      get: {
+        tags: ["Dedicated IPs"],
+        summary: "List dedicated IP pools",
+        operationId: "listDedicatedIpPools",
+        security: bearerSecurity,
+        responses: {
+          "200": {
+            description: "List of dedicated IP pools.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DedicatedIpPoolList",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+      post: {
+        tags: ["Dedicated IPs"],
+        summary: "Create a dedicated IP pool",
+        description:
+          "Creates a new dedicated IP pool in the email provider and records it in the database. Requires the caller's plan to have `dedicated_ips_enabled`.",
+        operationId: "createDedicatedIpPool",
+        security: bearerSecurity,
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/CreateDedicatedIpPoolRequest",
+          }),
+        },
+        responses: {
+          "201": {
+            description: "Created dedicated IP pool.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DedicatedIpPool",
+            }),
+          },
+          "402": { $ref: "#/components/responses/QuotaExceeded" },
+          "403": { $ref: "#/components/responses/Forbidden" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/dedicated-ips/{id}": {
+      get: {
+        tags: ["Dedicated IPs"],
+        summary: "Retrieve a dedicated IP pool",
+        operationId: "getDedicatedIpPool",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Dedicated IP pool detail.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DedicatedIpPool",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Dedicated IPs"],
+        summary: "Delete a dedicated IP pool",
+        operationId: "deleteDedicatedIpPool",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Pool deleted.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DedicatedIpPoolDeleted",
             }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
@@ -3744,6 +3828,74 @@ export const openApiDocument = {
         },
         required: ["name", "code", "message", "statusCode"],
       },
+      // ── Dedicated IPs ─────────────────────────────────────────────
+      DedicatedIpPool: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["dedicated_ip_pool"] },
+          id: { type: "string", format: "uuid" },
+          name: { type: "string" },
+          ses_pool_name: { type: "string" },
+          scaling_mode: { type: "string", enum: ["STANDARD", "MANAGED"] },
+          status: {
+            type: "string",
+            enum: ["pending", "active", "failed"],
+          },
+          created_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "object",
+          "id",
+          "name",
+          "ses_pool_name",
+          "scaling_mode",
+          "status",
+          "created_at",
+        ],
+      },
+      DedicatedIpPoolList: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["list"] },
+          data: {
+            type: "array",
+            items: { $ref: "#/components/schemas/DedicatedIpPool" },
+          },
+        },
+        required: ["object", "data"],
+      },
+      CreateDedicatedIpPoolRequest: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 255,
+            description: "User-facing label for the pool.",
+          },
+          ses_pool_name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 255,
+            description: "The AWS SES dedicated IP pool name.",
+          },
+          scaling_mode: {
+            type: "string",
+            enum: ["STANDARD", "MANAGED"],
+            description: "SES scaling mode. Defaults to MANAGED.",
+          },
+        },
+        required: ["name", "ses_pool_name"],
+      },
+      DedicatedIpPoolDeleted: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["dedicated_ip_pool"] },
+          id: { type: "string", format: "uuid" },
+          deleted: { type: "boolean" },
+        },
+        required: ["object", "id", "deleted"],
+      },
     },
     responses: {
       EmailAccepted: {
@@ -3790,6 +3942,14 @@ export const openApiDocument = {
       },
       NotFound: {
         description: "Resource not found.",
+        content: jsonContent({ $ref: "#/components/schemas/ErrorEnvelope" }),
+      },
+      Forbidden: {
+        description: "Caller's plan does not include this feature.",
+        content: jsonContent({ $ref: "#/components/schemas/ErrorEnvelope" }),
+      },
+      QuotaExceeded: {
+        description: "Plan quota for this resource has been reached.",
         content: jsonContent({ $ref: "#/components/schemas/ErrorEnvelope" }),
       },
       InternalServerError: {

@@ -162,6 +162,13 @@
       "when": 1778982844528,
       "tag": "0022_pink_vampiro",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1779463929955,
+      "tag": "0023_volatile_switch",
+      "breakpoints": true
     }
   ]
 }
