@@ -5,10 +5,35 @@ require "net/http"
 require "uri"
 
 require_relative "opensend/version"
+require_relative "opensend/http_client"
+require_relative "opensend/resources/emails"
+require_relative "opensend/resources/domains"
+require_relative "opensend/resources/api_keys"
+require_relative "opensend/resources/contacts"
+require_relative "opensend/resources/segments"
+require_relative "opensend/resources/audiences"
+require_relative "opensend/resources/broadcasts"
+require_relative "opensend/resources/templates"
+require_relative "opensend/resources/automations"
+require_relative "opensend/resources/events"
+require_relative "opensend/resources/webhooks"
+require_relative "opensend/resources/topics"
+require_relative "opensend/resources/suppressions"
+require_relative "opensend/resources/logs"
 
 module OpenSend
   DEFAULT_BASE_URL = "https://opensend.namuh.co"
   USER_AGENT = "opensend-ruby/#{VERSION}"
+
+  # ---------------------------------------------------------------------------
+  # Module-level convenience API
+  # ---------------------------------------------------------------------------
+  # Configure once at startup, then call resources directly:
+  #
+  #   OpenSend.api_key ENV["OPENSEND_API_KEY"]
+  #   OpenSend.emails.send(from: ..., to: ..., subject: ..., html: ...)
+  #   OpenSend.domains.list
+  # ---------------------------------------------------------------------------
 
   class << self
     attr_writer :api_key, :base_url
@@ -23,19 +48,77 @@ module OpenSend
       @base_url || DEFAULT_BASE_URL
     end
 
+    # Each resource method builds a fresh client so the caller's api_key/base_url
+    # configuration is always read at call-time, not at load-time.
     def emails
-      EmailsResource.new(Client.new(api_key: configured_api_key, base_url: base_url))
+      Resources::Emails.new(module_http_client)
+    end
+
+    def domains
+      Resources::Domains.new(module_http_client)
+    end
+
+    def api_keys
+      Resources::ApiKeys.new(module_http_client)
+    end
+
+    def contacts
+      Resources::Contacts.new(module_http_client)
+    end
+
+    def segments
+      Resources::Segments.new(module_http_client)
+    end
+
+    def audiences
+      Resources::Audiences.new(module_http_client)
+    end
+
+    def broadcasts
+      Resources::Broadcasts.new(module_http_client)
+    end
+
+    def templates
+      Resources::Templates.new(module_http_client)
+    end
+
+    def automations
+      Resources::Automations.new(module_http_client)
+    end
+
+    def events
+      Resources::Events.new(module_http_client)
+    end
+
+    def webhooks
+      Resources::Webhooks.new(module_http_client)
+    end
+
+    def topics
+      Resources::Topics.new(module_http_client)
+    end
+
+    def suppressions
+      Resources::Suppressions.new(module_http_client)
+    end
+
+    def logs
+      Resources::Logs.new(module_http_client)
     end
 
     private
 
-    def configured_api_key
+    def module_http_client
       key = api_key
       raise ArgumentError, "set OpenSend.api_key before making API requests" if key.nil? || key.to_s.strip.empty?
 
-      key
+      Client.new(api_key: key, base_url: base_url).http_client
     end
   end
+
+  # ---------------------------------------------------------------------------
+  # Error
+  # ---------------------------------------------------------------------------
 
   class Error < StandardError
     attr_reader :status_code, :name, :code, :details, :body
@@ -52,51 +135,83 @@ module OpenSend
 
   APIError = Error
 
+  # ---------------------------------------------------------------------------
+  # Client  (instance API)
+  # ---------------------------------------------------------------------------
+  # client = OpenSend::Client.new(api_key: "os_...", base_url: "https://...")
+  # client.emails.send(...)
+  # client.domains.list
+  # ---------------------------------------------------------------------------
+
   class Client
     attr_reader :api_key, :base_url
 
     def initialize(api_key:, base_url: DEFAULT_BASE_URL)
-      @api_key = normalize_api_key(api_key)
+      @api_key  = normalize_api_key(api_key)
       @base_uri = normalize_base_url(base_url)
-      @base_url = @base_uri.to_s
+      @base_url = @base_uri.to_s.sub(%r{/+\z}, "")
+      @http     = HttpClient.new(api_key: @api_key, base_uri: @base_uri)
+    end
+
+    # Expose the inner HttpClient so the module-level helpers can reuse it.
+    def http_client
+      @http
     end
 
     def emails
-      EmailsResource.new(self)
+      Resources::Emails.new(@http)
     end
 
-    def post(path, payload)
-      uri = endpoint(path)
-      request = Net::HTTP::Post.new(uri)
-      request["Authorization"] = "Bearer #{api_key}"
-      request["Content-Type"] = "application/json"
-      request["Accept"] = "application/json"
-      request["User-Agent"] = USER_AGENT
-      request.body = JSON.generate(payload)
+    def domains
+      Resources::Domains.new(@http)
+    end
 
-      response = perform_request(uri, request)
-      body = response.body.to_s
+    def api_keys
+      Resources::ApiKeys.new(@http)
+    end
 
-      unless response.is_a?(Net::HTTPSuccess)
-        raise api_error(response, body)
-      end
+    def contacts
+      Resources::Contacts.new(@http)
+    end
 
-      body.empty? ? {} : JSON.parse(body)
-    rescue JSON::ParserError => error
-      raise Error.new(
-        "Invalid JSON response from OpenSend",
-        status_code: 0,
-        name: "parse_error",
-        code: "parse_error",
-        body: error.message
-      )
-    rescue IOError, SystemCallError, Timeout::Error, SocketError => error
-      raise Error.new(
-        error.message,
-        status_code: 0,
-        name: "request_error",
-        code: "request_error"
-      )
+    def segments
+      Resources::Segments.new(@http)
+    end
+
+    def audiences
+      Resources::Audiences.new(@http)
+    end
+
+    def broadcasts
+      Resources::Broadcasts.new(@http)
+    end
+
+    def templates
+      Resources::Templates.new(@http)
+    end
+
+    def automations
+      Resources::Automations.new(@http)
+    end
+
+    def events
+      Resources::Events.new(@http)
+    end
+
+    def webhooks
+      Resources::Webhooks.new(@http)
+    end
+
+    def topics
+      Resources::Topics.new(@http)
+    end
+
+    def suppressions
+      Resources::Suppressions.new(@http)
+    end
+
+    def logs
+      Resources::Logs.new(@http)
     end
 
     private
@@ -124,63 +239,27 @@ module OpenSend
     rescue URI::InvalidURIError
       raise ArgumentError, "base URL must be a valid absolute http or https URL"
     end
-
-    def endpoint(path)
-      uri = @base_uri.dup
-      base_path = uri.path.to_s.sub(%r{/+\z}, "")
-      request_path = "/#{path.to_s.sub(%r{\A/+}, "")}"
-      uri.path = base_path.empty? ? request_path : "#{base_path}#{request_path}"
-      uri.query = nil
-      uri.fragment = nil
-      uri
-    end
-
-    def perform_request(uri, request)
-      Net::HTTP.start(uri.host, uri.port, use_ssl: uri.scheme == "https") do |http|
-        http.request(request)
-      end
-    end
-
-    def api_error(response, body)
-      envelope = parse_json_object(body)
-      message = envelope["message"] || response.message || "OpenSend API request failed"
-
-      Error.new(
-        message,
-        status_code: response.code.to_i,
-        name: envelope["name"],
-        code: envelope["code"],
-        details: envelope["details"],
-        body: body
-      )
-    end
-
-    def parse_json_object(body)
-      parsed = body.empty? ? {} : JSON.parse(body)
-      parsed.is_a?(Hash) ? parsed : {}
-    rescue JSON::ParserError
-      {}
-    end
   end
 
-  class EmailsResource
-    def initialize(client)
-      @client = client
-    end
-
-    def send(params)
-      @client.post("/emails", params)
-    end
-  end
+  # ---------------------------------------------------------------------------
+  # Legacy namespace-style convenience modules (e.g. OpenSend::Emails.send)
+  # These delegate to the module-level configured client.
+  # ---------------------------------------------------------------------------
 
   module Emails
-    def self.send(params, api_key: nil, base_url: nil)
+    def self.send(params, api_key: nil, base_url: nil, idempotency_key: nil)
       key = api_key || OpenSend.api_key
       raise ArgumentError, "set OpenSend.api_key before making API requests" if key.nil? || key.to_s.strip.empty?
 
-      Client.new(api_key: key, base_url: base_url || OpenSend.base_url).emails.send(params)
+      client = Client.new(api_key: key, base_url: base_url || OpenSend.base_url)
+      client.emails.send(params, idempotency_key: idempotency_key)
     end
   end
+
+  # EmailsResource is kept as a backwards-compatible alias used by legacy callers
+  # who hold a raw client handle (e.g. client.emails → EmailsResource instance).
+  EmailsResource = Resources::Emails
 end
 
+# Resend is exported as a drop-in alias for code migrating to OpenSend.
 Resend = OpenSend unless defined?(Resend)
