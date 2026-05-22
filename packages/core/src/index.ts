@@ -30,6 +30,7 @@ export * from "./billing/stripe-signature";
 export * from "./billing/stripe-events";
 export * from "./auth/api-auth";
 export * from "./auth/rate-limiter";
+export * from "./auth/validate-api-key";
 export * from "./dto";
 export * from "./contracts";
 export * from "./webhook-signing";

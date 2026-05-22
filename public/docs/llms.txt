@@ -140,7 +140,7 @@
 - [Send emails with Node.js](https://opensend.namuh.co/docs/send-with-nodejs.md): Send email from Node.js using the TypeScript SDK.
 - [Send emails with Python](https://opensend.namuh.co/docs/send-with-python.md): Send email from Python using the first-party OpenSend Python SDK.
 - [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK.
-- [Send emails with SMTP](https://opensend.namuh.co/docs/send-with-smtp.md): SMTP integration status.
+- [Send email with SMTP](https://opensend.namuh.co/docs/send-with-smtp.md): Send email over SMTP through the built-in OpenSend relay using an API key as the password.
 - [contact.created](https://opensend.namuh.co/docs/webhooks/contacts/created.md): Webhook event emitted when a contact is created.
 - [contact.deleted](https://opensend.namuh.co/docs/webhooks/contacts/deleted.md): Webhook event emitted when a contact is deleted.
 - [contact.updated](https://opensend.namuh.co/docs/webhooks/contacts/updated.md): Webhook event emitted when a contact is updated.

@@ -1,0 +1,20 @@
+{
+  "name": "@opensend/smtp-relay",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "build": "bun build ./src/index.ts --target bun --outfile ./dist/smtp-relay.js"
+  },
+  "dependencies": {
+    "@opensend/core": "workspace:*",
+    "mailparser": "^3.7.1",
+    "smtp-server": "^3.13.6"
+  },
+  "devDependencies": {
+    "@types/mailparser": "^3.4.4",
+    "@types/smtp-server": "^3.5.10"
+  }
+}
