@@ -34,7 +34,6 @@ export * from "./dto";
 export * from "./contracts";
 export * from "./webhook-signing";
 export * from "./webhook-events";
-export * from "./services/dns";
 export * from "./services/domain";
 export * from "./services/domain-providers";
 export * from "./services/dkim-keys";
