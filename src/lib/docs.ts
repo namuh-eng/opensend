@@ -77,12 +77,28 @@ const DOC_ORDER = [
   "api-reference/errors.md",
   "api-reference/rate-limit.md",
   "sdks.md",
+  "examples.md",
   "send-with-nodejs.md",
+  "send-with-bun.md",
+  "send-with-nextjs.md",
+  "send-with-express.md",
+  "send-with-hono.md",
   "send-with-python.md",
   "send-with-go.md",
   "send-with-ruby.md",
+  "send-with-smtp.md",
+  "integrations.md",
+  "cli.md",
+  "mcp-server.md",
+  "ai-onboarding.md",
+  "agent-email-inbox-skill.md",
+  "react-email-skill.md",
+  "email-best-practices-skill.md",
+  "custom-event-schemas.md",
   "self-hosting.md",
   "ingester-deploy.md",
+  "security.md",
+  "observability.md",
   "webhooks/introduction.md",
   "webhooks/event-types.md",
   "webhooks/verify-webhooks-requests.md",
@@ -119,6 +135,50 @@ export function relPathFromSlugParts(slugParts: string[]) {
 
 export function docsHrefFromRelPath(relPath: string) {
   return `/docs/${slugFromRelPath(relPath)}`;
+}
+
+export function normalizeDocsMarkdownHref(
+  href: string,
+  currentRelPath: string,
+) {
+  const trimmedHref = href.trim();
+  if (
+    !trimmedHref ||
+    trimmedHref.startsWith("#") ||
+    /^[a-z][a-z0-9+.-]*:/i.test(trimmedHref) ||
+    trimmedHref.startsWith("//")
+  ) {
+    return href;
+  }
+
+  const [withoutHash, hash = ""] = trimmedHref.split("#", 2);
+  const [withoutQuery, query = ""] = withoutHash.split("?", 2);
+
+  if (withoutQuery.startsWith("/docs/") && withoutQuery.endsWith(".md")) {
+    const normalizedPath = withoutQuery.replace(/\.md$/, "");
+    return `${normalizedPath}${query ? `?${query}` : ""}${
+      hash ? `#${hash}` : ""
+    }`;
+  }
+
+  if (withoutQuery.endsWith(".md")) {
+    const currentDir = path.posix.dirname(currentRelPath);
+    const baseDir = currentDir === "." ? "" : currentDir;
+    const resolvedRelPath = path.posix.normalize(
+      path.posix.join(baseDir, withoutQuery),
+    );
+
+    if (
+      !resolvedRelPath.startsWith("..") &&
+      !path.posix.isAbsolute(resolvedRelPath)
+    ) {
+      return `${docsHrefFromRelPath(resolvedRelPath)}${
+        query ? `?${query}` : ""
+      }${hash ? `#${hash}` : ""}`;
+    }
+  }
+
+  return href;
 }
 
 function cleanMarkdownText(value: string) {

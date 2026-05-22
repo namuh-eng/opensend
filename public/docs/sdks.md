@@ -32,6 +32,7 @@ The TypeScript SDK intentionally exposes a familiar `Resend` client shape for mi
 Use the Python SDK package when publishing credentials are configured for your environment. Keep the API key in `OPENSEND_API_KEY`, not in source code.
 
 ```py
+import os
 from opensend import OpenSend
 
 client = OpenSend(api_key=os.environ["OPENSEND_API_KEY"])

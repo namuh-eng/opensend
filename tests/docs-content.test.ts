@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import {
   docsHrefFromRelPath,
@@ -6,6 +6,7 @@ import {
   getAllDocs,
   getDocPage,
   getDocsNav,
+  normalizeDocsMarkdownHref,
   relPathFromSlugParts,
 } from "@/lib/docs";
 import { describe, expect, it } from "vitest";
@@ -30,9 +31,19 @@ describe("docs content shell", () => {
   it("groups docs into navigable sections with a rendered page payload", async () => {
     const nav = await getDocsNav();
     const page = await getDocPage("self-hosting.md");
+    const startHereItems =
+      nav.find((section) => section.id === "start-here")?.items ?? [];
 
     expect(nav.map((section) => section.id)).toContain("api-reference");
     expect(nav.map((section) => section.id)).toContain("operations");
+    expect(startHereItems.slice(0, 6).map((item) => item.relPath)).toEqual([
+      "sdks.md",
+      "examples.md",
+      "send-with-nodejs.md",
+      "send-with-bun.md",
+      "send-with-nextjs.md",
+      "send-with-express.md",
+    ]);
     expect(page?.title).toBe("Self Hosting");
     expect(page?.href).toBe("/docs/self-hosting");
     expect(
@@ -43,7 +54,7 @@ describe("docs content shell", () => {
     );
   });
 
-  it("keeps generated llms.txt on the OpenSend-owned hosted domain", () => {
+  it("keeps generated llms.txt on the OpenSend-owned hosted domain and docs order", () => {
     const llms = readFileSync(
       path.join(process.cwd(), "public/docs/llms.txt"),
       "utf8",
@@ -53,6 +64,37 @@ describe("docs content shell", () => {
       "https://opensend.namuh.co/docs/api-reference/introduction.md",
     );
     expect(llms).not.toContain("api.opensend.com");
+    expect(llms.indexOf("/docs/sdks.md")).toBeLessThan(
+      llms.indexOf("/docs/examples.md"),
+    );
+    expect(llms.indexOf("/docs/examples.md")).toBeLessThan(
+      llms.indexOf("/docs/send-with-nodejs.md"),
+    );
+    expect(llms.indexOf("/docs/webhooks/introduction.md")).toBeLessThan(
+      llms.indexOf("/docs/webhooks/emails/sent.md"),
+    );
+  });
+
+  it("normalizes markdown doc links to styled human docs routes", () => {
+    expect(
+      normalizeDocsMarkdownHref("./send-with-nodejs.md", "examples.md"),
+    ).toBe("/docs/send-with-nodejs");
+    expect(
+      normalizeDocsMarkdownHref(
+        "../authentication.md#api-keys",
+        "api-reference/emails/send-email.md",
+      ),
+    ).toBe("/docs/api-reference/authentication#api-keys");
+    expect(
+      normalizeDocsMarkdownHref("/docs/self-hosting.md", "examples.md"),
+    ).toBe("/docs/self-hosting");
+    expect(normalizeDocsMarkdownHref("#setup", "examples.md")).toBe("#setup");
+    expect(
+      normalizeDocsMarkdownHref(
+        "https://github.com/namuh-eng/opensend",
+        "examples.md",
+      ),
+    ).toBe("https://github.com/namuh-eng/opensend");
   });
 
   it("extracts unique heading anchors for table of contents", () => {
@@ -66,4 +108,32 @@ describe("docs content shell", () => {
       { depth: 2, id: "setup-2", text: "Setup" },
     ]);
   });
+
+  it("keeps Python examples copy-pasteable when they use environment variables", () => {
+    const docsRoot = path.join(process.cwd(), "public/docs");
+    const markdownFiles = listMarkdownFiles(docsRoot);
+
+    for (const file of markdownFiles) {
+      const markdown = readFileSync(file, "utf8");
+      const pythonBlocks = markdown.matchAll(
+        /```(?:py|python)\n([\s\S]*?)\n```/g,
+      );
+
+      for (const match of pythonBlocks) {
+        const code = match[1];
+        if (code.includes("os.environ")) {
+          expect(code).toContain("import os");
+        }
+      }
+    }
+  });
 });
+
+function listMarkdownFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) return listMarkdownFiles(fullPath);
+    if (entry.isFile() && entry.name.endsWith(".md")) return [fullPath];
+    return [];
+  });
+}
