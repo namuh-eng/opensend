@@ -45,14 +45,28 @@ jobs:
               .map(l => l.name)
               .filter(n => n.startsWith('size/'));
 
-            for (const old of existing) {
-              if (old !== label) {
+            async function removeStaleSizeLabel(name) {
+              try {
                 await github.rest.issues.removeLabel({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   issue_number: context.issue.number,
-                  name: old,
+                  name,
                 });
+              } catch (error) {
+                // Reruns/races can make payload labels stale; 404 means the old size label is already gone.
+                if (error.status === 404) {
+                  core.notice(`Stale size label ${name} was already absent; continuing.`);
+                  return;
+                }
+
+                throw error;
+              }
+            }
+
+            for (const old of existing) {
+              if (old !== label) {
+                await removeStaleSizeLabel(old);
               }
             }
 
