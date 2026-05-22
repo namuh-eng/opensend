@@ -1,4 +1,4 @@
-import { headingId } from "@/lib/docs";
+import { headingId, normalizeDocsMarkdownHref } from "@/lib/docs";
 import type { ReactNode } from "react";
 
 type MarkdownBlock =
@@ -14,7 +14,7 @@ function stripInlineMarkers(value: string) {
   return value.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/_([^_]+)_/g, "$1");
 }
 
-function parseInline(text: string): ReactNode[] {
+function parseInline(text: string, currentRelPath: string): ReactNode[] {
   const nodes: ReactNode[] = [];
   const pattern = /(\[[^\]]+\]\([^\)]+\)|`[^`]+`|\*\*[^*]+\*\*|_[^_]+_)/g;
   let lastIndex = 0;
@@ -49,14 +49,10 @@ function parseInline(text: string): ReactNode[] {
     } else {
       const linkMatch = /^\[([^\]]+)\]\(([^\)]+)\)$/.exec(token);
       if (linkMatch) {
-        const href = linkMatch[2];
+        const href = normalizeDocsMarkdownHref(linkMatch[2], currentRelPath);
         nodes.push(
-          <a
-            key={key}
-            href={href}
-            className="text-accent underline decoration-accent/30 underline-offset-4 transition hover:text-accent-2"
-          >
-            {linkMatch[1]}
+          <a key={key} href={href} className="docs-link">
+            {parseInline(linkMatch[1], currentRelPath)}
           </a>,
         );
       }
@@ -207,8 +203,12 @@ function parseMarkdown(markdown: string): MarkdownBlock[] {
 
 function Heading({
   block,
-}: { block: Extract<MarkdownBlock, { kind: "heading" }> }) {
-  const content = parseInline(block.text);
+  currentRelPath,
+}: {
+  block: Extract<MarkdownBlock, { kind: "heading" }>;
+  currentRelPath: string;
+}) {
+  const content = parseInline(block.text, currentRelPath);
   if (block.depth === 1) {
     return (
       <h1 className="text-[40px] font-medium leading-tight tracking-[-0.035em] text-fg sm:text-[52px]">
@@ -242,9 +242,11 @@ function Heading({
 export function MarkdownContent({
   markdown,
   skipFirstH1 = false,
+  currentRelPath = "index.md",
 }: {
   markdown: string;
   skipFirstH1?: boolean;
+  currentRelPath?: string;
 }) {
   const parsedBlocks = parseMarkdown(markdown);
   let blocks = parsedBlocks;
@@ -263,11 +265,13 @@ export function MarkdownContent({
       {blocks.map((block, index) => {
         const key = `${block.kind}-${index}`;
         if (block.kind === "heading")
-          return <Heading key={key} block={block} />;
+          return (
+            <Heading key={key} block={block} currentRelPath={currentRelPath} />
+          );
         if (block.kind === "paragraph") {
           return (
             <p key={key} className="max-w-3xl text-[15px] leading-7 text-fg-2">
-              {parseInline(block.text)}
+              {parseInline(block.text, currentRelPath)}
             </p>
           );
         }
@@ -296,7 +300,7 @@ export function MarkdownContent({
               className={`max-w-3xl space-y-2 pl-5 text-[15px] leading-7 text-fg-2 ${block.ordered ? "list-decimal" : "list-disc"}`}
             >
               {block.items.map((item) => (
-                <li key={item}>{parseInline(item)}</li>
+                <li key={item}>{parseInline(item, currentRelPath)}</li>
               ))}
             </ListTag>
           );
@@ -307,7 +311,7 @@ export function MarkdownContent({
               key={key}
               className="max-w-3xl rounded-card border border-accent/20 bg-accent-soft px-4 py-3 text-[14px] leading-7 text-fg-2"
             >
-              {parseInline(block.text)}
+              {parseInline(block.text, currentRelPath)}
             </blockquote>
           );
         }
@@ -325,7 +329,7 @@ export function MarkdownContent({
                         key={header}
                         className="border-b border-line px-4 py-3 font-medium"
                       >
-                        {parseInline(header)}
+                        {parseInline(header, currentRelPath)}
                       </th>
                     ))}
                   </tr>
@@ -343,7 +347,7 @@ export function MarkdownContent({
                             key={`${key}-cell-${rowKey}-${cell}`}
                             className="px-4 py-3 align-top"
                           >
-                            {parseInline(cell)}
+                            {parseInline(cell, currentRelPath)}
                           </td>
                         ))}
                       </tr>

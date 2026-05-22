@@ -55,18 +55,79 @@ function extractTitleAndSummary(markdown, relPath) {
   return { title, summary: cleanMarkdownText(summary) };
 }
 
+const SECTION_ORDER = [
+  "start-here",
+  "api-reference",
+  "dashboard",
+  "webhooks",
+  "knowledge-base",
+  "operations",
+];
+
+const DOC_ORDER = [
+  "api-reference/introduction.md",
+  "api-reference/authentication.md",
+  "api-reference/pagination.md",
+  "api-reference/errors.md",
+  "api-reference/rate-limit.md",
+  "sdks.md",
+  "examples.md",
+  "send-with-nodejs.md",
+  "send-with-bun.md",
+  "send-with-nextjs.md",
+  "send-with-express.md",
+  "send-with-hono.md",
+  "send-with-python.md",
+  "send-with-go.md",
+  "send-with-ruby.md",
+  "send-with-smtp.md",
+  "integrations.md",
+  "cli.md",
+  "mcp-server.md",
+  "ai-onboarding.md",
+  "agent-email-inbox-skill.md",
+  "react-email-skill.md",
+  "email-best-practices-skill.md",
+  "custom-event-schemas.md",
+  "self-hosting.md",
+  "ingester-deploy.md",
+  "security.md",
+  "observability.md",
+  "webhooks/introduction.md",
+  "webhooks/event-types.md",
+  "webhooks/verify-webhooks-requests.md",
+];
+
+function sectionIdForRelPath(relPath) {
+  if (relPath.startsWith("api-reference/")) return "api-reference";
+  if (relPath.startsWith("dashboard/")) return "dashboard";
+  if (relPath.startsWith("webhooks/")) return "webhooks";
+  if (relPath.startsWith("knowledge-base/")) return "knowledge-base";
+  if (
+    relPath === "self-hosting.md" ||
+    relPath === "ingester-deploy.md" ||
+    relPath === "observability.md" ||
+    relPath === "security.md"
+  ) {
+    return "operations";
+  }
+  return "start-here";
+}
+
+function orderIndex(relPath) {
+  const index = DOC_ORDER.indexOf(relPath);
+  return index === -1 ? 10_000 : index;
+}
+
 function sortDocs(a, b) {
-  const order = [
-    "api-reference/introduction.md",
-    "api-reference/authentication.md",
-    "api-reference/pagination.md",
-    "api-reference/errors.md",
-    "api-reference/rate-limit.md",
-  ];
-  const ai = order.indexOf(a.relPath);
-  const bi = order.indexOf(b.relPath);
-  if (ai !== -1 || bi !== -1)
-    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  const sectionDelta =
+    SECTION_ORDER.indexOf(sectionIdForRelPath(a.relPath)) -
+    SECTION_ORDER.indexOf(sectionIdForRelPath(b.relPath));
+  if (sectionDelta !== 0) return sectionDelta;
+
+  const orderDelta = orderIndex(a.relPath) - orderIndex(b.relPath);
+  if (orderDelta !== 0) return orderDelta;
+
   return a.relPath.localeCompare(b.relPath);
 }
 

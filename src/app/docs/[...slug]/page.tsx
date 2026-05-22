@@ -1,6 +1,9 @@
 import { DocsShell } from "@/components/docs/docs-shell";
 import { MarkdownContent } from "@/components/docs/markdown-content";
 import {
+  type DocsNavItem,
+  type DocsNavSection,
+  type DocsPage,
   getAllDocs,
   getDocPage,
   getDocsNav,
@@ -11,6 +14,66 @@ import { notFound, redirect } from "next/navigation";
 type DocsRouteProps = {
   params: Promise<{ slug: string[] }>;
 };
+
+function relatedDocsForPage(nav: DocsNavSection[], page: DocsPage) {
+  const section = nav.find((candidate) =>
+    candidate.items.some((item) => item.relPath === page.relPath),
+  );
+  const sectionItems = section?.items ?? [];
+  const currentIndex = sectionItems.findIndex(
+    (item) => item.relPath === page.relPath,
+  );
+  const windowStart = Math.max(
+    0,
+    Math.min(currentIndex - 3, sectionItems.length - 7),
+  );
+  const related = sectionItems
+    .slice(windowStart, windowStart + 7)
+    .filter((item) => item.relPath !== page.relPath)
+    .slice(0, 6);
+
+  return {
+    sectionTitle: section?.title ?? "OpenSend docs",
+    related,
+  };
+}
+
+function ContinueFromHere({
+  sectionTitle,
+  related,
+}: {
+  sectionTitle: string;
+  related: DocsNavItem[];
+}) {
+  if (related.length === 0) return null;
+
+  return (
+    <section className="mt-8 rounded-card border border-line bg-white/[0.02] p-5">
+      <p className="kicker">Continue from here</p>
+      <h2 className="mt-2 text-[22px] font-medium tracking-[-0.02em] text-fg">
+        More in {sectionTitle}
+      </h2>
+      <p className="mt-2 max-w-2xl text-[13px] leading-6 text-fg-2">
+        This page is intentionally concise. Use the neighboring guides below for
+        the next implementation details, route contracts, or operational steps.
+      </p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {related.map((item) => (
+          <a
+            key={item.relPath}
+            href={item.href}
+            className="rounded-card border border-line bg-bg-card p-4 transition hover:border-line-2 hover:bg-white/[0.04]"
+          >
+            <p className="text-[14px] font-medium text-fg">{item.title}</p>
+            <p className="mt-2 line-clamp-2 text-[12.5px] leading-5 text-fg-3">
+              {item.summary}
+            </p>
+          </a>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export async function generateStaticParams() {
   const docs = await getAllDocs();
@@ -42,6 +105,9 @@ export default async function DocsMarkdownPage({ params }: DocsRouteProps) {
   const [nav, page] = await Promise.all([getDocsNav(), getDocPage(relPath)]);
   if (!page) notFound();
 
+  const relatedDocs = relatedDocsForPage(nav, page);
+  const showConcisePageHelp = page.headings.length === 0;
+
   return (
     <DocsShell nav={nav} activeSlug={page.slug} headings={page.headings}>
       <article className="rounded-[24px] border border-line bg-bg-card p-6 shadow-[0_40px_120px_-90px_rgba(196,255,90,0.6)] sm:p-8 lg:p-10">
@@ -60,7 +126,18 @@ export default async function DocsMarkdownPage({ params }: DocsRouteProps) {
           </a>
         </div>
 
-        <MarkdownContent markdown={page.markdown} skipFirstH1 />
+        <MarkdownContent
+          markdown={page.markdown}
+          skipFirstH1
+          currentRelPath={page.relPath}
+        />
+
+        {showConcisePageHelp ? (
+          <ContinueFromHere
+            sectionTitle={relatedDocs.sectionTitle}
+            related={relatedDocs.related}
+          />
+        ) : null}
 
         <nav
           className="mt-10 grid gap-3 border-t border-line pt-6 sm:grid-cols-2"
