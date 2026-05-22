@@ -15,13 +15,14 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#agent-setup">Agent setup</a> ·
   <a href="#features">Features</a> ·
+  <a href="#docs-and-llm-ready-reference">Docs</a> ·
   <a href="#api-quickstart">API</a> ·
   <a href="#self-hosting">Self-hosting</a> ·
   <a href="./CONTRIBUTING.md">Contributing</a>
 </p>
 
 <p align="center">
-  <img src="docs/assets/screenshot-dashboard.png" alt="Opensend dashboard showing the email activity page" width="900" />
+  <img src="docs/assets/screenshot-dashboard.png" alt="Opensend Today dashboard showing delivery metrics and live activity" width="900" />
 </p>
 
 ---
@@ -36,7 +37,8 @@ Use Opensend when you want:
 
 - **Control** — run email infrastructure on your own cloud and AWS SES quota.
 - **Familiar API** — move common sends, audiences, and webhooks with minimal code changes where compatibility aliases are implemented.
-- **A real dashboard** — manage domains, API keys, broadcasts, automations, templates, audiences, logs, and metrics.
+- **A real dashboard** — manage the Today overview, domains, API keys, broadcasts, automations, templates, audiences, logs, audit trails, billing, and metrics.
+- **First-party docs** — ship a local docs hub, OpenAPI schema, LLM index, SDK guides, and MCP guidance from this repo.
 - **Open deployment** — Docker Compose for local/self-hosted installs, with production guides for split app + ingester deployments.
 
 ## Cloud or self-hosted
@@ -182,8 +184,21 @@ Never commit `.env`, API keys, bearer tokens, database URLs with real passwords,
 - **Suppressions** — tenant-scoped bounce/complaint suppression handling.
 - **Inbound email** — receive replies through `/api/emails/receiving`.
 - **Webhooks** — HMAC-signed, Svix-compatible delivery for accepted/sent/delivered/opened/clicked/bounced/complained/delayed/failed events.
-- **Dashboard** — dark-mode admin UI for email activity, domains, API keys, broadcasts, automations, templates, audience, metrics, logs, webhooks, and settings.
+- **Hosted usage and billing** — plan-aware quotas, usage summaries, Stripe Checkout, and customer portal routes for Opensend Cloud.
+- **Dashboard** — dark-mode admin UI with the `/today` overview, live activity, domains, API keys, broadcasts, automations, templates, audience, metrics, logs, audit log, webhooks, billing, and settings.
+- **Public status** — expose component health through `/status` and `/api/status`.
 - **Health checks** — `/api/health`, ingester `/health`, and service readiness endpoints.
+
+## Docs and LLM-ready reference
+
+Open **http://localhost:3015/docs** for the first-party docs hub. The generated markdown corpus and machine-readable references live at:
+
+- `/docs/llms.txt` — canonical LLM documentation index for OpenSend-owned docs.
+- `/openapi.json` — route and schema source of truth for API integrations.
+- `public/docs/**/*.md` — public markdown pages indexed by `bun run docs:generate`.
+- [`public/docs/mcp-server.md`](public/docs/mcp-server.md) — MCP guidance for AI clients.
+
+When adding public API, SDK, dashboard, webhook, automation, or operations docs, update the matching `public/docs/**/*.md` page and run `bun run docs:generate`.
 
 ## API quickstart
 
@@ -418,6 +433,7 @@ make test        # Vitest
 make test-e2e    # Playwright, requires dev server
 make all         # check + test
 make fix         # Biome autofix
+bun run docs:generate # rebuild public/docs/llms.txt after public docs changes
 ```
 
 Useful package commands:

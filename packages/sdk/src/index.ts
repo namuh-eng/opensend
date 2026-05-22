@@ -55,7 +55,7 @@ export interface RequestOptions {
   idempotencyKey?: string;
 }
 
-export const DEFAULT_BASE_URL = "https://api.opensend.com";
+export const DEFAULT_BASE_URL = "https://opensend.namuh.co";
 
 interface ApiError {
   message: string;

@@ -10,7 +10,7 @@ const defaultUsage = {
   plan: { name: "Free", slug: "free" },
   transactional: {
     monthlyUsed: 3,
-    monthlyLimit: 3000,
+    monthlyLimit: 5000,
     dailyUsed: 0,
     dailyLimit: 100,
   },
@@ -39,7 +39,7 @@ describe("UsageTab", () => {
   it("displays transactional monthly and daily limits", () => {
     render(<UsageTab usage={defaultUsage} />);
     expect(screen.getByText("Monthly limit")).toBeDefined();
-    expect(screen.getByText("3 / 3,000")).toBeDefined();
+    expect(screen.getByText("3 / 5,000")).toBeDefined();
     expect(screen.getByText("Daily limit")).toBeDefined();
     expect(screen.getByText("0 / 100")).toBeDefined();
   });
@@ -116,8 +116,8 @@ describe("UsageTab", () => {
       ...defaultUsage,
       transactional: {
         ...defaultUsage.transactional,
-        monthlyUsed: 3000,
-        monthlyLimit: 3000,
+        monthlyUsed: 5000,
+        monthlyLimit: 5000,
       },
     };
     const { container } = render(<UsageTab usage={atLimitUsage} />);
@@ -147,7 +147,7 @@ describe("UsageTab", () => {
 
   it("formats numbers with commas", () => {
     render(<UsageTab usage={defaultUsage} />);
-    expect(screen.getByText("3 / 3,000")).toBeDefined();
+    expect(screen.getByText("3 / 5,000")).toBeDefined();
     expect(screen.getByText("1 / 1,000")).toBeDefined();
   });
 });

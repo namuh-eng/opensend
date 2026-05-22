@@ -1,66 +1,7 @@
-"use client";
-
-import { useMemo, useState } from "react";
-
-type Method = "GET" | "POST" | "PATCH" | "DELETE";
-type Language = "node" | "curl";
-
-type Endpoint = {
-  method: Method;
-  path: string;
-  title: string;
-  description: string;
-  notes?: string[];
-  code: Record<Language, string>;
-};
-
-type ApiSection = {
-  id: string;
-  label: string;
-  description: string;
-  endpoints: Endpoint[];
-};
-
-type GuideCard = {
-  title: string;
-  eyebrow: string;
-  description: string;
-  href: string;
-};
+import { DocsShell } from "@/components/docs/docs-shell";
+import { getAllDocs, getDocsNav } from "@/lib/docs";
 
 const BASE_URL = "https://opensend.namuh.co";
-const DOCS_COUNT = 157;
-
-const OPENSEND_GUIDES: GuideCard[] = [
-  {
-    eyebrow: "REST basics",
-    title: "Authentication, base URL, and response codes",
-    description:
-      "Use os_ API keys with Bearer auth. Dashboard sessions are separate from API authentication.",
-    href: "/docs/api-reference/authentication.md",
-  },
-  {
-    eyebrow: "Sending",
-    title: "Send Email request model",
-    description:
-      "Send HTML or text email, schedule delivery, attach metadata, and protect retries with idempotency keys.",
-    href: "/docs/api-reference/emails/send-email.md",
-  },
-  {
-    eyebrow: "SDK",
-    title: "TypeScript SDK quickstart",
-    description:
-      "Install the opensend package, initialize the client, and send email from your application code.",
-    href: "/docs/send-with-nodejs.md",
-  },
-  {
-    eyebrow: "AI clients",
-    title: "LLM and MCP integration",
-    description:
-      "Use llms.txt, OpenAPI, and the MCP server to give agents a stable OpenSend control surface.",
-    href: "/docs/mcp-server.md",
-  },
-];
 
 const QUICKSTART_NODE = `import { Resend } from "opensend";
 
@@ -74,7 +15,7 @@ const { data, error } = await resend.emails.send({
 });
 
 if (error) throw error;
-console.log(data); // { id: "..." }`;
+console.log(data);`;
 
 const QUICKSTART_CURL = `curl -X POST ${BASE_URL}/emails \\
   -H "Authorization: Bearer os_YOUR_API_KEY" \\
@@ -87,717 +28,250 @@ const QUICKSTART_CURL = `curl -X POST ${BASE_URL}/emails \\
     "html": "<strong>It works.</strong>"
   }'`;
 
-const MCP_EXAMPLE = `{
-  "mcpServers": {
-    "opensend": {
-      "command": "bun",
-      "args": ["/path/to/opensend/packages/mcp/src/stdio.ts"],
-      "env": {
-        "OPENSEND_API_KEY": "os_YOUR_API_KEY",
-        "OPENSEND_API_BASE_URL": "https://opensend.namuh.co"
-      }
-    }
-  }
-}`;
-
-const API_SECTIONS: ApiSection[] = [
+const STARTER_CARDS = [
   {
-    id: "emails",
-    label: "Emails",
-    description: "Send, batch, cancel, and inspect delivery state.",
-    endpoints: [
-      {
-        method: "POST",
-        path: "/emails",
-        title: "Send an email",
-        description:
-          "Accepts OpenSend send payloads with familiar compatibility aliases. Duplicate Idempotency-Key retries within 24 hours replay the original accepted id.",
-        notes: ["Requires a verified sending domain for production traffic."],
-        code: {
-          node: `await resend.emails.send({
-  from: "Acme <onboarding@example.com>",
-  to: ["user@example.com"],
-  subject: "Welcome",
-  html: "<p>Hello world</p>",
-});`,
-          curl: `curl -X POST ${BASE_URL}/emails \\
-  -H "Authorization: Bearer os_YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: welcome-user-123" \\
-  -d '{ "from": "Acme <onboarding@example.com>", "to": ["user@example.com"], "subject": "Welcome", "html": "<p>Hello world</p>" }'`,
-        },
-      },
-      {
-        method: "POST",
-        path: "/emails/batch",
-        title: "Send a batch",
-        description:
-          "Queue multiple messages in one request. The batch idempotency key protects the whole accepted envelope.",
-        code: {
-          node: `await resend.emails.sendBatch([
-  {
-    from: "Acme <news@example.com>",
-    to: ["a@example.com"],
-    subject: "For A",
-    html: "<p>A</p>",
-  },
-  {
-    from: "Acme <news@example.com>",
-    to: ["b@example.com"],
-    subject: "For B",
-    html: "<p>B</p>",
-  },
-]);`,
-          curl: `curl -X POST ${BASE_URL}/emails/batch \\
-  -H "Authorization: Bearer os_YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -H "Idempotency-Key: batch-campaign-123" \\
-  -d '[{"from":"Acme <news@example.com>","to":["a@example.com"],"subject":"For A","html":"<p>A</p>"}]'`,
-        },
-      },
-      {
-        method: "POST",
-        path: "/emails/:email_id/cancel",
-        title: "Cancel scheduled email",
-        description: "Cancel a scheduled message before it leaves the queue.",
-        code: {
-          node: `await resend.emails.cancel("email_id");`,
-          curl: `curl -X POST ${BASE_URL}/emails/email_id/cancel \\
-  -H "Authorization: Bearer os_YOUR_API_KEY"`,
-        },
-      },
-      {
-        method: "GET",
-        path: "/api/emails/:id",
-        title: "Retrieve email details",
-        description:
-          "OpenSend dashboard/API detail route for status, metadata, and lifecycle events.",
-        code: {
-          node: `const email = await client.emails.get("email_id");`,
-          curl: `curl ${BASE_URL}/api/emails/email_id \\
-  -H "Authorization: Bearer os_YOUR_API_KEY"`,
-        },
-      },
-    ],
-  },
-  {
-    id: "domains",
-    label: "Domains",
+    eyebrow: "1 · API key",
+    title: "Authenticate requests",
     description:
-      "Add sender domains and verify DKIM, SPF, DMARC, and tracking DNS.",
-    endpoints: [
-      {
-        method: "POST",
-        path: "/api/domains",
-        title: "Create domain",
-        description:
-          "Add a domain and receive the DNS records required for SES-backed sending.",
-        code: {
-          node: `await client.domains.create({ name: "updates.example.com" });`,
-          curl: `curl -X POST ${BASE_URL}/api/domains \\
-  -H "Authorization: Bearer os_YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "name": "updates.example.com" }'`,
-        },
-      },
-      {
-        method: "POST",
-        path: "/api/domains/:id/auto-configure",
-        title: "Auto-configure DNS",
-        description:
-          "Operator/self-host Cloudflare token flow for writing the generated records automatically.",
-        code: {
-          node: `await fetch("https://opensend.namuh.co/api/domains/domain_id/auto-configure", {
-  method: "POST",
-  headers: { Authorization: "Bearer " + apiKey },
-});`,
-          curl: `curl -X POST ${BASE_URL}/api/domains/domain_id/auto-configure \\
-  -H "Authorization: Bearer os_YOUR_API_KEY"`,
-        },
-      },
-      {
-        method: "GET",
-        path: "/api/domains/:id",
-        title: "Retrieve domain",
-        description: "Inspect verification status and copy DNS records.",
-        code: {
-          node: `const domain = await client.domains.get("domain_id");`,
-          curl: `curl ${BASE_URL}/api/domains/domain_id \\
-  -H "Authorization: Bearer os_YOUR_API_KEY"`,
-        },
-      },
-    ],
+      "Create an os_ API key and use Bearer auth. Dashboard cookies are not API credentials.",
+    href: "/docs/api-reference/authentication",
   },
   {
-    id: "audience",
-    label: "Audience",
-    description: "Contacts, segments, topics, and contact properties.",
-    endpoints: [
-      {
-        method: "POST",
-        path: "/contacts",
-        title: "Create contact",
-        description: "Create a contact through the familiar root API alias.",
-        code: {
-          node: `await client.contacts.create({
-  email: "jane@example.com",
-  firstName: "Jane",
-});`,
-          curl: `curl -X POST ${BASE_URL}/contacts \\
-  -H "Authorization: Bearer os_YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "email": "jane@example.com", "first_name": "Jane" }'`,
-        },
-      },
-      {
-        method: "POST",
-        path: "/segments",
-        title: "Create segment",
-        description:
-          "Create a named audience segment for filtering contacts and campaigns.",
-        code: {
-          node: `await client.segments.create({ name: "Active users" });`,
-          curl: `curl -X POST ${BASE_URL}/segments \\
-  -H "Authorization: Bearer os_YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "name": "Active users" }'`,
-        },
-      },
-      {
-        method: "GET",
-        path: "/segments/:id/contacts",
-        title: "List segment contacts",
-        description: "Fetch contacts that currently match a segment.",
-        code: {
-          node: `const contacts = await client.segments.listContacts("segment_id");`,
-          curl: `curl ${BASE_URL}/segments/segment_id/contacts \\
-  -H "Authorization: Bearer os_YOUR_API_KEY"`,
-        },
-      },
-    ],
+    eyebrow: "2 · Domain",
+    title: "Verify a sending domain",
+    description:
+      "Add DNS records for DKIM, SPF, DMARC, bounce handling, and optional tracking.",
+    href: "/docs/api-reference/domains/create-domain",
   },
   {
-    id: "campaigns",
-    label: "Campaigns",
-    description: "Broadcasts and reusable templates for one-to-many sends.",
-    endpoints: [
-      {
-        method: "POST",
-        path: "/broadcasts",
-        title: "Create broadcast",
-        description:
-          "Create a draft broadcast with sender, subject, segment, and preview text.",
-        code: {
-          node: `await client.broadcasts.create({
-  name: "March newsletter",
-  from: "Acme <news@example.com>",
-  subject: "March updates",
-  segmentId: "segment_id",
-});`,
-          curl: `curl -X POST ${BASE_URL}/broadcasts \\
-  -H "Authorization: Bearer os_YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "name": "March newsletter", "from": "Acme <news@example.com>", "subject": "March updates", "segment_id": "segment_id" }'`,
-        },
-      },
-      {
-        method: "POST",
-        path: "/broadcasts/:id/send",
-        title: "Send broadcast",
-        description:
-          "Send immediately or schedule with the same narrow natural-language window as email sends.",
-        code: {
-          node: `await client.broadcasts.send("broadcast_id", {
-  scheduledAt: "in 1 hour",
-});`,
-          curl: `curl -X POST ${BASE_URL}/broadcasts/broadcast_id/send \\
-  -H "Authorization: Bearer os_YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "scheduled_at": "in 1 hour" }'`,
-        },
-      },
-      {
-        method: "POST",
-        path: "/templates",
-        title: "Create template",
-        description:
-          "Store versioned HTML templates that can be rendered for future sends.",
-        code: {
-          node: `await client.templates.create({
-  name: "Welcome",
-  alias: "welcome",
-  subject: "Welcome",
-  html: "<p>Hi {{name}}</p>",
-});`,
-          curl: `curl -X POST ${BASE_URL}/templates \\
-  -H "Authorization: Bearer os_YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "name": "Welcome", "alias": "welcome", "subject": "Welcome", "html": "<p>Hi {{name}}</p>" }'`,
-        },
-      },
-    ],
+    eyebrow: "3 · Send",
+    title: "Send your first email",
+    description:
+      "Use the OpenSend API or SDK to send, schedule, batch, tag, and inspect messages.",
+    href: "/docs/api-reference/emails/send-email",
   },
   {
-    id: "platform",
-    label: "Platform",
-    description: "API keys, webhooks, OpenAPI, and MCP integrations.",
-    endpoints: [
-      {
-        method: "POST",
-        path: "/api-keys",
-        title: "Create API key",
-        description:
-          "Create scoped keys. OpenSend keys use the os_ prefix while preserving familiar API semantics.",
-        code: {
-          node: `await client.apiKeys.create({ name: "Production" });`,
-          curl: `curl -X POST ${BASE_URL}/api-keys \\
-  -H "Authorization: Bearer os_YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "name": "Production" }'`,
-        },
-      },
-      {
-        method: "POST",
-        path: "/api/webhooks",
-        title: "Create webhook",
-        description:
-          "Subscribe an HTTPS endpoint to signed delivery and lifecycle events.",
-        code: {
-          node: `await fetch("https://opensend.namuh.co/api/webhooks", {
-  method: "POST",
-  headers: {
-    Authorization: "Bearer " + apiKey,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    endpoint: "https://example.com/webhooks/opensend",
-    events: ["email.delivered"],
-  }),
-});`,
-          curl: `curl -X POST ${BASE_URL}/api/webhooks \\
-  -H "Authorization: Bearer os_YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{ "endpoint": "https://example.com/webhooks/opensend", "events": ["email.delivered"] }'`,
-        },
-      },
-      {
-        method: "GET",
-        path: "/openapi.json",
-        title: "OpenAPI document",
-        description:
-          "Unauthenticated OpenAPI 3.0 contract for SDKs, generated clients, and audits.",
-        code: {
-          node: `const spec = await fetch("${BASE_URL}/openapi.json").then((res) => res.json());`,
-          curl: `curl ${BASE_URL}/openapi.json`,
-        },
-      },
-    ],
+    eyebrow: "4 · Observe",
+    title: "Watch logs and webhooks",
+    description:
+      "Track lifecycle events, signed webhook deliveries, retries, and API request logs.",
+    href: "/docs/webhooks/introduction",
   },
 ];
 
-const METHOD_STYLES: Record<Method, string> = {
-  GET: "border-blue/30 bg-blue/10 text-blue",
-  POST: "border-accent/30 bg-accent-soft text-accent",
-  PATCH: "border-amber/30 bg-amber/10 text-amber",
-  DELETE: "border-red/30 bg-red/10 text-red",
-};
+const COLLECTIONS = [
+  [
+    "API reference",
+    "/docs/api-reference/introduction",
+    "Endpoint contracts, auth, pagination, errors, limits, and OpenAPI.",
+  ],
+  [
+    "SDKs",
+    "/docs/sdks",
+    "TypeScript, Python, Go, Ruby, and framework-specific send examples.",
+  ],
+  [
+    "Domains",
+    "/docs/dashboard/domains/introduction",
+    "DNS setup, Cloudflare automation, DMARC, tracking, and provider guidance.",
+  ],
+  [
+    "Audience",
+    "/docs/dashboard/audiences/contacts",
+    "Contacts, segments, topics, properties, preferences, and suppressions.",
+  ],
+  [
+    "Broadcasts and templates",
+    "/docs/dashboard/broadcasts/introduction",
+    "Campaign creation, template variables, versioning, and performance tracking.",
+  ],
+  [
+    "Self-hosting",
+    "/docs/self-hosting",
+    "Docker Compose, migrations, SES/SNS ingester, security, and observability.",
+  ],
+] as const;
 
-function copyText(value: string) {
-  void navigator.clipboard?.writeText(value);
-}
+const POPULAR_ENDPOINTS = [
+  ["POST", "/emails", "Send one email"],
+  ["POST", "/emails/batch", "Queue a batch"],
+  ["POST", "/emails/:email_id/cancel", "Cancel scheduled email"],
+  ["POST", "/contacts", "Create contact"],
+  ["POST", "/broadcasts/:id/send", "Send broadcast"],
+  ["POST", "/api/webhooks", "Create webhook"],
+] as const;
 
-function CodeBlock({ value }: { value: string }) {
+function CodePanel({ title, code }: { title: string; code: string }) {
   return (
-    <div className="group relative overflow-hidden rounded-card border border-line bg-[#08080a]">
-      <button
-        type="button"
-        onClick={() => copyText(value)}
-        className="mono absolute right-2 top-2 z-10 rounded-md border border-line-2 bg-white/[0.04] px-2 py-1 text-[10.5px] text-fg-3 opacity-0 transition group-hover:opacity-100 hover:text-fg"
-      >
-        copy
-      </button>
-      <pre className="mono overflow-x-auto p-4 pr-14 text-[12px] leading-6 text-fg-2">
-        <code>{value}</code>
+    <div className="overflow-hidden rounded-card border border-line bg-[#08080a]">
+      <div className="border-b border-line bg-white/[0.03] px-4 py-2 font-mono text-[11px] uppercase tracking-[0.16em] text-fg-3">
+        {title}
+      </div>
+      <pre className="overflow-x-auto p-4 text-[12.5px] leading-6 text-fg-2">
+        <code>{code}</code>
       </pre>
     </div>
   );
 }
 
-function MethodBadge({ method }: { method: Method }) {
-  return (
-    <span
-      className={`mono inline-flex h-6 min-w-14 items-center justify-center rounded-md border px-2 text-[10.5px] font-semibold ${METHOD_STYLES[method]}`}
-    >
-      {method}
-    </span>
-  );
-}
-
-function EndpointCard({
-  endpoint,
-  language,
-}: { endpoint: Endpoint; language: Language }) {
-  return (
-    <article className="rounded-card border border-line bg-bg-card p-4 shadow-[0_18px_70px_-55px_rgba(196,255,90,0.55)] transition hover:border-line-2">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <MethodBadge method={endpoint.method} />
-            <code className="mono rounded-md bg-white/[0.03] px-2 py-1 text-[13px] text-fg">
-              {endpoint.path}
-            </code>
-          </div>
-          <h3 className="mt-3 text-[17px] font-medium tracking-tight text-fg">
-            {endpoint.title}
-          </h3>
-          <p className="mt-1 max-w-2xl text-[13px] leading-6 text-fg-2">
-            {endpoint.description}
-          </p>
-          {endpoint.notes && endpoint.notes.length > 0 && (
-            <ul className="mt-3 space-y-1 text-[12px] leading-5 text-fg-3">
-              {endpoint.notes.map((note) => (
-                <li key={note} className="flex gap-2">
-                  <span className="text-accent">•</span>
-                  <span>{note}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-      <div className="mt-4">
-        <CodeBlock value={endpoint.code[language]} />
-      </div>
-    </article>
-  );
-}
-
-function Sidebar({ sections }: { sections: ApiSection[] }) {
-  return (
-    <aside className="hidden 2xl:block">
-      <div className="sticky top-8 rounded-card border border-line bg-white/[0.02] p-3 backdrop-blur">
-        <p className="kicker px-2 py-2">On this page</p>
-        <nav className="space-y-1">
-          {[
-            "start",
-            "guides",
-            ...sections.map((section) => section.id),
-            "llms",
-          ].map((id) => (
-            <a
-              key={id}
-              href={`#${id}`}
-              className="block rounded-md px-2 py-1.5 text-[12.5px] capitalize text-fg-3 transition hover:bg-white/[0.04] hover:text-fg"
-            >
-              {id === "llms" ? "LLMs" : id}
-            </a>
-          ))}
-        </nav>
-      </div>
-    </aside>
-  );
-}
-
-export default function DocsPage() {
-  const [language, setLanguage] = useState<Language>("node");
-  const highlightedEndpointCount = useMemo(
-    () =>
-      API_SECTIONS.reduce((sum, section) => sum + section.endpoints.length, 0),
-    [],
-  );
-  const quickstart = language === "node" ? QUICKSTART_NODE : QUICKSTART_CURL;
+export default async function DocsPage() {
+  const [nav, docs] = await Promise.all([getDocsNav(), getAllDocs()]);
 
   return (
-    <main className="landing-root min-h-screen">
-      <div className="grain" aria-hidden />
-      <div className="ambient" aria-hidden />
-      <div className="landing-content">
-        <header className="border-b border-line bg-bg/70 backdrop-blur-xl">
-          <div className="mx-auto flex h-16 w-full max-w-[1500px] items-center justify-between px-6 lg:px-8">
-            <a
-              href="/"
-              className="flex items-center gap-2 text-[14px] font-semibold tracking-tight text-fg"
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-accent text-accent-ink">
-                O
-              </span>
-              OpenSend Docs
-            </a>
-            <nav className="hidden items-center gap-5 text-[13px] text-fg-3 md:flex">
-              <a className="transition hover:text-fg" href="/openapi.json">
-                OpenAPI
-              </a>
-              <a className="transition hover:text-fg" href="/docs/llms.txt">
-                llms.txt
-              </a>
-              <a className="transition hover:text-fg" href="/auth">
-                Dashboard
-              </a>
-            </nav>
-          </div>
-        </header>
-
-        <div className="mx-auto grid w-full max-w-[1500px] gap-8 px-6 py-10 lg:px-8 2xl:grid-cols-[220px_minmax(0,1fr)_260px]">
-          <Sidebar sections={API_SECTIONS} />
-
-          <div className="min-w-0 space-y-12">
-            <section
-              id="start"
-              className="overflow-hidden rounded-[24px] border border-line bg-bg-card shadow-[0_40px_120px_-80px_rgba(196,255,90,0.9)]"
-            >
-              <div className="grid gap-0">
-                <div className="p-6 sm:p-8 lg:p-10">
-                  <div className="pill success">
-                    <span className="dot" /> Familiar API · self-hosted on AWS
-                    SES
-                  </div>
-                  <h1 className="mt-6 text-[42px] font-medium leading-[0.96] tracking-[-0.04em] text-fg sm:text-[56px]">
-                    Email API docs that agents and humans can actually use.
-                  </h1>
-                  <p className="mt-5 max-w-xl text-[16px] leading-7 text-fg-2">
-                    OpenSend keeps the familiar Resend API shape, swaps in{" "}
-                    <code className="mono text-fg">os_</code> keys, and runs on
-                    your own infrastructure. Start with the send path, then
-                    expand into domains, audience, broadcasts, webhooks,
-                    OpenAPI, and MCP.
-                  </p>
-                  <div className="mt-7 flex flex-wrap gap-3">
-                    <a className="btn btn-primary" href="#quickstart">
-                      Send your first email
-                    </a>
-                    <a className="btn btn-ghost" href="/openapi.json">
-                      View OpenAPI
-                    </a>
-                  </div>
-                </div>
-                <div
-                  id="quickstart"
-                  className="border-t border-line bg-[#08080a] p-4 sm:p-5"
-                >
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="kicker">Quickstart</p>
-                      <p className="mt-1 text-[13px] text-fg-3">
-                        Base URL:{" "}
-                        <code className="mono text-fg">{BASE_URL}</code>
-                      </p>
-                    </div>
-                    <div className="inline-flex rounded-md border border-line bg-white/[0.03] p-1">
-                      {(["node", "curl"] as const).map((tab) => (
-                        <button
-                          key={tab}
-                          type="button"
-                          onClick={() => setLanguage(tab)}
-                          className={`mono rounded px-2.5 py-1 text-[11px] transition ${language === tab ? "bg-accent text-accent-ink" : "text-fg-3 hover:text-fg"}`}
-                        >
-                          {tab === "node" ? "Node.js" : "cURL"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <CodeBlock value={quickstart} />
-                  <p className="mt-3 text-[12px] leading-5 text-fg-3">
-                    For production, verify a sending domain first. Use a real
-                    recipient only after your domain records are healthy.
-                  </p>
-                </div>
+    <DocsShell nav={nav}>
+      <div className="space-y-10">
+        <section className="overflow-hidden rounded-[24px] border border-line bg-bg-card shadow-[0_40px_120px_-80px_rgba(196,255,90,0.9)]">
+          <div className="grid gap-0 lg:grid-cols-[1.04fr_0.96fr]">
+            <div className="p-6 sm:p-8 lg:p-10">
+              <div className="pill success">
+                <span className="dot" /> First-party docs · human and LLM ready
               </div>
-            </section>
-
-            <section id="guides" className="space-y-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="kicker">OpenSend guides</p>
-                  <h2 className="title-m mt-2">
-                    Everything you need to integrate OpenSend
-                  </h2>
-                </div>
-                <a className="btn btn-ghost btn-sm" href="/docs/llms.txt">
-                  OpenSend llms.txt
-                </a>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                {OPENSEND_GUIDES.map((reference) => (
-                  <a
-                    key={reference.href}
-                    href={reference.href}
-                    className="rounded-card border border-line bg-white/[0.02] p-4 transition hover:border-line-2 hover:bg-white/[0.04]"
-                  >
-                    <p className="kicker">{reference.eyebrow}</p>
-                    <h3 className="mt-2 text-[15px] font-medium text-fg">
-                      {reference.title}
-                    </h3>
-                    <p className="mt-2 text-[13px] leading-6 text-fg-2">
-                      {reference.description}
-                    </p>
-                  </a>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-card border border-line bg-white/[0.02] p-5">
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div>
-                  <p className="mono text-[28px] text-accent">{DOCS_COUNT}</p>
-                  <p className="text-[12px] text-fg-3">markdown docs</p>
-                </div>
-                <div>
-                  <p className="mono text-[28px] text-blue">OpenAPI 3.0</p>
-                  <p className="text-[12px] text-fg-3">
-                    machine-readable contract
-                  </p>
-                </div>
-                <div>
-                  <p className="mono text-[28px] text-violet">
-                    {highlightedEndpointCount}
-                  </p>
-                  <p className="text-[12px] text-fg-3">
-                    highlighted API examples
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <section className="space-y-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p className="kicker">Docs corpus</p>
-                  <h2 className="title-m mt-2">
-                    Browse the full first-party markdown set
-                  </h2>
-                </div>
-                <a className="btn btn-ghost btn-sm" href="/docs/llms.txt">
-                  Full index
-                </a>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {[
-                  [
-                    "API reference",
-                    "/docs/api-reference/introduction.md",
-                    "Endpoints, auth, pagination, errors, quotas, and resource operations.",
-                  ],
-                  [
-                    "Email operations",
-                    "/docs/api-reference/emails/send-email.md",
-                    "Sending, batch, scheduling, attachments, receiving, tags, and idempotency.",
-                  ],
-                  [
-                    "Audience",
-                    "/docs/dashboard/audiences/contacts.md",
-                    "Contacts, segments, topics, properties, unsubscribes, and preferences.",
-                  ],
-                  [
-                    "Campaigns",
-                    "/docs/dashboard/broadcasts/introduction.md",
-                    "Broadcasts, templates, variables, versioning, and performance tracking.",
-                  ],
-                  [
-                    "Webhooks",
-                    "/docs/webhooks/introduction.md",
-                    "Event types, signed requests, retries, replays, and lifecycle payloads.",
-                  ],
-                  [
-                    "Operations",
-                    "/docs/self-hosting.md",
-                    "Self-hosting, ingester deploys, observability, security, and troubleshooting.",
-                  ],
-                ].map(([title, href, description]) => (
-                  <a
-                    key={href}
-                    href={href}
-                    className="rounded-card border border-line bg-bg-card p-4 transition hover:border-line-2 hover:bg-white/[0.04]"
-                  >
-                    <h3 className="text-[15px] font-medium text-fg">{title}</h3>
-                    <p className="mt-2 text-[13px] leading-6 text-fg-2">
-                      {description}
-                    </p>
-                  </a>
-                ))}
-              </div>
-            </section>
-
-            {API_SECTIONS.map((section) => (
-              <section
-                key={section.id}
-                id={section.id}
-                className="scroll-mt-8 space-y-4"
-              >
-                <div>
-                  <p className="kicker">{section.label}</p>
-                  <h2 className="title-m mt-2">{section.description}</h2>
-                </div>
-                <div className="space-y-3">
-                  {section.endpoints.map((endpoint) => (
-                    <EndpointCard
-                      key={`${endpoint.method}-${endpoint.path}`}
-                      endpoint={endpoint}
-                      language={language}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
-
-            <section
-              id="llms"
-              className="rounded-[20px] border border-accent/20 bg-accent-soft p-5 sm:p-6"
-            >
-              <p className="kicker text-accent">LLM docs</p>
-              <h2 className="mt-2 text-[24px] font-medium tracking-tight text-fg">
-                Give agents a small, stable map first.
-              </h2>
-              <p className="mt-3 max-w-2xl text-[14px] leading-7 text-fg-2">
-                OpenSend exposes the canonical LLM entrypoint at{" "}
-                <a
-                  className="text-fg underline decoration-line-3 underline-offset-4"
-                  href="/docs/llms.txt"
-                >
-                  /docs/llms.txt
-                </a>{" "}
-                so coding agents can discover the API, SDKs, MCP server,
-                operational setup, and parity notes before generating
-                integration code.
+              <h1 className="mt-6 max-w-3xl text-[42px] font-medium leading-[0.96] tracking-[-0.04em] text-fg sm:text-[60px]">
+                Email infrastructure docs without the guesswork.
+              </h1>
+              <p className="mt-5 max-w-2xl text-[16px] leading-7 text-fg-2">
+                Start with a verified domain and one send, then expand into
+                audiences, broadcasts, templates, webhooks, receiving, MCP, and
+                self-hosted operations. This docs shell renders the same
+                markdown corpus that powers{" "}
+                <code className="mono text-fg">/docs/llms.txt</code>.
               </p>
-              <div className="mt-5">
-                <CodeBlock value={MCP_EXAMPLE} />
+              <div className="mt-7 flex flex-wrap gap-3">
+                <a
+                  className="btn btn-primary"
+                  href="/docs/api-reference/emails/send-email"
+                >
+                  Send your first email
+                </a>
+                <a className="btn btn-ghost" href="/docs/self-hosting">
+                  Self-hosting guide
+                </a>
+                <a className="btn btn-ghost" href="/openapi.json">
+                  OpenAPI
+                </a>
               </div>
-            </section>
-          </div>
-
-          <aside className="hidden 2xl:block">
-            <div className="sticky top-8 space-y-3">
-              <div className="rounded-card border border-line bg-bg-card p-4">
-                <p className="kicker">Auth</p>
-                <p className="mt-2 text-[13px] leading-6 text-fg-2">
-                  Use{" "}
-                  <code className="mono text-fg">
-                    Authorization: Bearer os_...
-                  </code>
-                  . Dashboard cookies are never API credentials.
-                </p>
-              </div>
-              <div className="rounded-card border border-line bg-bg-card p-4">
-                <p className="kicker">Contracts</p>
-                <div className="mt-3 space-y-2 text-[13px]">
-                  <a
-                    className="block text-fg-2 transition hover:text-fg"
-                    href="/openapi.json"
-                  >
-                    OpenAPI JSON
-                  </a>
-                  <a
-                    className="block text-fg-2 transition hover:text-fg"
-                    href="/docs/llms.txt"
-                  >
-                    Docs llms.txt
-                  </a>
+              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-card border border-line bg-white/[0.02] p-4">
+                  <p className="font-mono text-[26px] text-accent">
+                    {docs.length}
+                  </p>
+                  <p className="text-[12px] text-fg-3">markdown guides</p>
+                </div>
+                <div className="rounded-card border border-line bg-white/[0.02] p-4">
+                  <p className="font-mono text-[26px] text-blue">OpenAPI</p>
+                  <p className="text-[12px] text-fg-3">schema source</p>
+                </div>
+                <div className="rounded-card border border-line bg-white/[0.02] p-4">
+                  <p className="font-mono text-[26px] text-violet">MCP</p>
+                  <p className="text-[12px] text-fg-3">agent tooling</p>
                 </div>
               </div>
             </div>
-          </aside>
-        </div>
+            <div
+              id="quickstart"
+              className="border-t border-line bg-[#08080a] p-4 sm:p-5 lg:border-l lg:border-t-0"
+            >
+              <p className="kicker">Quickstart</p>
+              <p className="mt-2 text-[13px] leading-6 text-fg-3">
+                Base URL: <code className="mono text-fg">{BASE_URL}</code>
+              </p>
+              <div className="mt-4 space-y-4">
+                <CodePanel title="Node.js" code={QUICKSTART_NODE} />
+                <CodePanel title="cURL" code={QUICKSTART_CURL} />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <div>
+            <p className="kicker">Recommended path</p>
+            <h2 className="title-m mt-2">Do these four things first</h2>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {STARTER_CARDS.map((card) => (
+              <a
+                key={card.href}
+                href={card.href}
+                className="rounded-card border border-line bg-bg-card p-4 transition hover:border-line-2 hover:bg-white/[0.04]"
+              >
+                <p className="kicker">{card.eyebrow}</p>
+                <h3 className="mt-3 text-[16px] font-medium text-fg">
+                  {card.title}
+                </h3>
+                <p className="mt-2 text-[13px] leading-6 text-fg-2">
+                  {card.description}
+                </p>
+              </a>
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="kicker">Docs library</p>
+              <h2 className="title-m mt-2">Browse by job to be done</h2>
+            </div>
+            <a className="btn btn-ghost btn-sm" href="/docs/llms.txt">
+              Raw LLM index
+            </a>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {COLLECTIONS.map(([title, href, description]) => (
+              <a
+                key={href}
+                href={href}
+                className="rounded-card border border-line bg-bg-card p-4 transition hover:border-line-2 hover:bg-white/[0.04]"
+              >
+                <h3 className="text-[15px] font-medium text-fg">{title}</h3>
+                <p className="mt-2 text-[13px] leading-6 text-fg-2">
+                  {description}
+                </p>
+              </a>
+            ))}
+          </div>
+        </section>
+
+        <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-[20px] border border-line bg-bg-card p-5">
+            <p className="kicker">Popular endpoints</p>
+            <h2 className="mt-2 text-[22px] font-medium tracking-tight text-fg">
+              Common API surface
+            </h2>
+            <p className="mt-2 text-[13px] leading-6 text-fg-2">
+              Use the styled reference for humans and{" "}
+              <a
+                className="text-accent underline decoration-accent/30 underline-offset-4"
+                href="/openapi.json"
+              >
+                OpenAPI
+              </a>{" "}
+              for exact schemas.
+            </p>
+          </div>
+          <div className="rounded-[20px] border border-line bg-bg-card p-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {POPULAR_ENDPOINTS.map(([method, route, label]) => (
+                <div
+                  key={route}
+                  className="rounded-card border border-line bg-white/[0.02] p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[11px] font-semibold text-accent">
+                      {method}
+                    </span>
+                    <code className="font-mono text-[12px] text-fg">
+                      {route}
+                    </code>
+                  </div>
+                  <p className="mt-2 text-[12.5px] text-fg-3">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
       </div>
-    </main>
+    </DocsShell>
   );
 }
