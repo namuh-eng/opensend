@@ -169,6 +169,13 @@
       "when": 1779463929955,
       "tag": "0023_volatile_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1779465733477,
+      "tag": "0024_melodic_serpent_society",
+      "breakpoints": true
     }
   ]
 }

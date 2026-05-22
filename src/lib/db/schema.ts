@@ -89,6 +89,41 @@ export const dedicatedIpPools = pgTable(
   ],
 );
 
+export const unsubscribePageSettings = pgTable(
+  "unsubscribe_page_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    logoUrl: varchar("logo_url", { length: 2048 }),
+    brandColor: varchar("brand_color", { length: 9 })
+      .notNull()
+      .default("#10b981"),
+    headline: varchar("headline", { length: 200 })
+      .notNull()
+      .default("Unsubscribed successfully"),
+    message: varchar("message", { length: 1000 })
+      .notNull()
+      .default(
+        "You have been removed from this mailing list. You will no longer receive marketing emails from this sender.",
+      ),
+    footerText: varchar("footer_text", { length: 200 })
+      .notNull()
+      .default("Powered by OpenSend"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("unsubscribe_page_settings_user_id_idx").on(t.userId)],
+);
+
+export type UnsubscribePageSettings =
+  typeof unsubscribePageSettings.$inferSelect;
+export type UnsubscribePageSettingsInsert =
+  typeof unsubscribePageSettings.$inferInsert;
+
 export const domains = pgTable("domains", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull(),

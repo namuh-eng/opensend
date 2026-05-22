@@ -1,6 +1,7 @@
 export * from "./db/schema";
 export * from "./db/client";
 export * from "./db/repositories/dedicatedIpPoolRepo";
+export * from "./db/repositories/unsubscribePageSettingsRepo";
 export * from "./db/repositories/apiKeyRepo";
 export * from "./db/repositories/broadcastRepo";
 export * from "./db/repositories/contactRepo";
@@ -73,6 +74,7 @@ export * from "./services/dashboardAggregates";
 export * from "./services/health";
 export * from "./services/publicStatus";
 export * from "./services/invites";
+export * from "./services/unsubscribePageSettings";
 export * from "./jobs/background-jobs";
 export * from "./observability/telemetry";
 export * from "./security";

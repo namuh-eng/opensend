@@ -55,6 +55,7 @@ type OperationObject = {
 type PathItemObject = Partial<{
   get: OperationObject;
   post: OperationObject;
+  put: OperationObject;
   patch: OperationObject;
   delete: OperationObject;
 }>;
@@ -200,6 +201,11 @@ export const openApiDocument = {
       name: "Dedicated IPs",
       description:
         "Create and manage dedicated IP pools for improved deliverability.",
+    },
+    {
+      name: "Unsubscribe Page",
+      description:
+        "Customize the public unsubscribe confirmation page shown to contacts.",
     },
   ],
   security: bearerSecurity,
@@ -1965,6 +1971,49 @@ export const openApiDocument = {
             }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    // ── Unsubscribe Page ──────────────────────────────────────────
+    "/api/unsubscribe-page": {
+      get: {
+        tags: ["Unsubscribe Page"],
+        summary: "Get unsubscribe page settings",
+        description:
+          "Returns the current user's unsubscribe confirmation page customization, or system defaults if none have been saved.",
+        operationId: "getUnsubscribePageSettings",
+        security: bearerSecurity,
+        responses: {
+          "200": {
+            description: "Unsubscribe page settings.",
+            content: jsonContent({
+              $ref: "#/components/schemas/UnsubscribePageSettings",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+      put: {
+        tags: ["Unsubscribe Page"],
+        summary: "Update unsubscribe page settings",
+        description:
+          "Upserts the unsubscribe confirmation page customization for the authenticated user.",
+        operationId: "updateUnsubscribePageSettings",
+        security: bearerSecurity,
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateUnsubscribePageSettingsRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Updated unsubscribe page settings.",
+            content: jsonContent({
+              $ref: "#/components/schemas/UnsubscribePageSettings",
+            }),
+          },
           ...errorResponses,
         },
       },
@@ -3827,6 +3876,63 @@ export const openApiDocument = {
           details: { type: "object", additionalProperties: true },
         },
         required: ["name", "code", "message", "statusCode"],
+      },
+      // ── Unsubscribe Page ──────────────────────────────────────────
+      UnsubscribePageSettings: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["unsubscribe_page_settings"] },
+          logo_url: { type: "string", nullable: true, maxLength: 2048 },
+          brand_color: {
+            type: "string",
+            pattern: "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$",
+            description: "Hex brand color (#rrggbb or #rrggbbaa).",
+          },
+          headline: { type: "string", maxLength: 200 },
+          message: { type: "string", maxLength: 1000 },
+          footer_text: { type: "string", maxLength: 200 },
+        },
+        required: [
+          "object",
+          "logo_url",
+          "brand_color",
+          "headline",
+          "message",
+          "footer_text",
+        ],
+      },
+      UpdateUnsubscribePageSettingsRequest: {
+        type: "object",
+        properties: {
+          logo_url: {
+            type: "string",
+            nullable: true,
+            maxLength: 2048,
+            description:
+              "Full http/https URL for the logo image. Pass null to clear.",
+          },
+          brand_color: {
+            type: "string",
+            pattern: "^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$",
+            description: "Hex brand color applied to the page accent.",
+          },
+          headline: {
+            type: "string",
+            maxLength: 200,
+            description: "Main heading on the success confirmation page.",
+          },
+          message: {
+            type: "string",
+            maxLength: 1000,
+            description: "Body text on the success confirmation page.",
+          },
+          footer_text: {
+            type: "string",
+            maxLength: 200,
+            description:
+              "Footer attribution text shown on both success and error pages.",
+          },
+        },
       },
       // ── Dedicated IPs ─────────────────────────────────────────────
       DedicatedIpPool: {

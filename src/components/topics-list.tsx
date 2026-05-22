@@ -1,10 +1,8 @@
 "use client";
 
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
-
-const UNSUBSCRIBE_EDITOR_UNAVAILABLE_COPY =
-  "Editor unavailable; the default unsubscribe page remains active.";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Topic {
   id: string;
@@ -118,7 +116,12 @@ export function TopicsList() {
           <option value="opt_out">Opt-out</option>
         </select>
 
-        <UnsubscribeEditorUnavailableControl label="Edit Unsubscribe Page" />
+        <Link
+          href="/audience/topics/unsubscribe-page/edit"
+          className="inline-flex items-center rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
+        >
+          Edit Unsubscribe Page
+        </Link>
 
         <button
           type="button"
@@ -152,10 +155,12 @@ export function TopicsList() {
             >
               Create topic
             </button>
-            <UnsubscribeEditorUnavailableControl
-              label="Customize page"
-              align="center"
-            />
+            <Link
+              href="/audience/topics/unsubscribe-page/edit"
+              className="inline-flex items-center rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
+            >
+              Customize page
+            </Link>
           </div>
         </div>
       ) : (
@@ -281,10 +286,12 @@ export function TopicsList() {
           <h3 className="text-[14px] font-medium text-fg">
             Unsubscribe Page Preview
           </h3>
-          <UnsubscribeEditorUnavailableControl
-            label="Customize page"
-            align="right"
-          />
+          <Link
+            href="/audience/topics/unsubscribe-page/edit"
+            className="inline-flex items-center rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
+          >
+            Customize page
+          </Link>
         </div>
         <div className="bg-white rounded-b-lg p-8">
           <div className="max-w-[400px] mx-auto text-center">
@@ -348,39 +355,6 @@ export function TopicsList() {
           }}
         />
       )}
-    </div>
-  );
-}
-
-function UnsubscribeEditorUnavailableControl({
-  label,
-  align = "left",
-}: {
-  label: string;
-  align?: "left" | "center" | "right";
-}) {
-  const copyId = useId();
-  const alignmentClass =
-    align === "right"
-      ? "items-end text-right"
-      : align === "center"
-        ? "items-center text-center"
-        : "items-start text-left";
-
-  return (
-    <div className={`flex max-w-[230px] flex-col gap-1 ${alignmentClass}`}>
-      <button
-        type="button"
-        disabled
-        aria-describedby={copyId}
-        title={UNSUBSCRIBE_EDITOR_UNAVAILABLE_COPY}
-        className="inline-flex cursor-not-allowed items-center rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg-4 opacity-80"
-      >
-        {label}
-      </button>
-      <p id={copyId} className="text-[11px] leading-4 text-fg-3">
-        {UNSUBSCRIBE_EDITOR_UNAVAILABLE_COPY}
-      </p>
     </div>
   );
 }
