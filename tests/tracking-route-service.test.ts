@@ -65,6 +65,8 @@ function makeDomain(overrides: Partial<DomainRow> = {}): DomainRow {
     dkimPublicKey: null,
     dkimPrivateKeyCt: null,
     dkimPrivateKeyIv: null,
+    dedicatedIpPoolId: null,
+    sesConfigurationSetName: null,
     ...overrides,
   };
 }

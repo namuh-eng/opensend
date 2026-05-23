@@ -11,6 +11,7 @@ const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockCreateSuppressionService = vi.hoisted(() => vi.fn());
 const mockListSuppressions = vi.hoisted(() => vi.fn());
 const mockDeleteSuppression = vi.hoisted(() => vi.fn());
+const mockCreateSuppression = vi.hoisted(() => vi.fn());
 const MockSuppressionServiceError = vi.hoisted(
   () =>
     class SuppressionServiceError extends Error {
@@ -73,6 +74,9 @@ describe("suppression service", () => {
       async removeForUser() {
         return [];
       },
+      async suppress(input) {
+        return suppressionRow({ email: input.email, reason: input.reason });
+      },
     };
 
     const service = createActualSuppressionService({ repository });
@@ -123,6 +127,9 @@ describe("suppression service", () => {
         calls.push({ userId, email });
         return calls.length === 1 ? [{ id: "supp-1" }] : [];
       },
+      async suppress(input) {
+        return suppressionRow({ email: input.email, reason: input.reason });
+      },
     };
 
     const service = createActualSuppressionService({ repository });
@@ -146,6 +153,86 @@ describe("suppression service", () => {
       { userId: "user-2", email: "blocked@test.com" },
     ]);
   });
+
+  it("upserts a manual suppression and returns the public DTO", async () => {
+    const suppressedAtDate = new Date("2026-05-05T12:00:00.000Z");
+    const updatedAtDate = new Date("2026-05-05T12:30:00.000Z");
+    const row = suppressionRow({
+      reason: "manual",
+      metadata: { source: "manual" },
+      sourceEventId: null,
+      sourceEmailId: null,
+      sourceMessageId: null,
+      suppressedAt: suppressedAtDate,
+      updatedAt: updatedAtDate,
+    });
+
+    const suppressCalls: Parameters<SuppressionRepository["suppress"]>[0][] =
+      [];
+    const repository: SuppressionRepository = {
+      async list() {
+        return { data: [], hasMore: false };
+      },
+      async removeForUser() {
+        return [];
+      },
+      async suppress(input) {
+        suppressCalls.push(input);
+        return row;
+      },
+    };
+
+    const service = createActualSuppressionService({ repository });
+    const result = await service.createSuppression({
+      userId: "user-1",
+      email: "manual@test.com",
+    });
+
+    expect(suppressCalls).toHaveLength(1);
+    expect(suppressCalls[0]).toMatchObject({
+      userId: "user-1",
+      email: "manual@test.com",
+      reason: "manual",
+      metadata: { source: "manual" },
+    });
+
+    expect(result).toMatchObject({
+      id: "supp-1",
+      object: "suppression",
+      email: "blocked@test.com",
+      reason: "manual",
+      scope: "user",
+      suppressed_at: suppressedAtDate.toISOString(),
+      updated_at: updatedAtDate.toISOString(),
+    });
+  });
+
+  it("uses the provided reason when creating a suppression", async () => {
+    const suppressCalls: Parameters<SuppressionRepository["suppress"]>[0][] =
+      [];
+    const repository: SuppressionRepository = {
+      async list() {
+        return { data: [], hasMore: false };
+      },
+      async removeForUser() {
+        return [];
+      },
+      async suppress(input) {
+        suppressCalls.push(input);
+        return suppressionRow({ reason: input.reason });
+      },
+    };
+
+    const service = createActualSuppressionService({ repository });
+    const result = await service.createSuppression({
+      userId: "user-1",
+      email: "bounced@test.com",
+      reason: "bounced",
+    });
+
+    expect(suppressCalls[0]?.reason).toBe("bounced");
+    expect(result.reason).toBe("bounced");
+  });
 });
 
 describe("suppression management routes", () => {
@@ -155,6 +242,7 @@ describe("suppression management routes", () => {
     mockCreateSuppressionService.mockReturnValue({
       listSuppressions: mockListSuppressions,
       deleteSuppression: mockDeleteSuppression,
+      createSuppression: mockCreateSuppression,
     });
     mockAuthorizeDashboardOrApiKey.mockResolvedValue({
       apiKeyId: "key-1",
@@ -425,5 +513,153 @@ describe("suppression management routes", () => {
     });
     expect(mockListSuppressions).not.toHaveBeenCalled();
     expect(mockDeleteSuppression).not.toHaveBeenCalled();
+  });
+
+  it("creates a suppression and returns HTTP 201 with the public DTO", async () => {
+    const publicItem = {
+      id: "supp-new",
+      object: "suppression",
+      email: "new@test.com",
+      reason: "manual",
+      scope: "user",
+      source_event_id: null,
+      source_email_id: null,
+      source_message_id: null,
+      metadata: { source: "manual" },
+      suppressed_at: "2026-05-05T12:00:00.000Z",
+      updated_at: "2026-05-05T12:30:00.000Z",
+    };
+    mockCreateSuppression.mockResolvedValue(publicItem);
+
+    const { POST } = await import("@/app/api/suppressions/route");
+    const res = await POST(
+      new Request("http://localhost:3015/api/suppressions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer os_test",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: "new@test.com" }),
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    await expect(res.json()).resolves.toEqual(publicItem);
+    expect(mockCreateSuppression).toHaveBeenCalledWith({
+      userId: "user-1",
+      email: "new@test.com",
+      reason: undefined,
+    });
+  });
+
+  it("rejects an invalid email with HTTP 422", async () => {
+    const { POST } = await import("@/app/api/suppressions/route");
+    const res = await POST(
+      new Request("http://localhost:3015/api/suppressions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer os_test",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: "not-an-email" }),
+      }),
+    );
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: string; details: unknown };
+    expect(body.error).toBe("Validation failed");
+    expect(mockCreateSuppression).not.toHaveBeenCalled();
+  });
+
+  it("is idempotent — duplicate email returns updated row with HTTP 201", async () => {
+    const existingItem = {
+      id: "supp-existing",
+      object: "suppression",
+      email: "dup@test.com",
+      reason: "manual",
+      scope: "user",
+      source_event_id: null,
+      source_email_id: null,
+      source_message_id: null,
+      metadata: { source: "manual" },
+      suppressed_at: "2026-05-05T12:00:00.000Z",
+      updated_at: "2026-05-05T12:30:00.000Z",
+    };
+    mockCreateSuppression.mockResolvedValue(existingItem);
+
+    const { POST } = await import("@/app/api/suppressions/route");
+    const res = await POST(
+      new Request("http://localhost:3015/api/suppressions", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer os_test",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: "dup@test.com" }),
+      }),
+    );
+
+    expect(res.status).toBe(201);
+    await expect(res.json()).resolves.toEqual(existingItem);
+  });
+
+  it("blocks unauthenticated POST requests with HTTP 401", async () => {
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce(null);
+
+    const { POST } = await import("@/app/api/suppressions/route");
+    const res = await POST(
+      new Request("http://localhost:3015/api/suppressions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "any@test.com" }),
+      }),
+    );
+
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({
+      error: "Missing or invalid API key",
+    });
+    expect(mockCreateSuppression).not.toHaveBeenCalled();
+  });
+
+  it("creates a suppression through the Hono control-plane route", async () => {
+    const publicItem = {
+      id: "supp-hono",
+      object: "suppression",
+      email: "hono@test.com",
+      reason: "bounced",
+      scope: "user",
+      source_event_id: null,
+      source_email_id: null,
+      source_message_id: null,
+      metadata: { source: "manual" },
+      suppressed_at: "2026-05-05T12:00:00.000Z",
+      updated_at: "2026-05-05T12:30:00.000Z",
+    };
+    mockCreateSuppression.mockResolvedValue(publicItem);
+
+    const { Hono } = await import("hono");
+    const { registerSuppressionRoutes } = await import(
+      "../services/api/src/routes/suppressions"
+    );
+    const app = new Hono();
+    registerSuppressionRoutes(app);
+
+    const response = await app.request("/suppressions", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer os_test",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email: "hono@test.com", reason: "bounced" }),
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toEqual(publicItem);
+    expect(mockCreateSuppression).toHaveBeenCalledWith({
+      userId: "user-1",
+      email: "hono@test.com",
+      reason: "bounced",
+    });
   });
 });

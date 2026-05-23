@@ -5,6 +5,12 @@ import type {
   emailSuppressions,
 } from "../db/schema";
 
+export type CreateSuppressionInput = {
+  userId: string;
+  email: string;
+  reason?: SuppressionReason;
+};
+
 type SuppressionRow = typeof emailSuppressions.$inferSelect;
 
 export type SuppressionPublicItem = {
@@ -40,6 +46,15 @@ export type SuppressionRepository = {
     after?: string;
   }): Promise<{ data: SuppressionRow[]; hasMore: boolean }>;
   removeForUser(userId: string, email: string): Promise<Array<{ id: string }>>;
+  suppress(input: {
+    userId: string;
+    email: string;
+    reason: SuppressionReason;
+    sourceEventId?: string | null;
+    sourceEmailId?: string | null;
+    sourceMessageId?: string | null;
+    metadata?: SuppressionSourceMetadata | null;
+  }): Promise<SuppressionRow>;
 };
 
 export type SuppressionServiceErrorCode = "not_found";
@@ -116,6 +131,19 @@ export function createSuppressionService({
       }
 
       return { object: "suppression", deleted: true };
+    },
+
+    async createSuppression(
+      input: CreateSuppressionInput,
+    ): Promise<SuppressionPublicItem> {
+      const reason: SuppressionReason = input.reason ?? "manual";
+      const row = await repository.suppress({
+        userId: input.userId,
+        email: input.email,
+        reason,
+        metadata: { source: "manual" },
+      });
+      return toPublicItem(row);
     },
   };
 }

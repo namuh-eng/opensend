@@ -65,6 +65,65 @@ export const verification = pgTable("verification", {
 
 // ── Application Tables ──────────────────────────────────────────────
 
+export const dedicatedIpPools = pgTable(
+  "dedicated_ip_pools",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    sesPoolName: varchar("ses_pool_name", { length: 255 }).notNull(),
+    scalingMode: varchar("scaling_mode", { length: 20 })
+      .notNull()
+      .default("MANAGED"),
+    status: varchar("status", { length: 50 }).notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("dedicated_ip_pools_ses_pool_name_idx").on(t.sesPoolName),
+    index("dedicated_ip_pools_user_id_idx").on(t.userId),
+  ],
+);
+
+export const unsubscribePageSettings = pgTable(
+  "unsubscribe_page_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    logoUrl: varchar("logo_url", { length: 2048 }),
+    brandColor: varchar("brand_color", { length: 9 })
+      .notNull()
+      .default("#10b981"),
+    headline: varchar("headline", { length: 200 })
+      .notNull()
+      .default("Unsubscribed successfully"),
+    message: varchar("message", { length: 1000 })
+      .notNull()
+      .default(
+        "You have been removed from this mailing list. You will no longer receive marketing emails from this sender.",
+      ),
+    footerText: varchar("footer_text", { length: 200 })
+      .notNull()
+      .default("Powered by OpenSend"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("unsubscribe_page_settings_user_id_idx").on(t.userId)],
+);
+
+export type UnsubscribePageSettings =
+  typeof unsubscribePageSettings.$inferSelect;
+export type UnsubscribePageSettingsInsert =
+  typeof unsubscribePageSettings.$inferInsert;
+
 export const domains = pgTable("domains", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -104,6 +163,11 @@ export const domains = pgTable("domains", {
   dkimPublicKey: text("dkim_public_key"),
   dkimPrivateKeyCt: text("dkim_private_key_ct"),
   dkimPrivateKeyIv: text("dkim_private_key_iv"),
+  // Dedicated IP pool assignment and SES configuration set lifecycle
+  dedicatedIpPoolId: uuid("dedicated_ip_pool_id"),
+  sesConfigurationSetName: varchar("ses_configuration_set_name", {
+    length: 255,
+  }),
 });
 
 export const apiKeys = pgTable(
@@ -671,6 +735,10 @@ export const plans = pgTable(
     ratePerSecond: integer("rate_per_second").notNull().default(2),
     stripePriceId: varchar("stripe_price_id", { length: 255 }),
     isPublic: boolean("is_public").notNull().default(true),
+    dedicatedIpsEnabled: boolean("dedicated_ips_enabled")
+      .notNull()
+      .default(false),
+    maxDedicatedIps: integer("max_dedicated_ips").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
