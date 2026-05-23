@@ -5,7 +5,12 @@ export type AutomationStepType =
   | "delay"
   | "send_email"
   | "end"
-  // Reserved for future MVPs; runner foundation should ignore until implemented.
+  // Fully implemented in automation-runner.ts:
+  // - condition: evaluates a predicate against event/contact/step-output context
+  // - wait_for_event: suspends the run until the named event fires (with optional timeout)
+  // - contact_update: patches contact fields and/or custom properties
+  // - add_to_segment: adds the run's contact to a named segment
+  // - contact_delete: hard-deletes the run's contact record
   | "condition"
   | "wait_for_event"
   | "contact_update"
@@ -942,7 +947,7 @@ export function normalizeStepConfig(
     case "end":
       return {};
     default:
-      // Reserved step types pass through unchanged until their runners are built.
+      // Unknown step types (future extensions) pass through config unchanged.
       return config;
   }
 }

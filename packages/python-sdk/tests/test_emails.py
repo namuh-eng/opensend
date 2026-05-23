@@ -1,3 +1,5 @@
+"""Tests for the emails resource (send, send_batch, list, get, cancel)."""
+
 from __future__ import annotations
 
 import json
@@ -8,9 +10,17 @@ from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 import opensend  # noqa: E402
+
+from conftest import ApiTestBase  # type: ignore[import]
+
+
+# ---------------------------------------------------------------------------
+# Legacy standalone test infrastructure kept for the original tests
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -22,7 +32,7 @@ class RecordedRequest:
 
 
 @dataclass
-class TestServerState:
+class FakeServerState:
     response_status: int = 200
     response_body: dict[str, Any] = field(default_factory=lambda: {"id": "email_123"})
     requests: list[RecordedRequest] = field(default_factory=list)
@@ -31,7 +41,7 @@ class TestServerState:
 class RecordingHandler(BaseHTTPRequestHandler):
     server: "RecordingServer"
 
-    def do_POST(self) -> None:  # noqa: N802 - http.server hook
+    def do_POST(self) -> None:  # noqa: N802
         content_length = int(self.headers.get("Content-Length", "0"))
         raw_body = self.rfile.read(content_length) if content_length else b""
         body = json.loads(raw_body.decode("utf-8")) if raw_body else None
@@ -56,12 +66,12 @@ class RecordingHandler(BaseHTTPRequestHandler):
 
 
 class RecordingServer(ThreadingHTTPServer):
-    state: TestServerState
+    state: FakeServerState
 
 
 class OpenSendPythonSdkTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.state = TestServerState()
+        self.state = FakeServerState()
         self.server = RecordingServer(("127.0.0.1", 0), RecordingHandler)
         self.server.state = self.state
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -211,6 +221,76 @@ class OpenSendPythonSdkTests(unittest.TestCase):
                 },
                 base_url=self.base_url,
             )
+
+
+# ---------------------------------------------------------------------------
+# New email methods: list, get, cancel
+# ---------------------------------------------------------------------------
+
+
+class TestEmailsNewMethods(ApiTestBase, unittest.TestCase):
+    def test_list_emails_with_filters(self) -> None:
+        self.state.response_body = {
+            "object": "list",
+            "data": [{"id": "em_1", "status": "delivered"}],
+            "has_more": False,
+        }
+        result = self.client.emails.list({"status": "delivered", "limit": 10})
+        self.assertEqual(result["object"], "list")
+        req = self.state.requests[0]
+        self.assertEqual(req.method, "GET")
+        self.assertIn("/api/emails", req.path)
+        self.assertIn("status=delivered", req.path)
+        self.assertIn("limit=10", req.path)
+
+    def test_list_emails_before_cursor(self) -> None:
+        self.state.response_body = {"object": "list", "data": [], "has_more": False}
+        self.client.emails.list({"before": "cur_abc"})
+        req = self.state.requests[0]
+        self.assertIn("before=cur_abc", req.path)
+
+    def test_get_email_by_id(self) -> None:
+        self.state.response_body = {
+            "object": "email",
+            "id": "em_1",
+            "status": "delivered",
+            "subject": "Hello",
+            "created_at": "2026-01-01T00:00:00Z",
+        }
+        result = self.client.emails.get("em_1")
+        self.assertEqual(result["id"], "em_1")
+        req = self.state.requests[0]
+        self.assertEqual(req.method, "GET")
+        self.assertEqual(req.path, "/api/emails/em_1")
+
+    def test_cancel_email_posts_to_cancel(self) -> None:
+        self.state.response_body = {"object": "email", "id": "em_1"}
+        result = self.client.emails.cancel("em_1")
+        self.assertEqual(result["id"], "em_1")
+        req = self.state.requests[0]
+        self.assertEqual(req.method, "POST")
+        self.assertEqual(req.path, "/emails/em_1/cancel")
+
+    def test_module_level_list_emails(self) -> None:
+        self.state.response_body = {"object": "list", "data": [], "has_more": False}
+        opensend.api_key = "os_test"
+        opensend.base_url = self.base_url
+        result = opensend.Emails.list()
+        self.assertEqual(result["object"], "list")
+
+    def test_module_level_get_email(self) -> None:
+        self.state.response_body = {"object": "email", "id": "em_1", "created_at": "2026-01-01T00:00:00Z"}
+        opensend.api_key = "os_test"
+        opensend.base_url = self.base_url
+        result = opensend.Emails.get("em_1")
+        self.assertEqual(result["id"], "em_1")
+
+    def test_module_level_cancel_email(self) -> None:
+        self.state.response_body = {"object": "email", "id": "em_1"}
+        opensend.api_key = "os_test"
+        opensend.base_url = self.base_url
+        result = opensend.Emails.cancel("em_1")
+        self.assertEqual(result["id"], "em_1")
 
 
 if __name__ == "__main__":

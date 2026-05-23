@@ -15,7 +15,11 @@ export const domainRouteParamsSchema = z.object({
 
 export const domainRegionSchema = z.enum(validDomainRegions);
 
-export const domainTlsSchema = z.enum(["opportunistic", "enforced"]);
+export const domainTlsSchema = z.enum([
+  "opportunistic",
+  "enforced",
+  "required",
+]);
 
 export const domainCapabilitySchema = z.object({
   name: z.string().min(1).max(255),
@@ -66,6 +70,7 @@ export const updateDomainSchema = z
     sending_enabled: z.boolean().optional(),
     receiving_enabled: z.boolean().optional(),
     tls: domainTlsSchema.optional(),
+    dedicated_ip_pool_id: z.string().uuid().nullable().optional(),
   })
   .refine(
     (data) =>
@@ -75,7 +80,8 @@ export const updateDomainSchema = z
       data.capabilities !== undefined ||
       data.sending_enabled !== undefined ||
       data.receiving_enabled !== undefined ||
-      data.tls !== undefined,
+      data.tls !== undefined ||
+      data.dedicated_ip_pool_id !== undefined,
     {
       message: "At least one updatable field is required",
     },

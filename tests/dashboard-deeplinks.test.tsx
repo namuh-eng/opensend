@@ -72,7 +72,15 @@ describe("dashboard production deep links", () => {
     expect(mockRedirect).toHaveBeenCalledWith("/audience");
   });
 
-  it("renders an unavailable state for the topics unsubscribe editor deep link", async () => {
+  it("renders the unsubscribe page editor for the topics deep link", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: {} }),
+      }),
+    );
+
     const Page = (
       await import(
         "@/app/(dashboard)/audience/topics/unsubscribe-page/edit/page"
@@ -83,17 +91,14 @@ describe("dashboard production deep links", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Unsubscribe page editor unavailable",
+        name: "Unsubscribe page customization",
       }),
-    ).toBeDefined();
-    expect(
-      screen.getByText(
-        "Opensend still serves the default unsubscribe page for public topics, but dashboard customization is not available yet.",
-      ),
     ).toBeDefined();
     expect(
       screen.getByRole("link", { name: "Back to topics" }).getAttribute("href"),
     ).toBe("/audience/topics");
+
+    vi.unstubAllGlobals();
   });
 
   it("renders a billing unavailable state instead of raw-404 when billing is disabled", async () => {
