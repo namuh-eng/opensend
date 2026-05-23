@@ -1,5 +1,3 @@
-"use client";
-
 import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { plans, subscriptions } from "@/lib/db/schema";
