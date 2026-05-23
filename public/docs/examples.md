@@ -6,12 +6,12 @@ Use the framework quickstarts in this docs tree as starting points and adapt the
 
 ## Published npm package
 
-- [Send one email with `opensend`](../../examples/npm-send-email/README.md): minimal Node/Bun example that installs the published npm package, reads local environment variables, and sends one test email.
+- [Send one email with `opensend`](https://github.com/namuh-eng/opensend/tree/main/examples/npm-send-email): minimal Node/Bun example that installs the published npm package, reads local environment variables, and sends one test email.
 
 ## Framework quickstarts
 
-- [Node.js](./send-with-nodejs.md)
-- [Bun](./send-with-bun.md)
-- [Next.js](./send-with-nextjs.md)
-- [Express](./send-with-express.md)
-- [Hono](./send-with-hono.md)
+- [Node.js](/docs/send-with-nodejs)
+- [Bun](/docs/send-with-bun)
+- [Next.js](/docs/send-with-nextjs)
+- [Express](/docs/send-with-express)
+- [Hono](/docs/send-with-hono)
