@@ -2,13 +2,30 @@
 
 ## Docs
 
+- [Official SDKs](https://opensend.namuh.co/docs/sdks.md): OpenSend ships first-party SDK packages for application code and keeps /openapi.json available for generated clients.
+- [Examples](https://opensend.namuh.co/docs/examples.md): Example application patterns.
+- [Send emails with Node.js](https://opensend.namuh.co/docs/send-with-nodejs.md): Send email from Node.js using the TypeScript SDK.
+- [Send emails with Bun](https://opensend.namuh.co/docs/send-with-bun.md): Use the TypeScript SDK from Bun.
+- [Send emails with Next.js](https://opensend.namuh.co/docs/send-with-nextjs.md): Send email from a Next.js route handler or server action.
+- [Send emails with Express](https://opensend.namuh.co/docs/send-with-express.md): Send email from an Express API route.
+- [Send emails with Hono](https://opensend.namuh.co/docs/send-with-hono.md): Send email from Hono.
+- [Send emails with Python](https://opensend.namuh.co/docs/send-with-python.md): Send email from Python using the first-party OpenSend Python SDK.
+- [Send emails with Go](https://opensend.namuh.co/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.
+- [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK.
+- [Send email with SMTP](https://opensend.namuh.co/docs/send-with-smtp.md): Send email over SMTP through the built-in OpenSend relay using an API key as the password.
+- [Integrations](https://opensend.namuh.co/docs/integrations.md): Integration guidance.
+- [OpenSend CLI](https://opensend.namuh.co/docs/cli.md): Command-line workflows for OpenSend.
+- [MCP Server](https://opensend.namuh.co/docs/mcp-server.md): Use OpenSend from MCP-compatible AI clients.
+- [AI Onboarding](https://opensend.namuh.co/docs/ai-onboarding.md): Onboard coding agents to OpenSend.
+- [Agent Email Inbox Skill](https://opensend.namuh.co/docs/agent-email-inbox-skill.md): Give agents an email inbox backed by OpenSend receiving flows.
+- [React Email Skill](https://opensend.namuh.co/docs/react-email-skill.md): Build HTML email with React components.
+- [Email Best Practices Skill](https://opensend.namuh.co/docs/email-best-practices-skill.md): Guardrails for production email systems.
+- [Custom Event Schemas](https://opensend.namuh.co/docs/custom-event-schemas.md): Define and validate custom event payloads.
 - [Introduction](https://opensend.namuh.co/docs/api-reference/introduction.md): Core concepts for the OpenSend API.
 - [Authentication](https://opensend.namuh.co/docs/api-reference/authentication.md): How API key authentication works in OpenSend.
 - [Pagination](https://opensend.namuh.co/docs/api-reference/pagination.md): Pagination behavior for list endpoints.
 - [Errors](https://opensend.namuh.co/docs/api-reference/errors.md): Common OpenSend API error shapes and status codes.
 - [Usage Limits](https://opensend.namuh.co/docs/api-reference/rate-limit.md): Rate limits, quotas, and operational limits.
-- [Agent Email Inbox Skill](https://opensend.namuh.co/docs/agent-email-inbox-skill.md): Give agents an email inbox backed by OpenSend receiving flows.
-- [AI Onboarding](https://opensend.namuh.co/docs/ai-onboarding.md): Onboard coding agents to OpenSend.
 - [Create API Key](https://opensend.namuh.co/docs/api-reference/api-keys/create-api-key.md): Create a new API key.
 - [Delete API Key](https://opensend.namuh.co/docs/api-reference/api-keys/delete-api-key.md): Delete an API key.
 - [List API Keys](https://opensend.namuh.co/docs/api-reference/api-keys/list-api-keys.md): List API keys for the authenticated tenant.
@@ -80,8 +97,6 @@
 - [Retrieve Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/get-webhook.md): Retrieve a webhook.
 - [List Webhooks](https://opensend.namuh.co/docs/api-reference/webhooks/list-webhooks.md): List webhook endpoints.
 - [Update Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/update-webhook.md): Update a webhook.
-- [OpenSend CLI](https://opensend.namuh.co/docs/cli.md): Command-line workflows for OpenSend.
-- [Custom Event Schemas](https://opensend.namuh.co/docs/custom-event-schemas.md): Define and validate custom event payloads.
 - [Managing API Keys](https://opensend.namuh.co/docs/dashboard/api-keys/introduction.md): Manage OpenSend API keys in the dashboard.
 - [Managing Contacts](https://opensend.namuh.co/docs/dashboard/audiences/contacts.md): Manage contacts in the dashboard.
 - [Managing Unsubscribed Contacts](https://opensend.namuh.co/docs/dashboard/audiences/managing-unsubscribe-list.md): OpenSend stores unsubscribe state on contacts and exposes unsubscribe flows for recipient preference handling, including a customizable confirmation page operators can brand to match their product.
@@ -111,36 +126,9 @@
 - [Template Variables](https://opensend.namuh.co/docs/dashboard/templates/template-variables.md): Use variables in templates.
 - [Template Version History](https://opensend.namuh.co/docs/dashboard/templates/version-history.md): Template lifecycle guidance.
 - [Topics](https://opensend.namuh.co/docs/dashboard/topics/introduction.md): Give recipients subscription preferences.
-- [Email Best Practices Skill](https://opensend.namuh.co/docs/email-best-practices-skill.md): Guardrails for production email systems.
-- [Examples](https://opensend.namuh.co/docs/examples.md): Example application patterns.
-- [Ingester Deployment](https://opensend.namuh.co/docs/ingester-deploy.md): Deploy the SES/SNS ingester and queue worker.
-- [Integrations](https://opensend.namuh.co/docs/integrations.md): Integration guidance.
-- [Cloudflare](https://opensend.namuh.co/docs/knowledge-base/cloudflare.md): Verify and configure domains with Cloudflare.
-- [GoDaddy](https://opensend.namuh.co/docs/knowledge-base/godaddy.md): Verify domains hosted on GoDaddy.
-- [How to Handle API Keys](https://opensend.namuh.co/docs/knowledge-base/how-to-handle-api-keys.md): API key storage guidance.
-- [Namecheap](https://opensend.namuh.co/docs/knowledge-base/namecheap.md): Verify domains hosted on Namecheap.
-- [AWS Route 53](https://opensend.namuh.co/docs/knowledge-base/route53.md): Verify domains hosted on Route 53.
-- [Domain and IP Warm-up Guide](https://opensend.namuh.co/docs/knowledge-base/warming-up.md): Warm up sending reputation.
-- [Unsupported Attachment Types](https://opensend.namuh.co/docs/knowledge-base/what-attachment-types-are-not-supported.md): Attachment safety guidance.
-- [What Counts as Email Consent?](https://opensend.namuh.co/docs/knowledge-base/what-counts-as-email-consent.md): Consent guidance for marketing sends.
-- [What if my domain is not verifying?](https://opensend.namuh.co/docs/knowledge-base/what-if-my-domain-is-not-verifying.md): Troubleshoot DNS verification.
-- [What Sending Feature Should I Use?](https://opensend.namuh.co/docs/knowledge-base/what-sending-feature-to-use.md): Choose emails, broadcasts, or automations.
-- [Why Are My Emails Going to Spam?](https://opensend.namuh.co/docs/knowledge-base/why-are-my-emails-going-to-spam.md): Deliverability troubleshooting.
-- [MCP Server](https://opensend.namuh.co/docs/mcp-server.md): Use OpenSend from MCP-compatible AI clients.
-- [Observability](https://opensend.namuh.co/docs/observability.md): Operate OpenSend in production.
-- [React Email Skill](https://opensend.namuh.co/docs/react-email-skill.md): Build HTML email with React components.
-- [Official SDKs](https://opensend.namuh.co/docs/sdks.md): OpenSend ships first-party SDK packages for application code and keeps /openapi.json available for generated clients.
-- [Security](https://opensend.namuh.co/docs/security.md): Security model overview.
-- [Self Hosting](https://opensend.namuh.co/docs/self-hosting.md): Run OpenSend on your own infrastructure with Docker Compose, PostgreSQL, AWS SES/S3, and the standalone ingester service.
-- [Send emails with Bun](https://opensend.namuh.co/docs/send-with-bun.md): Use the TypeScript SDK from Bun.
-- [Send emails with Express](https://opensend.namuh.co/docs/send-with-express.md): Send email from an Express API route.
-- [Send emails with Go](https://opensend.namuh.co/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.
-- [Send emails with Hono](https://opensend.namuh.co/docs/send-with-hono.md): Send email from Hono.
-- [Send emails with Next.js](https://opensend.namuh.co/docs/send-with-nextjs.md): Send email from a Next.js route handler or server action.
-- [Send emails with Node.js](https://opensend.namuh.co/docs/send-with-nodejs.md): Send email from Node.js using the TypeScript SDK.
-- [Send emails with Python](https://opensend.namuh.co/docs/send-with-python.md): Send email from Python using the first-party OpenSend Python SDK.
-- [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK.
-- [Send email with SMTP](https://opensend.namuh.co/docs/send-with-smtp.md): Send email over SMTP through the built-in OpenSend relay using an API key as the password.
+- [Managing Webhooks](https://opensend.namuh.co/docs/webhooks/introduction.md): Receive real-time event notifications.
+- [Event Types](https://opensend.namuh.co/docs/webhooks/event-types.md): Supported webhook event names.
+- [Verify Webhook Requests](https://opensend.namuh.co/docs/webhooks/verify-webhooks-requests.md): Verify webhook signatures before trusting events.
 - [contact.created](https://opensend.namuh.co/docs/webhooks/contacts/created.md): Webhook event emitted when a contact is created.
 - [contact.deleted](https://opensend.namuh.co/docs/webhooks/contacts/deleted.md): Webhook event emitted when a contact is deleted.
 - [contact.updated](https://opensend.namuh.co/docs/webhooks/contacts/updated.md): Webhook event emitted when a contact is updated.
@@ -155,10 +143,22 @@
 - [email.opened](https://opensend.namuh.co/docs/webhooks/emails/opened.md): Webhook event emitted when tracking records an open.
 - [email.received](https://opensend.namuh.co/docs/webhooks/emails/received.md): Webhook event emitted when inbound email is received.
 - [email.sent](https://opensend.namuh.co/docs/webhooks/emails/sent.md): Webhook event emitted when an email is sent.
-- [Event Types](https://opensend.namuh.co/docs/webhooks/event-types.md): Supported webhook event names.
-- [Managing Webhooks](https://opensend.namuh.co/docs/webhooks/introduction.md): Receive real-time event notifications.
 - [Retries and Replays](https://opensend.namuh.co/docs/webhooks/retries-and-replays.md): Handle webhook delivery failures.
-- [Verify Webhook Requests](https://opensend.namuh.co/docs/webhooks/verify-webhooks-requests.md): Verify webhook signatures before trusting events.
+- [Cloudflare](https://opensend.namuh.co/docs/knowledge-base/cloudflare.md): Verify and configure domains with Cloudflare.
+- [GoDaddy](https://opensend.namuh.co/docs/knowledge-base/godaddy.md): Verify domains hosted on GoDaddy.
+- [How to Handle API Keys](https://opensend.namuh.co/docs/knowledge-base/how-to-handle-api-keys.md): API key storage guidance.
+- [Namecheap](https://opensend.namuh.co/docs/knowledge-base/namecheap.md): Verify domains hosted on Namecheap.
+- [AWS Route 53](https://opensend.namuh.co/docs/knowledge-base/route53.md): Verify domains hosted on Route 53.
+- [Domain and IP Warm-up Guide](https://opensend.namuh.co/docs/knowledge-base/warming-up.md): Warm up sending reputation.
+- [Unsupported Attachment Types](https://opensend.namuh.co/docs/knowledge-base/what-attachment-types-are-not-supported.md): Attachment safety guidance.
+- [What Counts as Email Consent?](https://opensend.namuh.co/docs/knowledge-base/what-counts-as-email-consent.md): Consent guidance for marketing sends.
+- [What if my domain is not verifying?](https://opensend.namuh.co/docs/knowledge-base/what-if-my-domain-is-not-verifying.md): Troubleshoot DNS verification.
+- [What Sending Feature Should I Use?](https://opensend.namuh.co/docs/knowledge-base/what-sending-feature-to-use.md): Choose emails, broadcasts, or automations.
+- [Why Are My Emails Going to Spam?](https://opensend.namuh.co/docs/knowledge-base/why-are-my-emails-going-to-spam.md): Deliverability troubleshooting.
+- [Self Hosting](https://opensend.namuh.co/docs/self-hosting.md): Run OpenSend on your own infrastructure with Docker Compose, PostgreSQL, AWS SES/S3, and the standalone ingester service.
+- [Ingester Deployment](https://opensend.namuh.co/docs/ingester-deploy.md): Deploy the SES/SNS ingester and queue worker.
+- [Security](https://opensend.namuh.co/docs/security.md): Security model overview.
+- [Observability](https://opensend.namuh.co/docs/observability.md): Operate OpenSend in production.
 
 ## OpenAPI Specs
 

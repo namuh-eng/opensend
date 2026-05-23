@@ -1,7 +1,14 @@
 import { DocsShell } from "@/components/docs/docs-shell";
 import { getAllDocs, getDocsNav } from "@/lib/docs";
+import type { Metadata } from "next";
 
 const BASE_URL = "https://opensend.namuh.co";
+
+export const metadata: Metadata = {
+  title: "OpenSend Docs",
+  description:
+    "First-party OpenSend documentation for sending email, verifying domains, using SDKs, webhooks, MCP, and self-hosting.",
+};
 
 const QUICKSTART_NODE = `import { Resend } from "opensend";
 
@@ -118,15 +125,15 @@ export default async function DocsPage() {
   const [nav, docs] = await Promise.all([getDocsNav(), getAllDocs()]);
 
   return (
-    <DocsShell nav={nav}>
+    <DocsShell nav={nav} showRightRail={false}>
       <div className="space-y-10">
         <section className="overflow-hidden rounded-[24px] border border-line bg-bg-card shadow-[0_40px_120px_-80px_rgba(196,255,90,0.9)]">
-          <div className="grid gap-0 lg:grid-cols-[1.04fr_0.96fr]">
-            <div className="p-6 sm:p-8 lg:p-10">
+          <div className="grid gap-0 xl:grid-cols-[minmax(0,0.95fr)_minmax(420px,0.9fr)]">
+            <div className="flex flex-col p-6 sm:p-8 lg:p-10">
               <div className="pill success">
                 <span className="dot" /> First-party docs · human and LLM ready
               </div>
-              <h1 className="mt-6 max-w-3xl text-[42px] font-medium leading-[0.96] tracking-[-0.04em] text-fg sm:text-[60px]">
+              <h1 className="mt-6 max-w-3xl text-[40px] font-medium leading-[0.98] tracking-[-0.04em] text-fg sm:text-[56px]">
                 Email infrastructure docs without the guesswork.
               </h1>
               <p className="mt-5 max-w-2xl text-[16px] leading-7 text-fg-2">
@@ -150,7 +157,7 @@ export default async function DocsPage() {
                   OpenAPI
                 </a>
               </div>
-              <div className="mt-8 grid gap-3 sm:grid-cols-3">
+              <div className="mt-8 grid gap-3 sm:grid-cols-3 xl:mt-auto xl:pt-8">
                 <div className="rounded-card border border-line bg-white/[0.02] p-4">
                   <p className="font-mono text-[26px] text-accent">
                     {docs.length}
@@ -241,10 +248,7 @@ export default async function DocsPage() {
             </h2>
             <p className="mt-2 text-[13px] leading-6 text-fg-2">
               Use the styled reference for humans and{" "}
-              <a
-                className="text-accent underline decoration-accent/30 underline-offset-4"
-                href="/openapi.json"
-              >
+              <a className="docs-link" href="/openapi.json">
                 OpenAPI
               </a>{" "}
               for exact schemas.
