@@ -99,6 +99,12 @@ vi.mock("@/components/log-detail", () => ({
   ),
 }));
 
+vi.mock("@/components/template-detail", () => ({
+  TemplateDetail: (props: { template: { id: string } }) => (
+    <div data-testid="template-detail" data-props={JSON.stringify(props)} />
+  ),
+}));
+
 function makeQuery<T>(rows: T[]) {
   const chain = {
     from: vi.fn(() => chain),
@@ -153,6 +159,7 @@ function parsedProps<T>(element: TestElement): T {
           "webhooks",
           "logs",
           "log",
+          "template",
           "apiKey",
           "email",
         ].some((key) => item.props[key] !== undefined),
@@ -270,8 +277,16 @@ describe("dashboard pages tenant scoping", () => {
       LogDetailPage({ params: Promise.resolve({ id: "log-a" }) }),
     ).rejects.toThrow("NEXT_NOT_FOUND");
 
+    queueRows([]);
+    const TemplateDetailPage = (
+      await import("@/app/(dashboard)/templates/[id]/page")
+    ).default;
+    await expect(
+      TemplateDetailPage({ params: Promise.resolve({ id: "template-a" }) }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+
     expect(
       mockEq.mock.calls.filter(([, right]) => right === "user-b").length,
-    ).toBeGreaterThanOrEqual(3);
+    ).toBeGreaterThanOrEqual(4);
   });
 });
