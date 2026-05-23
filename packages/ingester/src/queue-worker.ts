@@ -456,6 +456,8 @@ export class QueueWorker {
         headers: email.headers ?? undefined,
         attachments: await normalizeAttachmentsForSend(email.attachments),
         region: sesRegion,
+        configurationSetName:
+          deliveryDomain?.sesConfigurationSetName ?? undefined,
       });
       const sendDurationMs = finishTelemetrySpan(sesSpan, { status: "ok" });
 

@@ -6,6 +6,12 @@ import type {
   ApiResponse,
   AudienceListResponse,
   AudienceResponse,
+  AutomationDeleteResponse,
+  AutomationDetailResponse,
+  AutomationListResponse,
+  AutomationRunDetailItem,
+  AutomationRunListResponse,
+  AutomationRunMetricsResponse,
   BatchEmailResponse,
   BroadcastListResponse,
   BroadcastResponse,
@@ -14,23 +20,43 @@ import type {
   ContactResponse,
   CreateBroadcastPayload,
   CreateTemplatePayload,
+  CreateTopicResponse,
+  CreateWebhookPayload,
+  CustomEvent,
+  CustomEventListResponse,
   DeleteAudienceResponse,
   DeleteBroadcastResponse,
   DeleteContactResponse,
+  DeleteDomainResponse,
+  DeleteSuppressionResponse,
   DeleteTemplateResponse,
+  DeleteTopicResponse,
+  DeleteWebhookResponse,
   EmailOptions,
   EmailResponse,
+  LogDetailResponse,
+  LogListResponse,
   RequestOptions,
   SDKOptions,
   SegmentContactListResponse,
   SegmentListResponse,
   SegmentResponse,
   SendBroadcastPayload,
+  SendCustomEventResponse,
   SendEmailPayload,
+  SuppressionListResponse,
+  SuppressionPublicItem,
   TemplateListResponse,
   TemplateResponse,
+  TopicListResponse,
+  TopicResponse,
   UpdateBroadcastPayload,
   UpdateTemplatePayload,
+  WebhookCreateResponse,
+  WebhookDeliveryReplayResponse,
+  WebhookDetailResponse,
+  WebhookListResponse,
+  WebhookUpdateResponse,
 } from "../packages/sdk/src";
 
 describe("Opensend SDK", () => {
@@ -1032,6 +1058,405 @@ describe("Opensend SDK", () => {
       data: null,
       error: null,
     });
+  });
+
+  it("builds webhooks CRUD requests against /api/webhooks", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "webhook", id: "wh_123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.webhooks.create({
+      endpoint: "https://example.com/hook",
+      events: ["email.sent"],
+    });
+    await client.webhooks.list({ limit: 5, after: "wh_1" });
+    await client.webhooks.get("wh_123");
+    await client.webhooks.update("wh_123", { status: "disabled" });
+    await client.webhooks.delete("wh_123");
+    await client.webhooks.replayDelivery("wh_123", "del_456");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/api/webhooks",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/api/webhooks?limit=5&after=wh_1",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/api/webhooks/wh_123",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "https://api.example.com/api/webhooks/wh_123",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "https://api.example.com/api/webhooks/wh_123",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "https://api.example.com/api/webhooks/wh_123/deliveries/del_456/replay",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("builds webhooks listDeliveries request", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({ object: "list", data: [], has_more: false }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.webhooks.listDeliveries("wh_123", { limit: 10 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/api/webhooks/wh_123/deliveries?limit=10",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("builds topics CRUD requests against /api/topics", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "topic", id: "topic_123" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.topics.create({
+      name: "Product Updates",
+      visibility: "public",
+    });
+    await client.topics.list({ limit: 10, after: "topic_1", search: "update" });
+    await client.topics.get("topic_123");
+    await client.topics.update("topic_123", { name: "Renamed" });
+    await client.topics.delete("topic_123");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/api/topics",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/api/topics?limit=10&after=topic_1&search=update",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/api/topics/topic_123",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "https://api.example.com/api/topics/topic_123",
+      expect.objectContaining({ method: "PATCH" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "https://api.example.com/api/topics/topic_123",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("builds suppressions list, create, and delete requests", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "suppression", id: "sup_1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.suppressions.list({ limit: 20 });
+    await client.suppressions.create({
+      email: "bad@example.com",
+      reason: "bounce",
+    });
+    await client.suppressions.delete("bad@example.com");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/api/suppressions?limit=20",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/api/suppressions",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.example.com/api/suppressions/bad%40example.com",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+
+  it("builds suppressions get request with encoded email", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ object: "suppression", id: "sup_1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.suppressions.get("user+tag@example.com");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/api/suppressions/user%2Btag%40example.com",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("builds logs list and get requests", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({ object: "list", data: [], has_more: false }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.logs.list({ limit: 20, status: "200", method: "POST" });
+    await client.logs.get("log_abc");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://api.example.com/api/logs?limit=20&status=200&method=POST",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://api.example.com/api/logs/log_abc",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("builds domains delete request", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({ object: "domain", id: "dom_123", deleted: true }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    const response = await client.domains.delete("dom_123");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/api/domains/dom_123",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+    expect(response.data).toMatchObject({ object: "domain", deleted: true });
+  });
+
+  it("passes pagination options to contacts.list", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({ object: "list", data: [], has_more: false }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const client = new Opensend("os_test", {
+      baseUrl: "https://api.example.com",
+    });
+
+    await client.contacts.list({ limit: 25, after: "c_100" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://api.example.com/contacts?limit=25&after=c_100",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("exposes concrete types for automations and events namespaces", () => {
+    expectTypeOf<AutomationDetailResponse>().toMatchTypeOf<{
+      object: "automation";
+      id: string;
+      status: "draft" | "enabled" | "disabled";
+    }>();
+    expectTypeOf<AutomationListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ id: string; status: string }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<AutomationDeleteResponse>().toMatchTypeOf<{
+      object: "automation";
+      deleted: true;
+    }>();
+    expectTypeOf<AutomationRunListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ id: string; status: string }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<AutomationRunDetailItem>().toMatchTypeOf<{
+      object: "automation_run";
+      trigger_event_id: string | null;
+      step_states: Record<string, unknown>;
+    }>();
+    expectTypeOf<AutomationRunMetricsResponse>().toMatchTypeOf<{
+      object: "automation_run_metrics";
+      total_runs: number;
+      completion_rate: number;
+      failure_rate: number;
+    }>();
+    expectTypeOf<CustomEvent>().toMatchTypeOf<{
+      object: "event";
+      id: string;
+      name: string;
+      schema: Record<string, unknown> | null;
+    }>();
+    expectTypeOf<CustomEventListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ id: string; name: string }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<SendCustomEventResponse>().toMatchTypeOf<{
+      object: "event_delivery";
+      automation_runs: unknown[];
+    }>();
+  });
+
+  it("exposes new namespace type exports from the entrypoint", () => {
+    // Webhooks
+    expectTypeOf<WebhookCreateResponse>().toMatchTypeOf<{
+      object: "webhook";
+      id: string;
+      signing_secret: string;
+    }>();
+    expectTypeOf<WebhookListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ id: string; endpoint: string }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<WebhookDetailResponse>().toMatchTypeOf<{
+      object: "webhook";
+      recent_deliveries: unknown[];
+    }>();
+    expectTypeOf<WebhookUpdateResponse>().toMatchTypeOf<{
+      object: "webhook";
+    }>();
+    expectTypeOf<DeleteWebhookResponse>().toMatchTypeOf<{
+      object: "webhook";
+      deleted: true;
+    }>();
+    expectTypeOf<WebhookDeliveryReplayResponse>().toMatchTypeOf<{
+      object: "webhook_delivery_replay";
+    }>();
+    // Topics
+    expectTypeOf<CreateTopicResponse>().toMatchTypeOf<{
+      object: "topic";
+      id: string;
+    }>();
+    expectTypeOf<TopicResponse>().toMatchTypeOf<{
+      object: "topic";
+      id: string;
+      name: string;
+    }>();
+    expectTypeOf<TopicListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ id: string; name: string }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<DeleteTopicResponse>().toMatchTypeOf<{ success: true }>();
+    // Suppressions
+    expectTypeOf<SuppressionPublicItem>().toMatchTypeOf<{
+      object: "suppression";
+      email: string;
+      reason: string;
+    }>();
+    expectTypeOf<SuppressionListResponse>().toMatchTypeOf<{
+      object: "list";
+      scope: "user";
+      data: unknown[];
+      has_more: boolean;
+    }>();
+    expectTypeOf<DeleteSuppressionResponse>().toMatchTypeOf<{
+      object: "suppression";
+      deleted: true;
+    }>();
+    // Logs
+    expectTypeOf<LogListResponse>().toMatchTypeOf<{
+      object: "list";
+      data: Array<{ id: string; method: string | null }>;
+      has_more: boolean;
+    }>();
+    expectTypeOf<LogDetailResponse>().toMatchTypeOf<{
+      object: "log";
+      id: string;
+      request_body: unknown;
+      response_body: unknown;
+    }>();
+    // Domains delete
+    expectTypeOf<DeleteDomainResponse>().toMatchTypeOf<{
+      object: "domain";
+      deleted: true;
+    }>();
   });
 
   it("exposes automations and events clients", async () => {

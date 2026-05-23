@@ -82,6 +82,7 @@ export class EmailProviderService {
     headers?: Record<string, string>;
     attachments?: EmailAttachment[];
     region?: string;
+    configurationSetName?: string | null;
   }) {
     const command =
       params.attachments && params.attachments.length > 0
@@ -97,6 +98,9 @@ export class EmailProviderService {
                 Data: new TextEncoder().encode(buildMimeMessage(params)),
               },
             },
+            ...(params.configurationSetName
+              ? { ConfigurationSetName: params.configurationSetName }
+              : {}),
           })
         : new SendEmailCommand({
             FromEmailAddress: params.from,
@@ -115,6 +119,9 @@ export class EmailProviderService {
               },
             },
             ReplyToAddresses: params.replyTo,
+            ...(params.configurationSetName
+              ? { ConfigurationSetName: params.configurationSetName }
+              : {}),
           });
 
     if (useDevStub) {

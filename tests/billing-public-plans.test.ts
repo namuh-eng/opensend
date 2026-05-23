@@ -24,6 +24,8 @@ const basePlan = {
   ratePerSecond: 10,
   stripePriceId: "price_test_123",
   isPublic: true,
+  dedicatedIpsEnabled: false,
+  maxDedicatedIps: 0,
   createdAt: new Date("2026-05-01T00:00:00.000Z"),
 } satisfies PlanRow;
 

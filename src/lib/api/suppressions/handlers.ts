@@ -8,6 +8,12 @@ import {
   SuppressionServiceError,
   createSuppressionService,
 } from "@opensend/core";
+import { z } from "zod";
+
+const createSuppressionSchema = z.object({
+  email: z.string().email().min(3).max(512),
+  reason: z.enum(["bounced", "complained", "manual"]).optional(),
+});
 
 const suppressionService = createSuppressionService();
 
@@ -81,4 +87,34 @@ export async function handleDeleteSuppressionRequest(
     }
     throw err;
   }
+}
+
+export async function handleCreateSuppressionRequest(
+  request: Request,
+): Promise<Response> {
+  const authResult = await requireSuppressionAuth(request);
+  if (!authResult.ok) return authResult.response;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const result = createSuppressionSchema.safeParse(body);
+  if (!result.success) {
+    return Response.json(
+      { error: "Validation failed", details: result.error.flatten() },
+      { status: 422 },
+    );
+  }
+
+  const created = await suppressionService.createSuppression({
+    userId: authResult.userId,
+    email: result.data.email,
+    reason: result.data.reason,
+  });
+
+  return Response.json(created, { status: 201 });
 }

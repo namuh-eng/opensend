@@ -12,7 +12,7 @@
 - [Send emails with Python](https://opensend.namuh.co/docs/send-with-python.md): Send email from Python using the first-party OpenSend Python SDK.
 - [Send emails with Go](https://opensend.namuh.co/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.
 - [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK.
-- [Send emails with SMTP](https://opensend.namuh.co/docs/send-with-smtp.md): SMTP integration status.
+- [Send email with SMTP](https://opensend.namuh.co/docs/send-with-smtp.md): Send email over SMTP through the built-in OpenSend relay using an API key as the password.
 - [Integrations](https://opensend.namuh.co/docs/integrations.md): Integration guidance.
 - [OpenSend CLI](https://opensend.namuh.co/docs/cli.md): Command-line workflows for OpenSend.
 - [MCP Server](https://opensend.namuh.co/docs/mcp-server.md): Use OpenSend from MCP-compatible AI clients.
@@ -99,7 +99,7 @@
 - [Update Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/update-webhook.md): Update a webhook.
 - [Managing API Keys](https://opensend.namuh.co/docs/dashboard/api-keys/introduction.md): Manage OpenSend API keys in the dashboard.
 - [Managing Contacts](https://opensend.namuh.co/docs/dashboard/audiences/contacts.md): Manage contacts in the dashboard.
-- [Managing Unsubscribed Contacts](https://opensend.namuh.co/docs/dashboard/audiences/managing-unsubscribe-list.md): Understand unsubscribed contacts.
+- [Managing Unsubscribed Contacts](https://opensend.namuh.co/docs/dashboard/audiences/managing-unsubscribe-list.md): OpenSend stores unsubscribe state on contacts and exposes unsubscribe flows for recipient preference handling, including a customizable confirmation page operators can brand to match their product.
 - [Contact Properties](https://opensend.namuh.co/docs/dashboard/audiences/properties.md): Use custom properties on contacts.
 - [Condition](https://opensend.namuh.co/docs/dashboard/automations/condition.md): Branch automation runs.
 - [Delay](https://opensend.namuh.co/docs/dashboard/automations/delay.md): Pause automation execution.

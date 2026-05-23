@@ -1,5 +1,6 @@
 import { domainRepo } from "../db/repositories/domainRepo";
 import type { domains } from "../db/schema";
+import { configurationSetService } from "./configurationSet";
 import { domainIdentityProvider } from "./domain-providers";
 
 type DomainRow = typeof domains.$inferSelect;
@@ -225,6 +226,13 @@ export type DomainServiceDependencies = {
     name: string;
     region?: string | null;
   }) => Promise<void>;
+  syncDomainConfigurationSet?: (input: {
+    domainId: string;
+    tls: string | null | undefined;
+    dedicatedIpPoolSesName?: string | null;
+    existingConfigSetName?: string | null;
+    region?: string;
+  }) => Promise<string>;
 };
 
 const defaultCapabilities: DomainCapability[] = [
@@ -347,6 +355,8 @@ export function createDomainService({
   deleteDomainIdentity = (domain: string, options?: { region?: string }) =>
     domainIdentityProvider.deleteDomainIdentity(domain, options),
   invalidateDomainCaches = async () => {},
+  syncDomainConfigurationSet = (input) =>
+    configurationSetService.syncDomainConfigurationSet(input),
 }: DomainServiceDependencies = {}) {
   return {
     async listDomains(options: {
@@ -404,6 +414,26 @@ export function createDomainService({
         dkimPrivateKeyCt: identity.dkimPrivateKeyEnc?.ct ?? null,
         dkimPrivateKeyIv: identity.dkimPrivateKeyEnc?.iv ?? null,
       });
+
+      // Provision the SES configuration set for TLS enforcement + pool assignment
+      try {
+        const configSetName = await syncDomainConfigurationSet({
+          domainId: row.id,
+          tls: row.tls,
+          dedicatedIpPoolSesName: null,
+          region: row.region,
+        });
+        await repository.update(row.id, {
+          sesConfigurationSetName: configSetName,
+        });
+      } catch (configErr) {
+        // Config-set provisioning failure is non-fatal: the domain row is
+        // already committed. Log and proceed without a config set.
+        console.warn(
+          `Failed to sync SES config set for domain ${row.id}:`,
+          configErr,
+        );
+      }
 
       await invalidateDomainCaches({
         id: row.id,
