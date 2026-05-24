@@ -1,11 +1,10 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import {
   type TemplateDetail,
   TemplateServiceError,
   createTemplateService,
 } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
+import { authorizeTemplateRoute } from "../auth";
 
 function mapTemplateError(error: unknown, fallback: string) {
   if (error instanceof TemplateServiceError) {
@@ -44,14 +43,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeTemplateRoute(
+    request.headers.get("authorization"),
+  );
+  if (!auth.ok) return auth.response;
 
   try {
     const { id } = await params;
-    if (!auth.userId) return unauthorizedResponse();
     const template = await templateService().getTemplate(id, {
       userId: auth.userId,
     });
@@ -65,14 +63,13 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeTemplateRoute(
+    request.headers.get("authorization"),
+  );
+  if (!auth.ok) return auth.response;
 
   try {
     const { id } = await params;
-    if (!auth.userId) return unauthorizedResponse();
     const updated = await templateService().updateTemplate(
       id,
       await request.json(),
@@ -89,14 +86,13 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
-  if (permissionError) return permissionError;
+  const auth = await authorizeTemplateRoute(
+    request.headers.get("authorization"),
+  );
+  if (!auth.ok) return auth.response;
 
   try {
     const { id } = await params;
-    if (!auth.userId) return unauthorizedResponse();
     await templateService().deleteTemplate(id, { userId: auth.userId });
     return NextResponse.json({ success: true });
   } catch (error) {
