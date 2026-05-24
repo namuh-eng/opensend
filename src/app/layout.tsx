@@ -1,3 +1,4 @@
+import { PosthogProvider } from "@/components/observability/posthog-provider";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import "./globals.css";
@@ -39,7 +40,9 @@ export default function RootLayout({
       lang="en"
       className={`dark ${geistSans.variable} ${geistMono.variable} ${instrumentSerif.variable}`}
     >
-      <body className="min-h-screen antialiased">{children}</body>
+      <body className="min-h-screen antialiased">
+        <PosthogProvider>{children}</PosthogProvider>
+      </body>
     </html>
   );
 }
