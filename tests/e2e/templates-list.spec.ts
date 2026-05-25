@@ -63,6 +63,75 @@ test.describe("Templates List Page", () => {
     ]);
   });
 
+  test("edits and publishes a template through the dashboard editor", async ({
+    authenticatedPage: page,
+    e2eDb,
+    e2eUser,
+  }) => {
+    const templateId = randomUUID();
+    await e2eDb.query(
+      `insert into templates
+        (id, name, alias, status, subject, html, text, user_id, created_at)
+       values
+        ($1, 'Editable Template', 'editable-template', 'draft', 'Old subject', '<p>Old body</p>', 'Old body', $2, now())`,
+      [templateId, e2eUser.id],
+    );
+
+    await page.goto(`/templates/${templateId}/editor`);
+    await page.waitForLoadState("networkidle");
+
+    await expect(
+      page.getByRole("heading", { name: "Template editor" }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Template name")).toHaveValue(
+      "Editable Template",
+    );
+
+    await page.getByLabel("Template name").fill("Edited Template");
+    await page.getByLabel("Subject").fill("New subject {{firstName}}");
+    await page.getByLabel("HTML").fill("<h1>Hello {{firstName}}</h1>");
+    await page.getByLabel("Text/plain fallback").fill("Hello {{firstName}}");
+    await page.getByRole("button", { name: "Save" }).click();
+
+    await expect(page.getByText("Template saved.")).toBeVisible();
+
+    const saved = await e2eDb.query<{
+      name: string;
+      subject: string | null;
+      html: string | null;
+      text: string | null;
+      variables: Array<{ key: string }> | null;
+      status: string;
+    }>(
+      "select name, subject, html, text, variables, status from templates where id = $1 and user_id = $2",
+      [templateId, e2eUser.id],
+    );
+    expect(saved.rows[0]).toMatchObject({
+      name: "Edited Template",
+      subject: "New subject {{firstName}}",
+      html: "<h1>Hello {{firstName}}</h1>",
+      text: "Hello {{firstName}}",
+      status: "draft",
+    });
+    expect(saved.rows[0]?.variables?.map((variable) => variable.key)).toContain(
+      "firstName",
+    );
+
+    await page.getByRole("button", { name: "Publish" }).click();
+    await expect(page.getByText("Template published.")).toBeVisible();
+
+    const published = await e2eDb.query<{ status: string }>(
+      "select status from templates where id = $1 and user_id = $2",
+      [templateId, e2eUser.id],
+    );
+    expect(published.rows[0]?.status).toBe("published");
+
+    await e2eDb.query("delete from templates where id = $1 and user_id = $2", [
+      templateId,
+      e2eUser.id,
+    ]);
+  });
+
   test("renders React Email-backed template preview with text and variable diagnostics", async ({
     authenticatedPage: page,
     e2eDb,
