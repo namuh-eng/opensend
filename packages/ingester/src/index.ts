@@ -18,6 +18,7 @@ import {
 import { Hono } from "hono";
 import { webhookDispatcher } from "./dispatcher";
 import { queueWorker } from "./queue-worker";
+import { Sentry } from "./sentry";
 import { normalizeSesEvent } from "./ses-event-normalization";
 import {
   SnsValidationError,
@@ -109,6 +110,15 @@ async function runJobEndpoint<T>(
 }
 
 app.get("/health", (c) => c.text("OK"));
+
+app.get("/__sentry-test", async (c) => {
+  if (c.req.header("x-sentry-smoke") !== "1") {
+    return c.text("forbidden", 403);
+  }
+  Sentry.captureException(new Error("sentry-smoke-test:opensend-ingester"));
+  await Sentry.flush(2000);
+  return c.json({ ok: true });
+});
 
 app.post("/jobs/poll", async (c) =>
   runJobEndpoint(c, async () => await queueWorker.pollOnce()),
