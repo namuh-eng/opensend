@@ -1,35 +1,11 @@
 "use client";
 
 import { StatusBadge } from "@/components/status-badge";
-import { useState } from "react";
-
-interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  role: "admin" | "member";
-  status: "active" | "pending";
-}
-
-const MOCK_MEMBERS: TeamMember[] = [
-  {
-    id: "1",
-    name: "Ashley",
-    email: "ashley@example.com",
-    role: "admin",
-    status: "active",
-  },
-  {
-    id: "2",
-    name: "Jaeyun",
-    email: "jaeyun@example.com",
-    role: "admin",
-    status: "active",
-  },
-];
+import { authClient } from "@/lib/auth-client";
 
 export function TeamTab() {
-  const [members] = useState<TeamMember[]>(MOCK_MEMBERS);
+  const { data: session, isPending } = authClient.useSession();
+  const user = session?.user;
 
   return (
     <div className="space-y-6">
@@ -74,31 +50,30 @@ export function TeamTab() {
             </tr>
           </thead>
           <tbody>
-            {members.map((member) => (
-              <tr
-                key={member.id}
-                className="border-b border-line last:border-0 hover:bg-bg-2 transition-colors"
-              >
+            {isPending ? (
+              <tr>
+                <td
+                  colSpan={4}
+                  className="px-4 py-6 text-center text-[13px] text-fg-2"
+                >
+                  Loading…
+                </td>
+              </tr>
+            ) : user ? (
+              <tr className="border-b border-line last:border-0 hover:bg-bg-2 transition-colors">
                 <td className="px-4 py-4">
                   <div className="flex flex-col">
                     <span className="text-[14px] text-fg font-medium">
-                      {member.name}
+                      {user.name || user.email}
                     </span>
-                    <span className="text-[12px] text-fg-2">
-                      {member.email}
-                    </span>
+                    <span className="text-[12px] text-fg-2">{user.email}</span>
                   </div>
                 </td>
                 <td className="px-4 py-4">
-                  <span className="text-[13px] text-fg capitalize">
-                    {member.role}
-                  </span>
+                  <span className="text-[13px] text-fg capitalize">Owner</span>
                 </td>
                 <td className="px-4 py-4">
-                  <StatusBadge
-                    status={member.status === "active" ? "Active" : "Pending"}
-                    variant={member.status === "active" ? "success" : "warning"}
-                  />
+                  <StatusBadge status="Active" variant="success" />
                 </td>
                 <td className="px-4 py-4 text-right">
                   <button
@@ -106,14 +81,23 @@ export function TeamTab() {
                     className="cursor-not-allowed text-[12px] text-fg-3 opacity-70"
                     disabled
                     aria-describedby="team-actions-unavailable"
-                    aria-label={`Edit ${member.name} unavailable`}
+                    aria-label="Edit member unavailable"
                     title="Team role editing is not available yet."
                   >
                     Edit
                   </button>
                 </td>
               </tr>
-            ))}
+            ) : (
+              <tr>
+                <td
+                  colSpan={4}
+                  className="px-4 py-6 text-center text-[13px] text-fg-2"
+                >
+                  Sign in to view team members.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
