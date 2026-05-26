@@ -48,13 +48,17 @@ export default async function DashboardLayout({
           <div className="flex-1 px-6 py-6">{children}</div>
           <footer className="flex items-center justify-end gap-4 border-t border-line px-6 py-3">
             <a
-              href="mailto:feedback@example.com?subject=Opensend%20Feedback"
+              href="https://github.com/namuh-eng/opensend/issues/new?labels=feedback"
+              target="_blank"
+              rel="noreferrer noopener"
               className="text-[13px] text-fg-3 transition-colors hover:text-fg"
             >
               Feedback
             </a>
             <a
-              href="mailto:help@example.com?subject=Opensend%20Help"
+              href="https://github.com/namuh-eng/opensend/issues"
+              target="_blank"
+              rel="noreferrer noopener"
               className="text-[13px] text-fg-3 transition-colors hover:text-fg"
             >
               Help
