@@ -2,6 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  BlockEditorCanvas,
+  type EditorBlock,
+  blocksToHtml,
+} from "./block-editor";
 
 type TemplateApiResponse = {
   id: string;
@@ -32,6 +37,7 @@ type TemplateFormState = {
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 type LoadState = "loading" | "ready" | "error";
+type EditorMode = "visual" | "code";
 
 type TemplateEditorProps = {
   templateId: string;
@@ -59,6 +65,11 @@ function formFromTemplate(template: TemplateApiResponse): TemplateFormState {
     html: template.html ?? "",
     text: template.text ?? "",
   };
+}
+
+function blocksFromHtml(html: string): EditorBlock[] {
+  if (!html.trim()) return [];
+  return [{ id: crypto.randomUUID(), type: "html", content: html }];
 }
 
 function apiHeaders(): Record<string, string> {
@@ -114,6 +125,8 @@ export function TemplateEditor({ templateId }: TemplateEditorProps) {
   const [persistedForm, setPersistedForm] = useState<TemplateFormState | null>(
     null,
   );
+  const [blocks, setBlocks] = useState<EditorBlock[]>([]);
+  const [mode, setMode] = useState<EditorMode>("visual");
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -141,6 +154,7 @@ export function TemplateEditor({ templateId }: TemplateEditorProps) {
       setTemplate(payload);
       setForm(nextForm);
       setPersistedForm(nextForm);
+      setBlocks(blocksFromHtml(nextForm.html));
       setLoadState("ready");
     } catch (error) {
       setMessage(
@@ -160,6 +174,20 @@ export function TemplateEditor({ templateId }: TemplateEditorProps) {
   ) {
     setForm((current) => ({ ...current, [field]: value }));
     if (saveState === "saved") setSaveState("idle");
+  }
+
+  function handleBlocksChange(next: EditorBlock[]) {
+    setBlocks(next);
+    setForm((current) => ({ ...current, html: blocksToHtml(next) }));
+    if (saveState === "saved") setSaveState("idle");
+  }
+
+  function switchMode(next: EditorMode) {
+    if (next === mode) return;
+    if (next === "visual") {
+      setBlocks(blocksFromHtml(form.html));
+    }
+    setMode(next);
   }
 
   async function saveTemplate(): Promise<boolean> {
@@ -198,6 +226,7 @@ export function TemplateEditor({ templateId }: TemplateEditorProps) {
       setTemplate(payload);
       setForm(nextForm);
       setPersistedForm(nextForm);
+      setBlocks(blocksFromHtml(nextForm.html));
       setPreviewKey((key) => key + 1);
       setSaveState("saved");
       setMessage("Template saved.");
@@ -387,16 +416,59 @@ export function TemplateEditor({ templateId }: TemplateEditorProps) {
             />
           </label>
 
-          <label className="space-y-1.5 text-sm">
-            <span className="text-fg-2">HTML</span>
-            <textarea
-              value={form.html}
-              onChange={(event) => updateField("html", event.target.value)}
-              className="min-h-[360px] w-full resize-y rounded-md border border-line bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-line-3"
-              aria-label="HTML"
-              spellCheck={false}
-            />
-          </label>
+          <div className="space-y-2">
+            <div
+              role="tablist"
+              aria-label="Editor mode"
+              className="inline-flex items-center gap-1 rounded-md border border-line p-0.5 text-xs"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "visual"}
+                onClick={() => switchMode("visual")}
+                className={`rounded px-3 py-1.5 transition-colors ${
+                  mode === "visual"
+                    ? "bg-white/[0.08] text-fg"
+                    : "text-fg-3 hover:text-fg-2"
+                }`}
+              >
+                Visual
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "code"}
+                onClick={() => switchMode("code")}
+                className={`rounded px-3 py-1.5 transition-colors ${
+                  mode === "code"
+                    ? "bg-white/[0.08] text-fg"
+                    : "text-fg-3 hover:text-fg-2"
+                }`}
+              >
+                Code
+              </button>
+            </div>
+
+            {mode === "visual" ? (
+              <BlockEditorCanvas
+                blocks={blocks}
+                onBlocksChange={handleBlocksChange}
+                ariaLabel="Template content editor"
+              />
+            ) : (
+              <label className="block space-y-1.5 text-sm">
+                <span className="text-fg-2">HTML</span>
+                <textarea
+                  value={form.html}
+                  onChange={(event) => updateField("html", event.target.value)}
+                  className="min-h-[360px] w-full resize-y rounded-md border border-line bg-bg px-3 py-2 font-mono text-sm outline-none focus:border-line-3"
+                  aria-label="HTML"
+                  spellCheck={false}
+                />
+              </label>
+            )}
+          </div>
 
           <label className="space-y-1.5 text-sm">
             <span className="text-fg-2">Text/plain fallback</span>

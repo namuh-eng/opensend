@@ -66,6 +66,7 @@ describe("TemplateEditor", () => {
     expect(screen.getByDisplayValue("welcome-email")).toBeTruthy();
     expect(screen.getByDisplayValue("Welcome {{name}}")).toBeTruthy();
     expect(screen.getByTitle("Template editor live preview")).toBeTruthy();
+    expect(screen.getByLabelText("Template content editor")).toBeTruthy();
     expect(mockFetch).toHaveBeenCalledWith("/api/templates/tmpl-1", {
       headers: {},
     });
@@ -86,6 +87,7 @@ describe("TemplateEditor", () => {
 
     const name = await screen.findByLabelText("Template name");
     fireEvent.change(name, { target: { value: "Updated Welcome" } });
+    fireEvent.click(screen.getByRole("tab", { name: "Code" }));
     fireEvent.change(screen.getByLabelText("HTML"), {
       target: { value: "<h1>Updated</h1>" },
     });
