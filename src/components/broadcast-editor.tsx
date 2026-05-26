@@ -2,110 +2,12 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { BlockEditorCanvas, type EditorBlock } from "./block-editor";
 import {
   BroadcastEditorSidebar,
   type BroadcastStyle,
   DEFAULT_BROADCAST_STYLE,
 } from "./broadcast-editor-sidebar";
-
-// Block types for the editor
-type BlockType =
-  | "text"
-  | "title"
-  | "subtitle"
-  | "heading"
-  | "bullet_list"
-  | "numbered_list"
-  | "quote"
-  | "code_block"
-  | "image"
-  | "youtube"
-  | "twitter"
-  | "button"
-  | "divider"
-  | "section"
-  | "columns"
-  | "social_links"
-  | "unsubscribe_footer"
-  | "html"
-  | "variable";
-
-interface EditorBlock {
-  id: string;
-  type: BlockType;
-  content: string;
-}
-
-const SLASH_MENU_ITEMS: {
-  category: string;
-  items: { type: BlockType; label: string; icon: string }[];
-}[] = [
-  {
-    category: "Text",
-    items: [
-      { type: "text", label: "Text", icon: "T" },
-      { type: "title", label: "Title", icon: "H1" },
-      { type: "subtitle", label: "Subtitle", icon: "H2" },
-      { type: "heading", label: "Heading", icon: "H3" },
-      { type: "bullet_list", label: "Bullet list", icon: "•" },
-      { type: "numbered_list", label: "Numbered list", icon: "1." },
-      { type: "quote", label: "Quote", icon: "❝" },
-      { type: "code_block", label: "Code block", icon: "</>" },
-    ],
-  },
-  {
-    category: "Media",
-    items: [
-      { type: "image", label: "Image", icon: "🖼" },
-      { type: "youtube", label: "YouTube", icon: "▶" },
-      { type: "twitter", label: "X/Twitter", icon: "𝕏" },
-    ],
-  },
-  {
-    category: "Layout",
-    items: [
-      { type: "button", label: "Button", icon: "▢" },
-      { type: "divider", label: "Divider", icon: "—" },
-      { type: "section", label: "Section", icon: "☐" },
-      { type: "columns", label: "Columns", icon: "▥" },
-      { type: "social_links", label: "Social Links", icon: "🔗" },
-      {
-        type: "unsubscribe_footer",
-        label: "Unsubscribe Footer",
-        icon: "✉",
-      },
-    ],
-  },
-  {
-    category: "Utility",
-    items: [
-      { type: "html", label: "HTML", icon: "<>" },
-      { type: "variable", label: "Variable", icon: "{}" },
-    ],
-  },
-];
-
-const VARIABLES = [
-  { label: "{{{contact.first_name}}}", value: "{{{contact.first_name}}}" },
-  { label: "{{{contact.last_name}}}", value: "{{{contact.last_name}}}" },
-  { label: "{{{contact.email}}}", value: "{{{contact.email}}}" },
-  {
-    label: "{{{contact.company_name}}}",
-    value: "{{{contact.company_name}}}",
-  },
-  {
-    label: "{{{RESEND_UNSUBSCRIBE_URL}}}",
-    value: "{{{RESEND_UNSUBSCRIBE_URL}}}",
-  },
-];
-
-const COMPONENT_ITEMS = (
-  SLASH_MENU_ITEMS.find((c) => c.category === "Layout")?.items ?? []
-).concat(
-  (SLASH_MENU_ITEMS.find((c) => c.category === "Utility")?.items ?? []).filter(
-    (i) => i.type === "html" || i.type === "code_block",
-  ),
-);
 
 interface BroadcastData {
   id: string;
@@ -170,10 +72,6 @@ export function BroadcastEditor({
 
   // Block editor state
   const [blocks, setBlocks] = useState<EditorBlock[]>([]);
-  const [slashMenuOpen, setSlashMenuOpen] = useState(false);
-  const [activeToolbarTab, setActiveToolbarTab] = useState<
-    "text" | "image" | "components" | "variables"
-  >("text");
 
   // Right sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -187,7 +85,6 @@ export function BroadcastEditor({
 
   const saveTimeout = useRef<ReturnType<typeof setTimeout>>(null);
   const topicDropdownRef = useRef<HTMLDivElement>(null);
-  const slashMenuRef = useRef<HTMLDivElement>(null);
 
   // Load broadcast data
   useEffect(() => {
@@ -252,7 +149,7 @@ export function BroadcastEditor({
     loadOptions();
   }, []);
 
-  // Close topic dropdown and slash menu on outside click
+  // Close topic dropdown on outside click
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (
@@ -261,43 +158,10 @@ export function BroadcastEditor({
       ) {
         setTopicDropdownOpen(false);
       }
-      if (
-        slashMenuRef.current &&
-        !slashMenuRef.current.contains(e.target as Node)
-      ) {
-        setSlashMenuOpen(false);
-      }
     };
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
-
-  const insertBlock = (type: BlockType) => {
-    const newBlock: EditorBlock = {
-      id: crypto.randomUUID(),
-      type,
-      content: "",
-    };
-    setBlocks((prev) => [...prev, newBlock]);
-    setSlashMenuOpen(false);
-  };
-
-  const updateBlockContent = (id: string, content: string) => {
-    setBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, content } : b)));
-  };
-
-  const removeBlock = (id: string) => {
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
-  };
-
-  const handleEditorKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "/") {
-      setSlashMenuOpen(true);
-    }
-    if (e.key === "Escape") {
-      setSlashMenuOpen(false);
-    }
-  };
 
   // Auto-save
   const autoSave = useCallback(
@@ -723,94 +587,13 @@ export function BroadcastEditor({
               )}
             </div>
 
-            {/* Block Editor */}
-            <div className="mt-8 relative">
-              <div
-                data-testid="block-editor"
-                className="min-h-[400px] border border-line rounded-lg p-4 relative"
-                onKeyDown={handleEditorKeyDown}
-                // biome-ignore lint/a11y/noNoninteractiveTabindex: editor needs keyboard focus for slash commands
-                tabIndex={0}
-                aria-label="Content editor"
-              >
-                {blocks.length === 0 && !slashMenuOpen && (
-                  <p className="text-[14px] text-fg-4">
-                    Press &apos;/&apos; for commands
-                  </p>
-                )}
+            <BlockEditorCanvas
+              blocks={blocks}
+              onBlocksChange={setBlocks}
+              className="mt-8"
+            />
 
-                {/* Rendered blocks */}
-                {blocks.map((block) => (
-                  <div
-                    key={block.id}
-                    data-testid={`block-${block.type}`}
-                    className="group relative mb-3"
-                  >
-                    <div className="absolute -left-8 top-1 opacity-0 group-hover:opacity-100 flex gap-0.5">
-                      <button
-                        type="button"
-                        onClick={() => removeBlock(block.id)}
-                        className="p-0.5 text-fg-4 hover:text-red-400 text-xs"
-                        title="Remove block"
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          aria-hidden="true"
-                        >
-                          <path d="M18 6L6 18M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                    <BlockRenderer
-                      block={block}
-                      onUpdate={(content) =>
-                        updateBlockContent(block.id, content)
-                      }
-                    />
-                  </div>
-                ))}
-
-                {/* Slash command menu */}
-                {slashMenuOpen && (
-                  <div
-                    ref={slashMenuRef}
-                    className="absolute left-4 z-50 w-[280px] max-h-[360px] overflow-y-auto bg-bg-card border border-line rounded-lg shadow-xl"
-                    style={{
-                      top:
-                        blocks.length > 0
-                          ? `${blocks.length * 48 + 16}px`
-                          : "16px",
-                    }}
-                  >
-                    {SLASH_MENU_ITEMS.map((category) => (
-                      <div key={category.category}>
-                        <div className="px-3 py-1.5 text-[11px] font-semibold text-fg-4 uppercase tracking-wider">
-                          {category.category}
-                        </div>
-                        {category.items.map((item) => (
-                          <button
-                            key={item.type}
-                            type="button"
-                            onClick={() => insertBlock(item.type)}
-                            className="w-full px-3 py-2 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors flex items-center gap-2.5"
-                          >
-                            <span className="w-6 h-6 flex items-center justify-center rounded bg-white/[0.06] text-[11px] font-mono shrink-0">
-                              {item.icon}
-                            </span>
-                            {item.label}
-                          </button>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
+            <div className="relative">
               {/* Pick a template / Upload HTML */}
               <div className="flex items-center gap-3 mt-3">
                 <button
@@ -1010,339 +793,6 @@ export function BroadcastEditor({
           </div>
         </div>
       )}
-
-      {/* Bottom Toolbar */}
-      <div className="border-t border-line bg-bg-card">
-        {/* Toolbar tabs */}
-        <div className="flex items-center border-b border-line px-4">
-          {(
-            [
-              { key: "text", label: "Text" },
-              { key: "image", label: "Image" },
-              { key: "components", label: "Components" },
-              { key: "variables", label: "Variables" },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveToolbarTab(tab.key)}
-              className={`px-3 py-2.5 text-[13px] font-medium transition-colors relative ${
-                activeToolbarTab === tab.key
-                  ? "text-fg"
-                  : "text-fg-4 hover:text-fg-2"
-              }`}
-            >
-              {tab.label}
-              {activeToolbarTab === tab.key && (
-                <span className="absolute bottom-0 left-0 right-0 h-[2px] bg-white" />
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Toolbar content */}
-        <div className="px-4 py-2 min-h-[44px]">
-          {activeToolbarTab === "text" && (
-            <div className="flex items-center gap-1">
-              {[
-                { title: "Bold", icon: "B", style: "font-bold" },
-                { title: "Italic", icon: "I", style: "italic" },
-                { title: "Underline", icon: "U", style: "underline" },
-                {
-                  title: "Strikethrough",
-                  icon: "S",
-                  style: "line-through",
-                },
-                { title: "Code", icon: "</>", style: "font-mono text-[11px]" },
-                { title: "Uppercase", icon: "AA", style: "text-[11px]" },
-              ].map((btn) => (
-                <button
-                  key={btn.title}
-                  type="button"
-                  title={btn.title}
-                  className="w-8 h-8 flex items-center justify-center rounded text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
-                >
-                  <span className={btn.style}>{btn.icon}</span>
-                </button>
-              ))}
-
-              <span className="w-px h-5 bg-white/10 mx-1" />
-
-              {/* Alignment */}
-              {[
-                { title: "Align left", icon: "≡" },
-                { title: "Align center", icon: "≡" },
-                { title: "Align right", icon: "≡" },
-              ].map((btn) => (
-                <button
-                  key={btn.title}
-                  type="button"
-                  title={btn.title}
-                  className="w-8 h-8 flex items-center justify-center rounded text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
-                >
-                  {btn.icon}
-                </button>
-              ))}
-
-              <span className="w-px h-5 bg-white/10 mx-1" />
-
-              {/* Lists */}
-              {[
-                { title: "Bullet list", icon: "•" },
-                { title: "Numbered list", icon: "1." },
-              ].map((btn) => (
-                <button
-                  key={btn.title}
-                  type="button"
-                  title={btn.title}
-                  className="w-8 h-8 flex items-center justify-center rounded text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
-                >
-                  {btn.icon}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {activeToolbarTab === "image" && (
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="h-8 px-3 text-[13px] text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 transition-colors"
-              >
-                Upload image
-              </button>
-              <span className="text-[12px] text-fg-4">or drag and drop</span>
-            </div>
-          )}
-
-          {activeToolbarTab === "components" && (
-            <div className="flex items-center gap-1 flex-wrap">
-              {COMPONENT_ITEMS.map((item) => (
-                <button
-                  key={item.type}
-                  type="button"
-                  onClick={() => insertBlock(item.type)}
-                  className="h-8 px-3 text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg rounded transition-colors flex items-center gap-1.5"
-                >
-                  <span className="text-[11px] font-mono">{item.icon}</span>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {activeToolbarTab === "variables" && (
-            <div className="flex items-center gap-1 flex-wrap">
-              {VARIABLES.map((v) => (
-                <button
-                  key={v.value}
-                  type="button"
-                  onClick={() => {
-                    const newBlock: EditorBlock = {
-                      id: crypto.randomUUID(),
-                      type: "variable",
-                      content: v.value,
-                    };
-                    setBlocks((prev) => [...prev, newBlock]);
-                  }}
-                  className="h-8 px-2.5 text-[12px] font-mono text-fg-2 hover:bg-white/[0.08] hover:text-fg rounded border border-line transition-colors"
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
-}
-
-/** Renders a single editor block by type */
-function BlockRenderer({
-  block,
-  onUpdate,
-}: {
-  block: EditorBlock;
-  onUpdate: (content: string) => void;
-}) {
-  switch (block.type) {
-    case "title":
-      return (
-        <input
-          type="text"
-          value={block.content}
-          onChange={(e) => onUpdate(e.target.value)}
-          placeholder="Title"
-          className="w-full bg-transparent border-none outline-none text-[28px] font-bold text-fg placeholder-[#444]"
-        />
-      );
-    case "subtitle":
-      return (
-        <input
-          type="text"
-          value={block.content}
-          onChange={(e) => onUpdate(e.target.value)}
-          placeholder="Subtitle"
-          className="w-full bg-transparent border-none outline-none text-[20px] font-semibold text-fg-2 placeholder-[#444]"
-        />
-      );
-    case "heading":
-      return (
-        <input
-          type="text"
-          value={block.content}
-          onChange={(e) => onUpdate(e.target.value)}
-          placeholder="Heading"
-          className="w-full bg-transparent border-none outline-none text-[18px] font-semibold text-fg placeholder-[#444]"
-        />
-      );
-    case "quote":
-      return (
-        <div className="border-l-2 border-fg-2 pl-4">
-          <textarea
-            value={block.content}
-            onChange={(e) => onUpdate(e.target.value)}
-            placeholder="Quote"
-            rows={2}
-            className="w-full bg-transparent border-none outline-none text-[14px] italic text-fg-2 placeholder-[#444] resize-none"
-          />
-        </div>
-      );
-    case "code_block":
-      return (
-        <textarea
-          value={block.content}
-          onChange={(e) => onUpdate(e.target.value)}
-          placeholder="Code"
-          rows={4}
-          className="w-full bg-white/[0.03] border border-line rounded-md p-3 font-mono text-[13px] text-fg placeholder-[#444] resize-none outline-none"
-        />
-      );
-    case "bullet_list":
-      return (
-        <div className="flex items-start gap-2">
-          <span className="text-fg-2 mt-0.5">&#8226;</span>
-          <input
-            type="text"
-            value={block.content}
-            onChange={(e) => onUpdate(e.target.value)}
-            placeholder="List item"
-            className="flex-1 bg-transparent border-none outline-none text-[14px] text-fg placeholder-[#444]"
-          />
-        </div>
-      );
-    case "numbered_list":
-      return (
-        <div className="flex items-start gap-2">
-          <span className="text-fg-2 mt-0.5">1.</span>
-          <input
-            type="text"
-            value={block.content}
-            onChange={(e) => onUpdate(e.target.value)}
-            placeholder="List item"
-            className="flex-1 bg-transparent border-none outline-none text-[14px] text-fg placeholder-[#444]"
-          />
-        </div>
-      );
-    case "image":
-      return (
-        <div className="border border-dashed border-line-2 rounded-lg p-8 text-center">
-          <p className="text-[13px] text-fg-4">
-            Click to upload or drag and drop an image
-          </p>
-        </div>
-      );
-    case "youtube":
-      return (
-        <input
-          type="text"
-          value={block.content}
-          onChange={(e) => onUpdate(e.target.value)}
-          placeholder="Paste YouTube URL..."
-          className="w-full bg-white/[0.03] border border-line rounded-md px-3 py-2 text-[13px] text-fg placeholder-[#444] outline-none"
-        />
-      );
-    case "twitter":
-      return (
-        <input
-          type="text"
-          value={block.content}
-          onChange={(e) => onUpdate(e.target.value)}
-          placeholder="Paste X/Twitter URL..."
-          className="w-full bg-white/[0.03] border border-line rounded-md px-3 py-2 text-[13px] text-fg placeholder-[#444] outline-none"
-        />
-      );
-    case "button":
-      return (
-        <div className="flex justify-center">
-          <input
-            type="text"
-            value={block.content || "Button"}
-            onChange={(e) => onUpdate(e.target.value)}
-            className="btn btn-primary min-w-[120px] text-center"
-          />
-        </div>
-      );
-    case "divider":
-      return <hr className="border-t border-line-2 my-2" />;
-    case "section":
-      return (
-        <div className="border border-line rounded-lg p-4 min-h-[60px]">
-          <p className="text-[12px] text-fg-4">Section block</p>
-        </div>
-      );
-    case "columns":
-      return (
-        <div className="grid grid-cols-2 gap-3">
-          <div className="border border-line rounded-lg p-3 min-h-[60px]">
-            <p className="text-[12px] text-fg-4">Column 1</p>
-          </div>
-          <div className="border border-line rounded-lg p-3 min-h-[60px]">
-            <p className="text-[12px] text-fg-4">Column 2</p>
-          </div>
-        </div>
-      );
-    case "social_links":
-      return (
-        <div className="flex items-center justify-center gap-3 py-2">
-          <span className="text-[13px] text-fg-2">Social Links</span>
-        </div>
-      );
-    case "unsubscribe_footer":
-      return (
-        <div className="text-center py-3 text-[12px] text-fg-4">
-          <a href="{{{RESEND_UNSUBSCRIBE_URL}}}" className="underline">
-            Unsubscribe
-          </a>
-        </div>
-      );
-    case "html":
-      return (
-        <textarea
-          value={block.content}
-          onChange={(e) => onUpdate(e.target.value)}
-          placeholder="<html>...</html>"
-          rows={6}
-          className="w-full bg-white/[0.03] border border-line rounded-md p-3 font-mono text-[13px] text-fg placeholder-[#444] resize-none outline-none"
-        />
-      );
-    case "variable":
-      return (
-        <span className="inline-block px-2 py-1 bg-white/[0.08] rounded text-[13px] font-mono text-fg-2 border border-line">
-          {block.content}
-        </span>
-      );
-    default:
-      return (
-        <textarea
-          value={block.content}
-          onChange={(e) => onUpdate(e.target.value)}
-          placeholder="Type something..."
-          rows={2}
-          className="w-full bg-transparent border-none outline-none text-[14px] text-fg placeholder-[#444] resize-none"
-        />
-      );
-  }
 }
