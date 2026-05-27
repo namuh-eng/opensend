@@ -157,6 +157,37 @@ describe("docs content shell", () => {
     expect(sdks).toContain("install from the repo until RubyGems");
     expect(sdks).not.toMatch(/PHP SDK|Java SDK|\\.NET SDK|Rust SDK/);
   });
+
+  it("documents implemented dashboard product areas with caveats", () => {
+    const docsRoot = path.join(process.cwd(), "public/docs");
+    const requiredDashboardDocs = [
+      "dashboard/emails/introduction.md",
+      "dashboard/broadcasts/introduction.md",
+      "dashboard/domains/introduction.md",
+      "dashboard/automations/introduction.md",
+      "dashboard/templates/introduction.md",
+      "dashboard/audiences/contacts.md",
+      "dashboard/segments/introduction.md",
+      "dashboard/topics/introduction.md",
+      "dashboard/webhooks/introduction.md",
+      "dashboard/suppressions/introduction.md",
+      "dashboard/logs/introduction.md",
+    ];
+
+    for (const relPath of requiredDashboardDocs) {
+      const markdown = readFileSync(path.join(docsRoot, relPath), "utf8");
+      expect(markdown.split(/\s+/).length).toBeGreaterThan(80);
+      expect(markdown).not.toContain("resend.com/docs");
+    }
+
+    const suppressions = readFileSync(
+      path.join(docsRoot, "dashboard/suppressions/introduction.md"),
+      "utf8",
+    );
+    expect(suppressions).toContain(
+      "There is not a separate full suppressions dashboard page",
+    );
+  });
 });
 
 function listMarkdownFiles(dir: string): string[] {
