@@ -166,8 +166,13 @@ describe("template variable metadata service", () => {
         }),
         expect.objectContaining({
           key: "productName",
-          required: false,
-          fallbackValue: "Opensend",
+          required: true,
+          fallbackValue: null,
+        }),
+        expect.objectContaining({
+          key: "supportEmail",
+          required: true,
+          fallbackValue: null,
         }),
       ]),
     });

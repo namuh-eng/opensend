@@ -46,12 +46,19 @@ describe("GET /api/templates/:id/preview", () => {
           name: "productName",
           key: "productName",
           type: "string",
-          required: false,
-          fallbackValue: "Opensend",
+          required: true,
+          fallbackValue: null,
         },
         {
           name: "actionUrl",
           key: "actionUrl",
+          type: "string",
+          required: true,
+          fallbackValue: null,
+        },
+        {
+          name: "supportEmail",
+          key: "supportEmail",
           type: "string",
           required: true,
           fallbackValue: null,
@@ -81,7 +88,7 @@ describe("GET /api/templates/:id/preview", () => {
         kind: "react_email",
         template_key: "onboarding-welcome",
       },
-      subject: "Welcome to Opensend",
+      subject: "Welcome to Sample productName",
     });
     expect(body.html).toContain("Your email workspace is ready");
     expect(body.text).toContain("YOUR EMAIL WORKSPACE IS READY");
@@ -89,11 +96,16 @@ describe("GET /api/templates/:id/preview", () => {
       expect.arrayContaining([
         expect.objectContaining({
           key: "productName",
-          source: "fallback",
-          value: "Opensend",
+          source: "preview_sample",
+          sendRequired: true,
         }),
         expect.objectContaining({
           key: "actionUrl",
+          source: "preview_sample",
+          sendRequired: true,
+        }),
+        expect.objectContaining({
+          key: "supportEmail",
           source: "preview_sample",
           sendRequired: true,
         }),

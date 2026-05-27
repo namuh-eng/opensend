@@ -427,11 +427,11 @@ export function TemplatesList() {
             <div
               key={t.id}
               data-testid="template-card"
-              className="group border border-line rounded-lg overflow-hidden hover:border-line-3 transition-colors"
+              className="group border border-line rounded-lg hover:border-line-3 transition-colors"
             >
               {/* Preview thumbnail */}
               <Link href={`/templates/${t.id}/editor`}>
-                <div className="aspect-[4/3] bg-white flex items-start justify-start p-4 cursor-pointer">
+                <div className="aspect-[4/3] bg-white flex items-start justify-start p-4 cursor-pointer rounded-t-lg">
                   <div className="w-3/4 space-y-2 pt-2">
                     <div className="h-1.5 bg-white/[0.12] rounded w-full" />
                     <div className="h-1.5 bg-white/[0.12] rounded w-3/4" />
