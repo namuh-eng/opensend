@@ -1,8 +1,24 @@
 // ABOUTME: Unit tests for the Settings Team tab — member action availability and explanatory copy
 
-import { TeamTab } from "@/components/settings-team";
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/auth-client", () => ({
+  authClient: {
+    useSession: () => ({
+      data: {
+        user: {
+          id: "user-1",
+          name: "Ada Lovelace",
+          email: "ada@example.com",
+        },
+      },
+      isPending: false,
+    }),
+  },
+}));
+
+import { TeamTab } from "@/components/settings-team";
 
 afterEach(cleanup);
 
@@ -38,5 +54,14 @@ describe("TeamTab", () => {
         "team-actions-unavailable",
       );
     }
+  });
+
+  it("renders the signed-in user as the sole member row instead of mock seeds", () => {
+    render(<TeamTab />);
+
+    expect(screen.getByText("Ada Lovelace")).toBeDefined();
+    expect(screen.getByText("ada@example.com")).toBeDefined();
+    expect(screen.queryByText(/ashley@example\.com/i)).toBeNull();
+    expect(screen.queryByText(/jaeyun@example\.com/i)).toBeNull();
   });
 });

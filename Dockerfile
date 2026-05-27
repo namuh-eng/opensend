@@ -13,6 +13,18 @@ FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# NEXT_PUBLIC_* must be present at build time — Next.js inlines them into the client bundle.
+# These are intentionally optional; if unset, the client falls back to no-op observability.
+ARG NEXT_PUBLIC_SENTRY_DSN=""
+ARG NEXT_PUBLIC_POSTHOG_KEY=""
+ARG NEXT_PUBLIC_POSTHOG_HOST=""
+ARG SENTRY_ENVIRONMENT=""
+ARG SENTRY_RELEASE=""
+ENV NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN \
+    NEXT_PUBLIC_POSTHOG_KEY=$NEXT_PUBLIC_POSTHOG_KEY \
+    NEXT_PUBLIC_POSTHOG_HOST=$NEXT_PUBLIC_POSTHOG_HOST \
+    SENTRY_ENVIRONMENT=$SENTRY_ENVIRONMENT \
+    SENTRY_RELEASE=$SENTRY_RELEASE
 RUN bun run build
 
 # Migration runner — lightweight image with drizzle-kit + pg

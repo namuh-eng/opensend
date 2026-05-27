@@ -63,6 +63,20 @@ build_and_push() {
 
   local args=(buildx build --platform "${PLATFORM}" -f "${dockerfile}" -t "${image}" --push)
   [[ -n "${target}" ]] && args+=(--target "${target}")
+
+  # Plumb NEXT_PUBLIC_* observability vars through to the builder stage so they
+  # get inlined into the client JS bundle. Optional — empty means no-op client.
+  for build_arg in \
+    NEXT_PUBLIC_SENTRY_DSN \
+    NEXT_PUBLIC_POSTHOG_KEY \
+    NEXT_PUBLIC_POSTHOG_HOST \
+    SENTRY_ENVIRONMENT \
+    SENTRY_RELEASE; do
+    if [[ -n "${!build_arg:-}" ]]; then
+      args+=(--build-arg "${build_arg}=${!build_arg}")
+    fi
+  done
+
   args+=(.)
 
   docker "${args[@]}"
