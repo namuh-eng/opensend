@@ -52,6 +52,23 @@ describe("received email API route boundary", () => {
     mockReceivedEmailService.getAttachment.mockReset();
   });
 
+  it("rejects API keys without a tenant owner", async () => {
+    mockValidateApiKey.mockResolvedValueOnce({
+      ...AUTH_RESULT,
+      userId: null,
+    });
+
+    const { GET } = await import("@/app/api/emails/receiving/route");
+    const response = await GET(
+      new Request("http://localhost:3015/api/emails/receiving", {
+        headers: { Authorization: "Bearer os_test123" },
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(mockReceivedEmailService.listReceivedEmails).not.toHaveBeenCalled();
+  });
+
   it("delegates list pagination and recipient filters to the service", async () => {
     mockReceivedEmailService.listReceivedEmails.mockResolvedValueOnce({
       object: "list",
@@ -90,6 +107,7 @@ describe("received email API route boundary", () => {
       has_more: false,
     });
     expect(mockReceivedEmailService.listReceivedEmails).toHaveBeenCalledWith({
+      userId: "user-1",
       limit: 2,
       after: "received-0",
       to: "User@Example.com",
@@ -124,6 +142,7 @@ describe("received email API route boundary", () => {
     });
     expect(mockReceivedEmailService.getReceivedEmail).toHaveBeenCalledWith(
       "received-1",
+      "user-1",
     );
   });
 
@@ -187,6 +206,7 @@ describe("received email API route boundary", () => {
     });
     expect(mockReceivedEmailService.listAttachments).toHaveBeenCalledWith(
       "received-1",
+      "user-1",
     );
   });
 
@@ -252,6 +272,7 @@ describe("received email API route boundary", () => {
     expect(mockReceivedEmailService.getAttachment).toHaveBeenCalledWith(
       "received-1",
       "att-1",
+      "user-1",
     );
   });
 

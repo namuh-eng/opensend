@@ -70,13 +70,15 @@ export type ReceivedEmailAttachmentDetailResponse = {
 
 export type ReceivedEmailRepository = {
   listForApi(options: {
+    userId: string;
     limit: number;
     after?: string;
     to?: string;
   }): Promise<{ data: ReceivedEmailListRow[]; hasMore: boolean }>;
-  findById(id: string): Promise<ReceivedEmailRow | undefined>;
+  findById(id: string, userId: string): Promise<ReceivedEmailRow | undefined>;
   findAttachmentsByEmailId(
     id: string,
+    userId: string,
   ): Promise<ReceivedEmailAttachmentContainer | undefined>;
 };
 
@@ -101,6 +103,7 @@ export type ReceivedEmailServiceDependencies = {
 };
 
 export type ListReceivedEmailsInput = {
+  userId: string;
   limit?: number;
   after?: string;
   to?: string | null;
@@ -181,9 +184,10 @@ export function createReceivedEmailService({
 }: ReceivedEmailServiceDependencies = {}) {
   return {
     async listReceivedEmails(
-      input: ListReceivedEmailsInput = {},
+      input: ListReceivedEmailsInput,
     ): Promise<ReceivedEmailListResponse> {
       const result = await repository.listForApi({
+        userId: input.userId,
         limit: normalizeLimit(input.limit),
         after: normalizeAfter(input.after),
         to: normalizeToFilter(input.to),
@@ -196,15 +200,19 @@ export function createReceivedEmailService({
       };
     },
 
-    async getReceivedEmail(id: string): Promise<ReceivedEmailDetailResponse> {
-      return toDetail(requireEmail(await repository.findById(id)));
+    async getReceivedEmail(
+      id: string,
+      userId: string,
+    ): Promise<ReceivedEmailDetailResponse> {
+      return toDetail(requireEmail(await repository.findById(id, userId)));
     },
 
     async listAttachments(
       emailId: string,
+      userId: string,
     ): Promise<ReceivedEmailAttachmentListResponse> {
       const email = requireEmail(
-        await repository.findAttachmentsByEmailId(emailId),
+        await repository.findAttachmentsByEmailId(emailId, userId),
       );
 
       return {
@@ -216,9 +224,10 @@ export function createReceivedEmailService({
     async getAttachment(
       emailId: string,
       attachmentId: string,
+      userId: string,
     ): Promise<ReceivedEmailAttachmentDetailResponse> {
       const email = requireEmail(
-        await repository.findAttachmentsByEmailId(emailId),
+        await repository.findAttachmentsByEmailId(emailId, userId),
       );
       const attachment = getAttachments(email).find(
         (candidate) => candidate.id === attachmentId,
