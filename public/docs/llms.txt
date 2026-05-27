@@ -2,16 +2,25 @@
 
 ## Docs
 
-- [Official SDKs](https://opensend.namuh.co/docs/sdks.md): OpenSend ships first-party SDK packages for application code and keeps /openapi.json available for generated clients.
-- [Examples](https://opensend.namuh.co/docs/examples.md): Example application patterns.
-- [Send emails with Node.js](https://opensend.namuh.co/docs/send-with-nodejs.md): Send email from Node.js using the TypeScript SDK.
-- [Send emails with Bun](https://opensend.namuh.co/docs/send-with-bun.md): Use the TypeScript SDK from Bun.
-- [Send emails with Next.js](https://opensend.namuh.co/docs/send-with-nextjs.md): Send email from a Next.js route handler or server action.
-- [Send emails with Express](https://opensend.namuh.co/docs/send-with-express.md): Send email from an Express API route.
-- [Send emails with Hono](https://opensend.namuh.co/docs/send-with-hono.md): Send email from Hono.
-- [Send emails with Python](https://opensend.namuh.co/docs/send-with-python.md): Send email from Python using the first-party OpenSend Python SDK.
+- [Official SDKs](https://opensend.namuh.co/docs/sdks.md): OpenSend ships first-party SDKs for the languages most teams use to send mail from production services. All SDKs target OpenSend Cloud by default at https://opensend.namuh.co and can point at a self-hosted deployment by setting a base URL.
+- [Examples](https://opensend.namuh.co/docs/examples.md): Example application patterns for OpenSend. Start with the SDK or framework guide that matches your runtime, then adapt the sender domain, base URL, and secret storage to your deployment.
+- [Send emails with Node.js](https://opensend.namuh.co/docs/send-with-nodejs.md): Use the TypeScript SDK from Node.js server code. This guide works for plain Node services, background workers, queues, and CLIs.
+- [Send emails with Bun](https://opensend.namuh.co/docs/send-with-bun.md): Bun projects can use the same opensend TypeScript SDK as Node.js projects. This is useful for Bun APIs, queue workers, scripts, and the OpenSend monorepo itself.
+- [Send emails with Next.js](https://opensend.namuh.co/docs/send-with-nextjs.md): Call OpenSend only from Next.js server code: Route Handlers, Server Actions, background jobs, or server-only modules. Never call the SDK from Client Components because the API key would be bundled for users.
+- [Send emails with Express](https://opensend.namuh.co/docs/send-with-express.md): Use the TypeScript SDK from Express route handlers. Initialize the client once and keep API keys in environment variables.
+- [Send emails with Hono](https://opensend.namuh.co/docs/send-with-hono.md): Hono runs on Bun, Node.js, Cloudflare Workers, and other Fetch-compatible runtimes. Choose the SDK for Node/Bun runtimes and the REST API for constrained edge runtimes.
+- [Send emails with Cloudflare Workers](https://opensend.namuh.co/docs/send-with-cloudflare-workers.md): Cloudflare Workers should use the OpenSend REST API with fetch. This keeps the bundle small, avoids optional Node dependencies, and works in the Workers runtime.
+- [Send emails with AWS Lambda](https://opensend.namuh.co/docs/send-with-aws-lambda.md): AWS Lambda can send with either the TypeScript SDK or the REST API. Use environment variables or a secrets manager for the OpenSend API key.
+- [Send emails with Vercel](https://opensend.namuh.co/docs/send-with-vercel.md): Use OpenSend from Vercel Serverless Functions, Next.js Route Handlers, or Server Actions. Keep the API key in Vercel project environment variables.
+- [Send emails with Railway](https://opensend.namuh.co/docs/send-with-railway.md): Railway can host application code that sends through OpenSend, and it can also host a self-hosted OpenSend deployment. This guide covers application code that calls an existing OpenSend API.
+- [Send emails with Python](https://opensend.namuh.co/docs/send-with-python.md): Send email from Python using the first-party OpenSend Python SDK. It works in scripts, workers, Django, Flask, FastAPI, and any service that can make HTTPS requests.
+- [Send emails with FastAPI](https://opensend.namuh.co/docs/send-with-fastapi.md): Use the Python SDK from FastAPI route handlers or background tasks.
+- [Send emails with Flask](https://opensend.namuh.co/docs/send-with-flask.md): Use the Python SDK from Flask routes, CLI commands, or background workers.
+- [Send emails with Django](https://opensend.namuh.co/docs/send-with-django.md): Use the Python SDK from Django views, management commands, or background jobs.
 - [Send emails with Go](https://opensend.namuh.co/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.
-- [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK.
+- [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK. It works in Rails, Sinatra, Ruby scripts, and background jobs.
+- [Send emails with Rails](https://opensend.namuh.co/docs/send-with-rails.md): Use the Ruby SDK from Rails controllers, jobs, mailer adapters, or service objects.
+- [Send emails with Sinatra](https://opensend.namuh.co/docs/send-with-sinatra.md): Use the Ruby SDK from Sinatra routes or background jobs.
 - [Send email with SMTP](https://opensend.namuh.co/docs/send-with-smtp.md): Send email over SMTP through the built-in OpenSend relay using an API key as the password.
 - [Integrations](https://opensend.namuh.co/docs/integrations.md): Integration guidance.
 - [OpenSend CLI](https://opensend.namuh.co/docs/cli.md): Command-line workflows for OpenSend.
@@ -97,41 +106,44 @@
 - [Get Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/get-webhook.md): Retrieve one webhook endpoint and recent delivery metadata.
 - [List Webhooks](https://opensend.namuh.co/docs/api-reference/webhooks/list-webhooks.md): List webhook endpoints configured for the authenticated tenant.
 - [Update Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/update-webhook.md): Update webhook endpoint configuration such as URL, enabled events, or active state.
+- [Dashboard API Keys](https://opensend.namuh.co/docs/dashboard/api-keys/introduction.md): API keys authenticate server-to-server access to the OpenSend API. Use the dashboard to create, list, inspect, restrict, and revoke keys.
+- [Dashboard Emails](https://opensend.namuh.co/docs/dashboard/emails/introduction.md): The Emails area is the operational view for transactional and scheduled messages. Use it to inspect queued, processing, sent, delivered, bounced, complained, opened, and clicked lifecycle states after the API or SDK accepts a message.
+- [Attachments](https://opensend.namuh.co/docs/dashboard/emails/attachments.md): How to send and inspect attachments.
+- [Custom Headers](https://opensend.namuh.co/docs/dashboard/emails/custom-headers.md): Custom headers let application code attach provider-safe metadata to an email. Headers are submitted through the API or SDK and are useful for internal correlation, customer support, and downstream processing.
+- [Email Bounces](https://opensend.namuh.co/docs/dashboard/emails/email-bounces.md): Bounces are delivery-provider events recorded after SES rejects or later reports a message as undeliverable. In the dashboard, bounce information appears through the email lifecycle status, related logs, metrics, and suppression indicators.
+- [Email Suppressions](https://opensend.namuh.co/docs/dashboard/emails/email-suppressions.md): Suppressions prevent OpenSend from sending to addresses that should not receive mail. They can be created by bounce/complaint events, unsubscribe flows, or manual API actions. The dashboard surfaces suppression state on email detail and audience/contact views.
+- [Idempotency Keys](https://opensend.namuh.co/docs/dashboard/emails/idempotency-keys.md): Idempotency keys prevent duplicate accepted sends when application code retries after a timeout, crash, or provider webhook replay. OpenSend supports idempotency for single email sends, batch sends, broadcast creation/sending, and selected write APIs.
+- [Schedule Email](https://opensend.namuh.co/docs/dashboard/emails/schedule-email.md): Scheduled email lets application code queue a message for future delivery with the scheduledat field. The dashboard shows the accepted email record immediately; the worker sends it when the scheduled time is reached.
+- [Email Tags](https://opensend.namuh.co/docs/dashboard/emails/tags.md): Tags are structured name/value labels attached at send time. Use tags to group related email activity by campaign, workflow, tenant, product area, or internal object ID.
+- [Dashboard Broadcasts](https://opensend.namuh.co/docs/dashboard/broadcasts/introduction.md): Broadcasts are campaign-style sends built in the dashboard and delivered to an audience segment. Use broadcasts when you need one message to reach many contacts with unsubscribe handling, topic preferences, scheduling, and performance review.
+- [Broadcast Performance Tracking](https://opensend.namuh.co/docs/dashboard/broadcasts/performance-tracking.md): Broadcast performance combines accepted send counts, delivery events, opens, clicks, bounces, complaints, and unsubscribes recorded through the OpenSend pipeline. Use it after a campaign to understand whether the audience, domain, and content are healthy.
+- [Dashboard Domains](https://opensend.namuh.co/docs/dashboard/domains/introduction.md): Domains connect your sender identity to DNS records required for authenticated email. In OpenSend, a verified domain is required for trustworthy production sending.
+- [DMARC](https://opensend.namuh.co/docs/dashboard/domains/dmarc.md): DMARC tells mailbox providers how to evaluate mail that fails SPF or DKIM alignment. OpenSend displays DNS records that help align your sending domain, but you own the policy choice.
+- [Tracking Domains](https://opensend.namuh.co/docs/dashboard/domains/tracking.md): Tracking domains brand open and click tracking links to your domain instead of a generic application host. This improves trust and keeps tracking URLs aligned with your sender identity.
+- [Audience Contacts](https://opensend.namuh.co/docs/dashboard/audiences/contacts.md): Contacts are the people or addresses OpenSend knows about for audience, broadcast, topic, and preference workflows. The Contacts page lets you search, filter, add, inspect, and update contact records.
+- [Audience Properties](https://opensend.namuh.co/docs/dashboard/audiences/properties.md): Properties define custom fields stored on contacts. They are useful for personalization, filtering, support context, and automation conditions.
+- [Managing the Unsubscribe List](https://opensend.namuh.co/docs/dashboard/audiences/managing-unsubscribe-list.md): Unsubscribe management protects recipient consent and sender reputation. OpenSend supports contact-level unsubscribe state, topics, unsubscribe page customization, and suppression records from delivery safety events.
+- [Dashboard Segments](https://opensend.namuh.co/docs/dashboard/segments/introduction.md): Segments group contacts for broadcasts and lifecycle targeting. A segment can represent a newsletter audience, customer tier, product cohort, or imported list.
+- [Dashboard Topics](https://opensend.namuh.co/docs/dashboard/topics/introduction.md): Topics let contacts manage categories of mail instead of using a single all-or-nothing unsubscribe preference. Use topics for product updates, newsletters, billing notices, education, or announcements.
+- [Dashboard Templates](https://opensend.namuh.co/docs/dashboard/templates/introduction.md): Templates are reusable email bodies and subjects with variables. Use them when multiple sends share a layout or when non-engineering teammates need to update content without changing application code.
+- [Template Variables](https://opensend.namuh.co/docs/dashboard/templates/template-variables.md): Template variables make reusable content dynamic. Define variables for values such as first name, company name, plan, invoice amount, or action URL.
+- [Template Version History](https://opensend.namuh.co/docs/dashboard/templates/version-history.md): Template version history lets teams understand how content changed over time. Use it to audit edits, compare a published version with a draft, and recover the intent behind a campaign or automation message.
+- [Dashboard Automations](https://opensend.namuh.co/docs/dashboard/automations/introduction.md): Automations are event-driven flows that combine triggers, waits, conditions, contact updates, and email sends. Use them for lifecycle messaging such as welcome flows, trial nudges, onboarding reminders, and reactivation campaigns.
+- [Automation Trigger Step](https://opensend.namuh.co/docs/dashboard/automations/trigger.md): The trigger step starts an automation run. It usually listens for a custom event such as user.signedup, trial.started, or invoice.paid.
+- [Automation Delay Step](https://opensend.namuh.co/docs/dashboard/automations/delay.md): Delay steps pause a run before it continues. Use them for onboarding spacing, follow-ups, and waiting periods between lifecycle messages.
+- [Automation Condition Step](https://opensend.namuh.co/docs/dashboard/automations/condition.md): Condition steps branch a run based on contact, event, or run data. Use them to avoid sending irrelevant messages and to split flows by plan, lifecycle stage, or consent state.
+- [Automation Send Email Step](https://opensend.namuh.co/docs/dashboard/automations/send-email.md): The send-email step queues an email as part of an automation run. It can reference templates and recipient data collected from the trigger or contact record.
+- [Automation Wait for Event Step](https://opensend.namuh.co/docs/dashboard/automations/wait-for-event.md): Wait-for-event pauses a run until a matching custom event arrives or the wait expires. It is useful for flows such as "send a reminder unless the user completes setup".
+- [Automation Runs](https://opensend.namuh.co/docs/dashboard/automations/runs.md): Runs show how individual contacts or events moved through an automation. Use run detail pages for support, QA, and debugging production flows.
+- [Dashboard Webhooks](https://opensend.namuh.co/docs/dashboard/webhooks/introduction.md): The Webhooks dashboard manages outbound event subscriptions. Use it to create endpoints, choose event types, inspect delivery attempts, disable destinations, and replay failed or historical deliveries.
+- [Dashboard Suppressions](https://opensend.namuh.co/docs/dashboard/suppressions/introduction.md): OpenSend suppression behavior is visible across email detail, contacts, unsubscribe workflows, and APIs. There is not a separate full suppressions dashboard page in this repo yet; use the available dashboard surfaces plus the suppressions API for operational management.
+- [Dashboard Logs](https://opensend.namuh.co/docs/dashboard/logs/introduction.md): Logs are the low-level request and operational records used to troubleshoot OpenSend. They complement Emails, Broadcasts, Automations, and Webhooks by showing API method, path, status, timestamps, and error context.
 - [Receiving Overview](https://opensend.namuh.co/docs/dashboard/receiving/introduction.md): Receiving is the OpenSend area for inbound email rows that your deployment stores for a verified domain.
 - [Receiving Custom Domains](https://opensend.namuh.co/docs/dashboard/receiving/custom-domains.md): Use a custom domain or subdomain for inbound addresses that route into OpenSend-backed storage.
 - [Get Received Email Content](https://opensend.namuh.co/docs/dashboard/receiving/get-email-content.md): Use the received email detail API to fetch parsed content after your receiving worker stores a row.
 - [Receiving Attachments](https://opensend.namuh.co/docs/dashboard/receiving/attachments.md): Received email attachments are represented as metadata plus a private object key stored by your receiving worker.
 - [Forward Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/forward-emails.md): Automatic forwarding is not implemented in the OpenSend repository today.
 - [Reply To Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/reply-to-emails.md): OpenSend does not currently provide a one-click inbound reply API.
-- [Managing API Keys](https://opensend.namuh.co/docs/dashboard/api-keys/introduction.md): Manage OpenSend API keys in the dashboard.
-- [Managing Contacts](https://opensend.namuh.co/docs/dashboard/audiences/contacts.md): Manage contacts in the dashboard.
-- [Managing Unsubscribed Contacts](https://opensend.namuh.co/docs/dashboard/audiences/managing-unsubscribe-list.md): OpenSend stores unsubscribe state on contacts and exposes unsubscribe flows for recipient preference handling, including a customizable confirmation page operators can brand to match their product.
-- [Contact Properties](https://opensend.namuh.co/docs/dashboard/audiences/properties.md): Use custom properties on contacts.
-- [Condition](https://opensend.namuh.co/docs/dashboard/automations/condition.md): Branch automation runs.
-- [Delay](https://opensend.namuh.co/docs/dashboard/automations/delay.md): Pause automation execution.
-- [Using Automations](https://opensend.namuh.co/docs/dashboard/automations/introduction.md): Automate email workflows with custom events.
-- [Runs](https://opensend.namuh.co/docs/dashboard/automations/runs.md): Monitor automation executions.
-- [Send Email](https://opensend.namuh.co/docs/dashboard/automations/send-email.md): Send from an automation.
-- [Trigger](https://opensend.namuh.co/docs/dashboard/automations/trigger.md): Start automation runs.
-- [Wait for Event](https://opensend.namuh.co/docs/dashboard/automations/wait-for-event.md): Pause until an event arrives.
-- [Managing Broadcasts](https://opensend.namuh.co/docs/dashboard/broadcasts/introduction.md): Create, schedule, and inspect broadcasts.
-- [Broadcast Performance Tracking](https://opensend.namuh.co/docs/dashboard/broadcasts/performance-tracking.md): Track broadcast sends and metrics.
-- [DMARC](https://opensend.namuh.co/docs/dashboard/domains/dmarc.md): DMARC setup for sender domains.
-- [Managing Domains](https://opensend.namuh.co/docs/dashboard/domains/introduction.md): Domain verification and DNS setup.
-- [Open and Click Tracking](https://opensend.namuh.co/docs/dashboard/domains/tracking.md): Configure tracking domains and tracking behavior.
-- [Attachments](https://opensend.namuh.co/docs/dashboard/emails/attachments.md): How to send and inspect attachments.
-- [Custom Headers](https://opensend.namuh.co/docs/dashboard/emails/custom-headers.md): Attach custom headers to outbound email.
-- [Email Bounces](https://opensend.namuh.co/docs/dashboard/emails/email-bounces.md): Understand bounce handling.
-- [Email Suppressions](https://opensend.namuh.co/docs/dashboard/emails/email-suppressions.md): Understand suppressed recipients.
-- [Idempotency Keys](https://opensend.namuh.co/docs/dashboard/emails/idempotency-keys.md): Safely retry send requests.
-- [Schedule Email](https://opensend.namuh.co/docs/dashboard/emails/schedule-email.md): Schedule email delivery for later.
-- [Tags](https://opensend.namuh.co/docs/dashboard/emails/tags.md): Attach searchable identifiers to emails.
-- [Logs](https://opensend.namuh.co/docs/dashboard/logs/introduction.md): Troubleshoot API requests.
-- [Managing Segments](https://opensend.namuh.co/docs/dashboard/segments/introduction.md): Create and manage audience segments.
-- [Using Templates](https://opensend.namuh.co/docs/dashboard/templates/introduction.md): Store and reuse email templates.
-- [Template Variables](https://opensend.namuh.co/docs/dashboard/templates/template-variables.md): Use variables in templates.
-- [Template Version History](https://opensend.namuh.co/docs/dashboard/templates/version-history.md): Template lifecycle guidance.
-- [Topics](https://opensend.namuh.co/docs/dashboard/topics/introduction.md): Give recipients subscription preferences.
 - [Managing Webhooks](https://opensend.namuh.co/docs/webhooks/introduction.md): Use OpenSend webhooks to receive signed lifecycle events from your own OpenSend deployment.
 - [Event Types](https://opensend.namuh.co/docs/webhooks/event-types.md): OpenSend accepts the following webhook subscription event types.
 - [Verify Webhook Requests](https://opensend.namuh.co/docs/webhooks/verify-webhooks-requests.md): Verify every OpenSend webhook request before trusting the payload.
