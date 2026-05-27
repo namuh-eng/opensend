@@ -661,7 +661,7 @@ export const openApiDocument = {
           "200": {
             description: "Attachment list.",
             content: jsonContent({
-              $ref: "#/components/schemas/EmailAttachmentList",
+              $ref: "#/components/schemas/ReceivedEmailAttachmentList",
             }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
@@ -681,14 +681,14 @@ export const openApiDocument = {
             name: "attachmentId",
             in: "path",
             required: true,
-            schema: { type: "string", format: "uuid" },
+            schema: { type: "string" },
           },
         ],
         responses: {
           "200": {
             description: "Attachment detail.",
             content: jsonContent({
-              $ref: "#/components/schemas/EmailAttachmentDetail",
+              $ref: "#/components/schemas/ReceivedEmailAttachmentDetail",
             }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
@@ -2848,35 +2848,84 @@ export const openApiDocument = {
         },
         required: ["object", "data"],
       },
-      ReceivedEmail: {
+      ReceivedEmailListItem: {
         type: "object",
         properties: {
           id: { type: "string", format: "uuid" },
-          message_id: { type: "string" },
           from: { type: "string" },
           to: { type: "array", items: { type: "string", format: "email" } },
-          subject: { type: "string", nullable: true },
+          subject: { type: "string" },
+          created_at: { type: "string", format: "date-time" },
+        },
+        required: ["id", "from", "to", "subject", "created_at"],
+      },
+      ReceivedEmail: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["received_email"] },
+          id: { type: "string", format: "uuid" },
+          from: { type: "string" },
+          to: { type: "array", items: { type: "string", format: "email" } },
+          subject: { type: "string" },
           html: { type: "string", nullable: true },
           text: { type: "string", nullable: true },
-          headers: {
-            type: "object",
-            additionalProperties: { type: "string" },
-          },
-          received_at: { type: "string", format: "date-time" },
+          created_at: { type: "string", format: "date-time" },
         },
-        required: ["id", "from", "to"],
+        required: ["object", "id", "from", "to", "subject", "created_at"],
       },
       ReceivedEmailList: {
         type: "object",
         properties: {
-          object: { type: "string" },
+          object: { type: "string", enum: ["list"] },
           data: {
             type: "array",
-            items: { $ref: "#/components/schemas/ReceivedEmail" },
+            items: { $ref: "#/components/schemas/ReceivedEmailListItem" },
           },
           has_more: { type: "boolean" },
         },
         required: ["object", "data", "has_more"],
+      },
+      ReceivedEmailAttachment: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          filename: { type: "string" },
+          content_type: { type: "string" },
+          size: { type: "integer" },
+        },
+        required: ["id", "filename", "content_type", "size"],
+      },
+      ReceivedEmailAttachmentList: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["list"] },
+          data: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ReceivedEmailAttachment" },
+          },
+        },
+        required: ["object", "data"],
+      },
+      ReceivedEmailAttachmentDetail: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["received_email_attachment"] },
+          id: { type: "string" },
+          filename: { type: "string" },
+          content_type: { type: "string" },
+          size: { type: "integer" },
+          download_url: { type: "string", format: "uri" },
+          expires_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "object",
+          "id",
+          "filename",
+          "content_type",
+          "size",
+          "download_url",
+          "expires_at",
+        ],
       },
       UpdateDomainRequest: {
         type: "object",

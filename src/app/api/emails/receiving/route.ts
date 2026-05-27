@@ -6,7 +6,7 @@ const receivedEmailService = createReceivedEmailService();
 
 export async function GET(request: Request): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
   const permissionError = requireFullAccessApiKey(auth);
   if (permissionError) return permissionError;
 
@@ -14,6 +14,7 @@ export async function GET(request: Request): Promise<Response> {
 
   try {
     const result = await receivedEmailService.listReceivedEmails({
+      userId: auth.userId,
       limit: Number(url.searchParams.get("limit")) || 20,
       after: url.searchParams.get("after") || undefined,
       to: url.searchParams.get("to"),

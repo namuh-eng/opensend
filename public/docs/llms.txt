@@ -17,7 +17,7 @@
 - [OpenSend CLI](https://opensend.namuh.co/docs/cli.md): Command-line workflows for OpenSend.
 - [MCP Server](https://opensend.namuh.co/docs/mcp-server.md): Use OpenSend from MCP-compatible AI clients.
 - [AI Onboarding](https://opensend.namuh.co/docs/ai-onboarding.md): Onboard coding agents to OpenSend.
-- [Agent Email Inbox Skill](https://opensend.namuh.co/docs/agent-email-inbox-skill.md): Give agents an email inbox backed by OpenSend receiving flows.
+- [Agent Email Inbox Skill](https://opensend.namuh.co/docs/agent-email-inbox-skill.md): Build an agent inbox on top of OpenSend receiving without exposing raw mailbox access to the agent runtime.
 - [React Email Skill](https://opensend.namuh.co/docs/react-email-skill.md): Build HTML email with React components.
 - [Email Best Practices Skill](https://opensend.namuh.co/docs/email-best-practices-skill.md): Guardrails for production email systems.
 - [Custom Event Schemas](https://opensend.namuh.co/docs/custom-event-schemas.md): Define and validate custom event payloads.
@@ -60,12 +60,12 @@
 - [Cancel Email](https://opensend.namuh.co/docs/api-reference/emails/cancel-email.md): Cancel a scheduled email.
 - [List Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-email-attachments.md): List attachments associated with a sent email.
 - [List Sent Emails](https://opensend.namuh.co/docs/api-reference/emails/list-emails.md): List sent, queued, and scheduled emails for the authenticated tenant.
-- [List Received Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-received-email-attachments.md): List attachments parsed from one inbound email.
-- [List Received Emails](https://opensend.namuh.co/docs/api-reference/emails/list-received-emails.md): List inbound emails received by configured domains.
+- [List Received Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-received-email-attachments.md): List attachment metadata stored with one received email.
+- [List Received Emails](https://opensend.namuh.co/docs/api-reference/emails/list-received-emails.md): List inbound email rows stored for the authenticated OpenSend tenant.
 - [Retrieve Email Attachment](https://opensend.namuh.co/docs/api-reference/emails/retrieve-email-attachment.md): Retrieve metadata or content for one sent-email attachment.
 - [Retrieve Sent Email](https://opensend.namuh.co/docs/api-reference/emails/retrieve-email.md): Retrieve one sent email and its current state.
-- [Retrieve Received Email Attachment](https://opensend.namuh.co/docs/api-reference/emails/retrieve-received-email-attachment.md): Retrieve one attachment parsed from an inbound email.
-- [Retrieve Received Email](https://opensend.namuh.co/docs/api-reference/emails/retrieve-received-email.md): Retrieve one inbound email and its parsed metadata.
+- [Retrieve Received Email Attachment](https://opensend.namuh.co/docs/api-reference/emails/retrieve-received-email-attachment.md): Retrieve one attachment record for a received email and get a short-lived private download URL.
+- [Retrieve Received Email](https://opensend.namuh.co/docs/api-reference/emails/retrieve-received-email.md): Retrieve one stored inbound email for the authenticated tenant.
 - [Send Batch Emails](https://opensend.namuh.co/docs/api-reference/emails/send-batch-emails.md): Queue up to 100 emails in one request.
 - [Send Email](https://opensend.namuh.co/docs/api-reference/emails/send-email.md): Send one email through OpenSend.
 - [Update Scheduled Email](https://opensend.namuh.co/docs/api-reference/emails/update-email.md): Update a scheduled email before OpenSend sends it.
@@ -97,6 +97,12 @@
 - [Get Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/get-webhook.md): Retrieve one webhook endpoint and recent delivery metadata.
 - [List Webhooks](https://opensend.namuh.co/docs/api-reference/webhooks/list-webhooks.md): List webhook endpoints configured for the authenticated tenant.
 - [Update Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/update-webhook.md): Update webhook endpoint configuration such as URL, enabled events, or active state.
+- [Receiving Overview](https://opensend.namuh.co/docs/dashboard/receiving/introduction.md): Receiving is the OpenSend area for inbound email rows that your deployment stores for a verified domain.
+- [Receiving Custom Domains](https://opensend.namuh.co/docs/dashboard/receiving/custom-domains.md): Use a custom domain or subdomain for inbound addresses that route into OpenSend-backed storage.
+- [Get Received Email Content](https://opensend.namuh.co/docs/dashboard/receiving/get-email-content.md): Use the received email detail API to fetch parsed content after your receiving worker stores a row.
+- [Receiving Attachments](https://opensend.namuh.co/docs/dashboard/receiving/attachments.md): Received email attachments are represented as metadata plus a private object key stored by your receiving worker.
+- [Forward Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/forward-emails.md): Automatic forwarding is not implemented in the OpenSend repository today.
+- [Reply To Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/reply-to-emails.md): OpenSend does not currently provide a one-click inbound reply API.
 - [Managing API Keys](https://opensend.namuh.co/docs/dashboard/api-keys/introduction.md): Manage OpenSend API keys in the dashboard.
 - [Managing Contacts](https://opensend.namuh.co/docs/dashboard/audiences/contacts.md): Manage contacts in the dashboard.
 - [Managing Unsubscribed Contacts](https://opensend.namuh.co/docs/dashboard/audiences/managing-unsubscribe-list.md): OpenSend stores unsubscribe state on contacts and exposes unsubscribe flows for recipient preference handling, including a customizable confirmation page operators can brand to match their product.
@@ -141,7 +147,7 @@
 - [email.delivered](https://opensend.namuh.co/docs/webhooks/emails/delivered.md): Webhook event emitted when delivery is confirmed.
 - [email.failed](https://opensend.namuh.co/docs/webhooks/emails/failed.md): Webhook event emitted when sending fails.
 - [email.opened](https://opensend.namuh.co/docs/webhooks/emails/opened.md): Webhook event emitted when tracking records an open.
-- [email.received](https://opensend.namuh.co/docs/webhooks/emails/received.md): Webhook event emitted when inbound email is received.
+- [email.received](https://opensend.namuh.co/docs/webhooks/emails/received.md): Inbound receiving is currently a deployment integration point: the repository includes read APIs and storage schema for received email rows, but it does not include a complete SES inbound MIME parser that emits this event automatically. If you build that parser for your self-hosted deployment, use the payload shape below so downstream agents and webhook consumers can rely on a stable contract.
 - [email.sent](https://opensend.namuh.co/docs/webhooks/emails/sent.md): Webhook event emitted when an email is sent.
 - [Retries and Replays](https://opensend.namuh.co/docs/webhooks/retries-and-replays.md): Handle webhook delivery failures.
 - [Cloudflare](https://opensend.namuh.co/docs/knowledge-base/cloudflare.md): Verify and configure domains with Cloudflare.
