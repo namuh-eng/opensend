@@ -46,3 +46,7 @@ ralph_to_ralph_archive/
 # Local clawhip repo metadata (single-machine only)
 .clawhip/
 .scratch/
+
+# Scraped third-party docs and local scrape venv (never committed)
+resend-docs/
+.venv-scrape/
