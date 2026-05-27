@@ -192,4 +192,3 @@ These should not be described as shipped until code proves them:
 - Broad SDK language parity beyond TypeScript/Python/Go/Ruby.
 - No-code/CMS/notification integrations that require product-specific UI or provider setup.
 - Dedicated IP automation vs operator-managed infrastructure.
-
