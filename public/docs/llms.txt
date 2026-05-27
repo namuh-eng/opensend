@@ -2,16 +2,25 @@
 
 ## Docs
 
-- [Official SDKs](https://opensend.namuh.co/docs/sdks.md): OpenSend ships first-party SDK packages for application code and keeps /openapi.json available for generated clients.
-- [Examples](https://opensend.namuh.co/docs/examples.md): Example application patterns.
-- [Send emails with Node.js](https://opensend.namuh.co/docs/send-with-nodejs.md): Send email from Node.js using the TypeScript SDK.
-- [Send emails with Bun](https://opensend.namuh.co/docs/send-with-bun.md): Use the TypeScript SDK from Bun.
-- [Send emails with Next.js](https://opensend.namuh.co/docs/send-with-nextjs.md): Send email from a Next.js route handler or server action.
-- [Send emails with Express](https://opensend.namuh.co/docs/send-with-express.md): Send email from an Express API route.
-- [Send emails with Hono](https://opensend.namuh.co/docs/send-with-hono.md): Send email from Hono.
-- [Send emails with Python](https://opensend.namuh.co/docs/send-with-python.md): Send email from Python using the first-party OpenSend Python SDK.
+- [Official SDKs](https://opensend.namuh.co/docs/sdks.md): OpenSend ships first-party SDKs for the languages most teams use to send mail from production services. All SDKs target OpenSend Cloud by default at https://opensend.namuh.co and can point at a self-hosted deployment by setting a base URL.
+- [Examples](https://opensend.namuh.co/docs/examples.md): Example application patterns for OpenSend. Start with the SDK or framework guide that matches your runtime, then adapt the sender domain, base URL, and secret storage to your deployment.
+- [Send emails with Node.js](https://opensend.namuh.co/docs/send-with-nodejs.md): Use the TypeScript SDK from Node.js server code. This guide works for plain Node services, background workers, queues, and CLIs.
+- [Send emails with Bun](https://opensend.namuh.co/docs/send-with-bun.md): Bun projects can use the same opensend TypeScript SDK as Node.js projects. This is useful for Bun APIs, queue workers, scripts, and the OpenSend monorepo itself.
+- [Send emails with Next.js](https://opensend.namuh.co/docs/send-with-nextjs.md): Call OpenSend only from Next.js server code: Route Handlers, Server Actions, background jobs, or server-only modules. Never call the SDK from Client Components because the API key would be bundled for users.
+- [Send emails with Express](https://opensend.namuh.co/docs/send-with-express.md): Use the TypeScript SDK from Express route handlers. Initialize the client once and keep API keys in environment variables.
+- [Send emails with Hono](https://opensend.namuh.co/docs/send-with-hono.md): Hono runs on Bun, Node.js, Cloudflare Workers, and other Fetch-compatible runtimes. Choose the SDK for Node/Bun runtimes and the REST API for constrained edge runtimes.
+- [Send emails with Cloudflare Workers](https://opensend.namuh.co/docs/send-with-cloudflare-workers.md): Cloudflare Workers should use the OpenSend REST API with fetch. This keeps the bundle small, avoids optional Node dependencies, and works in the Workers runtime.
+- [Send emails with AWS Lambda](https://opensend.namuh.co/docs/send-with-aws-lambda.md): AWS Lambda can send with either the TypeScript SDK or the REST API. Use environment variables or a secrets manager for the OpenSend API key.
+- [Send emails with Vercel](https://opensend.namuh.co/docs/send-with-vercel.md): Use OpenSend from Vercel Serverless Functions, Next.js Route Handlers, or Server Actions. Keep the API key in Vercel project environment variables.
+- [Send emails with Railway](https://opensend.namuh.co/docs/send-with-railway.md): Railway can host application code that sends through OpenSend, and it can also host a self-hosted OpenSend deployment. This guide covers application code that calls an existing OpenSend API.
+- [Send emails with Python](https://opensend.namuh.co/docs/send-with-python.md): Send email from Python using the first-party OpenSend Python SDK. It works in scripts, workers, Django, Flask, FastAPI, and any service that can make HTTPS requests.
+- [Send emails with FastAPI](https://opensend.namuh.co/docs/send-with-fastapi.md): Use the Python SDK from FastAPI route handlers or background tasks.
+- [Send emails with Flask](https://opensend.namuh.co/docs/send-with-flask.md): Use the Python SDK from Flask routes, CLI commands, or background workers.
+- [Send emails with Django](https://opensend.namuh.co/docs/send-with-django.md): Use the Python SDK from Django views, management commands, or background jobs.
 - [Send emails with Go](https://opensend.namuh.co/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.
-- [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK.
+- [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK. It works in Rails, Sinatra, Ruby scripts, and background jobs.
+- [Send emails with Rails](https://opensend.namuh.co/docs/send-with-rails.md): Use the Ruby SDK from Rails controllers, jobs, mailer adapters, or service objects.
+- [Send emails with Sinatra](https://opensend.namuh.co/docs/send-with-sinatra.md): Use the Ruby SDK from Sinatra routes or background jobs.
 - [Send email with SMTP](https://opensend.namuh.co/docs/send-with-smtp.md): Send email over SMTP through the built-in OpenSend relay using an API key as the password.
 - [Integrations](https://opensend.namuh.co/docs/integrations.md): Integration guidance.
 - [OpenSend CLI](https://opensend.namuh.co/docs/cli.md): Command-line workflows for OpenSend.

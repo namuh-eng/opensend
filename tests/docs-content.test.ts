@@ -70,6 +70,9 @@ describe("docs content shell", () => {
     expect(llms.indexOf("/docs/examples.md")).toBeLessThan(
       llms.indexOf("/docs/send-with-nodejs.md"),
     );
+    expect(llms).toContain("/docs/send-with-cloudflare-workers.md");
+    expect(llms).toContain("/docs/send-with-fastapi.md");
+    expect(llms).toContain("/docs/send-with-rails.md");
     expect(llms.indexOf("/docs/webhooks/introduction.md")).toBeLessThan(
       llms.indexOf("/docs/webhooks/emails/sent.md"),
     );
@@ -126,6 +129,33 @@ describe("docs content shell", () => {
         }
       }
     }
+  });
+
+  it("documents first-party SDK and framework guides without implying unsupported packages", () => {
+    const docsRoot = path.join(process.cwd(), "public/docs");
+    const requiredGuides = [
+      "send-with-cloudflare-workers.md",
+      "send-with-aws-lambda.md",
+      "send-with-vercel.md",
+      "send-with-railway.md",
+      "send-with-fastapi.md",
+      "send-with-flask.md",
+      "send-with-django.md",
+      "send-with-rails.md",
+      "send-with-sinatra.md",
+    ];
+
+    for (const guide of requiredGuides) {
+      const markdown = readFileSync(path.join(docsRoot, guide), "utf8");
+      expect(markdown).toContain("OPENSEND_API_KEY");
+      expect(markdown).not.toContain("resend.com/docs");
+    }
+
+    const sdks = readFileSync(path.join(docsRoot, "sdks.md"), "utf8");
+    expect(sdks).toContain("v0.2.0");
+    expect(sdks).toContain("install from the repo until PyPI");
+    expect(sdks).toContain("install from the repo until RubyGems");
+    expect(sdks).not.toMatch(/PHP SDK|Java SDK|\\.NET SDK|Rust SDK/);
   });
 });
 
