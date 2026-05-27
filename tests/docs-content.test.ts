@@ -188,6 +188,34 @@ describe("docs content shell", () => {
       "There is not a separate full suppressions dashboard page",
     );
   });
+
+  it("documents deliverability and support knowledge-base guidance", () => {
+    const docsRoot = path.join(process.cwd(), "public/docs");
+    const requiredKbDocs = [
+      "knowledge-base/spf-dkim-dmarc.md",
+      "knowledge-base/why-are-my-emails-going-to-spam.md",
+      "knowledge-base/mx-conflicts-receiving.md",
+      "knowledge-base/consent-unsubscribe-topics-suppressions.md",
+      "knowledge-base/quotas-rate-limits-production-access.md",
+      "knowledge-base/how-to-handle-api-keys.md",
+    ];
+
+    for (const relPath of requiredKbDocs) {
+      const markdown = readFileSync(path.join(docsRoot, relPath), "utf8");
+      expect(markdown.split(/\s+/).length).toBeGreaterThan(90);
+      expect(markdown).not.toContain("resend.com/docs");
+    }
+
+    const quotas = readFileSync(
+      path.join(
+        docsRoot,
+        "knowledge-base/quotas-rate-limits-production-access.md",
+      ),
+      "utf8",
+    );
+    expect(quotas).toContain("Single email sends: 20 POST requests per minute");
+    expect(quotas).toContain("Batch email sends: 5 POST requests per minute");
+  });
 });
 
 function listMarkdownFiles(dir: string): string[] {
