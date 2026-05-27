@@ -131,6 +131,23 @@ describe("docs content shell", () => {
     }
   });
 
+  it("does not route public product/docs surfaces to competitor documentation", () => {
+    const checkedRoots = [
+      path.join(process.cwd(), "public/docs"),
+      path.join(process.cwd(), "src/app"),
+      path.join(process.cwd(), "src/components"),
+    ];
+
+    for (const root of checkedRoots) {
+      for (const file of listTextFiles(root)) {
+        const content = readFileSync(file, "utf8");
+        expect(content, file).not.toMatch(/resend\.com\/docs/i);
+        expect(content, file).not.toMatch(/api\.resend\.com/i);
+        expect(content, file).not.toMatch(/Resend docs/i);
+      }
+    }
+  });
+
   it("documents first-party SDK and framework guides without implying unsupported packages", () => {
     const docsRoot = path.join(process.cwd(), "public/docs");
     const requiredGuides = [
@@ -223,6 +240,20 @@ function listMarkdownFiles(dir: string): string[] {
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) return listMarkdownFiles(fullPath);
     if (entry.isFile() && entry.name.endsWith(".md")) return [fullPath];
+    return [];
+  });
+}
+
+function listTextFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) return listTextFiles(fullPath);
+    if (
+      entry.isFile() &&
+      [".md", ".ts", ".tsx", ".js", ".jsx"].includes(path.extname(entry.name))
+    ) {
+      return [fullPath];
+    }
     return [];
   });
 }
