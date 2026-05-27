@@ -27,7 +27,8 @@
     "dev:api": "bun run --cwd services/api dev",
     "start:api": "bun run --cwd services/api start",
     "build:api": "bun run --cwd services/api build",
-    "docs:generate": "node tools/generate-docs-index.mjs"
+    "docs:generate": "node tools/generate-docs-index.mjs",
+    "docs:check": "node tools/check-docs-quality.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-eventbridge": "^3.1038.0",

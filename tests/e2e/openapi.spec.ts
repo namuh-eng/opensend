@@ -12,9 +12,18 @@ test("publishes public OpenAPI and styled docs without sign-in", async ({
     paths?: Record<string, unknown>;
   };
   expect(openApiDocument.openapi).toMatch(/^3\./);
-  expect(openApiDocument.paths).toHaveProperty("/emails");
-  expect(openApiDocument.paths).toHaveProperty("/emails/batch");
-  expect(openApiDocument.paths).toHaveProperty("/api/domains");
+  const paths = openApiDocument.paths ?? {};
+  expect(paths).toHaveProperty("/emails");
+  expect(
+    Object.keys((paths["/emails"] as Record<string, unknown>) ?? {}).sort(),
+  ).toEqual(["get", "post"]);
+  expect(paths).toHaveProperty("/emails/batch");
+  expect(paths).toHaveProperty("/domains");
+  expect(paths).toHaveProperty("/webhooks");
+  expect(paths).toHaveProperty("/topics");
+  expect(paths).toHaveProperty("/contact-properties");
+  expect(paths).toHaveProperty("/logs");
+  expect(paths).toHaveProperty("/api/domains");
 
   await page.setViewportSize({ width: 1920, height: 1200 });
   await page.goto("/docs");
