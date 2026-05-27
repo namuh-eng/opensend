@@ -132,24 +132,25 @@
 - [Template Variables](https://opensend.namuh.co/docs/dashboard/templates/template-variables.md): Use variables in templates.
 - [Template Version History](https://opensend.namuh.co/docs/dashboard/templates/version-history.md): Template lifecycle guidance.
 - [Topics](https://opensend.namuh.co/docs/dashboard/topics/introduction.md): Give recipients subscription preferences.
-- [Managing Webhooks](https://opensend.namuh.co/docs/webhooks/introduction.md): Receive real-time event notifications.
-- [Event Types](https://opensend.namuh.co/docs/webhooks/event-types.md): Supported webhook event names.
-- [Verify Webhook Requests](https://opensend.namuh.co/docs/webhooks/verify-webhooks-requests.md): Verify webhook signatures before trusting events.
-- [contact.created](https://opensend.namuh.co/docs/webhooks/contacts/created.md): Webhook event emitted when a contact is created.
-- [contact.deleted](https://opensend.namuh.co/docs/webhooks/contacts/deleted.md): Webhook event emitted when a contact is deleted.
-- [contact.updated](https://opensend.namuh.co/docs/webhooks/contacts/updated.md): Webhook event emitted when a contact is updated.
-- [domain.created](https://opensend.namuh.co/docs/webhooks/domains/created.md): Webhook event emitted when a domain is created.
-- [domain.deleted](https://opensend.namuh.co/docs/webhooks/domains/deleted.md): Webhook event emitted when a domain is deleted.
-- [domain.updated](https://opensend.namuh.co/docs/webhooks/domains/updated.md): Webhook event emitted when a domain changes.
-- [email.bounced](https://opensend.namuh.co/docs/webhooks/emails/bounced.md): Webhook event emitted when an email bounces.
-- [email.clicked](https://opensend.namuh.co/docs/webhooks/emails/clicked.md): Webhook event emitted when tracking records a click.
-- [email.complained](https://opensend.namuh.co/docs/webhooks/emails/complained.md): Webhook event emitted when a recipient reports spam.
-- [email.delivered](https://opensend.namuh.co/docs/webhooks/emails/delivered.md): Webhook event emitted when delivery is confirmed.
-- [email.failed](https://opensend.namuh.co/docs/webhooks/emails/failed.md): Webhook event emitted when sending fails.
-- [email.opened](https://opensend.namuh.co/docs/webhooks/emails/opened.md): Webhook event emitted when tracking records an open.
+- [Managing Webhooks](https://opensend.namuh.co/docs/webhooks/introduction.md): Use OpenSend webhooks to receive signed lifecycle events from your own OpenSend deployment.
+- [Event Types](https://opensend.namuh.co/docs/webhooks/event-types.md): OpenSend accepts the following webhook subscription event types.
+- [Verify Webhook Requests](https://opensend.namuh.co/docs/webhooks/verify-webhooks-requests.md): Verify every OpenSend webhook request before trusting the payload.
+- [contact.created](https://opensend.namuh.co/docs/webhooks/contacts/created.md): Contact was created.
+- [contact.deleted](https://opensend.namuh.co/docs/webhooks/contacts/deleted.md): Contact was deleted.
+- [contact.updated](https://opensend.namuh.co/docs/webhooks/contacts/updated.md): Contact changed.
+- [domain.created](https://opensend.namuh.co/docs/webhooks/domains/created.md): Domain was created.
+- [domain.deleted](https://opensend.namuh.co/docs/webhooks/domains/deleted.md): Domain was deleted.
+- [domain.updated](https://opensend.namuh.co/docs/webhooks/domains/updated.md): Domain changed or verification status changed.
+- [email.bounced](https://opensend.namuh.co/docs/webhooks/emails/bounced.md): Provider bounce notification received.
+- [email.clicked](https://opensend.namuh.co/docs/webhooks/emails/clicked.md): Tracked link redirect was requested.
+- [email.complained](https://opensend.namuh.co/docs/webhooks/emails/complained.md): Provider complaint notification received.
+- [email.delivered](https://opensend.namuh.co/docs/webhooks/emails/delivered.md): Provider delivery notification received.
+- [email.deliverydelayed](https://opensend.namuh.co/docs/webhooks/emails/delivery-delayed.md): Provider delivery delay notification received.
+- [email.failed](https://opensend.namuh.co/docs/webhooks/emails/failed.md): Provider reject, rendering failure, or retry exhaustion recorded.
+- [email.opened](https://opensend.namuh.co/docs/webhooks/emails/opened.md): Open tracking pixel was requested.
 - [email.received](https://opensend.namuh.co/docs/webhooks/emails/received.md): Inbound receiving is currently a deployment integration point: the repository includes read APIs and storage schema for received email rows, but it does not include a complete SES inbound MIME parser that emits this event automatically. If you build that parser for your self-hosted deployment, use the payload shape below so downstream agents and webhook consumers can rely on a stable contract.
-- [email.sent](https://opensend.namuh.co/docs/webhooks/emails/sent.md): Webhook event emitted when an email is sent.
-- [Retries and Replays](https://opensend.namuh.co/docs/webhooks/retries-and-replays.md): Handle webhook delivery failures.
+- [email.sent](https://opensend.namuh.co/docs/webhooks/emails/sent.md): Provider send notification received.
+- [Retries and Replays](https://opensend.namuh.co/docs/webhooks/retries-and-replays.md): OpenSend records webhook delivery attempts and retries failed deliveries.
 - [Cloudflare](https://opensend.namuh.co/docs/knowledge-base/cloudflare.md): Verify and configure domains with Cloudflare.
 - [GoDaddy](https://opensend.namuh.co/docs/knowledge-base/godaddy.md): Verify domains hosted on GoDaddy.
 - [How to Handle API Keys](https://opensend.namuh.co/docs/knowledge-base/how-to-handle-api-keys.md): API key storage guidance.
