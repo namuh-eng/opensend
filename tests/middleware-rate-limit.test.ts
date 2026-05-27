@@ -157,6 +157,137 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("location")).toBe("https://example.com/auth");
   });
 
+  it("rewrites explicit API GET aliases for dashboard-colliding resources", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const cases = [
+      ["/domains", "/api/domains"],
+      ["/domains/domain_123", "/api/domains/domain_123"],
+      ["/webhooks", "/api/webhooks"],
+      ["/webhooks/webhook_123", "/api/webhooks/webhook_123"],
+      ["/logs", "/api/logs"],
+      ["/logs/log_123", "/api/logs/log_123"],
+      ["/emails", "/api/emails"],
+      ["/emails/email_123", "/api/emails/email_123"],
+      ["/emails/email_123/attachments", "/api/emails/email_123/attachments"],
+      [
+        "/emails/email_123/attachments/attachment_123",
+        "/api/emails/email_123/attachments/attachment_123",
+      ],
+      ["/emails/receiving", "/api/emails/receiving"],
+      ["/emails/receiving/email_123", "/api/emails/receiving/email_123"],
+      [
+        "/emails/receiving/email_123/attachments",
+        "/api/emails/receiving/email_123/attachments",
+      ],
+      [
+        "/emails/receiving/email_123/attachments/attachment_123",
+        "/api/emails/receiving/email_123/attachments/attachment_123",
+      ],
+    ] as const;
+
+    for (const [aliasPath, apiPath] of cases) {
+      const response = await middleware(
+        makeRequest(`https://example.com${aliasPath}`, {
+          method: "GET",
+          headers: {
+            accept: "application/json",
+            authorization: "Bearer test-api-key",
+          },
+        }),
+      );
+
+      expect(response.headers.get("x-middleware-rewrite")).toBe(
+        `https://example.com${apiPath}`,
+      );
+    }
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it("preserves browser dashboard GETs instead of rewriting compatibility aliases", async () => {
+    const { middleware } = await import("@/middleware");
+
+    for (const aliasPath of ["/domains", "/webhooks", "/logs", "/emails"]) {
+      const response = await middleware(
+        makeRequest(`https://example.com${aliasPath}`, {
+          method: "GET",
+          headers: { accept: "text/html" },
+        }),
+      );
+
+      expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+    }
+
+    expect(mockGetSessionCookie).toHaveBeenCalled();
+  });
+
+  it("rewrites mutation aliases for implemented API resources", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const cases = [
+      ["POST", "/domains", "/api/domains"],
+      ["PATCH", "/domains/domain_123", "/api/domains/domain_123"],
+      ["POST", "/domains/domain_123/verify", "/api/domains/domain_123/verify"],
+      ["POST", "/webhooks", "/api/webhooks"],
+      ["DELETE", "/webhooks/webhook_123", "/api/webhooks/webhook_123"],
+      ["POST", "/topics", "/api/topics"],
+      ["PATCH", "/topics/topic_123", "/api/topics/topic_123"],
+      ["POST", "/contact-properties", "/api/properties"],
+      ["DELETE", "/contact-properties/prop_123", "/api/properties/prop_123"],
+      ["PATCH", "/emails/email_123", "/api/emails/email_123"],
+    ] as const;
+
+    for (const [method, aliasPath, apiPath] of cases) {
+      const response = await middleware(
+        makeRequest(`https://example.com${aliasPath}`, {
+          method,
+          headers: {
+            authorization: "Bearer test-api-key",
+            "content-type": "application/json",
+          },
+        }),
+      );
+
+      expect(response.headers.get("x-middleware-rewrite")).toBe(
+        `https://example.com${apiPath}`,
+      );
+    }
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+  });
+
+  it("shares rate-limit buckets between compatibility aliases and canonical API routes", async () => {
+    process.env.RATE_LIMIT_BACKEND = "redis";
+    mockGetSessionCookie.mockReturnValue(null);
+    mockIncrCache.mockResolvedValue(1);
+
+    const { middleware } = await import("@/middleware");
+    const response = await middleware(
+      makeRequest("https://example.com/domains", {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": "203.0.113.10",
+          authorization: "Bearer test-api-key",
+          "content-type": "application/json",
+        },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(mockIncrCache).toHaveBeenCalledWith(
+      "ratelimit:203.0.113.10:Bearer test-api-key:/api/domains",
+      60,
+    );
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/domains",
+    );
+    expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
+  });
+
   it("preserves browser/RSC dashboard GET /broadcasts instead of rewriting the API alias", async () => {
     const { middleware } = await import("@/middleware");
 

@@ -106,6 +106,7 @@ New AWS accounts start in SES **sandbox mode** — you can only send to verified
 - **Biome** handles formatting — `make check` auto-reports issues, `bun run lint:fix` fixes them
 - **TypeScript strict mode** — no `any`, no type assertions without justification
 - Every feature needs at least one unit test (Vitest) and one E2E/scenario proof (Playwright) where applicable. Auth, tenant, security, API, or persistence-sensitive work must use real Postgres/Next.js-route E2E proof via `tests/e2e/fixtures/auth.ts`; route mocks are only for explicitly labeled client/provider integration tests.
+- Public docs must follow `docs/docs-style-guide.md` and `docs/docs-qa-checklist.md`; run `bun run docs:generate` after changing `public/docs/**/*.md`.
 
 ## Pull Requests
 

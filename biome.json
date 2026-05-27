@@ -32,9 +32,11 @@
       "coverage",
       ".omc",
       ".omx",
+      ".venv-scrape",
       "drizzle",
       "*.d.ts",
       "public",
+      "private-docs",
       "opensend-new-design",
       ".claude"
     ]
