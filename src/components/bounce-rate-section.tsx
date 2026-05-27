@@ -173,9 +173,7 @@ function BounceInfoPanel({ onClose }: { onClose: () => void }) {
         </h3>
         <div className="space-y-0 border-t border-line">
           <a
-            href="https://resend.com/docs/knowledge-base/tips-to-reduce-bounces"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/docs/knowledge-base/why-are-my-emails-going-to-spam"
             className="flex items-center justify-between py-3 border-b border-line text-[13px] text-fg hover:text-white transition-colors"
           >
             Tips to reduce bounces
@@ -195,9 +193,7 @@ function BounceInfoPanel({ onClose }: { onClose: () => void }) {
             </svg>
           </a>
           <a
-            href="https://resend.com/docs/knowledge-base/email-bounces"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/docs/dashboard/emails/email-bounces"
             className="flex items-center justify-between py-3 border-b border-line text-[13px] text-fg hover:text-white transition-colors"
           >
             Email Bounces
