@@ -35,11 +35,11 @@
 - [List Broadcasts](https://opensend.namuh.co/docs/api-reference/broadcasts/list-broadcasts.md): List broadcasts.
 - [Send Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/send-broadcast.md): Send or schedule a broadcast.
 - [Update Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/update-broadcast.md): Update a broadcast.
-- [Create Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/create-contact-property.md): Create a custom contact property.
-- [Delete Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/delete-contact-property.md): Delete a contact property.
-- [Retrieve Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/get-contact-property.md): Retrieve a contact property.
-- [List Contact Properties](https://opensend.namuh.co/docs/api-reference/contact-properties/list-contact-properties.md): List contact properties.
-- [Update Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/update-contact-property.md): Update a contact property.
+- [Create Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/create-contact-property.md): Create a custom contact property definition.
+- [Delete Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/delete-contact-property.md): Delete a custom contact property definition.
+- [Get Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/get-contact-property.md): Retrieve one custom contact property definition.
+- [List Contact Properties](https://opensend.namuh.co/docs/api-reference/contact-properties/list-contact-properties.md): List custom contact properties available for segmentation and personalization.
+- [Update Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/update-contact-property.md): Update display metadata for a custom contact property.
 - [Add Contact to Segment](https://opensend.namuh.co/docs/api-reference/contacts/add-contact-to-segment.md): Add a contact to a segment.
 - [Create Contact](https://opensend.namuh.co/docs/api-reference/contacts/create-contact.md): Create an audience contact.
 - [Delete Contact Segment](https://opensend.namuh.co/docs/api-reference/contacts/delete-contact-segment.md): Remove a contact from a segment.
@@ -51,28 +51,28 @@
 - [Update Contact Topics](https://opensend.namuh.co/docs/api-reference/contacts/update-contact-topics.md): Update topic subscriptions for a contact.
 - [Update Contact](https://opensend.namuh.co/docs/api-reference/contacts/update-contact.md): Update contact fields.
 - [Auto Configure Domain](https://opensend.namuh.co/docs/api-reference/domains/auto-configure-domain.md): Write DNS records through configured Cloudflare credentials.
-- [Create Domain](https://opensend.namuh.co/docs/api-reference/domains/create-domain.md): Add a sending domain.
-- [Delete Domain](https://opensend.namuh.co/docs/api-reference/domains/delete-domain.md): Delete a domain.
-- [Retrieve Domain](https://opensend.namuh.co/docs/api-reference/domains/get-domain.md): Retrieve a domain.
-- [List Domains](https://opensend.namuh.co/docs/api-reference/domains/list-domains.md): List domains.
-- [Update Domain](https://opensend.namuh.co/docs/api-reference/domains/update-domain.md): Update domain settings.
-- [Verify Domain](https://opensend.namuh.co/docs/api-reference/domains/verify-domain.md): Re-check DNS verification state.
+- [Create Domain](https://opensend.namuh.co/docs/api-reference/domains/create-domain.md): Create a sending domain and return the DNS records OpenSend expects operators to publish.
+- [Delete Domain](https://opensend.namuh.co/docs/api-reference/domains/delete-domain.md): Delete a domain from the authenticated tenant after any operator-side cleanup you require.
+- [Get Domain](https://opensend.namuh.co/docs/api-reference/domains/get-domain.md): Retrieve one domain, including verification status and DNS record metadata.
+- [List Domains](https://opensend.namuh.co/docs/api-reference/domains/list-domains.md): List domains owned by the authenticated OpenSend tenant. Use this before creating senders or checking DNS verification state.
+- [Update Domain](https://opensend.namuh.co/docs/api-reference/domains/update-domain.md): Update mutable domain settings such as tracking or provider metadata.
+- [Verify Domain](https://opensend.namuh.co/docs/api-reference/domains/verify-domain.md): Ask OpenSend to re-check DNS for a domain and return the current verification state.
 - [Cancel Email](https://opensend.namuh.co/docs/api-reference/emails/cancel-email.md): Cancel a scheduled email.
-- [List Sent Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-email-attachments.md): List attachments for a sent email.
-- [List Sent Emails](https://opensend.namuh.co/docs/api-reference/emails/list-emails.md): List sent and queued emails for the authenticated tenant.
-- [List Received Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-received-email-attachments.md): List attachments from a received email.
-- [List Received Emails](https://opensend.namuh.co/docs/api-reference/emails/list-received-emails.md): List inbound emails received by OpenSend.
-- [Retrieve Sent Email Attachment](https://opensend.namuh.co/docs/api-reference/emails/retrieve-email-attachment.md): Download or retrieve a sent email attachment.
+- [List Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-email-attachments.md): List attachments associated with a sent email.
+- [List Sent Emails](https://opensend.namuh.co/docs/api-reference/emails/list-emails.md): List sent, queued, and scheduled emails for the authenticated tenant.
+- [List Received Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-received-email-attachments.md): List attachments parsed from one inbound email.
+- [List Received Emails](https://opensend.namuh.co/docs/api-reference/emails/list-received-emails.md): List inbound emails received by configured domains.
+- [Retrieve Email Attachment](https://opensend.namuh.co/docs/api-reference/emails/retrieve-email-attachment.md): Retrieve metadata or content for one sent-email attachment.
 - [Retrieve Sent Email](https://opensend.namuh.co/docs/api-reference/emails/retrieve-email.md): Retrieve one sent email and its current state.
-- [Retrieve Received Email Attachment](https://opensend.namuh.co/docs/api-reference/emails/retrieve-received-email-attachment.md): Retrieve an inbound attachment.
-- [Retrieve Received Email](https://opensend.namuh.co/docs/api-reference/emails/retrieve-received-email.md): Retrieve one inbound email.
+- [Retrieve Received Email Attachment](https://opensend.namuh.co/docs/api-reference/emails/retrieve-received-email-attachment.md): Retrieve one attachment parsed from an inbound email.
+- [Retrieve Received Email](https://opensend.namuh.co/docs/api-reference/emails/retrieve-received-email.md): Retrieve one inbound email and its parsed metadata.
 - [Send Batch Emails](https://opensend.namuh.co/docs/api-reference/emails/send-batch-emails.md): Queue up to 100 emails in one request.
 - [Send Email](https://opensend.namuh.co/docs/api-reference/emails/send-email.md): Send one email through OpenSend.
-- [Update Scheduled Email](https://opensend.namuh.co/docs/api-reference/emails/update-email.md): Update a scheduled email before it is sent.
+- [Update Scheduled Email](https://opensend.namuh.co/docs/api-reference/emails/update-email.md): Update a scheduled email before OpenSend sends it.
 - [List Events](https://opensend.namuh.co/docs/api-reference/events/list-events.md): List custom events.
 - [Send Custom Event](https://opensend.namuh.co/docs/api-reference/events/send.md): Send a custom event into OpenSend.
-- [List Logs](https://opensend.namuh.co/docs/api-reference/logs/list-logs.md): List API request logs.
-- [Retrieve Log](https://opensend.namuh.co/docs/api-reference/logs/retrieve-log.md): Retrieve one API request log.
+- [List Logs](https://opensend.namuh.co/docs/api-reference/logs/list-logs.md): List API request logs for debugging delivery, auth, and integration behavior.
+- [Retrieve Log](https://opensend.namuh.co/docs/api-reference/logs/retrieve-log.md): Retrieve one API request log entry with request and response metadata.
 - [Create Segment](https://opensend.namuh.co/docs/api-reference/segments/create-segment.md): Create a segment.
 - [Delete Segment](https://opensend.namuh.co/docs/api-reference/segments/delete-segment.md): Delete a segment.
 - [Retrieve Segment](https://opensend.namuh.co/docs/api-reference/segments/get-segment.md): Retrieve a segment.
@@ -87,16 +87,16 @@
 - [List Templates](https://opensend.namuh.co/docs/api-reference/templates/list-templates.md): List templates.
 - [Publish Template](https://opensend.namuh.co/docs/api-reference/templates/publish-template.md): Publish a draft template.
 - [Update Template](https://opensend.namuh.co/docs/api-reference/templates/update-template.md): Update a template.
-- [Create Topic](https://opensend.namuh.co/docs/api-reference/topics/create-topic.md): Create a subscription topic.
-- [Delete Topic](https://opensend.namuh.co/docs/api-reference/topics/delete-topic.md): Delete a topic.
-- [Retrieve Topic](https://opensend.namuh.co/docs/api-reference/topics/get-topic.md): Retrieve a topic.
-- [List Topics](https://opensend.namuh.co/docs/api-reference/topics/list-topics.md): List topics.
-- [Update Topic](https://opensend.namuh.co/docs/api-reference/topics/update-topic.md): Update a topic.
-- [Create Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/create-webhook.md): Create a webhook endpoint.
-- [Delete Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/delete-webhook.md): Delete a webhook.
-- [Retrieve Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/get-webhook.md): Retrieve a webhook.
-- [List Webhooks](https://opensend.namuh.co/docs/api-reference/webhooks/list-webhooks.md): List webhook endpoints.
-- [Update Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/update-webhook.md): Update a webhook.
+- [Create Topic](https://opensend.namuh.co/docs/api-reference/topics/create-topic.md): Create a subscription topic for audience preference management.
+- [Delete Topic](https://opensend.namuh.co/docs/api-reference/topics/delete-topic.md): Delete a subscription topic.
+- [Get Topic](https://opensend.namuh.co/docs/api-reference/topics/get-topic.md): Retrieve one subscription topic by ID.
+- [List Topics](https://opensend.namuh.co/docs/api-reference/topics/list-topics.md): List subscription topics used for contact preferences and unsubscribe flows.
+- [Update Topic](https://opensend.namuh.co/docs/api-reference/topics/update-topic.md): Update mutable subscription topic fields.
+- [Create Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/create-webhook.md): Create a webhook endpoint and receive its signing secret in the response.
+- [Delete Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/delete-webhook.md): Delete a webhook endpoint from the authenticated tenant.
+- [Get Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/get-webhook.md): Retrieve one webhook endpoint and recent delivery metadata.
+- [List Webhooks](https://opensend.namuh.co/docs/api-reference/webhooks/list-webhooks.md): List webhook endpoints configured for the authenticated tenant.
+- [Update Webhook](https://opensend.namuh.co/docs/api-reference/webhooks/update-webhook.md): Update webhook endpoint configuration such as URL, enabled events, or active state.
 - [Managing API Keys](https://opensend.namuh.co/docs/dashboard/api-keys/introduction.md): Manage OpenSend API keys in the dashboard.
 - [Managing Contacts](https://opensend.namuh.co/docs/dashboard/audiences/contacts.md): Manage contacts in the dashboard.
 - [Managing Unsubscribed Contacts](https://opensend.namuh.co/docs/dashboard/audiences/managing-unsubscribe-list.md): OpenSend stores unsubscribe state on contacts and exposes unsubscribe flows for recipient preference handling, including a customizable confirmation page operators can brand to match their product.

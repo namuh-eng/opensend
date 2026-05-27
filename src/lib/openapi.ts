@@ -4065,3 +4065,42 @@ export const openApiDocument = {
     },
   },
 } as const satisfies OpenApiDocument;
+
+const compatibilityAliases: Record<string, string> = {
+  "/domains": "/api/domains",
+  "/domains/{id}": "/api/domains/{id}",
+  "/domains/{id}/verify": "/api/domains/{id}/verify",
+  "/webhooks": "/api/webhooks",
+  "/webhooks/{id}": "/api/webhooks/{id}",
+  "/topics": "/api/topics",
+  "/topics/{id}": "/api/topics/{id}",
+  "/contact-properties": "/api/properties",
+  "/contact-properties/{id}": "/api/properties/{id}",
+  "/logs": "/api/logs",
+  "/logs/{id}": "/api/logs/{id}",
+  "/emails/{id}": "/api/emails/{id}",
+  "/emails/{id}/attachments": "/api/emails/{id}/attachments",
+  "/emails/{id}/attachments/{attachmentId}":
+    "/api/emails/{id}/attachments/{attachmentId}",
+  "/emails/receiving": "/api/emails/receiving",
+  "/emails/receiving/{id}": "/api/emails/receiving/{id}",
+  "/emails/receiving/{id}/attachments":
+    "/api/emails/receiving/{id}/attachments",
+  "/emails/receiving/{id}/attachments/{attachmentId}":
+    "/api/emails/receiving/{id}/attachments/{attachmentId}",
+};
+
+const mutablePaths = openApiDocument.paths as Record<string, PathItemObject>;
+for (const [aliasPath, canonicalPath] of Object.entries(compatibilityAliases)) {
+  const canonicalPathItem = mutablePaths[canonicalPath];
+  if (canonicalPathItem) mutablePaths[aliasPath] = canonicalPathItem;
+}
+
+const canonicalEmailsPath = mutablePaths["/api/emails"];
+const existingEmailsAliasPath = mutablePaths["/emails"];
+if (canonicalEmailsPath?.get && existingEmailsAliasPath?.post) {
+  mutablePaths["/emails"] = {
+    get: canonicalEmailsPath.get,
+    post: existingEmailsAliasPath.post,
+  };
+}
