@@ -1,10 +1,10 @@
-# contact.deleted
+# email.delivery_delayed
 
-Contact was deleted.
+Provider delivery delay notification received.
 
 ## When it is emitted
 
-The contact delete API emits `contact.deleted` after deletion succeeds.
+SES/SNS lifecycle ingestion normalizes provider `DeliveryDelay` events to `email.delivery_delayed`.
 
 ## Payload
 
@@ -13,13 +13,13 @@ OpenSend sends this event in the standard webhook envelope:
 ```json
 {
   "id": "whd_delivery-id_1",
-  "type": "contact.deleted",
+  "type": "email.delivery_delayed",
   "created_at": "2026-05-10T00:00:00.000Z",
   "data": {}
 }
 ```
 
-Payload includes the deleted contact `id` and `email`.
+Use this event for delayed-delivery visibility. It is not a final failure; wait for delivered, bounced, complained, or failed follow-up events.
 
 ## Handling guidance
 
