@@ -1,29 +1,42 @@
 # Retrieve Received Email
 
-Retrieve one inbound email and its parsed metadata.
+Retrieve one stored inbound email for the authenticated tenant.
 
 `GET /emails/receiving/{id}`
 
-Compatibility note: `GET /api/emails/receiving/{id}` remains available for existing OpenSend integrations; new API clients should prefer the root compatibility path above. Browser dashboard navigation is preserved for page routes that share these names.
+Compatibility note: `GET /api/emails/receiving/{id}` remains available for existing OpenSend integrations; new API clients can use the root compatibility path above.
 
 ## Authentication
 
-Use an OpenSend API key in the Authorization header.
+Use an OpenSend API key in the Authorization header. The key owner must match the received email row.
 
 ```http
 Authorization: Bearer os_YOUR_API_KEY
 ```
 
-Dashboard session cookies are not API credentials.
+## Path parameters
 
-## Parameters
-
-Raw content and attachments depend on storage retention settings.
+| Name | Type | Description |
+| --- | --- | --- |
+| `id` | string | Received email ID. Cross-tenant and missing IDs both return `404`. |
 
 ## Response
 
-Returns an OpenSend JSON response for the authenticated tenant. Error responses use OpenSend error envelopes and standard HTTP status codes.
+```json
+{
+  "object": "received_email",
+  "id": "6f6f8b7e-534f-4b62-b0c1-64b79e45f3c2",
+  "from": "support@example.com",
+  "to": ["agent@inbound.example.com"],
+  "subject": "New support request",
+  "html": "<p>Hello from a customer.</p>",
+  "text": "Hello from a customer.",
+  "created_at": "2026-05-10T00:00:00.000Z"
+}
+```
+
+`html` and `text` can be `null` when your inbound parser did not store that body part. Attachment binaries are not returned from this endpoint; list and retrieve attachment metadata separately.
 
 ## Self-hosting notes
 
-Self-hosted deployments can use the same path on their own `OPENSEND_BASE_URL`. Ensure middleware is enabled so API-like requests are routed to `/api/emails/receiving/{id}` while dashboard page requests continue to render normally.
+The route reads parsed rows from Postgres. If your deployment stores raw MIME in S3, keep that object private and expose only normalized content through your ingestion code or through short-lived attachment URLs.

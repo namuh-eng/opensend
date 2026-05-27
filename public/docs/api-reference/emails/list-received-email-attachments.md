@@ -1,29 +1,43 @@
 # List Received Email Attachments
 
-List attachments parsed from one inbound email.
+List attachment metadata stored with one received email.
 
 `GET /emails/receiving/{id}/attachments`
 
-Compatibility note: `GET /api/emails/receiving/{id}/attachments` remains available for existing OpenSend integrations; new API clients should prefer the root compatibility path above. Browser dashboard navigation is preserved for page routes that share these names.
+Compatibility note: `GET /api/emails/receiving/{id}/attachments` remains available for existing OpenSend integrations; new API clients can use the root compatibility path above.
 
 ## Authentication
 
-Use an OpenSend API key in the Authorization header.
+Use an OpenSend API key in the Authorization header. The key owner must match the received email row.
 
 ```http
 Authorization: Bearer os_YOUR_API_KEY
 ```
 
-Dashboard session cookies are not API credentials.
+## Path parameters
 
-## Parameters
-
-Large attachments may be stored outside Postgres.
+| Name | Type | Description |
+| --- | --- | --- |
+| `id` | string | Received email ID. Cross-tenant and missing IDs both return `404`. |
 
 ## Response
 
-Returns an OpenSend JSON response for the authenticated tenant. Error responses use OpenSend error envelopes and standard HTTP status codes.
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "att_01",
+      "filename": "invoice.pdf",
+      "content_type": "application/pdf",
+      "size": 1234
+    }
+  ]
+}
+```
+
+OpenSend stores attachment metadata on the received email row. The binary object is retrieved through the attachment detail endpoint, which returns a short-lived download URL.
 
 ## Self-hosting notes
 
-Self-hosted deployments can use the same path on their own `OPENSEND_BASE_URL`. Ensure middleware is enabled so API-like requests are routed to `/api/emails/receiving/{id}/attachments` while dashboard page requests continue to render normally.
+Large inbound attachments should be stored outside Postgres, usually in S3. Store only IDs, filenames, content types, sizes, and private object keys in `received_emails.attachments`.

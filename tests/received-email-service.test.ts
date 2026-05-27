@@ -78,12 +78,14 @@ describe("received email service boundary", () => {
     });
 
     const result = await service.listReceivedEmails({
+      userId: "tenant-1",
       limit: 500,
       after: "received-1",
       to: " User@Example.com ",
     });
 
     expect(capturedOptions).toEqual({
+      userId: "tenant-1",
       limit: 100,
       after: "received-1",
       to: "user@example.com",
@@ -115,12 +117,14 @@ describe("received email service boundary", () => {
     });
 
     await service.listReceivedEmails({
+      userId: "tenant-1",
       limit: Number.NaN,
       after: "",
       to: "  ",
     });
 
     expect(capturedOptions).toEqual({
+      userId: "tenant-1",
       limit: 20,
       after: undefined,
       to: undefined,
@@ -136,7 +140,9 @@ describe("received email service boundary", () => {
       }),
     });
 
-    await expect(service.getReceivedEmail("received-9")).resolves.toEqual({
+    await expect(
+      service.getReceivedEmail("received-9", "tenant-1"),
+    ).resolves.toEqual({
       object: "received_email",
       id: "received-9",
       from: "sender@example.com",
@@ -155,7 +161,9 @@ describe("received email service boundary", () => {
       }),
     });
 
-    await expect(missingService.getReceivedEmail("missing")).rejects.toEqual(
+    await expect(
+      missingService.getReceivedEmail("missing", "tenant-1"),
+    ).rejects.toEqual(
       new ReceivedEmailServiceError(
         "received_email_not_found",
         "Received email not found",
@@ -181,7 +189,9 @@ describe("received email service boundary", () => {
       now: () => new Date("2026-05-10T12:00:00.000Z"),
     });
 
-    await expect(service.listAttachments("received-1")).resolves.toEqual({
+    await expect(
+      service.listAttachments("received-1", "tenant-1"),
+    ).resolves.toEqual({
       object: "list",
       data: [
         {
@@ -193,17 +203,17 @@ describe("received email service boundary", () => {
       ],
     });
 
-    await expect(service.getAttachment("received-1", "att-1")).resolves.toEqual(
-      {
-        object: "received_email_attachment",
-        id: "att-1",
-        filename: "invoice.pdf",
-        content_type: "application/pdf",
-        size: 1234,
-        download_url: "https://storage.test/received/received-1/invoice.pdf",
-        expires_at: "2026-05-10T13:00:00.000Z",
-      },
-    );
+    await expect(
+      service.getAttachment("received-1", "att-1", "tenant-1"),
+    ).resolves.toEqual({
+      object: "received_email_attachment",
+      id: "att-1",
+      filename: "invoice.pdf",
+      content_type: "application/pdf",
+      size: 1234,
+      download_url: "https://storage.test/received/received-1/invoice.pdf",
+      expires_at: "2026-05-10T13:00:00.000Z",
+    });
     expect(capturedKey).toBe("received/received-1/invoice.pdf");
   });
 
@@ -217,7 +227,7 @@ describe("received email service boundary", () => {
     });
 
     await expect(
-      missingEmailService.listAttachments("missing"),
+      missingEmailService.listAttachments("missing", "tenant-1"),
     ).rejects.toEqual(
       new ReceivedEmailServiceError(
         "received_email_not_found",
@@ -230,7 +240,11 @@ describe("received email service boundary", () => {
     });
 
     await expect(
-      missingAttachmentService.getAttachment("received-1", "missing"),
+      missingAttachmentService.getAttachment(
+        "received-1",
+        "missing",
+        "tenant-1",
+      ),
     ).rejects.toEqual(
       new ReceivedEmailServiceError(
         "attachment_not_found",
