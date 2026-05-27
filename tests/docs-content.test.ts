@@ -137,3 +137,38 @@ function listMarkdownFiles(dir: string): string[] {
     return [];
   });
 }
+
+describe("webhook event docs", () => {
+  it("documents every supported webhook subscription event in public docs", async () => {
+    const { SUPPORTED_WEBHOOK_EVENT_TYPES } = await import(
+      "@opensend/core/src/webhook-events"
+    );
+    const docsRoot = path.join(process.cwd(), "public/docs/webhooks");
+
+    const eventDocPath = (eventType: string) => {
+      const [resource, action] = eventType.split(".") as [string, string];
+      const folder = `${resource}s`;
+      const file = `${action.replaceAll("_", "-")}.md`;
+      return path.join(docsRoot, folder, file);
+    };
+
+    for (const eventType of SUPPORTED_WEBHOOK_EVENT_TYPES) {
+      const markdown = readFileSync(eventDocPath(eventType), "utf8");
+      expect(markdown).toContain(`# ${eventType}`);
+      expect(markdown).toContain("## When it is emitted");
+      expect(markdown).toContain("svix-signature");
+    }
+
+    const eventTypes = readFileSync(
+      path.join(docsRoot, "event-types.md"),
+      "utf8",
+    );
+    for (const eventType of SUPPORTED_WEBHOOK_EVENT_TYPES) {
+      expect(eventTypes).toContain(`\`${eventType}\``);
+    }
+    expect(eventTypes).toContain("email.received");
+    expect(eventTypes).toContain(
+      "not part of the default webhook subscription",
+    );
+  });
+});

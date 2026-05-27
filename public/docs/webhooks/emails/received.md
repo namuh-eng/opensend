@@ -32,7 +32,7 @@ Keep the webhook payload metadata-only. Retrieve bodies with `GET /emails/receiv
 
 ## Delivery and verification
 
-OpenSend webhook deliveries use the same signing and retry guidance as other events. Verify the `webhook-id`, `webhook-timestamp`, and `webhook-signature` headers before acting on the inbound email. See [Verify webhook requests](../verify-webhooks-requests.md) and [Retries and replays](../retries-and-replays.md).
+OpenSend webhook deliveries use the same signing and retry guidance as other events. Verify the `svix-id`, `svix-timestamp`, and `svix-signature` headers before acting on the inbound email. See [Verify webhook requests](../verify-webhooks-requests.md) and [Retries and replays](../retries-and-replays.md).
 
 ## Operator status
 
