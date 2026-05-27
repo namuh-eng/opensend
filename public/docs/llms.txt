@@ -23,33 +23,33 @@
 - [Custom Event Schemas](https://opensend.namuh.co/docs/custom-event-schemas.md): Define and validate custom event payloads.
 - [Introduction](https://opensend.namuh.co/docs/api-reference/introduction.md): Core concepts for the OpenSend API.
 - [Authentication](https://opensend.namuh.co/docs/api-reference/authentication.md): How API key authentication works in OpenSend.
-- [Pagination](https://opensend.namuh.co/docs/api-reference/pagination.md): Pagination behavior for list endpoints.
+- [Pagination](https://opensend.namuh.co/docs/api-reference/pagination.md): OpenSend collection endpoints use cursor-style pagination where the route supports it. The API keeps pagination deliberately simple so self-hosted deployments and generated clients can share the same contract.
 - [Errors](https://opensend.namuh.co/docs/api-reference/errors.md): Common OpenSend API error shapes and status codes.
 - [Usage Limits](https://opensend.namuh.co/docs/api-reference/rate-limit.md): Rate limits, quotas, and operational limits.
-- [Create API Key](https://opensend.namuh.co/docs/api-reference/api-keys/create-api-key.md): Create a new API key.
-- [Delete API Key](https://opensend.namuh.co/docs/api-reference/api-keys/delete-api-key.md): Delete an API key.
-- [List API Keys](https://opensend.namuh.co/docs/api-reference/api-keys/list-api-keys.md): List API keys for the authenticated tenant.
-- [Create Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/create-broadcast.md): Create a broadcast draft.
-- [Delete Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/delete-broadcast.md): Delete a broadcast.
-- [Retrieve Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/get-broadcast.md): Retrieve a broadcast.
-- [List Broadcasts](https://opensend.namuh.co/docs/api-reference/broadcasts/list-broadcasts.md): List broadcasts.
-- [Send Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/send-broadcast.md): Send or schedule a broadcast.
-- [Update Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/update-broadcast.md): Update a broadcast.
+- [Create API Key](https://opensend.namuh.co/docs/api-reference/api-keys/create-api-key.md): Create a new API key. This page documents the OpenSend-owned API contract for POST /api-keys.
+- [Delete API Key](https://opensend.namuh.co/docs/api-reference/api-keys/delete-api-key.md): Delete an API key. This page documents the OpenSend-owned API contract for DELETE /api-keys/{id}.
+- [List API Keys](https://opensend.namuh.co/docs/api-reference/api-keys/list-api-keys.md): List API keys for the authenticated tenant. This page documents the OpenSend-owned API contract for GET /api-keys.
+- [Create Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/create-broadcast.md): Create a broadcast draft. This page documents the OpenSend-owned API contract for POST /broadcasts.
+- [Delete Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/delete-broadcast.md): Delete a broadcast. This page documents the OpenSend-owned API contract for DELETE /broadcasts/{id}.
+- [Retrieve Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/get-broadcast.md): Retrieve a broadcast. This page documents the OpenSend-owned API contract for GET /broadcasts/{id}.
+- [List Broadcasts](https://opensend.namuh.co/docs/api-reference/broadcasts/list-broadcasts.md): List broadcasts. This page documents the OpenSend-owned API contract for GET /broadcasts.
+- [Send Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/send-broadcast.md): Send or schedule a broadcast. This page documents the OpenSend-owned API contract for POST /broadcasts/{id}/send.
+- [Update Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/update-broadcast.md): Update a broadcast. This page documents the OpenSend-owned API contract for PATCH /broadcasts/{id}.
 - [Create Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/create-contact-property.md): Create a custom contact property definition.
 - [Delete Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/delete-contact-property.md): Delete a custom contact property definition.
 - [Get Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/get-contact-property.md): Retrieve one custom contact property definition.
 - [List Contact Properties](https://opensend.namuh.co/docs/api-reference/contact-properties/list-contact-properties.md): List custom contact properties available for segmentation and personalization.
 - [Update Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/update-contact-property.md): Update display metadata for a custom contact property.
-- [Add Contact to Segment](https://opensend.namuh.co/docs/api-reference/contacts/add-contact-to-segment.md): Add a contact to a segment.
-- [Create Contact](https://opensend.namuh.co/docs/api-reference/contacts/create-contact.md): Create an audience contact.
-- [Delete Contact Segment](https://opensend.namuh.co/docs/api-reference/contacts/delete-contact-segment.md): Remove a contact from a segment.
-- [Delete Contact](https://opensend.namuh.co/docs/api-reference/contacts/delete-contact.md): Delete a contact.
-- [Retrieve Contact Topics](https://opensend.namuh.co/docs/api-reference/contacts/get-contact-topics.md): Get topic subscriptions for a contact.
-- [Retrieve Contact](https://opensend.namuh.co/docs/api-reference/contacts/get-contact.md): Retrieve a contact by id or email where supported.
-- [List Contact Segments](https://opensend.namuh.co/docs/api-reference/contacts/list-contact-segments.md): List segments for a contact.
-- [List Contacts](https://opensend.namuh.co/docs/api-reference/contacts/list-contacts.md): List contacts.
-- [Update Contact Topics](https://opensend.namuh.co/docs/api-reference/contacts/update-contact-topics.md): Update topic subscriptions for a contact.
-- [Update Contact](https://opensend.namuh.co/docs/api-reference/contacts/update-contact.md): Update contact fields.
+- [Add Contact to Segment](https://opensend.namuh.co/docs/api-reference/contacts/add-contact-to-segment.md): Add a contact to a segment. This page documents the OpenSend-owned API contract for POST /api/contacts/{id}/segments.
+- [Create Contact](https://opensend.namuh.co/docs/api-reference/contacts/create-contact.md): Create an audience contact. This page documents the OpenSend-owned API contract for POST /contacts.
+- [Delete Contact Segment](https://opensend.namuh.co/docs/api-reference/contacts/delete-contact-segment.md): Remove a contact from a segment. This page documents the OpenSend-owned API contract for DELETE /api/contacts/{id}/segments/{segmentid}.
+- [Delete Contact](https://opensend.namuh.co/docs/api-reference/contacts/delete-contact.md): Delete a contact. This page documents the OpenSend-owned API contract for DELETE /contacts/{contactid}.
+- [Retrieve Contact Topics](https://opensend.namuh.co/docs/api-reference/contacts/get-contact-topics.md): Get topic subscriptions for a contact. This page documents the OpenSend-owned API contract for GET /api/contacts/{id}/topics.
+- [Retrieve Contact](https://opensend.namuh.co/docs/api-reference/contacts/get-contact.md): Retrieve a contact by id or email where supported. This page documents the OpenSend-owned API contract for GET /contacts/{contactid}.
+- [List Contact Segments](https://opensend.namuh.co/docs/api-reference/contacts/list-contact-segments.md): List segments for a contact. This page documents the OpenSend-owned API contract for GET /api/contacts/{id}/segments.
+- [List Contacts](https://opensend.namuh.co/docs/api-reference/contacts/list-contacts.md): List contacts. This page documents the OpenSend-owned API contract for GET /contacts.
+- [Update Contact Topics](https://opensend.namuh.co/docs/api-reference/contacts/update-contact-topics.md): Update topic subscriptions for a contact. This page documents the OpenSend-owned API contract for PATCH /api/contacts/{id}/topics.
+- [Update Contact](https://opensend.namuh.co/docs/api-reference/contacts/update-contact.md): Update contact fields. This page documents the OpenSend-owned API contract for PATCH /contacts/{contactid}.
 - [Auto Configure Domain](https://opensend.namuh.co/docs/api-reference/domains/auto-configure-domain.md): Write DNS records through configured Cloudflare credentials.
 - [Create Domain](https://opensend.namuh.co/docs/api-reference/domains/create-domain.md): Create a sending domain and return the DNS records OpenSend expects operators to publish.
 - [Delete Domain](https://opensend.namuh.co/docs/api-reference/domains/delete-domain.md): Delete a domain from the authenticated tenant after any operator-side cleanup you require.
@@ -69,24 +69,24 @@
 - [Send Batch Emails](https://opensend.namuh.co/docs/api-reference/emails/send-batch-emails.md): Queue up to 100 emails in one request.
 - [Send Email](https://opensend.namuh.co/docs/api-reference/emails/send-email.md): Send one email through OpenSend.
 - [Update Scheduled Email](https://opensend.namuh.co/docs/api-reference/emails/update-email.md): Update a scheduled email before OpenSend sends it.
-- [List Events](https://opensend.namuh.co/docs/api-reference/events/list-events.md): List custom events.
-- [Send Custom Event](https://opensend.namuh.co/docs/api-reference/events/send.md): Send a custom event into OpenSend.
+- [List Events](https://opensend.namuh.co/docs/api-reference/events/list-events.md): List custom events. This page documents the OpenSend-owned API contract for GET /api/events.
+- [Send Custom Event](https://opensend.namuh.co/docs/api-reference/events/send.md): Send a custom event into OpenSend. This page documents the OpenSend-owned API contract for POST /api/events/send.
 - [List Logs](https://opensend.namuh.co/docs/api-reference/logs/list-logs.md): List API request logs for debugging delivery, auth, and integration behavior.
 - [Retrieve Log](https://opensend.namuh.co/docs/api-reference/logs/retrieve-log.md): Retrieve one API request log entry with request and response metadata.
-- [Create Segment](https://opensend.namuh.co/docs/api-reference/segments/create-segment.md): Create a segment.
-- [Delete Segment](https://opensend.namuh.co/docs/api-reference/segments/delete-segment.md): Delete a segment.
-- [Retrieve Segment](https://opensend.namuh.co/docs/api-reference/segments/get-segment.md): Retrieve a segment.
-- [List Segment Contacts](https://opensend.namuh.co/docs/api-reference/segments/list-segment-contacts.md): List contacts in a segment.
-- [List Segments](https://opensend.namuh.co/docs/api-reference/segments/list-segments.md): List segments.
-- [Delete Suppression](https://opensend.namuh.co/docs/api-reference/suppressions/delete-suppression.md): Remove a recipient from suppressions.
-- [List Suppressions](https://opensend.namuh.co/docs/api-reference/suppressions/list-suppressions.md): List suppressed recipients.
-- [Create Template](https://opensend.namuh.co/docs/api-reference/templates/create-template.md): Create a reusable template.
-- [Delete Template](https://opensend.namuh.co/docs/api-reference/templates/delete-template.md): Delete a template.
-- [Duplicate Template](https://opensend.namuh.co/docs/api-reference/templates/duplicate-template.md): Duplicate a template.
-- [Get Template](https://opensend.namuh.co/docs/api-reference/templates/get-template.md): Retrieve a template by id or alias.
-- [List Templates](https://opensend.namuh.co/docs/api-reference/templates/list-templates.md): List templates.
-- [Publish Template](https://opensend.namuh.co/docs/api-reference/templates/publish-template.md): Publish a draft template.
-- [Update Template](https://opensend.namuh.co/docs/api-reference/templates/update-template.md): Update a template.
+- [Create Segment](https://opensend.namuh.co/docs/api-reference/segments/create-segment.md): Create a segment. This page documents the OpenSend-owned API contract for POST /segments.
+- [Delete Segment](https://opensend.namuh.co/docs/api-reference/segments/delete-segment.md): Delete a segment. This page documents the OpenSend-owned API contract for DELETE /segments/{id}.
+- [Retrieve Segment](https://opensend.namuh.co/docs/api-reference/segments/get-segment.md): Retrieve a segment. This page documents the OpenSend-owned API contract for GET /segments/{id}.
+- [List Segment Contacts](https://opensend.namuh.co/docs/api-reference/segments/list-segment-contacts.md): List contacts in a segment. This page documents the OpenSend-owned API contract for GET /segments/{id}/contacts.
+- [List Segments](https://opensend.namuh.co/docs/api-reference/segments/list-segments.md): List segments. This page documents the OpenSend-owned API contract for GET /segments.
+- [Delete Suppression](https://opensend.namuh.co/docs/api-reference/suppressions/delete-suppression.md): Remove a recipient from suppressions. This page documents the OpenSend-owned API contract for DELETE /api/suppressions/{email}.
+- [List Suppressions](https://opensend.namuh.co/docs/api-reference/suppressions/list-suppressions.md): List suppressed recipients. This page documents the OpenSend-owned API contract for GET /api/suppressions.
+- [Create Template](https://opensend.namuh.co/docs/api-reference/templates/create-template.md): Create a reusable template. This page documents the OpenSend-owned API contract for POST /templates.
+- [Delete Template](https://opensend.namuh.co/docs/api-reference/templates/delete-template.md): Delete a template. This page documents the OpenSend-owned API contract for DELETE /templates/{id}.
+- [Duplicate Template](https://opensend.namuh.co/docs/api-reference/templates/duplicate-template.md): Duplicate a template. This page documents the OpenSend-owned API contract for POST /templates/{id}/duplicate.
+- [Get Template](https://opensend.namuh.co/docs/api-reference/templates/get-template.md): Retrieve a template by id or alias. This page documents the OpenSend-owned API contract for GET /templates/{id}.
+- [List Templates](https://opensend.namuh.co/docs/api-reference/templates/list-templates.md): List templates. This page documents the OpenSend-owned API contract for GET /templates.
+- [Publish Template](https://opensend.namuh.co/docs/api-reference/templates/publish-template.md): Publish a draft template. This page documents the OpenSend-owned API contract for POST /templates/{id}/publish.
+- [Update Template](https://opensend.namuh.co/docs/api-reference/templates/update-template.md): Update a template. This page documents the OpenSend-owned API contract for PATCH /templates/{id}.
 - [Create Topic](https://opensend.namuh.co/docs/api-reference/topics/create-topic.md): Create a subscription topic for audience preference management.
 - [Delete Topic](https://opensend.namuh.co/docs/api-reference/topics/delete-topic.md): Delete a subscription topic.
 - [Get Topic](https://opensend.namuh.co/docs/api-reference/topics/get-topic.md): Retrieve one subscription topic by ID.

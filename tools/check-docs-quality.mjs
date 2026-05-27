@@ -6,10 +6,17 @@ const docsRoot = path.join(process.cwd(), "public", "docs");
 const competitorPatterns = [/resend\.com\/docs/i, /Resend docs/i];
 const minApiReferenceWords = 30;
 const minimumDepthPrefixes = [
+  "api-reference/api-keys/",
+  "api-reference/broadcasts/",
   "api-reference/contact-properties/",
+  "api-reference/contacts/",
   "api-reference/domains/",
   "api-reference/emails/",
+  "api-reference/events/",
   "api-reference/logs/",
+  "api-reference/segments/",
+  "api-reference/suppressions/",
+  "api-reference/templates/",
   "api-reference/topics/",
   "api-reference/webhooks/",
 ];
