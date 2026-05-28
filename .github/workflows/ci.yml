@@ -73,6 +73,26 @@ jobs:
       - name: bunx vitest run
         run: bunx vitest run
 
+
+  php-sdk:
+    name: PHP SDK tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+
+      - name: Install PHP SDK dependencies
+        working-directory: packages/php-sdk
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run PHP SDK tests
+        working-directory: packages/php-sdk
+        run: composer test
+
   onboarding:
     name: Onboarding acceptance
     runs-on: ubuntu-latest

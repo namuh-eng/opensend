@@ -33,6 +33,15 @@ Authorization: Bearer os_YOUR_API_KEY
       "from": "support@example.com",
       "to": ["agent@inbound.example.com"],
       "subject": "New support request",
+      "route_decisions": [
+        {
+          "recipient": "agent@inbound.example.com",
+          "status": "exact",
+          "routeId": "22222222-2222-4222-8222-222222222222",
+          "routeType": "exact",
+          "targetAddress": "agent@inbound.example.com"
+        }
+      ],
       "created_at": "2026-05-10T00:00:00.000Z"
     }
   ],
@@ -40,7 +49,7 @@ Authorization: Bearer os_YOUR_API_KEY
 }
 ```
 
-Rows are scoped to the owner of the API key. Empty lists are returned as `200` responses with `data: []`.
+Rows are scoped to the owner of the API key. `route_decisions` is an empty array for legacy rows inserted before route audit metadata existed. Empty lists are returned as `200` responses with `data: []`.
 
 ## Self-hosting notes
 

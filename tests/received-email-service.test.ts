@@ -25,6 +25,7 @@ function makeReceivedEmail(
     html: "<p>Hello</p>",
     text: "Hello",
     status: "received",
+    routeDecisions: null,
     attachments: [
       {
         id: "att-1",
@@ -99,6 +100,7 @@ describe("received email service boundary", () => {
           from: "sender@example.com",
           to: ["user@example.com"],
           subject: "Filtered",
+          route_decisions: [],
           created_at: new Date("2026-05-10T00:00:00.000Z"),
         },
       ],
@@ -150,6 +152,7 @@ describe("received email service boundary", () => {
       subject: "Inbound",
       html: "<p>Hello</p>",
       text: "Hello",
+      route_decisions: [],
       created_at: new Date("2026-05-10T00:00:00.000Z"),
     });
 

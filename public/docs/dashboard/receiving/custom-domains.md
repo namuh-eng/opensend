@@ -20,3 +20,7 @@ OpenSend received-email rows must include the tenant `user_id`. Your inbound wor
 ## Dashboard status
 
 The dashboard can show receiving-capable domains, but MX validation and provider receipt-rule creation are still operator-owned. Label your internal runbook clearly so users know whether receiving is enabled for a domain or only prepared in DNS.
+
+## Routing rules
+
+After the domain is verified and receiving is enabled, create exact, alias, or catch-all routes from the Receiving page or `/api/receiving/routes`. Routes are tenant-scoped and evaluated in this order: exact address, alias, catch-all, then unrouteable. OpenSend records route decisions on received email rows for later audit and processing.

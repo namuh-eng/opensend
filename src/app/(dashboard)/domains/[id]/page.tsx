@@ -79,8 +79,17 @@ export default async function DomainDetailPage({
         openTracking: domain.trackOpens,
         trackingSubdomain: domain.trackingSubdomain,
         tls: domain.tls,
-        sendingEnabled: true,
-        receivingEnabled: false,
+        sendingEnabled: Boolean(
+          domain.capabilities?.some(
+            (capability) => capability.name === "sending" && capability.enabled,
+          ) ?? true,
+        ),
+        receivingEnabled: Boolean(
+          domain.capabilities?.some(
+            (capability) =>
+              capability.name === "receiving" && capability.enabled,
+          ),
+        ),
         records: domain.records ?? null,
         events,
       }}

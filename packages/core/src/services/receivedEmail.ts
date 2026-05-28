@@ -6,7 +6,7 @@ type ReceivedEmailRow = typeof receivedEmails.$inferSelect;
 
 type ReceivedEmailListRow = Pick<
   ReceivedEmailRow,
-  "id" | "from" | "to" | "subject" | "createdAt"
+  "id" | "from" | "to" | "subject" | "routeDecisions" | "createdAt"
 >;
 
 type ReceivedEmailAttachmentRow = {
@@ -21,11 +21,16 @@ type ReceivedEmailAttachmentContainer = {
   attachments: ReceivedEmailRow["attachments"];
 };
 
+export type ReceivedEmailRouteDecision = NonNullable<
+  ReceivedEmailRow["routeDecisions"]
+>[number];
+
 export type ReceivedEmailListItem = {
   id: string;
   from: string;
   to: string[];
   subject: string;
+  route_decisions: ReceivedEmailRouteDecision[];
   created_at: Date;
 };
 
@@ -43,6 +48,7 @@ export type ReceivedEmailDetailResponse = {
   subject: string;
   html: string | null;
   text: string | null;
+  route_decisions: ReceivedEmailRouteDecision[];
   created_at: Date;
 };
 
@@ -132,6 +138,7 @@ function toListItem(row: ReceivedEmailListRow): ReceivedEmailListItem {
     from: row.from,
     to: row.to,
     subject: row.subject,
+    route_decisions: row.routeDecisions ?? [],
     created_at: row.createdAt,
   };
 }
@@ -145,6 +152,7 @@ function toDetail(row: ReceivedEmailRow): ReceivedEmailDetailResponse {
     subject: row.subject,
     html: row.html,
     text: row.text,
+    route_decisions: row.routeDecisions ?? [],
     created_at: row.createdAt,
   };
 }
