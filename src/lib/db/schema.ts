@@ -508,6 +508,45 @@ export const receivingRoutes = pgTable(
 export type ReceivingRoute = typeof receivingRoutes.$inferSelect;
 export type ReceivingRouteInsert = typeof receivingRoutes.$inferInsert;
 
+export const inboundProviderEvents = pgTable(
+  "inbound_provider_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: varchar("provider", { length: 50 }).notNull(),
+    providerEventId: varchar("provider_event_id", { length: 255 }).notNull(),
+    providerMessageId: varchar("provider_message_id", { length: 255 }),
+    status: varchar("status", { length: 50 }).notNull().default("processing"),
+    terminalReason: text("terminal_reason"),
+    rawMetadata: jsonb("raw_metadata")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    userId: text("user_id"),
+    receivedEmailId: uuid("received_email_id"),
+    duplicateOfEventId: uuid("duplicate_of_event_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inbound_provider_events_provider_event_idx").on(
+      table.provider,
+      table.providerEventId,
+    ),
+    index("inbound_provider_events_status_idx").on(table.status),
+    index("inbound_provider_events_user_created_at_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export type InboundProviderEvent = typeof inboundProviderEvents.$inferSelect;
+export type InboundProviderEventInsert =
+  typeof inboundProviderEvents.$inferInsert;
+
 export const receivedEmails = pgTable(
   "received_emails",
   {
