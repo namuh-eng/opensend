@@ -53,4 +53,4 @@ Rows are scoped to the owner of the API key. `route_decisions` is an empty array
 
 ## Self-hosting notes
 
-OpenSend currently exposes the read API for inbound rows that your deployment stores in the `received_emails` table. Configure SES receiving, S3 storage, and any parser/ingestion worker in your own deployment before expecting rows to appear. The standalone ingester currently handles SES/SNS sending lifecycle events; full inbound MIME ingestion is an operator integration point, not a hosted promise in this repository.
+OpenSend includes a standalone ingester foundation for inbound MIME notifications at `POST /events/inbound`. Configure MX records and provider receipt rules for your deployment, then send provider notifications with raw MIME payloads or fetch URLs to the ingester. The ingester writes `received_emails` only after resolving the recipient to one tenant and storing attachments through the storage abstraction.

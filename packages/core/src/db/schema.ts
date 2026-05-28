@@ -511,6 +511,45 @@ export const receivingRoutes = pgTable(
 export type ReceivingRoute = typeof receivingRoutes.$inferSelect;
 export type ReceivingRouteInsert = typeof receivingRoutes.$inferInsert;
 
+export const inboundProviderEvents = pgTable(
+  "inbound_provider_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: varchar("provider", { length: 50 }).notNull(),
+    providerEventId: varchar("provider_event_id", { length: 255 }).notNull(),
+    providerMessageId: varchar("provider_message_id", { length: 255 }),
+    status: varchar("status", { length: 50 }).notNull().default("processing"),
+    terminalReason: text("terminal_reason"),
+    rawMetadata: jsonb("raw_metadata")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    userId: text("user_id"),
+    receivedEmailId: uuid("received_email_id"),
+    duplicateOfEventId: uuid("duplicate_of_event_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inbound_provider_events_provider_event_idx").on(
+      table.provider,
+      table.providerEventId,
+    ),
+    index("inbound_provider_events_status_idx").on(table.status),
+    index("inbound_provider_events_user_created_at_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export type InboundProviderEvent = typeof inboundProviderEvents.$inferSelect;
+export type InboundProviderEventInsert =
+  typeof inboundProviderEvents.$inferInsert;
+
 export const receivedEmails = pgTable(
   "received_emails",
   {
@@ -760,6 +799,46 @@ export const automationRuns = pgTable(
       t.automationId,
       t.createdAt,
     ),
+  ],
+);
+
+export type DashboardExportJobFilters = Record<
+  string,
+  string | number | boolean | null
+>;
+
+export const dashboardExportJobs = pgTable(
+  "dashboard_export_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdByEmail: text("created_by_email"),
+    resource: varchar("resource", { length: 64 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("completed"),
+    format: varchar("format", { length: 16 }).notNull().default("csv"),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    filters: jsonb("filters").$type<DashboardExportJobFilters>().notNull(),
+    filename: varchar("filename", { length: 255 }).notNull(),
+    content: text("content"),
+    rowCount: integer("row_count").notNull().default(0),
+    byteSize: integer("byte_size").notNull().default(0),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    downloadedAt: timestamp("downloaded_at", { withTimezone: true }),
+    downloadCount: integer("download_count").notNull().default(0),
+  },
+  (t) => [
+    index("dashboard_export_jobs_user_created_at_idx").on(
+      t.userId,
+      t.createdAt,
+    ),
+    index("dashboard_export_jobs_user_status_idx").on(t.userId, t.status),
+    index("dashboard_export_jobs_expires_at_idx").on(t.expiresAt),
   ],
 );
 

@@ -18,6 +18,7 @@
 - [Send emails with Flask](https://opensend.namuh.co/docs/send-with-flask.md): Use the Python SDK from Flask routes, CLI commands, or background workers.
 - [Send emails with Django](https://opensend.namuh.co/docs/send-with-django.md): Use the Python SDK from Django views, management commands, or background jobs.
 - [Send emails with Go](https://opensend.namuh.co/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.
+- [Send emails with Java and Kotlin](https://opensend.namuh.co/docs/send-with-java.md): Use the first-party OpenSend JVM SDK from plain Java, Kotlin, Spring Boot services, workers, and command-line applications. The package lives in this repository at packages/jvm-sdk while registry publishing is prepared.
 - [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK. It works in Rails, Sinatra, Ruby scripts, and background jobs.
 - [Send emails with Rails](https://opensend.namuh.co/docs/send-with-rails.md): Use the Ruby SDK from Rails controllers, jobs, mailer adapters, or service objects.
 - [Send emails with Sinatra](https://opensend.namuh.co/docs/send-with-sinatra.md): Use the Ruby SDK from Sinatra routes or background jobs.
@@ -143,6 +144,7 @@
 - [Dashboard Webhooks](https://opensend.namuh.co/docs/dashboard/webhooks/introduction.md): The Webhooks dashboard manages outbound event subscriptions. Use it to create endpoints, choose event types, inspect delivery attempts, disable destinations, and replay failed or historical deliveries.
 - [Dashboard Suppressions](https://opensend.namuh.co/docs/dashboard/suppressions/introduction.md): The Suppressions dashboard is the dedicated operational surface for addresses OpenSend will not send to for the current tenant. It is separate from Audience contacts and topic preferences so support teams can manage delivery-safety records without confusing them with marketing subscription state.
 - [Dashboard Logs](https://opensend.namuh.co/docs/dashboard/logs/introduction.md): Logs are the low-level request and operational records used to troubleshoot OpenSend. They complement Emails, Broadcasts, Automations, and Webhooks by showing API method, path, status, timestamps, and error context.
+- [Dashboard Export Center](https://opensend.namuh.co/docs/dashboard/export-center.md): The Export Center creates dashboard-session CSV exports for stable OpenSend resources without widening the public API-key surface. It is intended for operational downloads from the authenticated dashboard, not server-to-server automation.
 - [Receiving Overview](https://opensend.namuh.co/docs/dashboard/receiving/introduction.md): Receiving is the OpenSend area for inbound email rows that your deployment stores for a verified domain.
 - [Receiving Custom Domains](https://opensend.namuh.co/docs/dashboard/receiving/custom-domains.md): Use a custom domain or subdomain for inbound addresses that route into OpenSend-backed storage.
 - [Receiving Routing](https://opensend.namuh.co/docs/dashboard/receiving/routing.md): Receiving routes decide which stored inbox target should own an inbound recipient on a verified receiving domain. They do not forward mail, send replies, or create provider DNS records.
@@ -188,7 +190,7 @@
 - [What sending feature should I use?](https://opensend.namuh.co/docs/knowledge-base/what-sending-feature-to-use.md): OpenSend has several sending surfaces. Choose the one that matches the job instead of forcing every workflow through one endpoint.
 - [What attachment types are not supported?](https://opensend.namuh.co/docs/knowledge-base/what-attachment-types-are-not-supported.md): OpenSend accepts attachments through the email API and SMTP relay, but operators should restrict unsafe or oversized files according to their security policy and provider limits.
 - [Self Hosting](https://opensend.namuh.co/docs/self-hosting.md): Run OpenSend on your own infrastructure with Docker Compose, PostgreSQL, AWS SES/S3, and the standalone ingester service.
-- [Ingester Deployment](https://opensend.namuh.co/docs/ingester-deploy.md): Deploy the SES/SNS ingester and queue worker.
+- [Ingester Deployment](https://opensend.namuh.co/docs/ingester-deploy.md): Deploy the standalone ingester and queue worker. Provider callbacks should target the ingester service, not the Next.js app URL.
 - [Security](https://opensend.namuh.co/docs/security.md): Security model overview.
 - [Observability](https://opensend.namuh.co/docs/observability.md): Operate OpenSend in production.
 

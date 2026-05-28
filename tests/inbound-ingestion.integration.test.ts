@@ -1,0 +1,311 @@
+import { randomUUID } from "node:crypto";
+import {
+  ReceivedEmailServiceError,
+  createInboundEmailIngestionService,
+  createReceivedEmailService,
+} from "@opensend/core";
+import { Client } from "pg";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import app from "../packages/ingester/src/index";
+
+const databaseUrl = process.env.DATABASE_URL;
+const describeIfDb = databaseUrl ? describe : describe.skip;
+
+function buildMime(input: {
+  from: string;
+  to: string;
+  subject: string;
+  attachment?: boolean;
+}): string {
+  if (!input.attachment) {
+    return `From: ${input.from}\r\nTo: ${input.to}\r\nSubject: ${input.subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello inbound`;
+  }
+
+  return `From: ${input.from}\r\nTo: ${input.to}\r\nSubject: ${input.subject}\r\nMessage-ID: <${randomUUID()}@fixture.test>\r\nContent-Type: multipart/mixed; boundary="fixture-boundary"\r\n\r\n--fixture-boundary\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello inbound\r\n--fixture-boundary\r\nContent-Type: text/plain; name="note.txt"\r\nContent-Disposition: attachment; filename="note.txt"\r\n\r\nAttachment body\r\n--fixture-boundary--\r\n`;
+}
+
+async function cleanup(client: Client, marker: string): Promise<void> {
+  await client.query(
+    "delete from webhook_deliveries where event_id in (select id from email_events where user_id like $1)",
+    [`${marker}%`],
+  );
+  await client.query("delete from email_events where user_id like $1", [
+    `${marker}%`,
+  ]);
+  await client.query(
+    "delete from inbound_provider_events where user_id like $1 or raw_metadata->>'test_run_id' = $2",
+    [`${marker}%`, marker],
+  );
+  await client.query("delete from received_emails where user_id like $1", [
+    `${marker}%`,
+  ]);
+  await client.query("delete from receiving_routes where user_id like $1", [
+    `${marker}%`,
+  ]);
+  await client.query("delete from domains where user_id like $1", [
+    `${marker}%`,
+  ]);
+  await client.query('delete from "session" where user_id like $1', [
+    `${marker}%`,
+  ]);
+  await client.query('delete from "account" where user_id like $1', [
+    `${marker}%`,
+  ]);
+  await client.query('delete from "user" where id like $1', [`${marker}%`]);
+}
+
+describeIfDb("inbound MIME ingestion with real Postgres", () => {
+  const marker = `it-inbound-${randomUUID()}`;
+  const tenantA = `${marker}-tenant-a`;
+  const tenantB = `${marker}-tenant-b`;
+  const domainA = `${marker}.a.example.test`;
+  const domainB = `${marker}.b.example.test`;
+  const client = new Client({ connectionString: databaseUrl });
+  const receivedService = createReceivedEmailService();
+
+  beforeAll(async () => {
+    await client.connect();
+    await cleanup(client, marker);
+    await client.query(
+      'insert into "user" (id, name, email, email_verified, created_at, updated_at) values ($1, $2, $3, true, now(), now()), ($4, $5, $6, true, now(), now())',
+      [
+        tenantA,
+        "Tenant A",
+        `${tenantA}@example.test`,
+        tenantB,
+        "Tenant B",
+        `${tenantB}@example.test`,
+      ],
+    );
+    const capabilities = JSON.stringify([{ name: "receiving", enabled: true }]);
+    const domainAId = randomUUID();
+    const domainBId = randomUUID();
+    await client.query(
+      "insert into domains (id, name, status, region, capabilities, user_id) values ($1, $2, 'verified', 'us-east-1', $3::jsonb, $4), ($5, $6, 'verified', 'us-east-1', $7::jsonb, $8)",
+      [
+        domainAId,
+        domainA,
+        capabilities,
+        tenantA,
+        domainBId,
+        domainB,
+        capabilities,
+        tenantB,
+      ],
+    );
+    await client.query(
+      "insert into receiving_routes (user_id, domain_id, type, local_part, target_local_part) values ($1, $2, 'exact', 'support', 'support'), ($3, $4, 'exact', 'support', 'support')",
+      [tenantA, domainAId, tenantB, domainBId],
+    );
+  });
+
+  afterAll(async () => {
+    await cleanup(client, marker);
+    await client.end();
+  });
+
+  it("accepts an ingester provider notification, stores a tenant-scoped received email, and deduplicates retries", async () => {
+    const eventId = `${marker}-evt-1`;
+    const body = {
+      provider: "fixture",
+      event_id: eventId,
+      message_id: `${marker}-msg-1`,
+      recipients: [`support@${domainA}`],
+      raw_mime: buildMime({
+        from: "sender@example.test",
+        to: `support@${domainA}`,
+        subject: "Tenant A inbound",
+        attachment: true,
+      }),
+      metadata: {
+        test_run_id: marker,
+        provider_request_id: "request-1",
+        authorization: "Bearer should-not-persist",
+      },
+    };
+
+    const response = await app.request("/events/inbound", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    expect(response.status).toBe(202);
+    const json = (await response.json()) as {
+      received_email_id: string;
+      event_id: string;
+    };
+    expect(json.received_email_id).toMatch(/^[0-9a-f-]{36}$/);
+
+    const tenantAList = await receivedService.listReceivedEmails({
+      userId: tenantA,
+    });
+    expect(tenantAList.data.map((email) => email.id)).toContain(
+      json.received_email_id,
+    );
+    const tenantBList = await receivedService.listReceivedEmails({
+      userId: tenantB,
+    });
+    expect(tenantBList.data.map((email) => email.id)).not.toContain(
+      json.received_email_id,
+    );
+
+    await expect(
+      receivedService.getReceivedEmail(json.received_email_id, tenantB),
+    ).rejects.toEqual(
+      new ReceivedEmailServiceError(
+        "received_email_not_found",
+        "Received email not found",
+      ),
+    );
+
+    const attachmentList = await receivedService.listAttachments(
+      json.received_email_id,
+      tenantA,
+    );
+    expect(attachmentList.data).toEqual([
+      {
+        id: expect.stringMatching(/^att_/),
+        filename: "note.txt",
+        content_type: "text/plain",
+        size: 15,
+      },
+    ]);
+
+    const eventRows = await client.query<{
+      status: string;
+      raw_metadata: { authorization?: string; test_run_id?: string };
+      received_email_id: string | null;
+    }>(
+      "select status, raw_metadata, received_email_id from inbound_provider_events where provider = 'fixture' and provider_event_id = $1 order by created_at asc",
+      [eventId],
+    );
+    expect(eventRows.rows[0]).toMatchObject({
+      status: "processed",
+      received_email_id: json.received_email_id,
+    });
+    expect(eventRows.rows[0]?.raw_metadata.authorization).toBe("[redacted]");
+    expect(eventRows.rows[0]?.raw_metadata.test_run_id).toBe(marker);
+
+    const durableEventRows = await client.query<{
+      type: string;
+      payload: { received_email_id?: string };
+    }>(
+      "select type, payload from email_events where id = $1 and user_id = $2",
+      [json.event_id, tenantA],
+    );
+    expect(durableEventRows.rows[0]).toMatchObject({
+      type: "received",
+      payload: { received_email_id: json.received_email_id },
+    });
+
+    const duplicateResponse = await app.request("/events/inbound", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    expect(duplicateResponse.status).toBe(200);
+    await expect(duplicateResponse.json()).resolves.toMatchObject({
+      ok: false,
+      status: "duplicate_provider_event",
+    });
+
+    const countRows = await client.query<{ count: string }>(
+      "select count(*) from received_emails where user_id = $1 and subject = 'Tenant A inbound'",
+      [tenantA],
+    );
+    expect(countRows.rows[0]?.count).toBe("1");
+    const duplicateRows = await client.query<{ status: string }>(
+      "select status from inbound_provider_events where provider_event_id = $1 order by created_at desc limit 1",
+      [eventId],
+    );
+    expect(duplicateRows.rows[0]?.status).toBe("duplicate_provider_event");
+  });
+
+  it("records terminal malformed, missing-domain, oversized, and storage-failure states", async () => {
+    const malformed = await app.request("/events/inbound", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider: "fixture",
+        event_id: `${marker}-malformed`,
+        raw_mime: "not a header\n\nbody",
+        metadata: { test_run_id: marker },
+      }),
+    });
+    expect(malformed.status).toBe(200);
+    await expect(malformed.json()).resolves.toMatchObject({
+      status: "malformed_mime",
+    });
+
+    const unrouteable = await app.request("/events/inbound", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        provider: "fixture",
+        event_id: `${marker}-missing-domain`,
+        raw_mime: buildMime({
+          from: "sender@example.test",
+          to: "nobody@missing.example.test",
+          subject: "No route",
+        }),
+        metadata: { test_run_id: marker },
+      }),
+    });
+    expect(unrouteable.status).toBe(200);
+    await expect(unrouteable.json()).resolves.toMatchObject({
+      status: "missing_domain",
+    });
+
+    const failingService = createInboundEmailIngestionService({
+      maxBytes: 8,
+      uploadFile: async () => {
+        throw new Error("local storage unavailable");
+      },
+    });
+
+    await expect(
+      failingService.process({
+        provider: "fixture",
+        eventId: `${marker}-oversized`,
+        rawMime: buildMime({
+          from: "sender@example.test",
+          to: `support@${domainA}`,
+          subject: "Too large",
+        }),
+        metadata: { test_run_id: marker },
+      }),
+    ).resolves.toMatchObject({ status: "oversized_message" });
+
+    const storageService = createInboundEmailIngestionService({
+      uploadFile: async () => {
+        throw new Error("local storage unavailable");
+      },
+    });
+    await expect(
+      storageService.process({
+        provider: "fixture",
+        eventId: `${marker}-storage-failure`,
+        rawMime: buildMime({
+          from: "sender@example.test",
+          to: `support@${domainA}`,
+          subject: "Storage fails",
+          attachment: true,
+        }),
+        metadata: { test_run_id: marker },
+      }),
+    ).resolves.toMatchObject({ status: "storage_failure" });
+
+    const statuses = await client.query<{ status: string }>(
+      "select status from inbound_provider_events where raw_metadata->>'test_run_id' = $1",
+      [marker],
+    );
+    expect(statuses.rows.map((row) => row.status)).toEqual(
+      expect.arrayContaining([
+        "malformed_mime",
+        "missing_domain",
+        "oversized_message",
+        "storage_failure",
+      ]),
+    );
+  });
+});
