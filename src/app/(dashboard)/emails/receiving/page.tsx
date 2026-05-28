@@ -3,8 +3,11 @@ import { ReceivingList } from "@/components/receiving-list";
 import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { domains, receivingRoutes } from "@/lib/db/schema";
+import { createForwardingRuleService } from "@opensend/core";
 import { desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+
+const forwardingRuleService = createForwardingRuleService();
 
 export default async function EmailsReceivingPage() {
   const session = await getServerSession();
@@ -53,11 +56,40 @@ export default async function EmailsReceivingPage() {
       target_address: `${route.targetLocalPart}@${domain}`,
     };
   });
+  const forwardingRules = await forwardingRuleService.listRules({
+    userId: session.user.id,
+  });
+  const forwardingRuleData = forwardingRules.data.map((rule) => ({
+    id: rule.id,
+    domain_id: rule.domain_id,
+    domain: rule.domain,
+    route_id: rule.route_id,
+    route_target_address: rule.route_target_address,
+    destinations: rule.destinations,
+    status: rule.status,
+    invalid_reason: rule.invalid_reason,
+    last_attempt: rule.last_attempt
+      ? {
+          id: rule.last_attempt.id,
+          status: rule.last_attempt.status,
+          reason: rule.last_attempt.reason,
+          received_email_id: rule.last_attempt.received_email_id,
+          forwarded_email_id: rule.last_attempt.forwarded_email_id,
+          forwarded_email_status: rule.last_attempt.forwarded_email_status,
+          error_message: rule.last_attempt.error_message,
+          created_at: rule.last_attempt.created_at.toISOString(),
+        }
+      : null,
+  }));
 
   return (
     <div>
       <EmailsHeader activeTab="receiving" />
-      <ReceivingList domains={data} routes={routeData} />
+      <ReceivingList
+        domains={data}
+        routes={routeData}
+        forwardingRules={forwardingRuleData}
+      />
     </div>
   );
 }

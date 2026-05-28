@@ -112,6 +112,12 @@ export async function cleanupE2ERun(
   await client.query("delete from email_events where user_id like $1", [
     `${userPrefix}%`,
   ]);
+  await client.query("delete from forwarding_attempts where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query("delete from forwarding_rules where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query(
     "delete from inbound_provider_events where user_id like $1 or raw_metadata->>'test_run_id' = $2",
     [`${userPrefix}%`, runId],

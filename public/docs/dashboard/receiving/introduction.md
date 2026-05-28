@@ -2,7 +2,7 @@
 
 Receiving is the OpenSend area for inbound email rows that your deployment stores for a verified domain.
 
-The current product surface includes a dashboard entry point, received-email read APIs, attachment metadata, short-lived attachment URLs, receiving routes, and a standalone ingester endpoint for provider-to-Postgres MIME ingestion. Operators still own MX records and provider receipt-rule wiring for their deployment.
+The current product surface includes a dashboard entry point, received-email read APIs, attachment metadata, short-lived attachment URLs, receiving routes, automatic forwarding rules, and a standalone ingester endpoint for provider-to-Postgres MIME ingestion. Operators still own MX records and provider receipt-rule wiring for their deployment.
 
 ## What is implemented
 
@@ -10,6 +10,7 @@ The current product surface includes a dashboard entry point, received-email rea
 - Attachment listing and presigned attachment URL responses.
 - Domain-level receiving controls in the dashboard UI.
 - First-class receiving routes for exact addresses, aliases, and catch-all fallback on verified receiving domains.
+- Automatic forwarding rules with persisted queued, skipped, and failed attempt visibility.
 - Standalone ingester MIME ingestion through `POST /events/inbound`, including route resolution, attachment storage, provider-event idempotency, terminal failure records, and an internal durable `received` event after commit.
 
 ## What operators must add

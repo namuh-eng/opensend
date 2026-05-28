@@ -516,6 +516,37 @@ export const receivingRoutes = pgTable(
 export type ReceivingRoute = typeof receivingRoutes.$inferSelect;
 export type ReceivingRouteInsert = typeof receivingRoutes.$inferInsert;
 
+export const forwardingRules = pgTable(
+  "forwarding_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    domainId: uuid("domain_id")
+      .notNull()
+      .references(() => domains.id, { onDelete: "cascade" }),
+    routeId: uuid("route_id")
+      .notNull()
+      .references(() => receivingRoutes.id, { onDelete: "cascade" }),
+    destinations: jsonb("destinations").notNull().$type<string[]>(),
+    status: varchar("status", { length: 32 }).notNull().default("active"),
+    invalidReason: text("invalid_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("forwarding_rules_user_id_idx").on(table.userId),
+    index("forwarding_rules_domain_id_idx").on(table.domainId),
+    uniqueIndex("forwarding_rules_route_id_idx").on(table.routeId),
+  ],
+);
+
+export type ForwardingRule = typeof forwardingRules.$inferSelect;
+export type ForwardingRuleInsert = typeof forwardingRules.$inferInsert;
+
 export const inboundProviderEvents = pgTable(
   "inbound_provider_events",
   {
@@ -594,6 +625,52 @@ export const receivedEmails = pgTable(
   },
   (table) => [index("received_emails_created_at_idx").on(table.createdAt)],
 );
+
+export const forwardingAttempts = pgTable(
+  "forwarding_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    ruleId: uuid("rule_id").references(() => forwardingRules.id, {
+      onDelete: "set null",
+    }),
+    receivedEmailId: uuid("received_email_id")
+      .notNull()
+      .references(() => receivedEmails.id, { onDelete: "cascade" }),
+    forwardedEmailId: uuid("forwarded_email_id").references(() => emails.id, {
+      onDelete: "set null",
+    }),
+    status: varchar("status", { length: 32 }).notNull(),
+    reason: varchar("reason", { length: 64 }).notNull(),
+    destinations: jsonb("destinations").notNull().$type<string[]>(),
+    providerMessageId: varchar("provider_message_id", { length: 255 }),
+    retryEligible: boolean("retry_eligible").notNull().default(false),
+    errorCode: varchar("error_code", { length: 255 }),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("forwarding_attempts_user_created_at_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+    index("forwarding_attempts_received_email_id_idx").on(
+      table.receivedEmailId,
+    ),
+    index("forwarding_attempts_rule_id_idx").on(table.ruleId),
+    index("forwarding_attempts_forwarded_email_id_idx").on(
+      table.forwardedEmailId,
+    ),
+  ],
+);
+
+export type ForwardingAttempt = typeof forwardingAttempts.$inferSelect;
+export type ForwardingAttemptInsert = typeof forwardingAttempts.$inferInsert;
 
 export const emailEvents = pgTable(
   "email_events",

@@ -71,7 +71,13 @@ export class EmailService {
     bcc?: string[];
     replyTo?: string[];
     headers?: Record<string, string>;
-    attachments?: Array<{ filename: string; content: string }>;
+    attachments?: Array<{
+      filename: string;
+      content?: string;
+      path?: string;
+      content_type?: string;
+      content_id?: string;
+    }>;
     tags?: Array<{ name: string; value: string }>;
     scheduledAt?: Date | null;
     topicId?: string | null;

@@ -38,6 +38,7 @@
 - [Errors](https://opensend.namuh.co/docs/api-reference/errors.md): Common OpenSend API error shapes and status codes.
 - [Usage Limits](https://opensend.namuh.co/docs/api-reference/rate-limit.md): Rate limits, quotas, and operational limits.
 - [Receiving Routes API](https://opensend.namuh.co/docs/api-reference/receiving-routes.md): Create, list, update, retrieve, and delete receiving routes for verified receiving domains.
+- [Forwarding Rules API](https://opensend.namuh.co/docs/api-reference/forwarding-rules.md): Create, list, update, and delete automatic inbound forwarding rules for receiving routes.
 - [Create API Key](https://opensend.namuh.co/docs/api-reference/api-keys/create-api-key.md): Create a new API key. This page documents the OpenSend-owned API contract for POST /api-keys.
 - [Delete API Key](https://opensend.namuh.co/docs/api-reference/api-keys/delete-api-key.md): Delete an API key. This page documents the OpenSend-owned API contract for DELETE /api-keys/{id}.
 - [List API Keys](https://opensend.namuh.co/docs/api-reference/api-keys/list-api-keys.md): List API keys for the authenticated tenant. This page documents the OpenSend-owned API contract for GET /api-keys.
@@ -151,7 +152,7 @@
 - [Receiving Routing](https://opensend.namuh.co/docs/dashboard/receiving/routing.md): Receiving routes decide which stored inbox target should own an inbound recipient on a verified receiving domain. They do not forward mail, send replies, or create provider DNS records.
 - [Get Received Email Content](https://opensend.namuh.co/docs/dashboard/receiving/get-email-content.md): Use the received email detail API to fetch parsed content after your receiving worker stores a row.
 - [Receiving Attachments](https://opensend.namuh.co/docs/dashboard/receiving/attachments.md): Received email attachments are represented as metadata plus a private object key stored by your receiving worker.
-- [Forward Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/forward-emails.md): Automatic forwarding is not implemented in the OpenSend repository today.
+- [Forward Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/forward-emails.md): OpenSend can automatically forward stored inbound messages after MIME ingestion and receiving-route resolution succeeds.
 - [Reply To Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/reply-to-emails.md): OpenSend does not currently provide a one-click inbound reply API.
 - [Managing Webhooks](https://opensend.namuh.co/docs/webhooks/introduction.md): Use OpenSend webhooks to receive signed lifecycle events from your own OpenSend deployment.
 - [Event Types](https://opensend.namuh.co/docs/webhooks/event-types.md): OpenSend accepts the following webhook subscription event types.

@@ -71,6 +71,7 @@ const DOC_ORDER = [
   "api-reference/errors.md",
   "api-reference/rate-limit.md",
   "api-reference/receiving-routes.md",
+  "api-reference/forwarding-rules.md",
   "sdks.md",
   "examples.md",
   "send-with-nodejs.md",

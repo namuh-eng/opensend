@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   ReceivedEmailServiceError,
+  createForwardingRuleService,
   createInboundEmailIngestionService,
   createReceivedEmailService,
 } from "@opensend/core";
@@ -30,6 +31,15 @@ async function cleanup(client: Client, marker: string): Promise<void> {
     [`${marker}%`],
   );
   await client.query("delete from email_events where user_id like $1", [
+    `${marker}%`,
+  ]);
+  await client.query("delete from forwarding_attempts where user_id like $1", [
+    `${marker}%`,
+  ]);
+  await client.query("delete from forwarding_rules where user_id like $1", [
+    `${marker}%`,
+  ]);
+  await client.query("delete from emails where user_id like $1", [
     `${marker}%`,
   ]);
   await client.query(
@@ -62,6 +72,7 @@ describeIfDb("inbound MIME ingestion with real Postgres", () => {
   const domainB = `${marker}.b.example.test`;
   const client = new Client({ connectionString: databaseUrl });
   const receivedService = createReceivedEmailService();
+  const forwardingService = createForwardingRuleService();
 
   beforeAll(async () => {
     await client.connect();
@@ -219,6 +230,84 @@ describeIfDb("inbound MIME ingestion with real Postgres", () => {
       [eventId],
     );
     expect(duplicateRows.rows[0]?.status).toBe("duplicate_provider_event");
+  });
+
+  it("creates a persisted forwarding attempt and outbound send row after inbound routing", async () => {
+    const routeRows = await client.query<{ id: string }>(
+      "select id from receiving_routes where user_id = $1 and local_part = 'support' limit 1",
+      [tenantA],
+    );
+    const routeId = routeRows.rows[0]?.id;
+    expect(routeId).toBeTruthy();
+
+    const rule = await forwardingService.createRule({
+      userId: tenantA,
+      routeId: routeId ?? "",
+      destinations: [`forward-${marker}@external.example.test`],
+    });
+
+    const eventId = `${marker}-forwarding`;
+    const outcome = await createInboundEmailIngestionService().process({
+      provider: "fixture",
+      eventId,
+      messageId: `${marker}-forwarding-msg`,
+      recipients: [`support@${domainA}`],
+      rawMime: buildMime({
+        from: "sender@example.test",
+        to: `support@${domainA}`,
+        subject: "Forward me",
+      }),
+      metadata: { test_run_id: marker },
+    });
+
+    expect(outcome).toMatchObject({ status: "processed", user_id: tenantA });
+    if (outcome.status !== "processed") {
+      throw new Error("Expected processed inbound message");
+    }
+
+    const attempts = await forwardingService.listAttemptsForReceivedEmail(
+      tenantA,
+      outcome.received_email_id,
+    );
+    expect(attempts.data).toEqual([
+      expect.objectContaining({
+        rule_id: rule.id,
+        received_email_id: outcome.received_email_id,
+        status: "queued",
+        reason: "queued",
+        destinations: [`forward-${marker}@external.example.test`],
+        forwarded_email_status: "queued",
+      }),
+    ]);
+
+    const forwardedEmailId = attempts.data[0]?.forwarded_email_id;
+    expect(forwardedEmailId).toMatch(/^[0-9a-f-]{36}$/);
+    const emailRows = await client.query<{
+      from: string;
+      to: string[];
+      subject: string;
+      user_id: string;
+      headers: Record<string, string>;
+    }>(
+      'select "from", "to", subject, user_id, headers from emails where id = $1',
+      [forwardedEmailId],
+    );
+    expect(emailRows.rows[0]).toMatchObject({
+      from: `support@${domainA}`,
+      to: [`forward-${marker}@external.example.test`],
+      subject: "Fwd: Forward me",
+      user_id: tenantA,
+      headers: expect.objectContaining({
+        "X-OpenSend-Forwarded-Received-Email-ID": outcome.received_email_id,
+        "X-OpenSend-Forwarding-Rule-ID": rule.id,
+      }),
+    });
+
+    const receivedRows = await client.query<{ count: string }>(
+      "select count(*) from received_emails where id = $1 and user_id = $2",
+      [outcome.received_email_id, tenantA],
+    );
+    expect(receivedRows.rows[0]?.count).toBe("1");
   });
 
   it("records terminal malformed, missing-domain, oversized, and storage-failure states", async () => {

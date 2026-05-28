@@ -204,6 +204,13 @@
       "when": 1779949904271,
       "tag": "0028_sweet_blue_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1779953729008,
+      "tag": "0029_colossal_blackheart",
+      "breakpoints": true
     }
   ]
 }

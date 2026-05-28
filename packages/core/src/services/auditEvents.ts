@@ -21,6 +21,9 @@ export type AuditAction =
   | "receiving_route.created"
   | "receiving_route.updated"
   | "receiving_route.deleted"
+  | "forwarding_rule.created"
+  | "forwarding_rule.updated"
+  | "forwarding_rule.deleted"
   | "webhook.created"
   | "webhook.updated"
   | "webhook.deleted"
@@ -31,6 +34,7 @@ export type AuditTargetType =
   | "api_key"
   | "domain"
   | "receiving_route"
+  | "forwarding_rule"
   | "webhook"
   | "settings"
   | "team";
