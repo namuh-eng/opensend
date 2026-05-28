@@ -2,9 +2,11 @@ import { EmailDetail } from "@/components/email-detail";
 import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { emailEvents, emailSuppressions, emails, logs } from "@/lib/db/schema";
-import { toEmailEventTraceItem } from "@opensend/core";
+import { createEmailTraceService, toEmailEventTraceItem } from "@opensend/core";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
+
+const emailTraceService = createEmailTraceService();
 
 export default async function EmailDetailPage({
   params,
@@ -52,14 +54,17 @@ export default async function EmailDetailPage({
     .limit(10);
 
   const primaryRecipient = emailResult.to[0]?.toLowerCase();
-  const suppression = primaryRecipient
-    ? await db.query.emailSuppressions.findFirst({
-        where: and(
-          eq(emailSuppressions.userId, userId),
-          eq(emailSuppressions.email, primaryRecipient),
-        ),
-      })
-    : null;
+  const [suppression, trace] = await Promise.all([
+    primaryRecipient
+      ? db.query.emailSuppressions.findFirst({
+          where: and(
+            eq(emailSuppressions.userId, userId),
+            eq(emailSuppressions.email, primaryRecipient),
+          ),
+        })
+      : null,
+    emailTraceService.getTrace(userId, id),
+  ]);
 
   const emailData = {
     id: emailResult.id,
@@ -95,6 +100,16 @@ export default async function EmailDetailPage({
       endpoint: log.endpoint ?? "",
       statusCode: log.status ?? 0,
       createdAt: log.createdAt.toISOString(),
+    })),
+    trace: trace.data.map((item) => ({
+      id: item.id,
+      source: item.source,
+      type: item.type,
+      timestamp: item.created_at.toISOString(),
+      summary: item.summary,
+      details: item.details,
+      relatedId: item.related_id,
+      relatedUrl: item.related_url,
     })),
   };
 

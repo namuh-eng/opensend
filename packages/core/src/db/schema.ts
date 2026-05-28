@@ -243,6 +243,7 @@ export const emails = pgTable(
     index("emails_created_at_idx").on(table.createdAt),
     index("emails_status_created_at_idx").on(table.status, table.createdAt),
     index("emails_user_created_at_idx").on(table.userId, table.createdAt),
+    index("emails_tags_gin_idx").using("gin", table.tags),
     uniqueIndex("emails_user_id_idempotency_key_idx").on(
       table.userId,
       table.idempotencyKey,
@@ -418,21 +419,28 @@ export const templates = pgTable("templates", {
   userId: text("user_id"),
 });
 
-export const logs = pgTable("logs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  endpoint: text("endpoint"),
-  status: integer("status"),
-  method: varchar("method", { length: 10 }),
-  userAgent: text("user_agent"),
-  requestBody: jsonb("request_body"),
-  responseBody: jsonb("response_body"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  document: jsonb("document"),
-  userId: text("user_id"),
-  apiKeyId: uuid("api_key_id"),
-});
+export const logs = pgTable(
+  "logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    endpoint: text("endpoint"),
+    status: integer("status"),
+    method: varchar("method", { length: 10 }),
+    userAgent: text("user_agent"),
+    requestBody: jsonb("request_body"),
+    responseBody: jsonb("response_body"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    document: jsonb("document"),
+    userId: text("user_id"),
+    apiKeyId: uuid("api_key_id"),
+  },
+  (table) => [
+    index("logs_user_created_at_idx").on(table.userId, table.createdAt),
+    index("logs_document_gin_idx").using("gin", table.document),
+  ],
+);
 
 export const auditEvents = pgTable(
   "audit_events",

@@ -43,6 +43,8 @@ export type DashboardExportFilters = {
   domain?: string;
   topicId?: string;
   userAgent?: string;
+  tagName?: string;
+  tagValue?: string;
 };
 
 export type DashboardCsvExportResult = {
@@ -610,6 +612,29 @@ async function logsExport(
   const userAgentPattern = likePattern(filters.userAgent);
   if (userAgentPattern)
     conditions.push(sql`${logs.userAgent} ILIKE ${userAgentPattern}`);
+
+  const tagName = nonEmpty(filters.tagName);
+  if (tagName) {
+    const tagValue =
+      filters.tagValue === undefined ? undefined : filters.tagValue;
+    const tagPredicate = JSON.stringify(
+      tagValue === undefined
+        ? [{ name: tagName }]
+        : [{ name: tagName, value: tagValue.trim() }],
+    );
+    conditions.push(
+      sql`exists (
+        select 1 from ${emails}
+        where ${emails.userId} = ${userId}
+          and ${emails.userId} = ${logs.userId}
+          and (
+            ${emails.id}::text = ${logs.document}->>'emailId'
+            or coalesce(${logs.document}->'emailIds', '[]'::jsonb) ? ${emails.id}::text
+          )
+          and ${emails.tags} @> ${tagPredicate}::jsonb
+      )`,
+    );
+  }
 
   const pattern = likePattern(filters.search);
   if (pattern) {

@@ -18,7 +18,7 @@ Dashboard session cookies are not API credentials.
 
 ## Parameters
 
-Returns message metadata, status, tags, timestamps, and delivery detail fields.
+Returns message metadata, status, tags, timestamps, and delivery detail fields. For a chronological operational view, call `GET /emails/{id}/trace`; it combines sanitized request-log evidence, queue/scheduled state, provider events, webhook deliveries, and suppression evidence where available.
 
 ## Response
 

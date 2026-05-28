@@ -53,6 +53,7 @@ export * from "./services/email";
 export * from "./services/email-webhook-events";
 export * from "./services/deliveryFailureExport";
 export * from "./services/emailEventTrace";
+export * from "./services/emailTrace";
 export * from "./services/emailLifecycle";
 export * from "./services/emailRead";
 export * from "./services/emailDetail";

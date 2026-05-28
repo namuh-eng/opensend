@@ -108,6 +108,13 @@ export type DashboardTagOption = {
   values: string[];
 };
 
+export type DashboardTagBreakdownRow = {
+  name: string;
+  value: string;
+  total: number;
+  delivered: number;
+};
+
 export type DashboardStoredEmailTag = {
   name: string;
   value: string;
@@ -155,7 +162,12 @@ export type DashboardAggregateRepository = {
   listDomainBreakdown(
     input: DashboardMetricsBaseInput,
   ): Promise<DashboardDomainBreakdownRow[]>;
-  listTagOptions(userId: string): Promise<DashboardTagOption[]>;
+  listTagBreakdown(
+    input: DashboardMetricsBaseInput,
+  ): Promise<DashboardTagBreakdownRow[]>;
+  listTagOptions(
+    input: DashboardMetricsBaseInput,
+  ): Promise<DashboardTagOption[]>;
   countUsage(input: DashboardUsageCountInput): Promise<DashboardUsageCounts>;
 };
 
@@ -179,6 +191,12 @@ export type DashboardMetricsPayload = {
   dailyData: DashboardDailyCountRow[];
   domainBreakdown: Array<{
     domain: string;
+    count: number;
+    rate: number;
+  }>;
+  tagBreakdown: Array<{
+    name: string;
+    value: string;
     count: number;
     rate: number;
   }>;
@@ -281,6 +299,9 @@ function collectTagOptions(
     }));
 }
 
+const DASHBOARD_TAG_OPTIONS_EMAIL_LIMIT = 5000;
+const DASHBOARD_TAG_BREAKDOWN_LIMIT = 50;
+
 const emptyMetricsStats: DashboardMetricsStats = {
   total: 0,
   delivered: 0,
@@ -365,11 +386,59 @@ const defaultDashboardAggregateRepository: DashboardAggregateRepository = {
       .orderBy(sql`count(*) desc`);
   },
 
-  async listTagOptions(userId) {
+  async listTagBreakdown(input) {
+    const rows = await db
+      .select({ tags: emails.tags, status: emails.status })
+      .from(emails)
+      .where(and(...metricConditions(input)))
+      .orderBy(sql`${emails.createdAt} desc`)
+      .limit(DASHBOARD_TAG_OPTIONS_EMAIL_LIMIT);
+
+    const statsByTag = new Map<string, DashboardTagBreakdownRow>();
+    for (const row of rows) {
+      if (!Array.isArray(row.tags)) continue;
+      for (const tag of row.tags) {
+        if (!isStoredEmailTag(tag) || tag.name === "") continue;
+        const key = JSON.stringify([tag.name, tag.value]);
+        const existing = statsByTag.get(key) ?? {
+          name: tag.name,
+          value: tag.value,
+          total: 0,
+          delivered: 0,
+        };
+        existing.total += 1;
+        if (row.status === "delivered") existing.delivered += 1;
+        statsByTag.set(key, existing);
+      }
+    }
+
+    return Array.from(statsByTag.values())
+      .sort((left, right) => {
+        const totalDiff = right.total - left.total;
+        if (totalDiff !== 0) return totalDiff;
+        const nameDiff = left.name.localeCompare(right.name);
+        return nameDiff !== 0
+          ? nameDiff
+          : left.value.localeCompare(right.value);
+      })
+      .slice(0, DASHBOARD_TAG_BREAKDOWN_LIMIT);
+  },
+
+  async listTagOptions(input) {
     const rows = await db
       .select({ tags: emails.tags })
       .from(emails)
-      .where(eq(emails.userId, userId));
+      .where(
+        and(
+          ...metricConditions({
+            ...input,
+            tagName: null,
+            tagValue: null,
+          }),
+        ),
+      )
+      .orderBy(sql`${emails.createdAt} desc`)
+      .limit(DASHBOARD_TAG_OPTIONS_EMAIL_LIMIT);
 
     return collectTagOptions(rows);
   },
@@ -439,6 +508,7 @@ export function createDashboardAggregateService({
         dailyBounceRows,
         dailyComplainRows,
         domainRows,
+        tagRows,
         tagOptions,
       ] = await Promise.all([
         repository.aggregateMetrics(baseInput),
@@ -449,7 +519,8 @@ export function createDashboardAggregateService({
         repository.listDailyBounceRates(baseInput),
         repository.listDailyComplainRates(baseInput),
         repository.listDomainBreakdown(baseInput),
-        repository.listTagOptions(input.userId),
+        repository.listTagBreakdown(baseInput),
+        repository.listTagOptions(baseInput),
       ]);
 
       const totalEmails = stats.total;
@@ -476,6 +547,12 @@ export function createDashboardAggregateService({
           count: row.count,
         })),
         domainBreakdown,
+        tagBreakdown: tagRows.map((row) => ({
+          name: row.name,
+          value: row.value,
+          count: row.total,
+          rate: roundRate(row.delivered, row.total),
+        })),
         bounceBreakdown: {
           permanent: stats.hard_bounced,
           transient: stats.soft_bounced,
