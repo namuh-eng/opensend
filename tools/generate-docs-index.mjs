@@ -128,6 +128,7 @@ const DOC_ORDER = [
   "dashboard/webhooks/introduction.md",
   "dashboard/suppressions/introduction.md",
   "dashboard/logs/introduction.md",
+  "dashboard/export-center.md",
   "dashboard/receiving/introduction.md",
   "dashboard/receiving/custom-domains.md",
   "dashboard/receiving/routing.md",

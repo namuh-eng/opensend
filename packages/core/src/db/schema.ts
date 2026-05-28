@@ -763,6 +763,46 @@ export const automationRuns = pgTable(
   ],
 );
 
+export type DashboardExportJobFilters = Record<
+  string,
+  string | number | boolean | null
+>;
+
+export const dashboardExportJobs = pgTable(
+  "dashboard_export_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdByEmail: text("created_by_email"),
+    resource: varchar("resource", { length: 64 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("completed"),
+    format: varchar("format", { length: 16 }).notNull().default("csv"),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    filters: jsonb("filters").$type<DashboardExportJobFilters>().notNull(),
+    filename: varchar("filename", { length: 255 }).notNull(),
+    content: text("content"),
+    rowCount: integer("row_count").notNull().default(0),
+    byteSize: integer("byte_size").notNull().default(0),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    downloadedAt: timestamp("downloaded_at", { withTimezone: true }),
+    downloadCount: integer("download_count").notNull().default(0),
+  },
+  (t) => [
+    index("dashboard_export_jobs_user_created_at_idx").on(
+      t.userId,
+      t.createdAt,
+    ),
+    index("dashboard_export_jobs_user_status_idx").on(t.userId, t.status),
+    index("dashboard_export_jobs_expires_at_idx").on(t.expiresAt),
+  ],
+);
+
 // ── Billing Tables (additive, gated by BILLING_BACKEND) ────────────
 
 export const plans = pgTable(
