@@ -18,6 +18,7 @@
 - [Send emails with Flask](https://opensend.namuh.co/docs/send-with-flask.md): Use the Python SDK from Flask routes, CLI commands, or background workers.
 - [Send emails with Django](https://opensend.namuh.co/docs/send-with-django.md): Use the Python SDK from Django views, management commands, or background jobs.
 - [Send emails with Go](https://opensend.namuh.co/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.
+- [Send emails with Java and Kotlin](https://opensend.namuh.co/docs/send-with-java.md): Use the first-party OpenSend JVM SDK from plain Java, Kotlin, Spring Boot services, workers, and command-line applications. The package lives in this repository at packages/jvm-sdk while registry publishing is prepared.
 - [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK. It works in Rails, Sinatra, Ruby scripts, and background jobs.
 - [Send emails with Rails](https://opensend.namuh.co/docs/send-with-rails.md): Use the Ruby SDK from Rails controllers, jobs, mailer adapters, or service objects.
 - [Send emails with Sinatra](https://opensend.namuh.co/docs/send-with-sinatra.md): Use the Ruby SDK from Sinatra routes or background jobs.

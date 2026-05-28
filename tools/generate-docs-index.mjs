@@ -87,6 +87,7 @@ const DOC_ORDER = [
   "send-with-flask.md",
   "send-with-django.md",
   "send-with-go.md",
+  "send-with-java.md",
   "send-with-ruby.md",
   "send-with-rails.md",
   "send-with-sinatra.md",
