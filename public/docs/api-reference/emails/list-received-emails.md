@@ -42,6 +42,10 @@ Authorization: Bearer os_YOUR_API_KEY
           "targetAddress": "agent@inbound.example.com"
         }
       ],
+      "reply_match_status": "unmatched",
+      "thread_id": null,
+      "reply_to_email_id": null,
+      "contact_id": null,
       "created_at": "2026-05-10T00:00:00.000Z"
     }
   ],
@@ -49,7 +53,7 @@ Authorization: Bearer os_YOUR_API_KEY
 }
 ```
 
-Rows are scoped to the owner of the API key. `route_decisions` is an empty array for legacy rows inserted before route audit metadata existed. Empty lists are returned as `200` responses with `data: []`.
+Rows are scoped to the owner of the API key. `route_decisions` is an empty array for legacy rows inserted before route audit metadata existed. `reply_match_status` is `matched` when the ingester validated a tenant/domain-scoped reply token and linked the message to an outbound email thread; otherwise it is `unmatched`. Empty lists are returned as `200` responses with `data: []`.
 
 ## Self-hosting notes
 

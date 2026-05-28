@@ -4,6 +4,7 @@ import {
   createForwardingRuleService,
   createInboundEmailIngestionService,
   createReceivedEmailService,
+  generateReplyToken,
 } from "@opensend/core";
 import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -53,6 +54,9 @@ async function cleanup(client: Client, marker: string): Promise<void> {
     `${marker}%`,
   ]);
   await client.query("delete from domains where user_id like $1", [
+    `${marker}%`,
+  ]);
+  await client.query("delete from contacts where user_id like $1", [
     `${marker}%`,
   ]);
   await client.query('delete from "session" where user_id like $1', [
@@ -308,6 +312,176 @@ describeIfDb("inbound MIME ingestion with real Postgres", () => {
       [outcome.received_email_id, tenantA],
     );
     expect(receivedRows.rows[0]?.count).toBe("1");
+  });
+
+  it("threads matched replies, keeps unmatched replies visible, and blocks cross-tenant token attachment", async () => {
+    const outboundEmailId = randomUUID();
+    const contactId = randomUUID();
+    const token = generateReplyToken({
+      userId: tenantA,
+      emailId: outboundEmailId,
+      replyDomain: domainA,
+    });
+    const replyAddress = `reply+${token}@${domainA}`;
+    await client.query(
+      "insert into contacts (id, email, user_id) values ($1, $2, $3)",
+      [contactId, "customer@example.test", tenantA],
+    );
+    await client.query(
+      'insert into emails (id, "from", "to", subject, html, text, reply_to, headers, status, user_id, thread_id, reply_address, reply_token) values ($1, $2, $3::jsonb, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12, $13)',
+      [
+        outboundEmailId,
+        `support@${domainA}`,
+        JSON.stringify(["customer@example.test"]),
+        "Original support email",
+        "<p>Hello</p>",
+        "Hello",
+        JSON.stringify([replyAddress]),
+        JSON.stringify({ "X-OpenSend-Reply-Token": token }),
+        "sent",
+        tenantA,
+        outboundEmailId,
+        replyAddress,
+        token,
+      ],
+    );
+
+    const matched = await createInboundEmailIngestionService().process({
+      provider: "fixture",
+      eventId: `${marker}-reply-matched`,
+      recipients: [replyAddress],
+      rawMime: [
+        "From: Customer <customer@example.test>",
+        `To: ${replyAddress}`,
+        "Subject: Re: Original support email",
+        `In-Reply-To: <${token}@${domainA}>`,
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        "Thanks for the update",
+      ].join("\r\n"),
+      metadata: { test_run_id: marker },
+    });
+    expect(matched).toMatchObject({ status: "processed", user_id: tenantA });
+    if (matched.status !== "processed") throw new Error("Expected match");
+
+    const matchedRows = await client.query<{
+      reply_match_status: string;
+      reply_to_email_id: string | null;
+      thread_id: string | null;
+      contact_id: string | null;
+    }>(
+      "select reply_match_status, reply_to_email_id, thread_id, contact_id from received_emails where id = $1",
+      [matched.received_email_id],
+    );
+    expect(matchedRows.rows[0]).toEqual({
+      reply_match_status: "matched",
+      reply_to_email_id: outboundEmailId,
+      thread_id: outboundEmailId,
+      contact_id: contactId,
+    });
+    const matchedDetail = await receivedService.getReceivedEmail(
+      matched.received_email_id,
+      tenantA,
+    );
+    expect(matchedDetail.thread.messages.map((message) => message.id)).toEqual([
+      outboundEmailId,
+      matched.received_email_id,
+    ]);
+
+    const unmatched = await createInboundEmailIngestionService().process({
+      provider: "fixture",
+      eventId: `${marker}-reply-unmatched`,
+      recipients: [`support@${domainA}`],
+      rawMime: buildMime({
+        from: "unknown@example.test",
+        to: `support@${domainA}`,
+        subject: "Unmatched support reply",
+      }),
+      metadata: { test_run_id: marker },
+    });
+    expect(unmatched).toMatchObject({ status: "processed", user_id: tenantA });
+    if (unmatched.status !== "processed") throw new Error("Expected process");
+    const unmatchedDetail = await receivedService.getReceivedEmail(
+      unmatched.received_email_id,
+      tenantA,
+    );
+    expect(unmatchedDetail.reply_match_status).toBe("unmatched");
+    expect(unmatchedDetail.reply_to_email_id).toBeNull();
+
+    const invalidToken = `${token.slice(0, -1)}${token.endsWith("0") ? "1" : "0"}`;
+    const invalidReplyAddress = `reply+${invalidToken}@${domainA}`;
+    const invalidReply = await createInboundEmailIngestionService().process({
+      provider: "fixture",
+      eventId: `${marker}-reply-invalid-token`,
+      recipients: [invalidReplyAddress],
+      rawMime: [
+        "From: Customer <customer@example.test>",
+        `To: ${invalidReplyAddress}`,
+        "Subject: Re: Stale token",
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        "This should remain auditable but unmatched",
+      ].join("\r\n"),
+      metadata: { test_run_id: marker },
+    });
+    expect(invalidReply).toMatchObject({
+      status: "processed",
+      user_id: tenantA,
+    });
+    if (invalidReply.status !== "processed") {
+      throw new Error("Expected invalid reply token to remain visible");
+    }
+    const invalidRows = await client.query<{
+      reply_match_status: string;
+      reply_to_email_id: string | null;
+      thread_id: string | null;
+    }>(
+      "select reply_match_status, reply_to_email_id, thread_id from received_emails where id = $1",
+      [invalidReply.received_email_id],
+    );
+    expect(invalidRows.rows[0]).toEqual({
+      reply_match_status: "unmatched",
+      reply_to_email_id: null,
+      thread_id: null,
+    });
+
+    const crossTenant = await createInboundEmailIngestionService().process({
+      provider: "fixture",
+      eventId: `${marker}-reply-cross-tenant`,
+      recipients: [`support@${domainB}`],
+      rawMime: [
+        "From: Customer <customer@example.test>",
+        `To: support@${domainB}`,
+        "Subject: Re: Cross tenant attempt",
+        `X-OpenSend-Reply-Token: ${token}`,
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        "This must not attach to tenant A",
+      ].join("\r\n"),
+      metadata: { test_run_id: marker },
+    });
+    expect(crossTenant).toMatchObject({
+      status: "processed",
+      user_id: tenantB,
+    });
+    if (crossTenant.status !== "processed") {
+      throw new Error("Expected cross-tenant message to remain visible");
+    }
+    const crossRows = await client.query<{
+      user_id: string;
+      reply_match_status: string;
+      reply_to_email_id: string | null;
+      thread_id: string | null;
+    }>(
+      "select user_id, reply_match_status, reply_to_email_id, thread_id from received_emails where id = $1",
+      [crossTenant.received_email_id],
+    );
+    expect(crossRows.rows[0]).toEqual({
+      user_id: tenantB,
+      reply_match_status: "unmatched",
+      reply_to_email_id: null,
+      thread_id: null,
+    });
   });
 
   it("records terminal malformed, missing-domain, oversized, and storage-failure states", async () => {

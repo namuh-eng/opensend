@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   getApiKeyAuthHeaderError,
   publicApiKeyUnauthorizedResponse,
@@ -43,6 +44,7 @@ import {
   logTelemetry,
   normalizeEmailRecipient,
   normalizeScheduledAt,
+  prepareOutboundReplyTracking,
   publicApiError,
   publishBackgroundJob,
   recordTelemetryError,
@@ -629,6 +631,7 @@ export async function handlePostEmailRequest(
     }
 
     const shouldQueueNow = !scheduledAt || scheduledAt <= new Date();
+    const emailId = randomUUID();
 
     // Quota gate: post-validation and committed in the same transaction as the
     // durable email row. SQS publish remains after commit so workers can read it.
@@ -670,14 +673,31 @@ export async function handlePostEmailRequest(
       finalText = managedUnsubscribe.text;
       finalHeaders = managedUnsubscribe.headers;
 
+      const replyTracking = await prepareOutboundReplyTracking({
+        userId,
+        emailId,
+        from: validated.from,
+        providedReplyTo: replyTo,
+        headers: finalHeaders,
+      });
+      if (replyTracking.enabled) {
+        finalHeaders = {
+          ...finalHeaders,
+          ...replyTracking.headers,
+        };
+      }
+
       const [created] = await tx
         .insert(emails)
         .values({
+          id: emailId,
           from: validated.from,
           to,
           cc: cc ?? [],
           bcc: bcc ?? [],
-          replyTo: replyTo ?? [],
+          replyTo: replyTracking.enabled
+            ? replyTracking.replyTo
+            : (replyTo ?? []),
           subject: finalSubject,
           html: finalHtml,
           text: finalText,
@@ -688,6 +708,11 @@ export async function handlePostEmailRequest(
           scheduledAt: scheduledAt,
           topicId: validated.topic_id || null,
           idempotencyKey: idempotencyKey,
+          threadId: replyTracking.enabled ? replyTracking.threadId : null,
+          replyAddress: replyTracking.enabled
+            ? replyTracking.replyAddress
+            : null,
+          replyToken: replyTracking.enabled ? replyTracking.replyToken : null,
           userId: auth.userId, // Link to the user who owns the API key
         })
         .returning({ id: emails.id });

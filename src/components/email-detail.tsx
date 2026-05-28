@@ -100,6 +100,7 @@ export interface EmailDetailData {
   subject: string;
   html: string | null;
   text: string | null;
+  replyAddress?: string | null;
   createdAt: string;
   scheduledAt: string | null;
   tags: Array<{ name: string; value: string }>;
@@ -133,6 +134,22 @@ export interface EmailDetailData {
     relatedId: string | null;
     relatedUrl: string | null;
   }>;
+  thread?: {
+    threadId: string | null;
+    matchStatus: "matched" | "unmatched";
+    originalEmailId: string | null;
+    contactId: string | null;
+    messages: Array<{
+      id: string;
+      direction: "outbound" | "inbound";
+      subject: string;
+      from: string;
+      to: string[];
+      text: string | null;
+      html: string | null;
+      createdAt: string;
+    }>;
+  };
 }
 
 interface EmailDetailProps {
@@ -477,6 +494,103 @@ export function EmailDetail({ email }: EmailDetailProps) {
           </div>
         </div>
       </div>
+
+      {email.replyAddress && (
+        <div
+          data-testid="reply-tracking-card"
+          className="mb-8 rounded-xl border border-line bg-bg-2 p-4"
+        >
+          <p className="mb-1 text-[11px] font-medium tracking-wider text-fg-2">
+            REPLY TRACKING
+          </p>
+          <p className="text-[13px] text-fg-2">
+            Replies are tracked at{" "}
+            <span className="font-mono text-fg">{email.replyAddress}</span>
+            {email.thread?.threadId ? (
+              <>
+                {" "}
+                in thread{" "}
+                <span className="font-mono text-fg">
+                  {email.thread.threadId}
+                </span>
+              </>
+            ) : null}
+            .
+          </p>
+        </div>
+      )}
+
+      {email.thread && (
+        <div
+          data-testid="conversation-thread"
+          className="mb-8 rounded-xl border border-line bg-bg-2 p-4"
+        >
+          <div className="mb-4 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-medium tracking-wider text-fg-2">
+                CONVERSATION THREAD
+              </p>
+              <p className="mt-1 text-[13px] text-fg-2">
+                {email.thread.messages.length} message
+                {email.thread.messages.length === 1 ? "" : "s"} linked for
+                support context.
+              </p>
+            </div>
+            <StatusBadge
+              status={
+                email.thread.matchStatus === "matched"
+                  ? "Reply matched"
+                  : "No replies"
+              }
+              variant={
+                email.thread.matchStatus === "matched" ? "success" : "default"
+              }
+            />
+          </div>
+          <div className="space-y-3">
+            {email.thread.messages.length > 0 ? (
+              email.thread.messages.map((message) => (
+                <div
+                  key={`${message.direction}:${message.id}`}
+                  data-testid="thread-message"
+                  className="rounded-lg border border-line bg-bg px-4 py-3"
+                >
+                  <div className="flex flex-wrap items-center gap-2 text-[12px]">
+                    <StatusBadge
+                      status={
+                        message.direction === "inbound" ? "Inbound" : "Sent"
+                      }
+                      variant={
+                        message.direction === "inbound" ? "info" : "success"
+                      }
+                    />
+                    <span className="font-medium text-fg">
+                      {message.subject}
+                    </span>
+                    <span className="text-fg-4">
+                      {formatEventTimestamp(message.createdAt)}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[12px] text-fg-2">
+                    <span className="font-mono">{message.from}</span>
+                    {" → "}
+                    <span className="font-mono">{message.to.join(", ")}</span>
+                  </p>
+                  {(message.text || message.html) && (
+                    <p className="mt-2 line-clamp-3 text-[13px] text-fg">
+                      {message.text ?? message.html?.replace(/<[^>]+>/g, " ")}
+                    </p>
+                  )}
+                </div>
+              ))
+            ) : (
+              <div className="rounded-lg border border-dashed border-line px-4 py-4 text-center text-[13px] text-fg-4">
+                No inbound replies matched yet.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Message Trace */}
       <div className="mb-8">

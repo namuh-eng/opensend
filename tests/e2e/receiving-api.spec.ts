@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { generateReplyToken } from "@opensend/core";
 import app from "../../packages/ingester/src/index";
 import {
   cleanupE2ERun,
@@ -422,4 +423,102 @@ test("dashboard creates an inbound forwarding rule and shows a forwarding result
     [e2eTenant.user.id],
   );
   expect(attemptRows.rows[0]?.count).toBe("1");
+});
+
+test("outbound email detail shows matched inbound reply thread context", async ({
+  authenticatedPage,
+  e2eDb,
+  e2eRunId,
+  e2eTenant,
+}) => {
+  const domainId = randomUUID();
+  const outboundEmailId = randomUUID();
+  const contactId = randomUUID();
+  const domain = `replies.${e2eRunId}.e2e.opensend.test`;
+  const capabilities = JSON.stringify([
+    { name: "sending", enabled: true },
+    { name: "receiving", enabled: true },
+  ]);
+  const token = generateReplyToken({
+    userId: e2eTenant.user.id,
+    emailId: outboundEmailId,
+    replyDomain: domain,
+  });
+  const replyAddress = `reply+${token}@${domain}`;
+
+  await e2eDb.query(
+    `insert into domains (id, name, status, region, capabilities, user_id)
+     values ($1, $2, 'verified', 'us-east-1', $3::jsonb, $4)`,
+    [domainId, domain, capabilities, e2eTenant.user.id],
+  );
+  await e2eDb.query(
+    `insert into contacts (id, email, user_id, document)
+     values ($1, $2, $3, $4::jsonb)`,
+    [
+      contactId,
+      `customer@${e2eRunId}.e2e.opensend.test`,
+      e2eTenant.user.id,
+      JSON.stringify({ test_run_id: e2eRunId }),
+    ],
+  );
+  await e2eDb.query(
+    `insert into emails
+       (id, "from", "to", subject, html, text, reply_to, headers, status, user_id, thread_id, reply_address, reply_token, sent_at)
+     values
+       ($1, $2, $3::jsonb, $4, $5, $6, $7::jsonb, $8::jsonb, 'sent', $9, $10, $11, $12, now())`,
+    [
+      outboundEmailId,
+      `support@${domain}`,
+      JSON.stringify([`customer@${e2eRunId}.e2e.opensend.test`]),
+      "Threaded support question",
+      "<p>Can we help?</p>",
+      "Can we help?",
+      JSON.stringify([replyAddress]),
+      JSON.stringify({ "X-OpenSend-Reply-Token": token }),
+      e2eTenant.user.id,
+      outboundEmailId,
+      replyAddress,
+      token,
+    ],
+  );
+
+  const inboundResponse = await app.request("/events/inbound", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      provider: "playwright-fixture",
+      event_id: `${e2eRunId}-reply-thread`,
+      message_id: `${e2eRunId}-reply-thread-message`,
+      recipients: [replyAddress],
+      raw_mime: [
+        `From: Customer <customer@${e2eRunId}.e2e.opensend.test>`,
+        `To: ${replyAddress}`,
+        "Subject: Re: Threaded support question",
+        `References: <${token}@${domain}>`,
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        "Thanks, this answers my question.",
+      ].join("\r\n"),
+      metadata: { test_run_id: e2eRunId },
+    }),
+  });
+  expect(inboundResponse.status).toBe(202);
+
+  await authenticatedPage.goto(`/emails/${outboundEmailId}`);
+  await expect(
+    authenticatedPage.getByTestId("reply-tracking-card"),
+  ).toContainText(replyAddress);
+  await expect(
+    authenticatedPage.getByTestId("conversation-thread"),
+  ).toContainText("Reply matched");
+  await expect(authenticatedPage.getByTestId("thread-message")).toHaveCount(2);
+  await expect(
+    authenticatedPage.getByText("Thanks, this answers my question."),
+  ).toBeVisible();
+
+  const rows = await e2eDb.query<{ reply_match_status: string }>(
+    "select reply_match_status from received_emails where user_id = $1 and reply_to_email_id = $2",
+    [e2eTenant.user.id, outboundEmailId],
+  );
+  expect(rows.rows[0]?.reply_match_status).toBe("matched");
 });

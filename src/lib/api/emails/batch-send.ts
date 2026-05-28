@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   getApiKeyAuthHeaderError,
   publicApiKeyUnauthorizedResponse,
@@ -38,6 +39,7 @@ import {
   logTelemetry,
   normalizeEmailRecipient,
   normalizeScheduledAt,
+  prepareOutboundReplyTracking,
   publicApiError,
   publishBackgroundJob,
   recordTelemetryError,
@@ -638,26 +640,45 @@ export async function handlePostEmailBatchRequest(
           headers: (item.headers as Record<string, string>) ?? {},
           baseUrl: getPublicBaseUrl(request),
         });
+        const emailId = randomUUID();
+        const replyTracking = await prepareOutboundReplyTracking({
+          userId,
+          emailId,
+          from: item.from,
+          providedReplyTo: replyTo,
+          headers: managedUnsubscribe.headers,
+        });
+        const finalHeaders = replyTracking.enabled
+          ? { ...managedUnsubscribe.headers, ...replyTracking.headers }
+          : managedUnsubscribe.headers;
 
         const [email] = await tx
           .insert(emails)
           .values({
+            id: emailId,
             from: item.from,
             to,
             cc: cc ?? [],
             bcc: bcc ?? [],
-            replyTo: replyTo ?? [],
+            replyTo: replyTracking.enabled
+              ? replyTracking.replyTo
+              : (replyTo ?? []),
             subject: item.subject,
             html: managedUnsubscribe.html,
             text: managedUnsubscribe.text,
             tags: item.tags ?? [],
-            headers: managedUnsubscribe.headers,
+            headers: finalHeaders,
             attachments: normalizeAttachmentsForStorage(item.attachments),
             status: shouldQueueNow ? "queued" : "scheduled",
             scheduledAt: scheduledAt,
             topicId: item.topic_id || null,
             idempotencyKey:
               index === firstAcceptedIndex ? idempotencyKey : null,
+            threadId: replyTracking.enabled ? replyTracking.threadId : null,
+            replyAddress: replyTracking.enabled
+              ? replyTracking.replyAddress
+              : null,
+            replyToken: replyTracking.enabled ? replyTracking.replyToken : null,
             userId: auth.userId,
           })
           .returning({ id: emails.id });

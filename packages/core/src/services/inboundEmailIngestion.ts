@@ -12,6 +12,10 @@ import {
   type ReceivingRouteDecision,
   createReceivingRouteService,
 } from "./receivingRoutes";
+import {
+  hasInboundReplyTokenCandidate,
+  resolveInboundReply,
+} from "./replyThreading";
 import { storageService } from "./storage";
 
 export type InboundProviderNotification = {
@@ -177,6 +181,19 @@ function resolveSingleTenant(
   return { userId: userIds[0], routeable };
 }
 
+function resolveSingleCandidateTenant(
+  decisions: Array<ReceivingRouteDecision & { userId?: string }>,
+): string | null {
+  const userIds = [
+    ...new Set(
+      decisions
+        .map((decision) => decision.userId)
+        .filter((userId): userId is string => Boolean(userId)),
+    ),
+  ];
+  return userIds.length === 1 ? userIds[0] : null;
+}
+
 function terminalReasonForRouting(
   decisions: Array<ReceivingRouteDecision & { userId?: string }>,
 ): string {
@@ -308,7 +325,29 @@ export function createInboundEmailIngestionService(
       const recipients = mergeRecipients(parsed, notification.recipients);
       const routeDecisions =
         await receivingRouteService.matchRecipients(recipients);
-      const tenant = resolveSingleTenant(routeDecisions);
+      const routeTenant = resolveSingleTenant(routeDecisions);
+      const candidateUserId = resolveSingleCandidateTenant(routeDecisions);
+      const replyMatch = candidateUserId
+        ? await resolveInboundReply({
+            userId: candidateUserId,
+            recipients,
+            headers: parsed.headers,
+            from: parsed.from,
+          })
+        : null;
+      const hasReplyTokenCandidate = candidateUserId
+        ? hasInboundReplyTokenCandidate({
+            recipients,
+            headers: parsed.headers,
+          })
+        : false;
+      const tenant =
+        replyMatch?.status === "matched"
+          ? { userId: replyMatch.userId, routeable: [] }
+          : (routeTenant ??
+            (candidateUserId && hasReplyTokenCandidate
+              ? { userId: candidateUserId, routeable: [] }
+              : null));
       if (!tenant) {
         return await markTerminal({
           eventId: created.event.id,
@@ -371,6 +410,14 @@ export function createInboundEmailIngestionService(
                 ({ userId: _userId, ...decision }) => decision,
               ),
               attachments: storedAttachments,
+              headers: parsed.headers,
+              replyMatchStatus: replyMatch?.status ?? "unmatched",
+              threadId:
+                replyMatch?.status === "matched" ? replyMatch.threadId : null,
+              replyToEmailId:
+                replyMatch?.status === "matched" ? replyMatch.emailId : null,
+              contactId:
+                replyMatch?.status === "matched" ? replyMatch.contactId : null,
               userId: tenant.userId,
             })
             .returning();
@@ -388,6 +435,11 @@ export function createInboundEmailIngestionService(
                 provider_event_id: providerEventId,
                 provider_message_id: notification.messageId ?? parsed.messageId,
                 message_id: parsed.messageId,
+                reply_match_status: replyMatch?.status ?? "unmatched",
+                reply_to_email_id:
+                  replyMatch?.status === "matched" ? replyMatch.emailId : null,
+                thread_id:
+                  replyMatch?.status === "matched" ? replyMatch.threadId : null,
                 recipients,
                 attachment_count: storedAttachments.length,
                 size: parsed.size,
