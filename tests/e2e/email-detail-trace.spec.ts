@@ -173,7 +173,10 @@ test("dashboard email detail trace shows sanitized event details and linked logs
   await expect(
     page.getByRole("link", { name: /View all logs/i }),
   ).toHaveAttribute("href", `/logs?q=${encodeURIComponent(emailId)}`);
-  await expect(page.locator(`a[href="/logs/${logId}"]`)).toBeVisible();
+  const associatedLogLink = page
+    .getByTestId("associated-logs")
+    .locator(`a[href="/logs/${logId}"]`);
+  await expect(associatedLogLink).toBeVisible();
 
   const metricsResponse = await page.request.get(
     `/api/metrics?range=last_30_days&tag_name=campaign&tag_value=${encodeURIComponent(tagValue)}`,
@@ -194,8 +197,8 @@ test("dashboard email detail trace shows sanitized event details and linked logs
   ).toBeVisible();
 
   await page.goto(`/emails/${emailId}`);
-  await expect(page.locator(`a[href="/logs/${logId}"]`)).toBeVisible();
-  await page.locator(`a[href="/logs/${logId}"]`).click();
+  await expect(associatedLogLink).toBeVisible();
+  await associatedLogLink.click();
   await expect(
     page.getByRole("heading", { name: "POST /api/emails" }),
   ).toBeVisible();
