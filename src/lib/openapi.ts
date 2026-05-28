@@ -826,6 +826,96 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/receiving/forwarding-rules": {
+      get: {
+        tags: ["Receiving"],
+        summary: "List inbound forwarding rules",
+        operationId: "listForwardingRules",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "domain_id",
+            in: "query",
+            schema: { type: "string", format: "uuid" },
+            description: "Limit rules to one owned receiving domain.",
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Forwarding rule list.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ForwardingRuleList",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+      post: {
+        tags: ["Receiving"],
+        summary: "Create an inbound forwarding rule",
+        operationId: "createForwardingRule",
+        security: bearerSecurity,
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/CreateForwardingRuleRequest",
+          }),
+        },
+        responses: {
+          "201": {
+            description: "Created forwarding rule.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ForwardingRule",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          "409": { $ref: "#/components/responses/ValidationError" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/receiving/forwarding-rules/{id}": {
+      patch: {
+        tags: ["Receiving"],
+        summary: "Update an inbound forwarding rule",
+        operationId: "updateForwardingRule",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateForwardingRuleRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Updated forwarding rule.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ForwardingRule",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Receiving"],
+        summary: "Delete an inbound forwarding rule",
+        operationId: "deleteForwardingRule",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Deleted forwarding rule.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DeleteForwardingRuleResponse",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
     // ── Domains extended ──────────────────────────────────────────
     "/api/domains": {
       get: {
@@ -3125,6 +3215,129 @@ export const openApiDocument = {
         type: "object",
         properties: {
           object: { type: "string", enum: ["receiving_route"] },
+          id: { type: "string", format: "uuid" },
+          deleted: { type: "boolean" },
+        },
+        required: ["object", "id", "deleted"],
+      },
+      ForwardingAttempt: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["forwarding_attempt"] },
+          id: { type: "string", format: "uuid" },
+          rule_id: { type: "string", format: "uuid", nullable: true },
+          received_email_id: { type: "string", format: "uuid" },
+          forwarded_email_id: {
+            type: "string",
+            format: "uuid",
+            nullable: true,
+          },
+          status: {
+            type: "string",
+            enum: ["queued", "skipped", "failed"],
+          },
+          reason: { type: "string" },
+          destinations: {
+            type: "array",
+            items: { type: "string", format: "email" },
+          },
+          retry_eligible: { type: "boolean" },
+          error_message: { type: "string", nullable: true },
+          forwarded_email_status: { type: "string", nullable: true },
+          created_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "object",
+          "id",
+          "received_email_id",
+          "status",
+          "reason",
+          "destinations",
+          "retry_eligible",
+          "created_at",
+        ],
+      },
+      ForwardingRule: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["forwarding_rule"] },
+          id: { type: "string", format: "uuid" },
+          domain_id: { type: "string", format: "uuid" },
+          domain: { type: "string" },
+          route_id: { type: "string", format: "uuid" },
+          route_type: {
+            type: "string",
+            enum: ["exact", "alias", "catch_all"],
+          },
+          route_local_part: { type: "string", nullable: true },
+          route_target_address: { type: "string", format: "email" },
+          destinations: {
+            type: "array",
+            items: { type: "string", format: "email" },
+          },
+          status: {
+            type: "string",
+            enum: ["active", "disabled", "invalid"],
+          },
+          invalid_reason: { type: "string", nullable: true },
+          last_attempt: { type: "object", nullable: true },
+          created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "object",
+          "id",
+          "domain_id",
+          "domain",
+          "route_id",
+          "route_target_address",
+          "destinations",
+          "status",
+          "created_at",
+          "updated_at",
+        ],
+      },
+      ForwardingRuleList: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["list"] },
+          data: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ForwardingRule" },
+          },
+        },
+        required: ["object", "data"],
+      },
+      CreateForwardingRuleRequest: {
+        type: "object",
+        properties: {
+          route_id: { type: "string", format: "uuid" },
+          destinations: {
+            type: "array",
+            minItems: 1,
+            maxItems: 25,
+            items: { type: "string", format: "email" },
+          },
+          status: { type: "string", enum: ["active", "disabled"] },
+        },
+        required: ["route_id", "destinations"],
+      },
+      UpdateForwardingRuleRequest: {
+        type: "object",
+        properties: {
+          destinations: {
+            type: "array",
+            minItems: 1,
+            maxItems: 25,
+            items: { type: "string", format: "email" },
+          },
+          status: { type: "string", enum: ["active", "disabled"] },
+        },
+      },
+      DeleteForwardingRuleResponse: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["forwarding_rule"] },
           id: { type: "string", format: "uuid" },
           deleted: { type: "boolean" },
         },
