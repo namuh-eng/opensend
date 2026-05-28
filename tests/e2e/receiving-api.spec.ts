@@ -350,3 +350,76 @@ test("inbound ingester notifications become tenant-scoped received email API row
     await cleanupE2ERun(e2eDb, e2eRunId);
   }
 });
+
+test("dashboard creates an inbound forwarding rule and shows a forwarding result", async ({
+  authenticatedPage,
+  e2eDb,
+  e2eRunId,
+  e2eTenant,
+}) => {
+  const domainId = randomUUID();
+  const domain = `forwarding.${e2eRunId}.e2e.opensend.test`;
+  const capabilities = JSON.stringify([
+    { name: "sending", enabled: true },
+    { name: "receiving", enabled: true },
+  ]);
+
+  await e2eDb.query(
+    `insert into domains (id, name, status, region, capabilities, user_id)
+     values ($1, $2, 'verified', 'us-east-1', $3::jsonb, $4)`,
+    [domainId, domain, capabilities, e2eTenant.user.id],
+  );
+  const routeRows = await e2eDb.query<{ id: string }>(
+    `insert into receiving_routes (user_id, domain_id, type, local_part, target_local_part)
+     values ($1, $2, 'exact', 'support', 'support')
+     returning id`,
+    [e2eTenant.user.id, domainId],
+  );
+  const routeId = routeRows.rows[0]?.id;
+  expect(routeId).toBeTruthy();
+
+  await authenticatedPage.goto("/emails/receiving");
+  await expect(
+    authenticatedPage.getByText(domain, { exact: true }),
+  ).toBeVisible();
+  await authenticatedPage
+    .getByLabel(`Forwarding destinations for support@${domain}`)
+    .fill(`ops-${e2eRunId}@external.example.test`);
+  await authenticatedPage
+    .getByRole("button", { name: "Add forwarding" })
+    .click();
+  await expect(authenticatedPage.getByText("Forwarding active")).toBeVisible();
+  await expect(
+    authenticatedPage.getByText(`ops-${e2eRunId}@external.example.test`),
+  ).toBeVisible();
+
+  const inboundResponse = await app.request("/events/inbound", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      provider: "playwright-fixture",
+      event_id: `${e2eRunId}-forwarding-dashboard`,
+      message_id: `${e2eRunId}-forwarding-message`,
+      recipients: [`support@${domain}`],
+      raw_mime: buildInboundMime({
+        from: "sender@example.test",
+        to: `support@${domain}`,
+        subject: "Dashboard forwarding",
+      }),
+      metadata: { test_run_id: e2eRunId },
+    }),
+  });
+  expect(inboundResponse.status).toBe(202);
+
+  await authenticatedPage.reload();
+  await expect(authenticatedPage.getByText("Last forward:")).toBeVisible();
+  await expect(authenticatedPage.getByText("queued")).toBeVisible();
+  await expect(authenticatedPage.getByText("outbound queued")).toBeVisible();
+
+  const attemptRows = await e2eDb.query<{ count: string }>(
+    `select count(*) from forwarding_attempts
+     where user_id = $1 and status = 'queued' and forwarded_email_id is not null`,
+    [e2eTenant.user.id],
+  );
+  expect(attemptRows.rows[0]?.count).toBe("1");
+});

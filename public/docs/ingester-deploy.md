@@ -23,6 +23,6 @@ Set `INGESTER_INBOUND_TOKEN` to require `Authorization: Bearer <token>` on inbou
 }
 ```
 
-The ingester stores sanitized provider metadata in `inbound_provider_events`, parses MIME headers/body/attachments, resolves the recipient domain and route to exactly one tenant, uploads attachment bodies through OpenSend storage, inserts `received_emails`, and then writes an internal durable `email_events` row of type `received`.
+The ingester stores sanitized provider metadata in `inbound_provider_events`, parses MIME headers/body/attachments, resolves the recipient domain and route to exactly one tenant, uploads attachment bodies through OpenSend storage, inserts `received_emails`, writes an internal durable `email_events` row of type `received`, and then evaluates matching forwarding rules without deleting or hiding the stored message.
 
 Terminal outcomes are recorded for malformed MIME, missing or ambiguous receiving domain, oversized messages, attachment storage failure, and duplicate provider events. Raw MIME bodies and secrets are not written to logs or provider metadata.

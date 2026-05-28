@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { db } from "../db/client";
 import { inboundProviderEventRepo } from "../db/repositories/inboundProviderEventRepo";
 import { emailEvents, receivedEmails } from "../db/schema";
+import { forwardingRuleService } from "./forwardingRules";
 import {
   InboundMimeParseError,
   type ParsedInboundMime,
@@ -403,6 +404,20 @@ export function createInboundEmailIngestionService(
           userId: tenant.userId,
           receivedEmailId: result.received.id,
         });
+
+        try {
+          await forwardingRuleService.processReceivedEmail({
+            receivedEmail: result.received,
+          });
+        } catch (error) {
+          console.error(
+            "Inbound forwarding failed after received email commit:",
+            {
+              receivedEmailId: result.received.id,
+              error,
+            },
+          );
+        }
 
         return {
           status: "processed",
