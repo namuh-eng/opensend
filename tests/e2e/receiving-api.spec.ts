@@ -113,3 +113,113 @@ test("received email APIs are tenant-scoped across list, detail, and attachments
     await cleanupE2ERun(e2eDb, e2eRunId);
   }
 });
+
+test("receiving route CRUD is tenant-scoped for overlapping local parts", async ({
+  e2eDb,
+  e2eRunId,
+  playwright,
+}) => {
+  await cleanupE2ERun(e2eDb, e2eRunId);
+
+  const tenantA = await createE2ETenant(e2eDb, e2eRunId, "routes-a");
+  const tenantB = await createE2ETenant(e2eDb, e2eRunId, "routes-b");
+  const tenantADomainId = randomUUID();
+  const tenantBDomainId = randomUUID();
+  const tenantADomain = `inbound-a.${e2eRunId}.e2e.opensend.test`;
+  const tenantBDomain = `inbound-b.${e2eRunId}.e2e.opensend.test`;
+  const capabilities = JSON.stringify([
+    { name: "sending", enabled: true },
+    { name: "receiving", enabled: true },
+  ]);
+
+  await e2eDb.query(
+    `insert into domains (id, name, status, region, capabilities, user_id)
+     values
+       ($1, $2, 'verified', 'us-east-1', $3::jsonb, $4),
+       ($5, $6, 'verified', 'us-east-1', $7::jsonb, $8)`,
+    [
+      tenantADomainId,
+      tenantADomain,
+      capabilities,
+      tenantA.user.id,
+      tenantBDomainId,
+      tenantBDomain,
+      capabilities,
+      tenantB.user.id,
+    ],
+  );
+
+  const tenantARequest = await playwright.request.newContext({
+    baseURL: getE2EBaseUrl(),
+    extraHTTPHeaders: { Authorization: tenantA.apiKey.authorization },
+  });
+  const tenantBRequest = await playwright.request.newContext({
+    baseURL: getE2EBaseUrl(),
+    extraHTTPHeaders: { Authorization: tenantB.apiKey.authorization },
+  });
+
+  try {
+    const createA = await tenantARequest.post("/api/receiving/routes", {
+      data: {
+        domain_id: tenantADomainId,
+        type: "exact",
+        local_part: "support",
+      },
+    });
+    expect(createA.status()).toBe(201);
+    const routeA = (await createA.json()) as {
+      id: string;
+      target_address: string;
+    };
+    expect(routeA.target_address).toBe(`support@${tenantADomain}`);
+
+    const createB = await tenantBRequest.post("/api/receiving/routes", {
+      data: {
+        domain_id: tenantBDomainId,
+        type: "exact",
+        local_part: "support",
+        target_local_part: "inbox",
+      },
+    });
+    expect(createB.status()).toBe(201);
+    const routeB = (await createB.json()) as {
+      id: string;
+      target_address: string;
+    };
+    expect(routeB.target_address).toBe(`inbox@${tenantBDomain}`);
+
+    const crossTenantCreate = await tenantBRequest.post(
+      "/api/receiving/routes",
+      {
+        data: {
+          domain_id: tenantADomainId,
+          type: "alias",
+          local_part: "help",
+          target_local_part: "support",
+        },
+      },
+    );
+    expect(crossTenantCreate.status()).toBe(404);
+
+    const tenantBList = await tenantBRequest.get("/api/receiving/routes", {
+      params: { domain_id: tenantBDomainId },
+    });
+    expect(tenantBList.status()).toBe(200);
+    const tenantBListJson = (await tenantBList.json()) as {
+      data: Array<{ id: string; local_part: string; target_address: string }>;
+    };
+    expect(tenantBListJson.data.map((route) => route.id)).toContain(routeB.id);
+    expect(tenantBListJson.data.map((route) => route.id)).not.toContain(
+      routeA.id,
+    );
+
+    const crossTenantRead = await tenantBRequest.get(
+      `/api/receiving/routes/${routeA.id}`,
+    );
+    expect(crossTenantRead.status()).toBe(404);
+  } finally {
+    await tenantARequest.dispose();
+    await tenantBRequest.dispose();
+    await cleanupE2ERun(e2eDb, e2eRunId);
+  }
+});

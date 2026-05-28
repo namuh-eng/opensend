@@ -176,6 +176,13 @@
       "when": 1779465733477,
       "tag": "0024_melodic_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1779945013309,
+      "tag": "0025_fresh_strong_guy",
+      "breakpoints": true
     }
   ]
 }
