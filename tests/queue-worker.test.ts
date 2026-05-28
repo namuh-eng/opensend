@@ -5,6 +5,7 @@ const mockFindDueScheduled = vi.hoisted(() => vi.fn());
 const mockFindDomainByNameForUser = vi.hoisted(() => vi.fn());
 const mockUpdateEmail = vi.hoisted(() => vi.fn());
 const mockCreateEmailEvent = vi.hoisted(() => vi.fn());
+const mockEnqueueEmailWebhookEvent = vi.hoisted(() => vi.fn());
 const mockSendEmail = vi.hoisted(() => vi.fn());
 const mockPublishBackgroundJob = vi.hoisted(() => vi.fn());
 const mockSuppress = vi.hoisted(() => vi.fn());
@@ -49,6 +50,7 @@ vi.mock("@opensend/core", () => ({
   emailProvider: {
     sendEmail: mockSendEmail,
   },
+  enqueueEmailWebhookEvent: mockEnqueueEmailWebhookEvent,
   emailRepo: {
     findById: mockFindById,
     findDueScheduled: mockFindDueScheduled,
@@ -133,6 +135,10 @@ describe("QueueWorker", () => {
     mockListWebhooksForDispatch.mockResolvedValue({ data: [] });
     mockEnqueueWebhookDelivery.mockResolvedValue({ id: "delivery-1" });
     mockFindDomainByNameForUser.mockResolvedValue(null);
+    mockEnqueueEmailWebhookEvent.mockResolvedValue({
+      eventId: "event-delayed",
+      deliveryIds: ["delivery-delayed"],
+    });
     mockApplyEmailTracking.mockImplementation((input: { html: string }) => ({
       html: input.html,
       rewroteLinks: 0,
@@ -271,6 +277,10 @@ describe("QueueWorker", () => {
       userId: "user-1",
     });
     mockFindDomainByNameForUser.mockResolvedValue(null);
+    mockEnqueueEmailWebhookEvent.mockResolvedValue({
+      eventId: "event-delayed",
+      deliveryIds: ["delivery-delayed"],
+    });
 
     const { QueueWorker } = await import(
       "../packages/ingester/src/queue-worker"
@@ -800,6 +810,24 @@ describe("QueueWorker", () => {
       providerDeadLetteredAt: null,
     });
     expect(mockCreateEmailEvent).not.toHaveBeenCalled();
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenCalledWith({
+      type: "email.delayed",
+      userId: "user-1",
+      emailId: "email-retry",
+      sourceId: "provider-delayed:email-retry:2",
+      payload: {
+        email_id: "email-retry",
+        reason: "provider_retry_scheduled",
+        provider: "ses",
+        attempt_count: 2,
+        next_retry_at: expect.any(String),
+        last_error: {
+          code: "ThrottlingException",
+          message: "SES is throttling sends",
+        },
+      },
+      receivedAt: expect.any(Date),
+    });
   });
 
   it("dead-letters exhausted provider retries and records a failure event", async () => {
@@ -875,6 +903,7 @@ describe("QueueWorker", () => {
       },
       receivedAt: expect.any(Date),
     });
+    expect(mockEnqueueEmailWebhookEvent).not.toHaveBeenCalled();
   });
 
   it("publishes due scheduled emails and marks published rows queued", async () => {

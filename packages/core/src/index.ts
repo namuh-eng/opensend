@@ -48,6 +48,7 @@ export * from "./services/apiKeys";
 export * from "./services/contact";
 export * from "./services/contact-operations";
 export * from "./services/email";
+export * from "./services/email-webhook-events";
 export * from "./services/deliveryFailureExport";
 export * from "./services/emailEventTrace";
 export * from "./services/emailLifecycle";

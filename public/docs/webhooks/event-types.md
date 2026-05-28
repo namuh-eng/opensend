@@ -8,7 +8,10 @@ OpenSend accepts the following webhook subscription event types.
 | `email.delivered` | SES/SNS delivery lifecycle ingestion | Final delivery confirmation from the provider. |
 | `email.bounced` | SES/SNS bounce lifecycle ingestion | Can also refresh suppressions for bounced recipients. |
 | `email.complained` | SES/SNS complaint lifecycle ingestion | Can also refresh suppressions for complained recipients. |
-| `email.delivery_delayed` | SES/SNS delivery-delay lifecycle ingestion | Indicates provider-side delay, not final failure. |
+| `email.delivery_delayed` | SES/SNS delivery-delay lifecycle ingestion | Indicates provider-side delay after provider acceptance, not final failure. |
+| `email.scheduled` | Send API scheduled delivery acceptance | Emitted after a future `scheduled_at` send is persisted. |
+| `email.delayed` | Queue worker provider retry state | Emitted when provider handoff failed but retry attempts remain. |
+| `email.suppressed` | Send API suppression policy check | Emitted when suppressed recipients block a send before email-row creation. |
 | `email.opened` | Open tracking pixel route | Requires tracking token and image load. |
 | `email.clicked` | Click tracking redirect route | Requires rewritten tracked links. |
 | `email.failed` | SES reject/rendering failure or provider retry exhaustion | Use for operator alerts and support triage. |
