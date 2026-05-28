@@ -37,6 +37,7 @@ import {
   createTelemetryContext,
   detectSandboxTestRecipient,
   emitCloudWatchMetric,
+  enqueueEmailWebhookEvent,
   getSandboxTestOutcomeForRecipients,
   getTelemetryCarrier,
   logTelemetry,
@@ -84,6 +85,49 @@ function recordAcceptMetric(
       Operation: "email.accept",
       Outcome: input.outcome,
     },
+  });
+}
+
+async function emitSuppressedWebhook(input: {
+  userId: string;
+  recipients: Array<{ email: string; reason: string }>;
+}): Promise<void> {
+  if (input.recipients.length === 0) return;
+
+  const submittedAt = new Date();
+  await enqueueEmailWebhookEvent({
+    type: "email.suppressed",
+    userId: input.userId,
+    payload: {
+      reason: "recipient_suppressed",
+      recipients: input.recipients,
+      recipient_count: input.recipients.length,
+      submitted_at: submittedAt.toISOString(),
+    },
+    receivedAt: submittedAt,
+  });
+}
+
+async function emitScheduledWebhook(input: {
+  userId: string;
+  emailId: string;
+  scheduledAt: Date;
+  recipientCount: number;
+}): Promise<void> {
+  const acceptedAt = new Date();
+  await enqueueEmailWebhookEvent({
+    type: "email.scheduled",
+    userId: input.userId,
+    emailId: input.emailId,
+    sourceId: `scheduled:${input.emailId}`,
+    payload: {
+      email_id: input.emailId,
+      status: "scheduled",
+      scheduled_at: input.scheduledAt.toISOString(),
+      accepted_at: acceptedAt.toISOString(),
+      recipient_count: input.recipientCount,
+    },
+    receivedAt: acceptedAt,
   });
 }
 
@@ -434,6 +478,13 @@ export async function handlePostEmailRequest(
   const sandboxSuppressedRecipients =
     findSandboxSuppressedRecipients(sandboxRecipients);
   if (sandboxSuppressedRecipients.length > 0) {
+    await emitSuppressedWebhook({
+      userId: auth.userId,
+      recipients: sandboxSuppressedRecipients.map((email) => ({
+        email,
+        reason: "suppressed",
+      })),
+    });
     recordAcceptMetric(telemetry, {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
@@ -454,6 +505,13 @@ export async function handlePostEmailRequest(
     recipients: to,
   });
   if (suppressedRecipients.length > 0) {
+    await emitSuppressedWebhook({
+      userId: auth.userId,
+      recipients: suppressedRecipients.map((entry) => ({
+        email: entry.email,
+        reason: entry.reason,
+      })),
+    });
     recordAcceptMetric(telemetry, {
       durationMs: performance.now() - startedAt,
       outcome: "invalid",
@@ -658,6 +716,16 @@ export async function handlePostEmailRequest(
     }
 
     const createdEmail = email.email;
+
+    if (!shouldQueueNow && scheduledAt) {
+      quotaReserved = false;
+      await emitScheduledWebhook({
+        userId: auth.userId,
+        emailId: createdEmail.id,
+        scheduledAt,
+        recipientCount: to.length,
+      });
+    }
 
     if (shouldQueueNow) {
       try {
