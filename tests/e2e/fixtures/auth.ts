@@ -113,6 +113,10 @@ export async function cleanupE2ERun(
     `${userPrefix}%`,
   ]);
   await client.query(
+    "delete from inbound_provider_events where user_id like $1 or raw_metadata->>'test_run_id' = $2",
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
     "delete from email_suppressions where user_id like $1 or email like $2",
     [`${userPrefix}%`, emailPattern],
   );
