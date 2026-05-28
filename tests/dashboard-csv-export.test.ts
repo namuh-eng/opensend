@@ -148,6 +148,9 @@ describe("dashboard CSV export route", () => {
         region: "us-east-1",
         permission: "full_access",
         method: "post",
+        source: undefined,
+        domain: undefined,
+        topicId: undefined,
         userAgent: "Chrome",
       },
     });

@@ -279,15 +279,16 @@ export const topics = pgTable("topics", {
   userId: text("user_id"),
 });
 
-export type SuppressionReason = "bounced" | "complained";
+export type SuppressionReason = "bounced" | "complained" | "manual";
 
 export type SuppressionSourceMetadata = {
-  source?: "ses" | "operator";
+  source?: "ses" | "operator" | "manual";
   sourceEventId?: string;
   sourceEmailId?: string;
   sourceMessageId?: string;
   bounceType?: string;
   complaintFeedbackType?: string;
+  importRow?: number;
 };
 
 export const emailSuppressions = pgTable(

@@ -1,13 +1,12 @@
 # Email Suppressions
 
-Suppressions prevent OpenSend from sending to addresses that should not receive mail. They can be created by bounce/complaint events, unsubscribe flows, or manual API actions. The dashboard surfaces suppression state on email detail and audience/contact views.
+Suppressions prevent OpenSend from sending to addresses that should not receive mail. They can be created by hard bounce/complaint events or manual dashboard/API actions.
 
 ## Dashboard workflow
 
-- Open an email detail page to see whether the primary recipient is suppressed.
-- Use **Audience → Contacts** to see subscribed versus unsubscribed contact state.
-- Use **Audience → Topics** and the unsubscribe page editor for preference-management flows.
-- Use the suppressions API when you need a dedicated operational list or manual create/delete actions.
+- Open **Suppressions** for the dedicated list, search, filters, manual create/delete, bounded CSV import, and sanitized CSV export.
+- Open an email detail page to see whether the primary recipient is currently suppressed for the tenant.
+- Use **Audience → Contacts** for marketing subscription state and topic preferences. Contact unsubscribe state is related to consent, but it is not the same record as a delivery suppression.
 
 ## Important distinction
 
