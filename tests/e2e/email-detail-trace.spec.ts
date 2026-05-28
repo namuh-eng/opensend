@@ -11,11 +11,12 @@ test("dashboard email detail trace shows sanitized event details and linked logs
   const otherRecipient = `other-trace@${e2eRunId}.e2e.opensend.test`;
   const rawSecret = `Bearer e2e-secret-${e2eRunId}`;
   const rawBody = `raw-html-secret-${e2eRunId}`;
+  const tagValue = `trace-${e2eRunId}`;
   const otherTenantMarker = `other-tenant-marker-${e2eRunId}`;
 
   const insertedEmail = await e2eDb.query<{ id: string }>(
-    `insert into emails ("from", "to", subject, html, text, status, user_id, created_at)
-     values ($1, $2::jsonb, $3, $4, $5, 'bounced', $6, $7)
+    `insert into emails ("from", "to", subject, html, text, status, tags, user_id, created_at)
+     values ($1, $2::jsonb, $3, $4, $5, 'bounced', $6::jsonb, $7, $8)
      returning id`,
     [
       "sender@example.com",
@@ -23,8 +24,9 @@ test("dashboard email detail trace shows sanitized event details and linked logs
       "Trace detail e2e",
       "<p>Hello trace</p>",
       "Hello trace",
+      JSON.stringify([{ name: "campaign", value: tagValue }]),
       e2eTenant.user.id,
-      "2026-05-11T00:00:00.000Z",
+      "2026-05-28T00:00:00.000Z",
     ],
   );
   const emailId = insertedEmail.rows[0]?.id ?? "";
@@ -39,7 +41,7 @@ test("dashboard email detail trace shows sanitized event details and linked logs
       JSON.stringify([otherRecipient]),
       otherTenantMarker,
       otherTenant.user.id,
-      "2026-05-11T00:00:00.000Z",
+      "2026-05-28T00:00:00.000Z",
     ],
   );
   const otherEmailId = insertedOtherEmail.rows[0]?.id ?? "";
@@ -54,7 +56,7 @@ test("dashboard email detail trace shows sanitized event details and linked logs
       `e2e-trace-sent-${e2eRunId}`,
       JSON.stringify({ messageId: `ses-message-${e2eRunId}` }),
       e2eTenant.user.id,
-      "2026-05-11T00:01:00.000Z",
+      "2026-05-28T00:01:00.000Z",
     ],
   );
   const sentEventId = sentEvent.rows[0]?.id ?? "";
@@ -81,7 +83,7 @@ test("dashboard email detail trace shows sanitized event details and linked logs
         html: rawBody,
       }),
       e2eTenant.user.id,
-      "2026-05-11T00:02:00.000Z",
+      "2026-05-28T00:02:00.000Z",
     ],
   );
   const bounceEventId = bounceEvent.rows[0]?.id ?? "";
@@ -96,7 +98,7 @@ test("dashboard email detail trace shows sanitized event details and linked logs
       `e2e-trace-other-${e2eRunId}`,
       JSON.stringify({ bounceType: "Transient", reason: otherTenantMarker }),
       otherTenant.user.id,
-      "2026-05-11T00:02:00.000Z",
+      "2026-05-28T00:02:00.000Z",
     ],
   );
 
@@ -115,7 +117,7 @@ test("dashboard email detail trace shows sanitized event details and linked logs
       JSON.stringify({ emailId, test_run_id: e2eRunId }),
       e2eTenant.user.id,
       e2eTenant.apiKey.id,
-      "2026-05-11T00:03:00.000Z",
+      "2026-05-27T23:59:59.000Z",
     ],
   );
   const logId = logResult.rows[0]?.id ?? "";
@@ -129,20 +131,29 @@ test("dashboard email detail trace shows sanitized event details and linked logs
       JSON.stringify({ emailId: otherEmailId, test_run_id: e2eRunId }),
       otherTenant.user.id,
       otherTenant.apiKey.id,
-      "2026-05-11T00:03:00.000Z",
+      "2026-05-28T00:03:00.000Z",
     ],
   );
 
   await page.goto(`/emails/${emailId}`);
 
-  await expect(page.getByText("EMAIL EVENT TRACE")).toBeVisible();
+  await expect(page.getByText("MESSAGE TRACE")).toBeVisible();
   const eventRows = page.getByTestId("event-trace-row");
-  await expect(eventRows).toHaveCount(2);
-  await expect(eventRows.nth(0).getByTestId("event-badge")).toHaveText("Sent");
+  await expect(eventRows).toHaveCount(4);
+  await expect(eventRows.nth(0).getByTestId("event-badge")).toHaveText(
+    "Api Request",
+  );
   await expect(eventRows.nth(1).getByTestId("event-badge")).toHaveText(
+    "Created",
+  );
+  await expect(eventRows.nth(2).getByTestId("event-badge")).toHaveText("Sent");
+  await expect(eventRows.nth(3).getByTestId("event-badge")).toHaveText(
     "Bounced",
   );
-  await expect(page.getByText(`event_id: ${bounceEventId}`)).toBeVisible();
+  await expect(
+    page.getByText(`trace_id: event:${bounceEventId}`),
+  ).toBeVisible();
+  await expect(page.getByText(`campaign=${tagValue}`)).toBeVisible();
   await expect(
     page.getByText("Permanent bounce", { exact: false }),
   ).toBeVisible();
@@ -162,8 +173,32 @@ test("dashboard email detail trace shows sanitized event details and linked logs
   await expect(
     page.getByRole("link", { name: /View all logs/i }),
   ).toHaveAttribute("href", `/logs?q=${encodeURIComponent(emailId)}`);
-  await expect(page.locator(`a[href="/logs/${logId}"]`)).toBeVisible();
-  await page.locator(`a[href="/logs/${logId}"]`).click();
+  const associatedLogLink = page
+    .getByTestId("associated-logs")
+    .locator(`a[href="/logs/${logId}"]`);
+  await expect(associatedLogLink).toBeVisible();
+
+  const metricsResponse = await page.request.get(
+    `/api/metrics?range=last_30_days&tag_name=campaign&tag_value=${encodeURIComponent(tagValue)}`,
+  );
+  expect(metricsResponse.ok()).toBeTruthy();
+  const metricsJson = (await metricsResponse.json()) as {
+    totalEmails: number;
+    tagBreakdown: Array<{ name: string; value: string; count: number }>;
+  };
+  expect(metricsJson.totalEmails).toBeGreaterThanOrEqual(1);
+  expect(metricsJson.tagBreakdown).toContainEqual(
+    expect.objectContaining({ name: "campaign", value: tagValue, count: 1 }),
+  );
+
+  await page.goto("/metrics");
+  await expect(
+    page.getByTestId("tag-breakdown-row").filter({ hasText: tagValue }),
+  ).toBeVisible();
+
+  await page.goto(`/emails/${emailId}`);
+  await expect(associatedLogLink).toBeVisible();
+  await associatedLogLink.click();
   await expect(
     page.getByRole("heading", { name: "POST /api/emails" }),
   ).toBeVisible();

@@ -61,7 +61,7 @@ describe("EmailDetail", () => {
   it("renders event timeline in chronological order", () => {
     render(<EmailDetail email={mockEmail} />);
 
-    expect(screen.getByText("EMAIL EVENT TRACE")).toBeTruthy();
+    expect(screen.getByText("MESSAGE TRACE")).toBeTruthy();
 
     const sentBadge = screen.getByText("Sent");
     const deliveredBadge = screen.getByText("Delivered");
@@ -79,7 +79,7 @@ describe("EmailDetail", () => {
   it("renders event ids and sanitized payload-backed details", () => {
     render(<EmailDetail email={mockEmail} />);
 
-    expect(screen.getByText("event_id: event-delivered")).toBeTruthy();
+    expect(screen.getByText("trace_id: event-delivered")).toBeTruthy();
     expect(
       screen.getByText("Delivered to jaeyunha0317@gmail.com — 250 Ok"),
     ).toBeTruthy();

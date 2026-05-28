@@ -313,7 +313,12 @@ function isEmailReadAlias(pathname: string, method: string): boolean {
   const parts = pathname.split("/").filter(Boolean);
   if (parts[0] !== "emails") return false;
   if (parts.length === 2) return ["GET", "PATCH"].includes(method);
-  if (parts.length === 3 && parts[2] === "attachments") return method === "GET";
+  if (
+    parts.length === 3 &&
+    ["attachments", "events", "trace"].includes(parts[2] ?? "")
+  ) {
+    return method === "GET";
+  }
   if (parts.length === 4 && parts[2] === "attachments") return method === "GET";
   if (parts[1] === "receiving") {
     if (parts.length === 2) return method === "GET";

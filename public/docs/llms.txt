@@ -71,6 +71,7 @@
 - [Verify Domain](https://opensend.namuh.co/docs/api-reference/domains/verify-domain.md): Ask OpenSend to re-check DNS for a domain and return the current verification state.
 - [Cancel Email](https://opensend.namuh.co/docs/api-reference/emails/cancel-email.md): Cancel a scheduled email.
 - [List Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-email-attachments.md): List attachments associated with a sent email.
+- [List Email Trace](https://opensend.namuh.co/docs/api-reference/emails/list-email-trace.md): List the chronological trace for one sent email.
 - [List Sent Emails](https://opensend.namuh.co/docs/api-reference/emails/list-emails.md): List sent, queued, and scheduled emails for the authenticated tenant.
 - [List Received Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-received-email-attachments.md): List attachment metadata stored with one received email.
 - [List Received Emails](https://opensend.namuh.co/docs/api-reference/emails/list-received-emails.md): List inbound email rows stored for the authenticated OpenSend tenant.

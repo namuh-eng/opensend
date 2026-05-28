@@ -82,6 +82,7 @@ const freshPayload = {
   complained: 1,
   domains: ["example.com"],
   tagOptions: [{ name: "campaign", values: ["launch"] }],
+  tagBreakdown: [{ name: "campaign", value: "launch", count: 10, rate: 70 }],
   dailyData: [{ date: "2026-04-23", count: 7 }],
   domainBreakdown: [{ domain: "example.com", count: 10, rate: 70 }],
   bounceBreakdown: {
@@ -177,6 +178,26 @@ describe("metrics route adapter", () => {
       60,
     );
     await expect(response.json()).resolves.toEqual(freshPayload);
+  });
+
+  it("returns validation_error envelopes for invalid tag query params", async () => {
+    const metricsRoute = await import("@/app/api/metrics/route");
+    const response = await metricsRoute.GET(
+      makeNextRequest("http://localhost/api/metrics?tag_value=launch") as never,
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      name: "validation_error",
+      code: "validation_error",
+      statusCode: 422,
+      details: {
+        fieldErrors: {
+          tag_name: ["tag_name is required when tag_value is provided."],
+        },
+      },
+    });
+    expect(mockGetMetrics).not.toHaveBeenCalled();
   });
 
   it("matches Yesterday exactly instead of leaking into today", async () => {

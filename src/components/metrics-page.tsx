@@ -61,6 +61,13 @@ interface TagOption {
   values: string[];
 }
 
+interface TagBreakdownEntry {
+  name: string;
+  value: string;
+  count: number;
+  rate: number;
+}
+
 interface MetricsData {
   totalEmails: number;
   deliverabilityRate: number;
@@ -69,6 +76,7 @@ interface MetricsData {
   complained: number;
   domains: string[];
   tagOptions: TagOption[];
+  tagBreakdown: TagBreakdownEntry[];
   dailyData: DailyDataPoint[];
   domainBreakdown: DomainBreakdownEntry[];
   bounceBreakdown: BounceBreakdown;
@@ -265,6 +273,32 @@ export function MetricsPage() {
 
       {/* Deliverability Rate section */}
       <div className="space-y-4">
+        {(data?.tagBreakdown?.length ?? 0) > 0 && (
+          <Card>
+            <div className="flex items-center justify-between mb-3">
+              <span className="kicker">TAG BREAKDOWN</span>
+              <span className="text-[12px] text-fg-3">Top 50 by volume</span>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {(data?.tagBreakdown ?? []).map((tag) => (
+                <div
+                  key={`${tag.name}:${tag.value}`}
+                  className="rounded-lg border border-line bg-bg-2 px-3 py-2"
+                  data-testid="tag-breakdown-row"
+                >
+                  <div className="font-mono text-[12px] text-fg">
+                    <span className="text-fg-2">{tag.name}:</span>{" "}
+                    {tag.value === "" ? "(empty)" : tag.value}
+                  </div>
+                  <div className="mt-1 text-[12px] text-fg-3">
+                    {tag.count} emails · {tag.rate}% delivered
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         <MetricSection
           title="DELIVERABILITY RATE"
           value={loading ? "—" : `${data?.deliverabilityRate ?? 0}%`}

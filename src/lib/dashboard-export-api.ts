@@ -84,6 +84,12 @@ export function filtersFromSearchParams(
     domain: searchParam(params, "domain"),
     topicId: searchParam(params, "topic_id", "topicId"),
     userAgent: searchParam(params, "user_agent", "userAgent"),
+    tagName: searchParam(params, "tag_name", "tagName"),
+    tagValue: params.has("tag_value")
+      ? (params.get("tag_value") ?? "").trim()
+      : params.has("tagValue")
+        ? (params.get("tagValue") ?? "").trim()
+        : undefined,
   };
 }
 
@@ -117,6 +123,13 @@ export function filtersFromInput(
     domain: stringInput(input, "domain"),
     topicId: stringInput(input, "topic_id", "topicId"),
     userAgent: stringInput(input, "user_agent", "userAgent"),
+    tagName: stringInput(input, "tag_name", "tagName"),
+    tagValue:
+      typeof input.tag_value === "string"
+        ? input.tag_value.trim()
+        : typeof input.tagValue === "string"
+          ? input.tagValue.trim()
+          : undefined,
   };
 }
 

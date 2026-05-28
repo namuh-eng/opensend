@@ -123,6 +123,16 @@ export interface EmailDetailData {
     statusCode: number;
     createdAt: string;
   }>;
+  trace?: Array<{
+    id: string;
+    source: "request" | "queue" | "provider" | "webhook" | "suppression";
+    type: string;
+    timestamp: string;
+    summary: string;
+    details: Record<string, string | number | boolean | string[]>;
+    relatedId: string | null;
+    relatedUrl: string | null;
+  }>;
 }
 
 interface EmailDetailProps {
@@ -157,6 +167,23 @@ function formatStatusLabel(status: string): string {
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
+}
+
+function formatSourceLabel(source: string): string {
+  switch (source) {
+    case "request":
+      return "Request";
+    case "queue":
+      return "Queue";
+    case "provider":
+      return "Provider";
+    case "webhook":
+      return "Webhook";
+    case "suppression":
+      return "Suppression";
+    default:
+      return formatStatusLabel(source);
+  }
 }
 
 function formatEventTimestamp(dateStr: string): string {
@@ -282,6 +309,19 @@ export function EmailDetail({ email }: EmailDetailProps) {
     (i) => i.status === "needs_attention",
   );
   const doingGreat = DEFAULT_INSIGHTS.filter((i) => i.status === "doing_great");
+
+  const timelineItems =
+    email.trace ??
+    email.events.map((event) => ({
+      id: event.id,
+      source: "provider" as const,
+      type: event.type,
+      timestamp: event.timestamp,
+      summary: event.summary,
+      details: event.details,
+      relatedId: event.id,
+      relatedUrl: null,
+    }));
 
   const handleCopyTabContent = useCallback(() => {
     let content = "";
@@ -438,14 +478,14 @@ export function EmailDetail({ email }: EmailDetailProps) {
         </div>
       </div>
 
-      {/* Email Events */}
+      {/* Message Trace */}
       <div className="mb-8">
         <p className="text-[11px] font-medium text-fg-2 tracking-wider mb-4">
-          EMAIL EVENT TRACE
+          MESSAGE TRACE
         </p>
         <div className="space-y-3" data-testid="event-timeline">
-          {email.events.length > 0 ? (
-            email.events.map((event) => {
+          {timelineItems.length > 0 ? (
+            timelineItems.map((event) => {
               const details = Object.entries(event.details);
               return (
                 <div
@@ -457,11 +497,17 @@ export function EmailDetail({ email }: EmailDetailProps) {
                     <div
                       className={clsx(
                         "w-2 h-2 rounded-full mt-1.5 shrink-0",
-                        event.type === "delivered" || event.type === "sent"
-                          ? "bg-accent"
-                          : event.type === "bounced" || event.type === "failed"
-                            ? "bg-red-500"
-                            : "bg-blue-500",
+                        event.source === "request"
+                          ? "bg-purple-400"
+                          : event.source === "queue"
+                            ? "bg-amber-400"
+                            : event.type === "delivered" ||
+                                event.type === "sent"
+                              ? "bg-accent"
+                              : event.type === "bounced" ||
+                                  event.type === "failed"
+                                ? "bg-red-500"
+                                : "bg-blue-500",
                       )}
                     />
                     <div className="min-w-0 flex-1">
@@ -472,6 +518,12 @@ export function EmailDetail({ email }: EmailDetailProps) {
                         >
                           {formatStatusLabel(event.type)}
                         </span>
+                        <span
+                          className="rounded border border-line px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-fg-2"
+                          data-testid="trace-source"
+                        >
+                          {formatSourceLabel(event.source)}
+                        </span>
                         <span className="text-fg-4">
                           {formatEventTimestamp(event.timestamp)}
                         </span>
@@ -479,8 +531,16 @@ export function EmailDetail({ email }: EmailDetailProps) {
                           className="font-mono text-[11px] text-fg-2"
                           data-testid="event-id"
                         >
-                          event_id: {event.id}
+                          trace_id: {event.id}
                         </span>
+                        {event.relatedUrl && (
+                          <Link
+                            href={event.relatedUrl}
+                            className="font-mono text-[11px] text-fg-2 hover:text-fg"
+                          >
+                            open related
+                          </Link>
+                        )}
                       </div>
                       <p className="mt-1 text-fg">{event.summary}</p>
                       {details.length > 0 && (
@@ -507,7 +567,7 @@ export function EmailDetail({ email }: EmailDetailProps) {
             })
           ) : (
             <div className="py-4 px-4 rounded-lg bg-bg-2 border border-dashed border-line text-center text-[13px] text-fg-4">
-              No events recorded yet
+              No trace entries recorded yet
             </div>
           )}
         </div>
