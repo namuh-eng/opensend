@@ -74,6 +74,9 @@ function filtersFromSearchParams(
     region: searchParam(params, "region"),
     permission: searchParam(params, "permission"),
     method: searchParam(params, "method"),
+    source: searchParam(params, "source"),
+    domain: searchParam(params, "domain"),
+    topicId: searchParam(params, "topic_id", "topicId"),
     userAgent: searchParam(params, "user_agent", "userAgent"),
   };
 }

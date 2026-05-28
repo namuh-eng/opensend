@@ -12,6 +12,7 @@ const mockPublishBackgroundJob = vi.hoisted(() => vi.fn());
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockGetApiKeyAuthHeaderError = vi.hoisted(() => vi.fn());
 const mockEmitCloudWatchMetric = vi.hoisted(() => vi.fn());
+const mockEnqueueEmailWebhookEvent = vi.hoisted(() => vi.fn());
 const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
 const mockListSuppressions = vi.hoisted(() => vi.fn());
@@ -191,6 +192,7 @@ vi.mock("@opensend/core", async () => {
         "corr-test",
     }),
     emitCloudWatchMetric: mockEmitCloudWatchMetric,
+    enqueueEmailWebhookEvent: mockEnqueueEmailWebhookEvent,
     getTelemetryCarrier: (context: {
       traceparent: string;
       correlationId: string;
@@ -369,6 +371,11 @@ describe("POST /api/emails", () => {
     mockSendEmail.mockReset();
     mockPublishBackgroundJob.mockReset();
     mockEmitCloudWatchMetric.mockReset();
+    mockEnqueueEmailWebhookEvent.mockReset();
+    mockEnqueueEmailWebhookEvent.mockResolvedValue({
+      eventId: "event-1",
+      deliveryIds: [],
+    });
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
     mockReserveEmailQuota.mockReset();
@@ -1399,6 +1406,17 @@ describe("POST /api/emails", () => {
         scope: "sandbox",
       },
     });
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenCalledWith({
+      type: "email.suppressed",
+      userId: "user-1",
+      payload: {
+        reason: "recipient_suppressed",
+        recipients: [{ email: "suppressed@resend.dev", reason: "suppressed" }],
+        recipient_count: 1,
+        submitted_at: expect.any(String),
+      },
+      receivedAt: expect.any(Date),
+    });
     expect(mockReserveEmailQuota).not.toHaveBeenCalled();
     expect(nonLogInsertCalls()).toHaveLength(0);
     expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
@@ -1441,6 +1459,17 @@ describe("POST /api/emails", () => {
         reason: "bounced",
         scope: "user",
       },
+    });
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenCalledWith({
+      type: "email.suppressed",
+      userId: "user-1",
+      payload: {
+        reason: "recipient_suppressed",
+        recipients: [{ email: "blocked@test.com", reason: "bounced" }],
+        recipient_count: 1,
+        submitted_at: expect.any(String),
+      },
+      receivedAt: expect.any(Date),
     });
     expect(mockReserveEmailQuota).not.toHaveBeenCalled();
     expect(nonLogInsertCalls()).toHaveLength(0);
@@ -1616,6 +1645,35 @@ describe("POST /api/emails", () => {
       scheduledAt: new Date("2026-05-07T00:01:00.000Z"),
     });
     expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenCalledTimes(2);
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        type: "email.scheduled",
+        userId: "user-1",
+        emailId: "email-1",
+        sourceId: "scheduled:email-1",
+        payload: expect.objectContaining({
+          email_id: "email-1",
+          scheduled_at: "2026-05-08T00:00:00.000Z",
+          recipient_count: 1,
+        }),
+      }),
+    );
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: "email.scheduled",
+        userId: "user-1",
+        emailId: "email-3",
+        sourceId: "scheduled:email-3",
+        payload: expect.objectContaining({
+          email_id: "email-3",
+          scheduled_at: "2026-05-07T00:01:00.000Z",
+          recipient_count: 1,
+        }),
+      }),
+    );
   });
 
   it("rejects invalid, past, and out-of-policy scheduled_at values before quota or insert", async () => {
@@ -1667,6 +1725,11 @@ describe("POST /api/emails/batch", () => {
     mockSendEmail.mockReset();
     mockPublishBackgroundJob.mockReset();
     mockEmitCloudWatchMetric.mockReset();
+    mockEnqueueEmailWebhookEvent.mockReset();
+    mockEnqueueEmailWebhookEvent.mockResolvedValue({
+      eventId: "event-1",
+      deliveryIds: [],
+    });
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
     mockReserveEmailQuota.mockReset();
@@ -2171,6 +2234,17 @@ describe("POST /api/emails/batch", () => {
     );
     expect(nonLogInsertCalls()).toHaveLength(2);
     expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(2);
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenCalledWith({
+      type: "email.suppressed",
+      userId: "user-1",
+      payload: {
+        reason: "recipient_suppressed",
+        recipients: [{ email: "suppressed@resend.dev", reason: "suppressed" }],
+        recipient_count: 1,
+        submitted_at: expect.any(String),
+      },
+      receivedAt: expect.any(Date),
+    });
   });
 
   it("returns per-item suppression errors while preserving accepted batch sends", async () => {
@@ -2238,6 +2312,17 @@ describe("POST /api/emails/batch", () => {
     );
     expect(nonLogInsertCalls()).toHaveLength(1);
     expect(mockPublishBackgroundJob).toHaveBeenCalledTimes(1);
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenCalledWith({
+      type: "email.suppressed",
+      userId: "user-1",
+      payload: {
+        reason: "recipient_suppressed",
+        recipients: [{ email: "blocked@test.com", reason: "complained" }],
+        recipient_count: 1,
+        submitted_at: expect.any(String),
+      },
+      receivedAt: expect.any(Date),
+    });
   });
 
   it("sends batch and returns array of ids", async () => {
@@ -2403,6 +2488,35 @@ describe("POST /api/emails/batch", () => {
       scheduledAt: new Date("2026-05-07T02:00:00.000Z"),
     });
     expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenCalledTimes(2);
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        type: "email.scheduled",
+        userId: "user-1",
+        emailId: "email-1",
+        sourceId: "scheduled:email-1",
+        payload: expect.objectContaining({
+          email_id: "email-1",
+          scheduled_at: "2026-05-08T00:00:00.000Z",
+          recipient_count: 1,
+        }),
+      }),
+    );
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: "email.scheduled",
+        userId: "user-1",
+        emailId: "email-2",
+        sourceId: "scheduled:email-2",
+        payload: expect.objectContaining({
+          email_id: "email-2",
+          scheduled_at: "2026-05-07T02:00:00.000Z",
+          recipient_count: 1,
+        }),
+      }),
+    );
   });
 
   it("rejects invalid, past, and out-of-policy batch scheduled_at before any rows", async () => {
@@ -2448,6 +2562,11 @@ describe("services/api transactional email routes", () => {
     mockSendEmail.mockReset();
     mockPublishBackgroundJob.mockReset();
     mockEmitCloudWatchMetric.mockReset();
+    mockEnqueueEmailWebhookEvent.mockReset();
+    mockEnqueueEmailWebhookEvent.mockResolvedValue({
+      eventId: "event-1",
+      deliveryIds: [],
+    });
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
     mockReserveEmailQuota.mockReset();

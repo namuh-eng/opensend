@@ -126,6 +126,14 @@ export const Icon = {
       </>,
       p,
     ),
+  suppressions: (p?: IconProps) =>
+    svg(
+      <>
+        <path d="M12 22s7-3.5 7-10V5l-7-3-7 3v7c0 6.5 7 10 7 10" />
+        <path d="M9 12h6" />
+      </>,
+      p,
+    ),
   billing: (p?: IconProps) =>
     svg(
       <>

@@ -48,6 +48,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: "/domains", label: "Domains", icon: "domains" },
       { href: "/audience", label: "Audience", icon: "audience" },
+      { href: "/suppressions", label: "Suppressions", icon: "suppressions" },
       { href: "/webhooks", label: "Webhooks", icon: "webhooks" },
       { href: "/api-keys", label: "API Keys", icon: "keys" },
     ],

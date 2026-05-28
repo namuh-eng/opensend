@@ -8,11 +8,13 @@ import {
 } from "@/lib/dashboard-export-types";
 import { db } from "@/lib/db";
 import {
+  type SuppressionReason,
   apiKeys,
   broadcasts,
   contacts,
   contactsToSegments,
   domains,
+  emailSuppressions,
   emails,
   logs,
   segments,
@@ -30,6 +32,9 @@ export type DashboardExportFilters = {
   region?: string;
   permission?: string;
   method?: string;
+  source?: string;
+  domain?: string;
+  topicId?: string;
   userAgent?: string;
 };
 
@@ -99,6 +104,16 @@ type LogKey =
   | "user_agent"
   | "created_at";
 
+type SuppressionKey =
+  | "id"
+  | "email"
+  | "reason"
+  | "source"
+  | "source_email_id"
+  | "source_message_id"
+  | "suppressed_at"
+  | "updated_at";
+
 type ApiKeyKey =
   | "id"
   | "name"
@@ -165,6 +180,17 @@ const LOG_HEADERS: readonly CsvHeader<LogKey>[] = [
   { key: "created_at", label: "created_at" },
 ];
 
+const SUPPRESSION_HEADERS: readonly CsvHeader<SuppressionKey>[] = [
+  { key: "id", label: "id" },
+  { key: "email", label: "email" },
+  { key: "reason", label: "reason" },
+  { key: "source", label: "source" },
+  { key: "source_email_id", label: "source_email_id" },
+  { key: "source_message_id", label: "source_message_id" },
+  { key: "suppressed_at", label: "suppressed_at" },
+  { key: "updated_at", label: "updated_at" },
+];
+
 const API_KEY_HEADERS: readonly CsvHeader<ApiKeyKey>[] = [
   { key: "id", label: "id" },
   { key: "name", label: "name" },
@@ -178,6 +204,14 @@ const API_KEY_HEADERS: readonly CsvHeader<ApiKeyKey>[] = [
 function nonEmpty(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function toSuppressionReason(
+  value: string | undefined,
+): SuppressionReason | undefined {
+  return value === "bounced" || value === "complained" || value === "manual"
+    ? value
+    : undefined;
 }
 
 function likePattern(value: string | undefined): string | undefined {
@@ -531,6 +565,86 @@ async function logsExport(
   );
 }
 
+async function suppressionsExport(
+  userId: string,
+  filters: DashboardExportFilters,
+): Promise<DashboardCsvExport<SuppressionKey>> {
+  const conditions: SQL[] = [eq(emailSuppressions.userId, userId)];
+  const reason = toSuppressionReason(nonEmpty(filters.status));
+  if (reason) {
+    conditions.push(eq(emailSuppressions.reason, reason));
+  }
+  pushCreatedAtFilters(conditions, emailSuppressions.suppressedAt, filters);
+
+  const pattern = likePattern(filters.search);
+  if (pattern) {
+    const searchCondition = or(
+      sql`${emailSuppressions.id}::text ILIKE ${pattern}`,
+      sql`${emailSuppressions.email} ILIKE ${pattern}`,
+      sql`${emailSuppressions.sourceEmailId}::text ILIKE ${pattern}`,
+      sql`${emailSuppressions.sourceMessageId} ILIKE ${pattern}`,
+    );
+    if (searchCondition) conditions.push(searchCondition);
+  }
+
+  const source = nonEmpty(filters.source ?? filters.method);
+  if (source) {
+    conditions.push(sql`${emailSuppressions.metadata}->>'source' = ${source}`);
+  }
+
+  const domain = nonEmpty(filters.domain)?.toLowerCase();
+  if (domain) {
+    const domainPattern = `%${domain}%`;
+    conditions.push(sql`exists (
+      select 1 from ${emails}
+      where ${emails.id} = ${emailSuppressions.sourceEmailId}
+        and ${emails.userId} = ${userId}
+        and lower(${emails.from}) like ${domainPattern}
+    )`);
+  }
+
+  const topicId = nonEmpty(filters.topicId);
+  if (topicId) {
+    conditions.push(sql`exists (
+      select 1 from ${emails}
+      where ${emails.id} = ${emailSuppressions.sourceEmailId}
+        and ${emails.userId} = ${userId}
+        and ${emails.topicId}::text = ${topicId}
+    )`);
+  }
+
+  const rows = await db
+    .select({
+      id: emailSuppressions.id,
+      email: emailSuppressions.email,
+      reason: emailSuppressions.reason,
+      metadata: emailSuppressions.metadata,
+      sourceEmailId: emailSuppressions.sourceEmailId,
+      sourceMessageId: emailSuppressions.sourceMessageId,
+      suppressedAt: emailSuppressions.suppressedAt,
+      updatedAt: emailSuppressions.updatedAt,
+    })
+    .from(emailSuppressions)
+    .where(and(...conditions))
+    .orderBy(desc(emailSuppressions.suppressedAt))
+    .limit(DASHBOARD_EXPORT_LIMIT + 1);
+
+  return assertWithinLimit(
+    "suppressions",
+    SUPPRESSION_HEADERS,
+    rows.map((row) => ({
+      id: row.id,
+      email: row.email,
+      reason: row.reason,
+      source: row.metadata?.source ?? "",
+      source_email_id: row.sourceEmailId,
+      source_message_id: row.sourceMessageId,
+      suppressed_at: row.suppressedAt.toISOString(),
+      updated_at: row.updatedAt.toISOString(),
+    })),
+  );
+}
+
 export async function apiKeysExport(
   userId: string,
   filters: DashboardExportFilters,
@@ -600,6 +714,8 @@ export async function loadDashboardCsvExport(
       return domainsExport(userId, filters);
     case "logs":
       return logsExport(userId, filters);
+    case "suppressions":
+      return suppressionsExport(userId, filters);
     case "api-keys":
       return apiKeysExport(userId, filters);
   }

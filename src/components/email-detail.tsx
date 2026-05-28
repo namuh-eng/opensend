@@ -106,7 +106,7 @@ export interface EmailDetailData {
   headers: Record<string, string>;
   suppression?: {
     email: string;
-    reason: "bounced" | "complained";
+    reason: "bounced" | "complained" | "manual";
     suppressedAt: string;
   } | null;
   events: Array<{
@@ -354,7 +354,9 @@ export function EmailDetail({ email }: EmailDetailProps) {
               it{" "}
               {email.suppression.reason === "bounced"
                 ? "hard bounced"
-                : "reported a complaint"}
+                : email.suppression.reason === "complained"
+                  ? "reported a complaint"
+                  : "was manually suppressed"}
               .
             </span>
           </div>
