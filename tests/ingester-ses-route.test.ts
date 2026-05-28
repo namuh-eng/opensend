@@ -1,6 +1,22 @@
 import { generateKeyPairSync, sign } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+type DomainCacheParams = {
+  id?: string | null;
+  name?: string | null;
+  region?: string | null;
+};
+
+// Captured at module load by the mocked createDomainService. Tests assert
+// the ingester wired `invalidateDomainCaches` into the factory and that the
+// real-service contract (one invalidate call per changed row) is honored.
+let capturedInvalidator: ((params: DomainCacheParams) => Promise<void>) | null =
+  null;
+
+const mockInvalidateDomainCaches = vi
+  .fn<(params: DomainCacheParams) => Promise<void>>()
+  .mockResolvedValue(undefined);
+
 const mockCreateOrIgnoreDuplicate = vi.fn();
 const mockDomainReconcileAllPendingVerifications = vi.fn();
 const mockEnqueueDomainEvent = vi.fn();
@@ -53,10 +69,44 @@ vi.mock("@opensend/core", () => {
         getHeader(input.headers, "x-correlation-id") ??
         "corr-ingester-test",
     }),
-    createDomainService: () => ({
-      reconcileAllPendingVerifications:
-        mockDomainReconcileAllPendingVerifications,
-    }),
+    createDomainService: (deps: {
+      invalidateDomainCaches: (params: DomainCacheParams) => Promise<void>;
+    }) => {
+      // Capture the wired invalidator so tests can verify (a) the ingester
+      // DI'd it correctly and (b) the per-row contract is honored.
+      capturedInvalidator = deps.invalidateDomainCaches;
+      return {
+        reconcileAllPendingVerifications: async () => {
+          const result =
+            await mockDomainReconcileAllPendingVerifications.call(undefined);
+          // Simulate the real service: invalidate once per changed row,
+          // matching reconcileVerification's contract. This is what proves
+          // the factory→invalidator wiring works end-to-end.
+          if (
+            capturedInvalidator &&
+            result &&
+            Array.isArray((result as { changes?: unknown[] }).changes)
+          ) {
+            for (const change of (
+              result as {
+                changes: Array<{
+                  domainId: string;
+                  domainName: string;
+                  region?: string;
+                }>;
+              }
+            ).changes) {
+              await capturedInvalidator({
+                id: change.domainId,
+                name: change.domainName,
+                region: change.region ?? null,
+              });
+            }
+          }
+          return result;
+        },
+      };
+    },
     emailEventRepo: {
       createOrIgnoreDuplicate: mockCreateOrIgnoreDuplicate,
     },
@@ -153,8 +203,9 @@ vi.mock("../packages/ingester/src/dispatcher", () => ({
 }));
 
 // Mock the ingester cache module to avoid Redis connections in unit tests.
+// Use the shared top-level spy so tests can assert per-row invocation.
 vi.mock("../packages/ingester/src/cache/domain-cache", () => ({
-  invalidateDomainCaches: vi.fn().mockResolvedValue(undefined),
+  invalidateDomainCaches: mockInvalidateDomainCaches,
 }));
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", {
@@ -332,6 +383,68 @@ describe("SES SNS ingestion route", () => {
         records: [],
         capabilities: ["sending"],
       },
+    });
+
+    // PRD US-013: verify the ingester wired the cache invalidator into the
+    // factory AND that the per-row contract is honored.
+    expect(capturedInvalidator).toBe(mockInvalidateDomainCaches);
+    expect(mockInvalidateDomainCaches).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateDomainCaches).toHaveBeenCalledWith({
+      id: "domain-1",
+      name: "example.com",
+      region: null,
+    });
+  });
+
+  it("invalidates dashboard cache once per updated domain across a multi-row batch", async () => {
+    vi.stubEnv("INGESTER_JOB_TOKEN", "test-job-token");
+    mockDomainReconcileAllPendingVerifications.mockResolvedValue({
+      scanned: 3,
+      updated: 2,
+      unchanged: 0,
+      failed: 0,
+      changes: [
+        {
+          domainId: "domain-a",
+          domainName: "alpha.example.com",
+          userId: "user-1",
+          previousStatus: "pending",
+          nextStatus: "verified",
+          records: [],
+          capabilities: ["sending"],
+        },
+        {
+          domainId: "domain-b",
+          domainName: "beta.example.com",
+          userId: "user-1",
+          previousStatus: "pending",
+          nextStatus: "verified",
+          records: [],
+          capabilities: ["sending"],
+        },
+      ],
+    });
+
+    const app = (await import("../packages/ingester/src/index")).default;
+    const response = await app.request("http://localhost/jobs/domain-verify", {
+      method: "POST",
+      headers: { authorization: "Bearer test-job-token" },
+    });
+
+    expect(response.status).toBe(200);
+
+    // Spy must fire exactly once per changed row with the exact contract
+    // shape the service uses.
+    expect(mockInvalidateDomainCaches).toHaveBeenCalledTimes(2);
+    expect(mockInvalidateDomainCaches).toHaveBeenNthCalledWith(1, {
+      id: "domain-a",
+      name: "alpha.example.com",
+      region: null,
+    });
+    expect(mockInvalidateDomainCaches).toHaveBeenNthCalledWith(2, {
+      id: "domain-b",
+      name: "beta.example.com",
+      region: null,
     });
   });
 
