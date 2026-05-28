@@ -115,6 +115,9 @@ export async function cleanupE2ERun(
   await client.query("delete from received_emails where user_id like $1", [
     `${userPrefix}%`,
   ]);
+  await client.query("delete from receiving_routes where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query("delete from emails where user_id like $1", [
     `${userPrefix}%`,
   ]);
@@ -148,6 +151,9 @@ export async function cleanupE2ERun(
     "delete from segments where user_id like $1 or document->>'test_run_id' = $2",
     [`${userPrefix}%`, runId],
   );
+  await client.query("delete from domains where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query(
     "delete from api_keys where user_id like $1 or name like $2 or document->>'test_run_id' = $3",
     [`${userPrefix}%`, `${apiKeyPrefix}%`, runId],

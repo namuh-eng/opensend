@@ -9,6 +9,7 @@ The current product surface includes a dashboard entry point, received-email rea
 - Tenant-scoped API reads for `/emails/receiving` and `/emails/receiving/{id}`.
 - Attachment listing and presigned attachment URL responses.
 - Domain-level receiving controls in the dashboard UI.
+- First-class receiving routes for exact addresses, aliases, and catch-all fallback on verified receiving domains.
 - A reserved `email.received` event contract for deployments that add inbound ingestion.
 
 ## What operators must add
@@ -23,5 +24,6 @@ The current product surface includes a dashboard entry point, received-email rea
 1. Verify the sending domain first so ownership and tenant mapping are clear.
 2. Add MX records only after deciding how inbound messages will be stored.
 3. Keep raw MIME and attachments in a private bucket.
-4. Insert parsed rows with the owning OpenSend user ID.
-5. Read messages through the tenant API rather than handing mailbox credentials to apps or agents.
+4. Resolve route decisions with exact-address, alias, catch-all, then unrouteable precedence.
+5. Insert parsed rows with the owning OpenSend user ID and `route_decisions` audit metadata.
+6. Read messages through the tenant API rather than handing mailbox credentials to apps or agents.

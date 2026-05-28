@@ -24,6 +24,7 @@ export const receivedEmailRepo = {
         from: receivedEmails.from,
         to: receivedEmails.to,
         subject: receivedEmails.subject,
+        routeDecisions: receivedEmails.routeDecisions,
         createdAt: receivedEmails.createdAt,
       })
       .from(receivedEmails)

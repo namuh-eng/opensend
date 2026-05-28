@@ -476,6 +476,38 @@ export const contactProperties = pgTable(
   (table) => [uniqueIndex("contact_properties_key_idx").on(table.key)],
 );
 
+export const receivingRoutes = pgTable(
+  "receiving_routes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    domainId: uuid("domain_id")
+      .notNull()
+      .references(() => domains.id, { onDelete: "cascade" }),
+    type: varchar("type", { length: 20 }).notNull(),
+    localPart: varchar("local_part", { length: 320 }),
+    targetLocalPart: varchar("target_local_part", { length: 320 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("receiving_routes_user_id_idx").on(table.userId),
+    index("receiving_routes_domain_id_idx").on(table.domainId),
+    uniqueIndex("receiving_routes_domain_type_local_idx").on(
+      table.domainId,
+      table.type,
+      table.localPart,
+    ),
+  ],
+);
+
+export type ReceivingRoute = typeof receivingRoutes.$inferSelect;
+export type ReceivingRouteInsert = typeof receivingRoutes.$inferInsert;
+
 export const receivedEmails = pgTable(
   "received_emails",
   {
@@ -486,6 +518,18 @@ export const receivedEmails = pgTable(
     html: text("html"),
     text: text("text"),
     status: varchar("status", { length: 50 }).notNull().default("received"),
+    routeDecisions:
+      jsonb("route_decisions").$type<
+        Array<{
+          recipient: string;
+          status: "exact" | "alias" | "catch_all" | "unrouteable";
+          domainId?: string;
+          routeId?: string;
+          routeType?: "exact" | "alias" | "catch_all";
+          localPart?: string;
+          targetAddress?: string;
+        }>
+      >(),
     attachments:
       jsonb("attachments").$type<
         Array<{

@@ -18,6 +18,9 @@ export type AuditAction =
   | "domain.updated"
   | "domain.deleted"
   | "domain.verified"
+  | "receiving_route.created"
+  | "receiving_route.updated"
+  | "receiving_route.deleted"
   | "webhook.created"
   | "webhook.updated"
   | "webhook.deleted"
@@ -27,6 +30,7 @@ export type AuditAction =
 export type AuditTargetType =
   | "api_key"
   | "domain"
+  | "receiving_route"
   | "webhook"
   | "settings"
   | "team";

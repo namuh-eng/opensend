@@ -31,11 +31,20 @@ Authorization: Bearer os_YOUR_API_KEY
   "subject": "New support request",
   "html": "<p>Hello from a customer.</p>",
   "text": "Hello from a customer.",
+  "route_decisions": [
+    {
+      "recipient": "agent@inbound.example.com",
+      "status": "exact",
+      "routeId": "22222222-2222-4222-8222-222222222222",
+      "routeType": "exact",
+      "targetAddress": "agent@inbound.example.com"
+    }
+  ],
   "created_at": "2026-05-10T00:00:00.000Z"
 }
 ```
 
-`html` and `text` can be `null` when your inbound parser did not store that body part. Attachment binaries are not returned from this endpoint; list and retrieve attachment metadata separately.
+`html` and `text` can be `null` when your inbound parser did not store that body part. `route_decisions` explains exact, alias, catch-all, or unrouteable routing for each recipient and is empty for legacy rows. Attachment binaries are not returned from this endpoint; list and retrieve attachment metadata separately.
 
 ## Self-hosting notes
 
