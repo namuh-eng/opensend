@@ -160,6 +160,7 @@ describe("docs content shell", () => {
       "send-with-django.md",
       "send-with-rails.md",
       "send-with-sinatra.md",
+      "send-with-php.md",
     ];
 
     for (const guide of requiredGuides) {
@@ -172,7 +173,8 @@ describe("docs content shell", () => {
     expect(sdks).toContain("v0.2.0");
     expect(sdks).toContain("install from the repo until PyPI");
     expect(sdks).toContain("install from the repo until RubyGems");
-    expect(sdks).not.toMatch(/PHP SDK|Java SDK|\\.NET SDK|Rust SDK/);
+    expect(sdks).toContain("opensend/opensend-php");
+    expect(sdks).not.toMatch(/Java SDK|\\.NET SDK|Rust SDK/);
   });
 
   it("documents implemented dashboard product areas with caveats", () => {
