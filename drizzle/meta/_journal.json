@@ -183,6 +183,13 @@
       "when": 1779945013309,
       "tag": "0025_fresh_strong_guy",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1779946068656,
+      "tag": "0026_early_kronos",
+      "breakpoints": true
     }
   ]
 }

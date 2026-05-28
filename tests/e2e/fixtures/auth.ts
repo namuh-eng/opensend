@@ -90,6 +90,10 @@ export async function cleanupE2ERun(
   const emailPattern = `%@${runId}.e2e.opensend.test`;
 
   await client.query(
+    "delete from dashboard_export_jobs where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query(
     `delete from webhook_deliveries
      where event_id in (
        select id from email_events

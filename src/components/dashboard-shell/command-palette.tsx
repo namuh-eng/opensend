@@ -111,6 +111,14 @@ const COMMANDS: CommandItem[] = [
     keywords: ["activity", "events"],
   },
   {
+    id: "exports",
+    label: "Exports",
+    group: "Inspect",
+    icon: "logs",
+    href: "/exports",
+    keywords: ["csv", "download", "history"],
+  },
+  {
     id: "audit",
     label: "Audit log",
     group: "Inspect",
