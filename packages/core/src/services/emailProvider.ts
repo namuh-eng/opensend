@@ -8,6 +8,7 @@ import {
   SESv2Client,
   SendEmailCommand,
 } from "@aws-sdk/client-sesv2";
+import { sanitizeHeaderName, sanitizeHeaderValue } from "../security";
 import {
   type EncryptedBlob,
   decryptSecret,
@@ -116,6 +117,15 @@ export class EmailProviderService {
                   Html: params.html ? { Data: params.html } : undefined,
                   Text: params.text ? { Data: params.text } : undefined,
                 },
+                Headers: params.headers
+                  ? Object.entries(params.headers).map(([name, value]) => {
+                      const safeName = sanitizeHeaderName(name);
+                      return {
+                        Name: safeName,
+                        Value: sanitizeHeaderValue(safeName, value),
+                      };
+                    })
+                  : undefined,
               },
             },
             ReplyToAddresses: params.replyTo,
@@ -332,7 +342,8 @@ function buildMimeMessage(params: {
     lines.push(`Reply-To: ${params.replyTo.join(", ")}`);
   if (params.headers) {
     for (const [key, value] of Object.entries(params.headers)) {
-      lines.push(`${key}: ${value}`);
+      const safeName = sanitizeHeaderName(key);
+      lines.push(`${safeName}: ${sanitizeHeaderValue(safeName, value)}`);
     }
   }
   lines.push("MIME-Version: 1.0");

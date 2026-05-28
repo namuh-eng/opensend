@@ -8,6 +8,7 @@ import {
 import {
   EmailDetailServiceError,
   createEmailDetailService,
+  getThreadForOutboundEmail,
 } from "@opensend/core";
 
 const emailDetailService = createEmailDetailService({ parseScheduledAt });
@@ -28,7 +29,11 @@ export async function GET(
       userId: auth.userId,
       id,
     });
-    return Response.json(email);
+    const thread = await getThreadForOutboundEmail({
+      userId: auth.userId,
+      emailId: id,
+    });
+    return Response.json({ ...email, thread });
   } catch (err) {
     if (err instanceof EmailDetailServiceError && err.code === "not_found") {
       return Response.json({ error: "Email not found" }, { status: 404 });

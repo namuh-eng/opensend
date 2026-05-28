@@ -201,6 +201,14 @@ vi.mock("@opensend/core", async () => {
       correlationId: context.correlationId,
     }),
     logTelemetry: mockLogTelemetry,
+    getThreadForOutboundEmail: async () => ({
+      thread_id: null,
+      match_status: "unmatched",
+      original_email_id: null,
+      contact_id: null,
+      messages: [],
+    }),
+    prepareOutboundReplyTracking: async () => ({ enabled: false }),
     publishBackgroundJob: mockPublishBackgroundJob,
     recordTelemetryError: mockRecordTelemetryError,
   };
