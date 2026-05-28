@@ -18,7 +18,14 @@ Dashboard session cookies are not API credentials.
 
 ## Parameters
 
-Supports filters such as status, method, API key, date range, and text search.
+Supports filters such as status, method, API key, date range, text search, and email tag filters.
+
+Tag filters use the same validation semantics as send-time tags:
+
+- `tag_name` / `tagName`: ASCII letters, numbers, underscores, or dashes; 1-256 characters.
+- `tag_value` / `tagValue`: optional; ASCII letters, numbers, underscores, or dashes; up to 256 characters; may be empty.
+
+`tag_value` requires `tag_name`. Tag-filtered logs only match request logs linked to tenant-owned emails through sanitized log metadata (`emailId` or `emailIds`).
 
 ## Response
 

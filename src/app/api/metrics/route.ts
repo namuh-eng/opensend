@@ -1,6 +1,7 @@
 // ABOUTME: Metrics API endpoint — returns aggregated email stats, daily chart data, and per-domain breakdown
 
 import { getServerSession, unauthorizedResponse } from "@/lib/api-auth";
+import { publicApiError } from "@/lib/api-errors";
 import {
   DASHBOARD_METRICS_CACHE_TTL_SECONDS,
   getMetricsAggregateCacheKey,
@@ -8,6 +9,7 @@ import {
   writeDashboardAggregateCache,
 } from "@/lib/cache/dashboard-aggregates";
 import { getDateRangeBounds } from "@/lib/date-range";
+import { parseTagQueryParams } from "@/lib/tag-query-params";
 import { createDashboardAggregateService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -42,10 +44,20 @@ export async function GET(request: NextRequest) {
     const range = searchParams.get("range") || "last_15_days";
     const domain = searchParams.get("domain");
     const eventType = searchParams.get("event_type");
-    const tagName = normalizeOptionalQueryParam(searchParams.get("tag_name"));
-    const rawTagValue = searchParams.get("tag_value");
-    const tagValue =
-      tagName && rawTagValue !== null ? rawTagValue.trim() : null;
+    const parsedTags = parseTagQueryParams(searchParams);
+    if (!parsedTags.ok) {
+      return NextResponse.json(
+        publicApiError(
+          "validation_error",
+          "Validation failed.",
+          422,
+          parsedTags.details,
+        ),
+        { status: 422 },
+      );
+    }
+    const tagName = parsedTags.value.tagName;
+    const tagValue = parsedTags.value.tagValue;
     const userId = session.user.id;
     const cacheKey = getMetricsAggregateCacheKey({
       userId,

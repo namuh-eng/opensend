@@ -558,6 +558,26 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/emails/{id}/trace": {
+      get: {
+        tags: ["Emails"],
+        summary: "List the chronological trace for an email",
+        operationId: "listEmailTrace",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description:
+              "Chronological trace entries for request, queue, provider, webhook, and suppression evidence.",
+            content: jsonContent({
+              $ref: "#/components/schemas/EmailTrace",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
     "/api/emails/{id}/attachments": {
       get: {
         tags: ["Emails"],
@@ -2354,6 +2374,28 @@ export const openApiDocument = {
             description: "Full-text search.",
             schema: { type: "string" },
           },
+          {
+            name: "tag_name",
+            in: "query",
+            description:
+              "Filter logs to requests linked to emails with this tag name. Uses the same tag validation as send requests.",
+            schema: {
+              type: "string",
+              maxLength: 256,
+              pattern: "^[A-Za-z0-9_-]+$",
+            },
+          },
+          {
+            name: "tag_value",
+            in: "query",
+            description:
+              "Optional tag value filter. Requires tag_name and may be an empty string.",
+            schema: {
+              type: "string",
+              maxLength: 256,
+              pattern: "^[A-Za-z0-9_-]*$",
+            },
+          },
         ],
         responses: {
           "200": {
@@ -2929,6 +2971,46 @@ export const openApiDocument = {
           },
         },
         required: ["object", "data"],
+      },
+      EmailTraceEvent: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["email_trace_event"] },
+          id: { type: "string" },
+          source: {
+            type: "string",
+            enum: ["request", "queue", "provider", "webhook", "suppression"],
+          },
+          type: { type: "string" },
+          created_at: { type: "string", format: "date-time" },
+          summary: { type: "string" },
+          details: { type: "object", additionalProperties: true },
+          related_id: { type: "string", nullable: true },
+          related_url: { type: "string", nullable: true },
+        },
+        required: [
+          "object",
+          "id",
+          "source",
+          "type",
+          "created_at",
+          "summary",
+          "details",
+          "related_id",
+          "related_url",
+        ],
+      },
+      EmailTrace: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["email_trace"] },
+          email_id: { type: "string", format: "uuid" },
+          data: {
+            type: "array",
+            items: { $ref: "#/components/schemas/EmailTraceEvent" },
+          },
+        },
+        required: ["object", "email_id", "data"],
       },
       EmailAttachmentDetail: {
         type: "object",

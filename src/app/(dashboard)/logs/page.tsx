@@ -1,7 +1,7 @@
 import { LogsListPage } from "@/components/logs-list-page";
 import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { logs } from "@/lib/db/schema";
+import { emails, logs } from "@/lib/db/schema";
 import { type SQL, and, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
@@ -15,6 +15,10 @@ export default async function LogsPage(props: {
     apiKeyId?: string;
     q?: string;
     search?: string;
+    tag_name?: string;
+    tagName?: string;
+    tag_value?: string;
+    tagValue?: string;
   }>;
 }) {
   const session = await getServerSession();
@@ -28,6 +32,9 @@ export default async function LogsPage(props: {
   const userAgent = searchParams.userAgent;
   const apiKeyId = searchParams.apiKeyId;
   const search = (searchParams.q || searchParams.search || "").trim();
+  const tagName = (searchParams.tag_name || searchParams.tagName || "").trim();
+  const tagValueRaw = searchParams.tag_value ?? searchParams.tagValue;
+  const tagValue = tagValueRaw === undefined ? null : tagValueRaw.trim();
 
   const conditions: SQL[] = [eq(logs.userId, session.user.id)];
 
@@ -63,6 +70,26 @@ export default async function LogsPage(props: {
 
   if (apiKeyId) {
     conditions.push(eq(logs.apiKeyId, apiKeyId));
+  }
+
+  if (tagName) {
+    const tagPredicate = JSON.stringify(
+      tagValue === null
+        ? [{ name: tagName }]
+        : [{ name: tagName, value: tagValue }],
+    );
+    conditions.push(
+      sql`exists (
+        select 1 from ${emails}
+        where ${emails.userId} = ${session.user.id}
+          and ${emails.userId} = ${logs.userId}
+          and (
+            ${emails.id}::text = ${logs.document}->>'emailId'
+            or coalesce(${logs.document}->'emailIds', '[]'::jsonb) ? ${emails.id}::text
+          )
+          and ${emails.tags} @> ${tagPredicate}::jsonb
+      )`,
+    );
   }
 
   if (search) {
