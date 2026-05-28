@@ -37,17 +37,12 @@ async function invalidateDomainIdentityCache(
 ): Promise<void> {
   const normalizedName = domainName.trim().toLowerCase();
 
-  // Always delete both the legacy key (pre-region-scoped) and the
-  // region-scoped key so stale entries are cleared regardless of when
-  // the row was first cached.
+  // reconcileVerification always supplies the row's region, so the
+  // region-scoped key is the hot path. When region is absent (defensive
+  // fallback only), clear the legacy unscoped key.
   const keys = region
     ? [getDomainIdentityCacheKey(normalizedName, region)]
-    : [
-        getLegacyDomainIdentityCacheKey(normalizedName),
-        getDomainIdentityCacheKey(normalizedName, "us-east-1"),
-        getDomainIdentityCacheKey(normalizedName, "eu-west-1"),
-        getDomainIdentityCacheKey(normalizedName, "ap-northeast-1"),
-      ];
+    : [getLegacyDomainIdentityCacheKey(normalizedName)];
 
   await Promise.all(
     keys.map(async (key) => {

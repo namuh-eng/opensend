@@ -366,8 +366,8 @@ export function createDomainService({
 }: DomainServiceDependencies) {
   if (!invalidateDomainCaches) {
     throw new Error(
-      "createDomainService: invalidateDomainCaches is required. " +
-        "Pass invalidateDomainCaches: async () => {} if you intentionally want a no-op.",
+      "createDomainService: invalidateDomainCaches is required — " +
+        "domain mutations without cache invalidation cause stale dashboard reads.",
     );
   }
   return {

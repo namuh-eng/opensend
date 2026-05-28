@@ -30,10 +30,6 @@ export const schedulerHeartbeatRepo = {
       })
       .returning();
 
-    if (!row)
-      throw new Error(
-        `schedulerHeartbeatRepo.upsert: no row returned for ${jobName}`,
-      );
     return row;
   },
 

@@ -4,8 +4,9 @@ const DEFAULT_INGESTER_URL = "http://ingester:3016";
 const DEFAULT_INTERVAL_SECONDS = 60;
 const REQUEST_TIMEOUT_MS = 20_000;
 
-// Derive job paths from the shared constant so job-scheduler.ts and
-// @opensend/core stay in sync without manual duplication.
+// Paths are kept as literal strings (not derived) so the static-coverage
+// test at tests/ingester-job-scheduler-coverage.test.ts can grep for each
+// endpoint in this source file. See that test for the contract.
 const JOB_PATHS: Record<(typeof SCHEDULED_JOB_NAMES)[number], string> = {
   "scheduled-emails": "/jobs/scheduled-emails",
   webhooks: "/jobs/webhooks",
