@@ -53,10 +53,10 @@ vi.mock("@opensend/core", () => {
         getHeader(input.headers, "x-correlation-id") ??
         "corr-ingester-test",
     }),
-    domainService: {
+    createDomainService: () => ({
       reconcileAllPendingVerifications:
         mockDomainReconcileAllPendingVerifications,
-    },
+    }),
     emailEventRepo: {
       createOrIgnoreDuplicate: mockCreateOrIgnoreDuplicate,
     },
@@ -150,6 +150,11 @@ vi.mock("../packages/ingester/src/dispatcher", () => ({
     enqueue: mockEnqueue,
     dispatchDelivery: mockDispatchDelivery,
   },
+}));
+
+// Mock the ingester cache module to avoid Redis connections in unit tests.
+vi.mock("../packages/ingester/src/cache/domain-cache", () => ({
+  invalidateDomainCaches: vi.fn().mockResolvedValue(undefined),
 }));
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", {

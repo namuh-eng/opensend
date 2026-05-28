@@ -82,6 +82,7 @@ vi.mock("@opensend/core", () => ({
   }),
   createDomainService: () => ({
     createDomain: mockCreateDomain,
+    reconcileVerification: mockReconcileVerification,
   }),
   createDomainDetailService: () => ({
     updateDomainDetail: async (input: {
@@ -125,9 +126,6 @@ vi.mock("@opensend/core", () => ({
       };
     },
   }),
-  domainService: {
-    reconcileVerification: mockReconcileVerification,
-  },
   DMARC_RECORD_VALUE: "v=DMARC1; p=none;",
   buildDmarcRecordName: (domainName: string) => `_dmarc.${domainName}`,
   getEffectiveReturnPathLabel: (customReturnPath: string | null | undefined) =>
@@ -342,7 +340,9 @@ describe("cache invalidation routes", () => {
     expect(mockInvalidateDomainCaches).not.toHaveBeenCalled();
   });
 
-  it("invalidates domain caches after verify", async () => {
+  it("verify route returns 200 and enqueues domain.updated when reconcile succeeds", async () => {
+    // Cache invalidation is now owned by the service (injected via factory).
+    // The route no longer calls invalidateDomainCaches directly.
     mockGetCachedDomainById.mockResolvedValue({
       id: VALID_DOMAIN_ID,
       name: "example.com",
@@ -370,10 +370,6 @@ describe("cache invalidation routes", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(mockInvalidateDomainCaches).toHaveBeenCalledWith({
-      id: VALID_DOMAIN_ID,
-      name: "example.com",
-    });
     expect(mockQueueEvent).toHaveBeenCalledOnce();
   });
 

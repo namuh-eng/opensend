@@ -73,6 +73,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@opensend/core": "workspace:*",
+        "redis": "^5.12.1",
       },
     },
     "packages/mcp": {
