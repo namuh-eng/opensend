@@ -1,42 +1,53 @@
 # List Suppressions
 
-List suppressed recipients. This page documents the OpenSend-owned API contract for `GET /api/suppressions`.
+List tenant-scoped suppressed recipients for the authenticated OpenSend account.
 
 `GET /api/suppressions`
 
 ## Authentication
 
-Use an OpenSend API key in the Authorization header. Dashboard session cookies are not API credentials for public API clients.
+Use a full-access OpenSend API key in the Authorization header for public API clients. The dashboard uses the same handler with an authenticated dashboard session.
 
 ```http
 Authorization: Bearer os_YOUR_API_KEY
 ```
 
-## When to use it
+## Query parameters
 
-Suppressions are an OpenSend extension for managing addresses that should not receive mail. Removing an address permits future sends only if your own consent and compliance rules allow it. Return a tenant-scoped collection. Use pagination parameters when available instead of assuming a fixed result size.
-
-## Parameters
-
-`limit` and `after` may be used on collection routes when the route supports cursor pagination.
+- `limit`: 1-100 rows. Defaults to 50.
+- `after`: cursor used by the existing suppression list contract.
+- `q`, `search`, or `email`: search by suppression email, suppression id, source email id, or source message id.
+- `reason`: `manual`, `bounced`, or `complained`.
+- `source`: `manual`, `operator`, or `ses` when present in suppression metadata.
+- `created_after` / `created_before`: date or ISO timestamp matched against `suppressed_at`.
+- `domain`: filters suppressions linked to a source email whose `from` value contains that domain. Manual/imported suppressions do not carry source-domain evidence.
+- `topic_id`: filters suppressions linked to a source email with that topic id. Manual/imported suppressions do not carry source-topic evidence.
 
 ## Response
 
-Successful responses return JSON scoped to the authenticated tenant. A representative response shape is:
-
 ```json
 {
+  "object": "list",
+  "scope": "user",
   "data": [
-    { "email": "bounced@example.com", "reason": "bounce" }
+    {
+      "id": "0f1b8c7d-...",
+      "object": "suppression",
+      "email": "bounced@example.com",
+      "reason": "bounced",
+      "scope": "user",
+      "source_event_id": "evt_123",
+      "source_email_id": "2d9b...",
+      "source_message_id": "0100018...",
+      "metadata": { "source": "ses" },
+      "suppressed_at": "2026-05-28T00:00:00.000Z",
+      "updated_at": "2026-05-28T00:00:00.000Z"
+    }
   ],
-  "hasMore": false
+  "has_more": false
 }
 ```
 
-## Errors
+## Tenant scope
 
-OpenSend returns structured errors for missing authentication, validation failures, not-found resources, quota/rate-limit conditions, and unexpected server failures. Treat `404` as either missing or not owned by the caller.
-
-## Self-hosting notes
-
-Self-hosted deployments can use the same path on their own `OPENSEND_BASE_URL`. Run migrations before deploying code that expects new fields, and keep API keys in a secrets manager instead of committing them to source control.
+The response only includes suppressions owned by the API key or dashboard session user. Missing or cross-tenant records are not disclosed.

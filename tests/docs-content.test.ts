@@ -202,8 +202,10 @@ describe("docs content shell", () => {
       "utf8",
     );
     expect(suppressions).toContain(
-      "There is not a separate full suppressions dashboard page",
+      "The Suppressions dashboard is the dedicated operational surface",
     );
+    expect(suppressions).toContain("up to 200 rows");
+    expect(suppressions).toContain("up to 1,000 rows");
   });
 
   it("documents deliverability and support knowledge-base guidance", () => {

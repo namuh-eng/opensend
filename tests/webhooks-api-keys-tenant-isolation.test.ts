@@ -134,6 +134,9 @@ vi.mock("@opensend/core", () => ({
   createSuppressionService: () => ({
     listSuppressions: mockListSuppressions,
     deleteSuppression: mockDeleteSuppression,
+    createSuppression: vi.fn(),
+    importSuppressions: vi.fn(),
+    exportSuppressions: vi.fn(),
   }),
   createWebhookService: () => ({
     listWebhooks: mockListWebhooks,

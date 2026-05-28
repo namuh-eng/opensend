@@ -7,6 +7,7 @@ export const DASHBOARD_EXPORT_RESOURCES = [
   "segments",
   "domains",
   "logs",
+  "suppressions",
   "api-keys",
 ] as const;
 
@@ -88,5 +89,7 @@ export function dashboardExportLabel(
       return "domains";
     case "logs":
       return "logs";
+    case "suppressions":
+      return "suppressions";
   }
 }

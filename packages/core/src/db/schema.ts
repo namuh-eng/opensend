@@ -286,6 +286,7 @@ export type SuppressionSourceMetadata = {
   sourceMessageId?: string;
   bounceType?: string;
   complaintFeedbackType?: string;
+  importRow?: number;
 };
 
 export const emailSuppressions = pgTable(
