@@ -21,6 +21,8 @@ export type EmailDetailServiceResponse = {
   subject: string;
   html: string | null;
   text: string | null;
+  reply_address: string | null;
+  thread_id: string | null;
   cc: string[] | null;
   bcc: string[] | null;
   reply_to: string[] | null;
@@ -166,6 +168,8 @@ function toDetail(row: EmailRow): EmailDetailServiceResponse {
     subject: row.subject,
     html: row.html,
     text: row.text,
+    reply_address: row.replyAddress,
+    thread_id: row.threadId,
     cc: row.cc,
     bcc: row.bcc,
     reply_to: row.replyTo,

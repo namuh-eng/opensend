@@ -23,6 +23,11 @@ Set `INGESTER_INBOUND_TOKEN` to require `Authorization: Bearer <token>` on inbou
 }
 ```
 
-The ingester stores sanitized provider metadata in `inbound_provider_events`, parses MIME headers/body/attachments, resolves the recipient domain and route to exactly one tenant, uploads attachment bodies through OpenSend storage, inserts `received_emails`, writes an internal durable `email_events` row of type `received`, and then evaluates matching forwarding rules without deleting or hiding the stored message.
+The ingester stores sanitized provider metadata in `inbound_provider_events`, parses MIME headers/body/attachments, resolves the recipient domain/route to one tenant, validates OpenSend reply tokens for conversation threading, uploads attachment bodies through OpenSend storage, inserts `received_emails`, writes an internal durable `email_events` row of type `received`, and then evaluates matching forwarding rules without deleting or hiding the stored message.
 
 Terminal outcomes are recorded for malformed MIME, missing or ambiguous receiving domain, oversized messages, attachment storage failure, and duplicate provider events. Raw MIME bodies and secrets are not written to logs or provider metadata.
+
+
+## Reply-domain setup
+
+For threaded replies, run the app and ingester with the same `OPENSEND_REPLY_TOKEN_SECRET`, enable receiving on the sending domain, and point that domain's inbound provider notifications at `POST /events/inbound`. Outbound sends from receiving-enabled domains get generated reply addresses and headers; inbound messages with invalid or cross-tenant tokens stay unmatched for the resolved recipient-domain tenant instead of being attached to another tenant's thread.

@@ -239,16 +239,24 @@ export const emails = pgTable(
     userId: text("user_id"),
     topicId: uuid("topic_id"),
     idempotencyKey: varchar("idempotency_key", { length: 256 }),
+    threadId: uuid("thread_id"),
+    replyAddress: varchar("reply_address", { length: 512 }),
+    replyToken: varchar("reply_token", { length: 128 }),
   },
   (table) => [
     index("emails_status_idx").on(table.status),
     index("emails_created_at_idx").on(table.createdAt),
     index("emails_status_created_at_idx").on(table.status, table.createdAt),
     index("emails_user_created_at_idx").on(table.userId, table.createdAt),
+    index("emails_user_thread_idx").on(table.userId, table.threadId),
     index("emails_tags_gin_idx").using("gin", table.tags),
     uniqueIndex("emails_user_id_idempotency_key_idx").on(
       table.userId,
       table.idempotencyKey,
+    ),
+    uniqueIndex("emails_user_id_reply_token_idx").on(
+      table.userId,
+      table.replyToken,
     ),
   ],
 );
@@ -618,12 +626,28 @@ export const receivedEmails = pgTable(
           s3Key: string;
         }>
       >(),
+    headers: jsonb("headers").$type<Record<string, string>>(),
+    replyMatchStatus: varchar("reply_match_status", { length: 32 })
+      .notNull()
+      .default("unmatched"),
+    threadId: uuid("thread_id"),
+    replyToEmailId: uuid("reply_to_email_id").references(() => emails.id, {
+      onDelete: "set null",
+    }),
+    contactId: uuid("contact_id").references(() => contacts.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
     userId: text("user_id"),
   },
-  (table) => [index("received_emails_created_at_idx").on(table.createdAt)],
+  (table) => [
+    index("received_emails_created_at_idx").on(table.createdAt),
+    index("received_emails_user_thread_idx").on(table.userId, table.threadId),
+    index("received_emails_reply_to_email_idx").on(table.replyToEmailId),
+    index("received_emails_contact_id_idx").on(table.contactId),
+  ],
 );
 
 export const forwardingAttempts = pgTable(

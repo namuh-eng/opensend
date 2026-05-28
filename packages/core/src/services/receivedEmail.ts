@@ -1,12 +1,25 @@
 import { receivedEmailRepo } from "../db/repositories/receivedEmailRepo";
 import type { receivedEmails } from "../db/schema";
+import {
+  type ThreadSummary,
+  getThreadForReceivedEmail,
+} from "./replyThreading";
 import { storageService } from "./storage";
 
 type ReceivedEmailRow = typeof receivedEmails.$inferSelect;
 
 type ReceivedEmailListRow = Pick<
   ReceivedEmailRow,
-  "id" | "from" | "to" | "subject" | "routeDecisions" | "createdAt"
+  | "id"
+  | "from"
+  | "to"
+  | "subject"
+  | "routeDecisions"
+  | "replyMatchStatus"
+  | "threadId"
+  | "replyToEmailId"
+  | "contactId"
+  | "createdAt"
 >;
 
 type ReceivedEmailAttachmentRow = {
@@ -31,6 +44,10 @@ export type ReceivedEmailListItem = {
   to: string[];
   subject: string;
   route_decisions: ReceivedEmailRouteDecision[];
+  reply_match_status: string;
+  thread_id: string | null;
+  reply_to_email_id: string | null;
+  contact_id: string | null;
   created_at: Date;
 };
 
@@ -49,6 +66,11 @@ export type ReceivedEmailDetailResponse = {
   html: string | null;
   text: string | null;
   route_decisions: ReceivedEmailRouteDecision[];
+  reply_match_status: string;
+  thread_id: string | null;
+  reply_to_email_id: string | null;
+  contact_id: string | null;
+  thread: ThreadSummary;
   created_at: Date;
 };
 
@@ -105,6 +127,7 @@ export class ReceivedEmailServiceError extends Error {
 export type ReceivedEmailServiceDependencies = {
   repository?: ReceivedEmailRepository;
   getPresignedUrl?: (key: string) => Promise<string>;
+  getThread?: typeof getThreadForReceivedEmail;
   now?: () => Date;
 };
 
@@ -139,11 +162,47 @@ function toListItem(row: ReceivedEmailListRow): ReceivedEmailListItem {
     to: row.to,
     subject: row.subject,
     route_decisions: row.routeDecisions ?? [],
+    reply_match_status: row.replyMatchStatus,
+    thread_id: row.threadId,
+    reply_to_email_id: row.replyToEmailId,
+    contact_id: row.contactId,
     created_at: row.createdAt,
   };
 }
 
-function toDetail(row: ReceivedEmailRow): ReceivedEmailDetailResponse {
+function unmatchedReceivedThread(row: ReceivedEmailRow): ThreadSummary {
+  return {
+    thread_id: null,
+    match_status: "unmatched",
+    original_email_id: null,
+    contact_id: null,
+    messages: [
+      {
+        id: row.id,
+        direction: "inbound",
+        subject: row.subject,
+        from: row.from,
+        to: row.to,
+        text: row.text,
+        html: row.html,
+        created_at: row.createdAt,
+      },
+    ],
+  };
+}
+
+async function toDetail(
+  row: ReceivedEmailRow,
+  userId: string,
+  getThread: typeof getThreadForReceivedEmail,
+): Promise<ReceivedEmailDetailResponse> {
+  const thread = row.threadId
+    ? await getThread({
+        userId,
+        receivedEmailId: row.id,
+      })
+    : unmatchedReceivedThread(row);
+
   return {
     object: "received_email",
     id: row.id,
@@ -153,6 +212,11 @@ function toDetail(row: ReceivedEmailRow): ReceivedEmailDetailResponse {
     html: row.html,
     text: row.text,
     route_decisions: row.routeDecisions ?? [],
+    reply_match_status: row.replyMatchStatus,
+    thread_id: row.threadId,
+    reply_to_email_id: row.replyToEmailId,
+    contact_id: row.contactId,
+    thread,
     created_at: row.createdAt,
   };
 }
@@ -188,6 +252,7 @@ function requireEmail<T>(email: T | undefined): T {
 export function createReceivedEmailService({
   repository = receivedEmailRepo,
   getPresignedUrl = storageService.getPresignedUrl.bind(storageService),
+  getThread = getThreadForReceivedEmail,
   now = () => new Date(),
 }: ReceivedEmailServiceDependencies = {}) {
   return {
@@ -212,7 +277,11 @@ export function createReceivedEmailService({
       id: string,
       userId: string,
     ): Promise<ReceivedEmailDetailResponse> {
-      return toDetail(requireEmail(await repository.findById(id, userId)));
+      return await toDetail(
+        requireEmail(await repository.findById(id, userId)),
+        userId,
+        getThread,
+      );
     },
 
     async listAttachments(

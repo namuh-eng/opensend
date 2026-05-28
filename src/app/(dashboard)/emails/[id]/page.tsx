@@ -2,7 +2,11 @@ import { EmailDetail } from "@/components/email-detail";
 import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { emailEvents, emailSuppressions, emails, logs } from "@/lib/db/schema";
-import { createEmailTraceService, toEmailEventTraceItem } from "@opensend/core";
+import {
+  createEmailTraceService,
+  getThreadForOutboundEmail,
+  toEmailEventTraceItem,
+} from "@opensend/core";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 
@@ -73,6 +77,7 @@ export default async function EmailDetailPage({
     subject: emailResult.subject,
     html: emailResult.html,
     text: emailResult.text,
+    replyAddress: emailResult.replyAddress,
     createdAt: emailResult.createdAt.toISOString(),
     scheduledAt: emailResult.scheduledAt?.toISOString() || null,
     tags: (emailResult.tags as Array<{ name: string; value: string }>) ?? [],
@@ -110,6 +115,25 @@ export default async function EmailDetailPage({
       details: item.details,
       relatedId: item.related_id,
       relatedUrl: item.related_url,
+    })),
+    thread: await getThreadForOutboundEmail({
+      userId,
+      emailId: emailResult.id,
+    }).then((thread) => ({
+      threadId: thread.thread_id,
+      matchStatus: thread.match_status,
+      originalEmailId: thread.original_email_id,
+      contactId: thread.contact_id,
+      messages: thread.messages.map((message) => ({
+        id: message.id,
+        direction: message.direction,
+        subject: message.subject,
+        from: message.from,
+        to: message.to,
+        text: message.text,
+        html: message.html,
+        createdAt: message.created_at.toISOString(),
+      })),
     })),
   };
 

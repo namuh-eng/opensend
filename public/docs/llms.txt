@@ -153,7 +153,7 @@
 - [Get Received Email Content](https://opensend.namuh.co/docs/dashboard/receiving/get-email-content.md): Use the received email detail API to fetch parsed content after your receiving worker stores a row.
 - [Receiving Attachments](https://opensend.namuh.co/docs/dashboard/receiving/attachments.md): Received email attachments are represented as metadata plus a private object key stored by your receiving worker.
 - [Forward Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/forward-emails.md): OpenSend can automatically forward stored inbound messages after MIME ingestion and receiving-route resolution succeeds.
-- [Reply To Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/reply-to-emails.md): OpenSend does not currently provide a one-click inbound reply API.
+- [Reply To Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/reply-to-emails.md): OpenSend now links inbound replies to outbound messages when the sending domain is also a verified receiving domain.
 - [Managing Webhooks](https://opensend.namuh.co/docs/webhooks/introduction.md): Use OpenSend webhooks to receive signed lifecycle events from your own OpenSend deployment.
 - [Event Types](https://opensend.namuh.co/docs/webhooks/event-types.md): OpenSend accepts the following webhook subscription event types.
 - [Verify Webhook Requests](https://opensend.namuh.co/docs/webhooks/verify-webhooks-requests.md): Verify every OpenSend webhook request before trusting the payload.
