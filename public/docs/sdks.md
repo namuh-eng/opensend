@@ -12,6 +12,7 @@ Use an OpenSend API key that starts with `os_`. Keep keys in server-side environ
 | Python | `packages/python-sdk` / future `opensend` PyPI package | Django, Flask, FastAPI, scripts, workers | First-party package; install from the repo until PyPI publishing is enabled |
 | Go | `github.com/namuh-eng/opensend/packages/go-sdk` | API services, workers, CLIs | First-party module |
 | Ruby | `packages/ruby-sdk` / future `opensend` gem | Rails, Sinatra, Ruby jobs | First-party package; install from the repo until RubyGems publishing is enabled |
+| PHP | `packages/php-sdk` / future `opensend/opensend-php` Composer package | PHP services, Laravel/Symfony apps, workers | First-party send-email slice; install from the repo until Packagist publishing is enabled |
 | SMTP relay | `@opensend/smtp-relay` service | Apps that only speak SMTP | Self-hosted relay service |
 | Other languages | `/openapi.json` | Generated clients | Generate from the OpenAPI contract |
 
@@ -170,6 +171,50 @@ puts email.fetch("id")
 ```
 
 The Ruby package also exports `Resend` as a compatibility alias for migration-oriented code.
+
+
+## PHP
+
+Install from this repository until Packagist publishing is complete:
+
+```bash
+composer config repositories.opensend path ../../packages/php-sdk
+composer require opensend/opensend-php:dev-main
+```
+
+Send one email:
+
+```php
+<?php
+
+use OpenSend\Client;
+use OpenSend\Errors\ApiException;
+use OpenSend\ValueObjects\RequestOptions;
+use OpenSend\ValueObjects\SendEmailRequest;
+
+$client = new Client(
+    apiKey: getenv('OPENSEND_API_KEY') ?: '',
+    baseUrl: getenv('OPENSEND_BASE_URL') ?: null,
+);
+
+try {
+    $email = $client->emails->send(
+        new SendEmailRequest(
+            from: 'OpenSend <onboarding@updates.example.com>',
+            to: ['user@example.com'],
+            subject: 'Hello from OpenSend',
+            html: '<strong>It works.</strong>',
+        ),
+        RequestOptions::withIdempotencyKey('welcome-user-123'),
+    );
+
+    echo $email->id;
+} catch (ApiException $error) {
+    throw $error;
+}
+```
+
+The PHP SDK currently supports single-email sends plus shared request, response, idempotency, and error-envelope plumbing. Use the REST API for other resources until more PHP clients are added.
 
 ## SMTP relay
 
