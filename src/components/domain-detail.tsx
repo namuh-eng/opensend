@@ -697,9 +697,9 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
         <DNSRecordTable records={dkimRecords.length > 0 ? dkimRecords : null} />
       </div>
 
-      {/* Section 2: Enable Sending (SPF) */}
+      {/* Section 2: Enable Sending — SPF + DMARC live here */}
       <div className="mb-8 border-t border-line pt-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-1">
           <h3 className="text-[14px] font-semibold text-fg">Enable Sending</h3>
           <button
             type="button"
@@ -723,24 +723,39 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
             />
           </button>
         </div>
-        <DNSRecordTable
-          records={sendingRecords.length > 0 ? sendingRecords : null}
-        />
-      </div>
-
-      {/* Section 3: DMARC guidance */}
-      <div className="mb-8 border-t border-line pt-6">
-        <h3 className="text-[14px] font-semibold text-fg mb-1">DMARC Policy</h3>
         <p className="text-[13px] text-fg-2 mb-4">
-          Publish this starter TXT record so receivers can evaluate SPF and DKIM
-          alignment before you enforce a stricter policy.
+          DNS records that let receiving mail servers accept and authenticate
+          messages from this domain.
         </p>
-        <DNSRecordTable
-          records={dmarcRecords.length > 0 ? dmarcRecords : null}
-        />
+
+        {/* SPF + Return-Path */}
+        <div className="mb-6">
+          <p className="text-[13px] text-blue-400 mb-2">
+            SPF &amp; Return-Path
+          </p>
+          <DNSRecordTable
+            records={sendingRecords.length > 0 ? sendingRecords : null}
+          />
+        </div>
+
+        {/* DMARC — nested under Sending so it reads as send-side, not receive-side */}
+        <div>
+          <p className="text-[13px] text-blue-400 mb-1">DMARC Policy</p>
+          <p className="text-[12px] text-fg-2 mb-3">
+            Tells other mail servers what to do with messages claiming to be
+            from your domain that fail SPF/DKIM. Starter record uses{" "}
+            <span className="font-mono text-fg">p=none</span> (monitor only) —
+            tighten to <span className="font-mono text-fg">quarantine</span> or{" "}
+            <span className="font-mono text-fg">reject</span> once you trust
+            your sending setup.
+          </p>
+          <DNSRecordTable
+            records={dmarcRecords.length > 0 ? dmarcRecords : null}
+          />
+        </div>
       </div>
 
-      {/* Section 4: Tracking CNAME */}
+      {/* Section 3: Tracking CNAME */}
       <div className="mb-8 border-t border-line pt-6">
         <h3 className="text-[14px] font-semibold text-fg mb-1">
           Tracking CNAME
@@ -754,7 +769,7 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
         />
       </div>
 
-      {/* Section 5: Enable Receiving */}
+      {/* Section 4: Enable Receiving */}
       <div className="border-t border-line pt-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-[14px] font-semibold text-fg">
