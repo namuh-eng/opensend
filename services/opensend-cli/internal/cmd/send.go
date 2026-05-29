@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -57,8 +56,8 @@ func init() {
 }
 
 func runSend(cmd *cobra.Command, args []string) error {
-	if apiKey == "" {
-		return fmt.Errorf("API key required — set OPENSEND_API_KEY or pass --api-key")
+	if err := requireAPIKey(); err != nil {
+		return err
 	}
 	if sendFrom == "" {
 		return fmt.Errorf("--from is required")
@@ -108,24 +107,13 @@ func runSend(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("marshalling request: %w", err)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	url := strings.TrimRight(endpoint, "/") + "/api/emails"
-
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(bodyBytes))
+	resp, err := doRequest(http.MethodPost, "/api/emails", bytes.NewReader(bodyBytes))
 	if err != nil {
-		return fmt.Errorf("building request: %w", err)
-	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("could not reach %s: %w", url, err)
+		return err
 	}
 	defer resp.Body.Close()
 
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxBodyBytes))
 	if err != nil {
 		return fmt.Errorf("reading response: %w", err)
 	}

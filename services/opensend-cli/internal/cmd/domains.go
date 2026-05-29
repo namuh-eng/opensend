@@ -3,11 +3,9 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"text/tabwriter"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -42,34 +40,17 @@ func init() {
 }
 
 func runDomainsList(cmd *cobra.Command, args []string) error {
-	if apiKey == "" {
-		return fmt.Errorf("API key required — set OPENSEND_API_KEY or pass --api-key")
+	if err := requireAPIKey(); err != nil {
+		return err
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	url := strings.TrimRight(endpoint, "/") + "/api/domains"
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	resp, err := doRequest(http.MethodGet, "/api/domains", nil)
 	if err != nil {
-		return fmt.Errorf("building request: %w", err)
+		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
+	body, err := readOKBody(resp, http.StatusOK)
 	if err != nil {
-		return fmt.Errorf("could not reach %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20)) // 1 MiB
-	if err != nil {
-		return fmt.Errorf("reading response: %w", err)
+		return err
 	}
 
 	domains, err := parseDomains(body)

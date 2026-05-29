@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"text/tabwriter"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -81,34 +79,17 @@ func init() {
 }
 
 func runApiKeysList(cmd *cobra.Command, args []string) error {
-	if apiKey == "" {
-		return fmt.Errorf("API key required — set OPENSEND_API_KEY or pass --api-key")
+	if err := requireAPIKey(); err != nil {
+		return err
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	url := strings.TrimRight(endpoint, "/") + "/api/api-keys"
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	resp, err := doRequest(http.MethodGet, "/api/api-keys", nil)
 	if err != nil {
-		return fmt.Errorf("building request: %w", err)
+		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
+	body, err := readOKBody(resp, http.StatusOK)
 	if err != nil {
-		return fmt.Errorf("could not reach %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return fmt.Errorf("reading response: %w", err)
+		return err
 	}
 
 	var listResp apiKeyListResponse
@@ -136,47 +117,28 @@ func runApiKeysList(cmd *cobra.Command, args []string) error {
 }
 
 func runApiKeysCreate(cmd *cobra.Command, args []string) error {
-	if apiKey == "" {
-		return fmt.Errorf("API key required — set OPENSEND_API_KEY or pass --api-key")
+	if err := requireAPIKey(); err != nil {
+		return err
 	}
 	if apiKeyCreateName == "" {
 		return fmt.Errorf("--name is required")
 	}
 
-	payload := map[string]string{
+	bodyBytes, err := json.Marshal(map[string]string{
 		"name":       apiKeyCreateName,
 		"permission": apiKeyCreatePermission,
-	}
-	bodyBytes, err := json.Marshal(payload)
+	})
 	if err != nil {
 		return fmt.Errorf("marshalling request: %w", err)
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	url := strings.TrimRight(endpoint, "/") + "/api/api-keys"
-
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(bodyBytes))
+	resp, err := doRequest(http.MethodPost, "/api/api-keys", bytes.NewReader(bodyBytes))
 	if err != nil {
-		return fmt.Errorf("building request: %w", err)
+		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
+	body, err := readOKBody(resp, http.StatusCreated, http.StatusOK)
 	if err != nil {
-		return fmt.Errorf("could not reach %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return fmt.Errorf("reading response: %w", err)
+		return err
 	}
 
 	var created apiKeyCreateResponse
@@ -195,8 +157,8 @@ func runApiKeysCreate(cmd *cobra.Command, args []string) error {
 }
 
 func runApiKeysRevoke(cmd *cobra.Command, args []string) error {
-	if apiKey == "" {
-		return fmt.Errorf("API key required — set OPENSEND_API_KEY or pass --api-key")
+	if err := requireAPIKey(); err != nil {
+		return err
 	}
 
 	id := args[0]
@@ -211,25 +173,12 @@ func runApiKeysRevoke(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	url := strings.TrimRight(endpoint, "/") + "/api/api-keys/" + id
-
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	resp, err := doRequest(http.MethodDelete, "/api/api-keys/"+id, nil)
 	if err != nil {
-		return fmt.Errorf("building request: %w", err)
+		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("could not reach %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("server returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	if _, err := readOKBody(resp, http.StatusOK, http.StatusNoContent); err != nil {
+		return err
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "API key %s has been revoked.\n", id)

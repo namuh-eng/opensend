@@ -1,3 +1,10 @@
+// @ts-nocheck
+//
+// This file uses `bun:test` and the `Bun` global runtime API — neither is in
+// the project's TypeScript lib path (no @types/bun dependency is installed
+// because Bun is the runtime, not a TS-library dependency). The file is only
+// loaded by `bun test`, never by the Next.js TS compiler in production. Skip
+// typecheck rather than add a runtime-only dependency.
 /**
  * Bun-side benchmarks for the three hot paths compared against Go.
  *
@@ -97,7 +104,12 @@ describe("Bench: HMAC-SHA256 sign webhook payload", () => {
     const timestamp = "1716980400";
 
     benchSync("Bun HMAC-SHA256 sign", 100_000, () => {
-      const _sig = signWebhookPayload(secret, msgId, timestamp, webhookPayloadRaw);
+      const _sig = signWebhookPayload(
+        secret,
+        msgId,
+        timestamp,
+        webhookPayloadRaw,
+      );
     });
   });
 });
@@ -120,7 +132,12 @@ describe("Bench: Webhook dispatch 1000 requests", () => {
     await benchAsync("Bun webhook dispatch 1000 POSTs", 5, async () => {
       for (let j = 0; j < 1000; j++) {
         const msgId = `msg_${String(j).padStart(10, "0")}`;
-        const sig = signWebhookPayload(secret, msgId, timestamp, webhookPayloadRaw);
+        const sig = signWebhookPayload(
+          secret,
+          msgId,
+          timestamp,
+          webhookPayloadRaw,
+        );
         await fetch(serverUrl, {
           method: "POST",
           headers: {

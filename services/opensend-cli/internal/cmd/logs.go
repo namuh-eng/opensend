@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -57,34 +56,17 @@ func init() {
 }
 
 func fetchLogs(limit int) ([]logListItem, error) {
-	if apiKey == "" {
-		return nil, fmt.Errorf("API key required — set OPENSEND_API_KEY or pass --api-key")
+	if err := requireAPIKey(); err != nil {
+		return nil, err
 	}
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	url := fmt.Sprintf("%s/api/logs?limit=%d", strings.TrimRight(endpoint, "/"), limit)
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	resp, err := doRequest(http.MethodGet, fmt.Sprintf("/api/logs?limit=%d", limit), nil)
 	if err != nil {
-		return nil, fmt.Errorf("building request: %w", err)
+		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := client.Do(req)
+	body, err := readOKBody(resp, http.StatusOK)
 	if err != nil {
-		return nil, fmt.Errorf("could not reach %s: %w", url, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, fmt.Errorf("reading response: %w", err)
+		return nil, err
 	}
 
 	var listResp logListResponse
