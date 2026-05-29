@@ -1,0 +1,17 @@
+{
+  "type": "email.sent",
+  "created_at": "2026-05-29T10:00:00.000Z",
+  "data": {
+    "id": "01000182a1b2c3d4-e5f60718-9012-3456-789a-bcdef0123456",
+    "object": "email",
+    "from": "sender@yourdomain.com",
+    "to": ["recipient@example.com"],
+    "subject": "Welcome to OpenSend",
+    "created_at": "2026-05-29T09:59:58.000Z",
+    "status": "sent",
+    "tags": [
+      {"name": "campaign", "value": "onboarding-2026-q2"},
+      {"name": "user_id", "value": "usr_abc123def456"}
+    ]
+  }
+}

@@ -1,4 +1,4 @@
-.PHONY: check test test-e2e typecheck lint format fix all dev build clean setup cli-build cli-test cli-check go-all
+.PHONY: check test test-e2e typecheck lint format fix all dev build clean setup cli-build cli-test cli-check go-all bench
 
 # Go CLI version (override with make cli-build VERSION=1.2.3)
 VERSION ?= dev
@@ -87,6 +87,23 @@ cli-check:
 
 # Aggregate target: run all Go checks.
 go-all: cli-check
+
+# ── Benchmarks ───────────────────────────────────────────────────────────────
+
+# Run Go + Bun benchmarks, capture output to bench/results/<timestamp>.txt
+bench:
+	@mkdir -p bench/results
+	@TS=$$(date -u +%Y%m%dT%H%M%SZ); OUT=bench/results/$$TS.txt; \
+	echo "=== Bun vs Go Worker Benchmark — $$(date -u) ===" | tee $$OUT; \
+	echo "" | tee -a $$OUT; \
+	echo "--- Go (services/opensend-cli/internal/bench) ---" | tee -a $$OUT; \
+	cd services/opensend-cli && go test -bench=. -benchmem -benchtime=3s ./internal/bench/ 2>&1 | tee -a ../../$$OUT; \
+	cd ../..; \
+	echo "" | tee -a $$OUT; \
+	echo "--- Bun (bench/bun-worker-bench.test.ts) ---" | tee -a $$OUT; \
+	bun test ./bench/bun-worker-bench.test.ts 2>&1 | tee -a $$OUT; \
+	echo "" | tee -a $$OUT; \
+	echo "Output written to $$OUT"
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 
