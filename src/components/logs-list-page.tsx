@@ -88,6 +88,12 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
   const [query, setQuery] = useState<string>(
     searchParams.get("q") || searchParams.get("search") || "",
   );
+  const [tagName, setTagName] = useState<string>(
+    searchParams.get("tag_name") || searchParams.get("tagName") || "",
+  );
+  const [tagValue, setTagValue] = useState<string>(
+    searchParams.get("tag_value") || searchParams.get("tagValue") || "",
+  );
 
   const updateFilters = useCallback(
     (updates: Record<string, string>) => {
@@ -112,8 +118,10 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
     if (dateFrom) params.set("after", dateFrom);
     if (dateTo) params.set("before", dateTo);
     if (query.trim()) params.set("q", query.trim());
+    if (tagName.trim()) params.set("tag_name", tagName.trim());
+    if (tagName.trim() && tagValue) params.set("tag_value", tagValue);
     void exportCsv(params);
-  }, [dateFrom, dateTo, exportCsv, query, statusFilter]);
+  }, [dateFrom, dateTo, exportCsv, query, statusFilter, tagName, tagValue]);
 
   const columns = [
     {
@@ -204,6 +212,36 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
           className="min-w-[320px] bg-bg-3 border border-line text-fg text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
         />
 
+        <div className="flex items-center gap-2">
+          <label htmlFor="tag-name" className="text-[12px] text-fg-2">
+            Tag
+          </label>
+          <input
+            id="tag-name"
+            type="text"
+            value={tagName}
+            onChange={(e) => {
+              const val = e.target.value;
+              setTagName(val);
+              updateFilters({ tag_name: val, tag_value: val ? tagValue : "" });
+            }}
+            placeholder="campaign"
+            className="w-32 bg-bg-3 border border-line text-fg text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
+          />
+          <input
+            id="tag-value"
+            type="text"
+            value={tagValue}
+            onChange={(e) => {
+              const val = e.target.value;
+              setTagValue(val);
+              updateFilters({ tag_value: tagName ? val : "" });
+            }}
+            placeholder="launch"
+            className="w-32 bg-bg-3 border border-line text-fg text-[13px] rounded-md px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-[rgba(176,199,217,0.3)]"
+          />
+        </div>
+
         <select
           value={statusFilter}
           onChange={(e) => {
@@ -253,7 +291,12 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
           />
         </div>
 
-        {(statusFilter !== "all" || dateFrom || dateTo || query) && (
+        {(statusFilter !== "all" ||
+          dateFrom ||
+          dateTo ||
+          query ||
+          tagName ||
+          tagValue) && (
           <button
             type="button"
             onClick={() => {
@@ -261,7 +304,16 @@ export function LogsListPage({ logs }: { logs: LogRow[] }) {
               setDateFrom("");
               setDateTo("");
               setQuery("");
-              updateFilters({ status: "", after: "", before: "", q: "" });
+              setTagName("");
+              setTagValue("");
+              updateFilters({
+                status: "",
+                after: "",
+                before: "",
+                q: "",
+                tag_name: "",
+                tag_value: "",
+              });
             }}
             className="text-[12px] text-fg-2 hover:text-fg transition-colors"
           >

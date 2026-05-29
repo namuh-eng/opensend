@@ -56,6 +56,8 @@ export type LogRepository = {
     dateTo?: Date;
     userAgent?: string;
     search?: string;
+    tagName?: string;
+    tagValue?: string;
   }): Promise<{ data: LogListRow[]; hasMore: boolean }>;
   findByIdForUser(id: string, userId: string): Promise<LogRow | undefined>;
 };
@@ -88,6 +90,8 @@ export type ListLogsInput = {
   dateTo?: string | null;
   userAgent?: string | null;
   search?: string | null;
+  tagName?: string | null;
+  tagValue?: string | null;
 };
 
 function normalizeLimit(limit: number | undefined): number {
@@ -160,6 +164,11 @@ export function createLogReadService({
         dateTo: parseDate(input.dateTo, true),
         userAgent: normalizeOptionalString(input.userAgent),
         search: normalizeSearch(input.search),
+        tagName: normalizeOptionalString(input.tagName),
+        tagValue:
+          input.tagName && input.tagValue !== null
+            ? (input.tagValue ?? "")
+            : undefined,
       });
 
       return {

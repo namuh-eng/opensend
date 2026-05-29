@@ -19,6 +19,7 @@ import {
   emailProvider,
   emailRepo,
   emitCloudWatchMetric,
+  enqueueEmailWebhookEvent,
   finishTelemetrySpan,
   getEmailAddressDomain,
   getEmailTrackingBaseUrl,
@@ -505,6 +506,22 @@ export class QueueWorker {
             reason: "provider_retries_exhausted",
             provider: "ses",
             attempt_count: attemptCount,
+            last_error: errorSummary,
+          },
+          receivedAt: attemptedAt,
+        });
+      } else if (email.userId) {
+        await enqueueEmailWebhookEvent({
+          type: "email.delayed",
+          userId: email.userId,
+          emailId: email.id,
+          sourceId: `provider-delayed:${email.id}:${attemptCount}`,
+          payload: {
+            email_id: email.id,
+            reason: "provider_retry_scheduled",
+            provider: "ses",
+            attempt_count: attemptCount,
+            next_retry_at: nextRetryAt?.toISOString() ?? null,
             last_error: errorSummary,
           },
           receivedAt: attemptedAt,

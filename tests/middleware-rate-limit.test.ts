@@ -170,6 +170,8 @@ describe("middleware rate limiting", () => {
       ["/logs/log_123", "/api/logs/log_123"],
       ["/emails", "/api/emails"],
       ["/emails/email_123", "/api/emails/email_123"],
+      ["/emails/email_123/events", "/api/emails/email_123/events"],
+      ["/emails/email_123/trace", "/api/emails/email_123/trace"],
       ["/emails/email_123/attachments", "/api/emails/email_123/attachments"],
       [
         "/emails/email_123/attachments/attachment_123",

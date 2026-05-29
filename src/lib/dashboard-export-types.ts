@@ -7,11 +7,23 @@ export const DASHBOARD_EXPORT_RESOURCES = [
   "segments",
   "domains",
   "logs",
+  "suppressions",
   "api-keys",
+  "email-events",
+  "topics",
+  "webhook-deliveries",
+  "automation-runs",
 ] as const;
 
 export type DashboardExportResource =
   (typeof DASHBOARD_EXPORT_RESOURCES)[number];
+
+export const DASHBOARD_EXPORT_RETENTION_DAYS = 7;
+export const DASHBOARD_EXPORT_SCHEMA_VERSION = 1;
+
+export const DASHBOARD_EXPORT_FORMAT = "csv" as const;
+
+export type DashboardExportStatus = "completed" | "failed" | "expired";
 
 export type CsvValue = string | number | boolean | Date | null | undefined;
 
@@ -88,5 +100,15 @@ export function dashboardExportLabel(
       return "domains";
     case "logs":
       return "logs";
+    case "suppressions":
+      return "suppressions";
+    case "email-events":
+      return "email events";
+    case "topics":
+      return "topics";
+    case "webhook-deliveries":
+      return "webhook deliveries";
+    case "automation-runs":
+      return "automation runs";
   }
 }

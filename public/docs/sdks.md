@@ -11,7 +11,9 @@ Use an OpenSend API key that starts with `os_`. Keep keys in server-side environ
 | TypeScript / JavaScript | `opensend` on npm | Node.js, Bun, Next.js, serverless functions, React Email rendering | First-party package |
 | Python | `packages/python-sdk` / future `opensend` PyPI package | Django, Flask, FastAPI, scripts, workers | First-party package; install from the repo until PyPI publishing is enabled |
 | Go | `github.com/namuh-eng/opensend/packages/go-sdk` | API services, workers, CLIs | First-party module |
+| Java / Kotlin | `packages/jvm-sdk` / future Maven package | Spring Boot, plain JVM services, Kotlin workers | First-party blocking SDK slice; install from the repo until Maven publishing is enabled |
 | Ruby | `packages/ruby-sdk` / future `opensend` gem | Rails, Sinatra, Ruby jobs | First-party package; install from the repo until RubyGems publishing is enabled |
+| PHP | `packages/php-sdk` / future `opensend/opensend-php` Composer package | PHP services, Laravel/Symfony apps, workers | First-party send-email slice; install from the repo until Packagist publishing is enabled |
 | SMTP relay | `@opensend/smtp-relay` service | Apps that only speak SMTP | Self-hosted relay service |
 | Other languages | `/openapi.json` | Generated clients | Generate from the OpenAPI contract |
 
@@ -136,6 +138,43 @@ func main() {
 }
 ```
 
+
+## Java and Kotlin
+
+Install from this repository until Maven publishing is complete:
+
+```bash
+cd packages/jvm-sdk
+mvn test
+mvn install
+```
+
+Send one email from Java:
+
+```java
+import com.opensend.OpenSend;
+import com.opensend.RequestOptions;
+import com.opensend.models.EmailResponse;
+import com.opensend.models.SendEmailRequest;
+import java.util.List;
+
+OpenSend client = OpenSend.builder(System.getenv("OPENSEND_API_KEY"))
+    .baseUrl(System.getenv().getOrDefault("OPENSEND_BASE_URL", OpenSend.DEFAULT_BASE_URL))
+    .build();
+
+EmailResponse email = client.emails().send(
+    SendEmailRequest.builder()
+        .from("OpenSend <onboarding@updates.example.com>")
+        .to(List.of("user@example.com"))
+        .subject("Hello from OpenSend")
+        .html("<strong>It works.</strong>")
+        .build(),
+    RequestOptions.withIdempotencyKey("welcome-user-123"));
+System.out.println(email.id());
+```
+
+The JVM SDK is blocking-only in this first slice and supports implemented email, contact, domain, and suppression routes. It exposes `ApiException` for OpenSend error envelopes plus rate-limit headers. See [Send emails with Java and Kotlin](./send-with-java.md) for Kotlin and Spring Boot examples.
+
 ## Ruby
 
 Build and install locally until RubyGems publishing is complete:
@@ -170,6 +209,50 @@ puts email.fetch("id")
 ```
 
 The Ruby package also exports `Resend` as a compatibility alias for migration-oriented code.
+
+
+## PHP
+
+Install from this repository until Packagist publishing is complete:
+
+```bash
+composer config repositories.opensend path ../../packages/php-sdk
+composer require opensend/opensend-php:dev-main
+```
+
+Send one email:
+
+```php
+<?php
+
+use OpenSend\Client;
+use OpenSend\Errors\ApiException;
+use OpenSend\ValueObjects\RequestOptions;
+use OpenSend\ValueObjects\SendEmailRequest;
+
+$client = new Client(
+    apiKey: getenv('OPENSEND_API_KEY') ?: '',
+    baseUrl: getenv('OPENSEND_BASE_URL') ?: null,
+);
+
+try {
+    $email = $client->emails->send(
+        new SendEmailRequest(
+            from: 'OpenSend <onboarding@updates.example.com>',
+            to: ['user@example.com'],
+            subject: 'Hello from OpenSend',
+            html: '<strong>It works.</strong>',
+        ),
+        RequestOptions::withIdempotencyKey('welcome-user-123'),
+    );
+
+    echo $email->id;
+} catch (ApiException $error) {
+    throw $error;
+}
+```
+
+The PHP SDK currently supports single-email sends plus shared request, response, idempotency, and error-envelope plumbing. Use the REST API for other resources until more PHP clients are added.
 
 ## SMTP relay
 

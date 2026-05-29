@@ -239,15 +239,24 @@ export const emails = pgTable(
     userId: text("user_id"),
     topicId: uuid("topic_id"),
     idempotencyKey: varchar("idempotency_key", { length: 256 }),
+    threadId: uuid("thread_id"),
+    replyAddress: varchar("reply_address", { length: 512 }),
+    replyToken: varchar("reply_token", { length: 128 }),
   },
   (table) => [
     index("emails_status_idx").on(table.status),
     index("emails_created_at_idx").on(table.createdAt),
     index("emails_status_created_at_idx").on(table.status, table.createdAt),
     index("emails_user_created_at_idx").on(table.userId, table.createdAt),
+    index("emails_user_thread_idx").on(table.userId, table.threadId),
+    index("emails_tags_gin_idx").using("gin", table.tags),
     uniqueIndex("emails_user_id_idempotency_key_idx").on(
       table.userId,
       table.idempotencyKey,
+    ),
+    uniqueIndex("emails_user_id_reply_token_idx").on(
+      table.userId,
+      table.replyToken,
     ),
   ],
 );
@@ -279,15 +288,16 @@ export const topics = pgTable("topics", {
   userId: text("user_id"),
 });
 
-export type SuppressionReason = "bounced" | "complained";
+export type SuppressionReason = "bounced" | "complained" | "manual";
 
 export type SuppressionSourceMetadata = {
-  source?: "ses" | "operator";
+  source?: "ses" | "operator" | "manual";
   sourceEventId?: string;
   sourceEmailId?: string;
   sourceMessageId?: string;
   bounceType?: string;
   complaintFeedbackType?: string;
+  importRow?: number;
 };
 
 export const emailSuppressions = pgTable(
@@ -414,21 +424,28 @@ export const templates = pgTable("templates", {
   userId: text("user_id"),
 });
 
-export const logs = pgTable("logs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  endpoint: text("endpoint"),
-  status: integer("status"),
-  method: varchar("method", { length: 10 }),
-  userAgent: text("user_agent"),
-  requestBody: jsonb("request_body"),
-  responseBody: jsonb("response_body"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  document: jsonb("document"),
-  userId: text("user_id"),
-  apiKeyId: uuid("api_key_id"),
-});
+export const logs = pgTable(
+  "logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    endpoint: text("endpoint"),
+    status: integer("status"),
+    method: varchar("method", { length: 10 }),
+    userAgent: text("user_agent"),
+    requestBody: jsonb("request_body"),
+    responseBody: jsonb("response_body"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    document: jsonb("document"),
+    userId: text("user_id"),
+    apiKeyId: uuid("api_key_id"),
+  },
+  (table) => [
+    index("logs_user_created_at_idx").on(table.userId, table.createdAt),
+    index("logs_document_gin_idx").using("gin", table.document),
+  ],
+);
 
 export const auditEvents = pgTable(
   "audit_events",
@@ -475,6 +492,108 @@ export const contactProperties = pgTable(
   (table) => [uniqueIndex("contact_properties_key_idx").on(table.key)],
 );
 
+export const receivingRoutes = pgTable(
+  "receiving_routes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    domainId: uuid("domain_id")
+      .notNull()
+      .references(() => domains.id, { onDelete: "cascade" }),
+    type: varchar("type", { length: 20 }).notNull(),
+    localPart: varchar("local_part", { length: 320 }),
+    targetLocalPart: varchar("target_local_part", { length: 320 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("receiving_routes_user_id_idx").on(table.userId),
+    index("receiving_routes_domain_id_idx").on(table.domainId),
+    uniqueIndex("receiving_routes_domain_type_local_idx").on(
+      table.domainId,
+      table.type,
+      table.localPart,
+    ),
+  ],
+);
+
+export type ReceivingRoute = typeof receivingRoutes.$inferSelect;
+export type ReceivingRouteInsert = typeof receivingRoutes.$inferInsert;
+
+export const forwardingRules = pgTable(
+  "forwarding_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    domainId: uuid("domain_id")
+      .notNull()
+      .references(() => domains.id, { onDelete: "cascade" }),
+    routeId: uuid("route_id")
+      .notNull()
+      .references(() => receivingRoutes.id, { onDelete: "cascade" }),
+    destinations: jsonb("destinations").notNull().$type<string[]>(),
+    status: varchar("status", { length: 32 }).notNull().default("active"),
+    invalidReason: text("invalid_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("forwarding_rules_user_id_idx").on(table.userId),
+    index("forwarding_rules_domain_id_idx").on(table.domainId),
+    uniqueIndex("forwarding_rules_route_id_idx").on(table.routeId),
+  ],
+);
+
+export type ForwardingRule = typeof forwardingRules.$inferSelect;
+export type ForwardingRuleInsert = typeof forwardingRules.$inferInsert;
+
+export const inboundProviderEvents = pgTable(
+  "inbound_provider_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: varchar("provider", { length: 50 }).notNull(),
+    providerEventId: varchar("provider_event_id", { length: 255 }).notNull(),
+    providerMessageId: varchar("provider_message_id", { length: 255 }),
+    status: varchar("status", { length: 50 }).notNull().default("processing"),
+    terminalReason: text("terminal_reason"),
+    rawMetadata: jsonb("raw_metadata")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    userId: text("user_id"),
+    receivedEmailId: uuid("received_email_id"),
+    duplicateOfEventId: uuid("duplicate_of_event_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inbound_provider_events_provider_event_idx").on(
+      table.provider,
+      table.providerEventId,
+    ),
+    index("inbound_provider_events_status_idx").on(table.status),
+    index("inbound_provider_events_user_created_at_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export type InboundProviderEvent = typeof inboundProviderEvents.$inferSelect;
+export type InboundProviderEventInsert =
+  typeof inboundProviderEvents.$inferInsert;
+
 export const receivedEmails = pgTable(
   "received_emails",
   {
@@ -485,6 +604,18 @@ export const receivedEmails = pgTable(
     html: text("html"),
     text: text("text"),
     status: varchar("status", { length: 50 }).notNull().default("received"),
+    routeDecisions:
+      jsonb("route_decisions").$type<
+        Array<{
+          recipient: string;
+          status: "exact" | "alias" | "catch_all" | "unrouteable";
+          domainId?: string;
+          routeId?: string;
+          routeType?: "exact" | "alias" | "catch_all";
+          localPart?: string;
+          targetAddress?: string;
+        }>
+      >(),
     attachments:
       jsonb("attachments").$type<
         Array<{
@@ -495,13 +626,75 @@ export const receivedEmails = pgTable(
           s3Key: string;
         }>
       >(),
+    headers: jsonb("headers").$type<Record<string, string>>(),
+    replyMatchStatus: varchar("reply_match_status", { length: 32 })
+      .notNull()
+      .default("unmatched"),
+    threadId: uuid("thread_id"),
+    replyToEmailId: uuid("reply_to_email_id").references(() => emails.id, {
+      onDelete: "set null",
+    }),
+    contactId: uuid("contact_id").references(() => contacts.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
     userId: text("user_id"),
   },
-  (table) => [index("received_emails_created_at_idx").on(table.createdAt)],
+  (table) => [
+    index("received_emails_created_at_idx").on(table.createdAt),
+    index("received_emails_user_thread_idx").on(table.userId, table.threadId),
+    index("received_emails_reply_to_email_idx").on(table.replyToEmailId),
+    index("received_emails_contact_id_idx").on(table.contactId),
+  ],
 );
+
+export const forwardingAttempts = pgTable(
+  "forwarding_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    ruleId: uuid("rule_id").references(() => forwardingRules.id, {
+      onDelete: "set null",
+    }),
+    receivedEmailId: uuid("received_email_id")
+      .notNull()
+      .references(() => receivedEmails.id, { onDelete: "cascade" }),
+    forwardedEmailId: uuid("forwarded_email_id").references(() => emails.id, {
+      onDelete: "set null",
+    }),
+    status: varchar("status", { length: 32 }).notNull(),
+    reason: varchar("reason", { length: 64 }).notNull(),
+    destinations: jsonb("destinations").notNull().$type<string[]>(),
+    providerMessageId: varchar("provider_message_id", { length: 255 }),
+    retryEligible: boolean("retry_eligible").notNull().default(false),
+    errorCode: varchar("error_code", { length: 255 }),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("forwarding_attempts_user_created_at_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+    index("forwarding_attempts_received_email_id_idx").on(
+      table.receivedEmailId,
+    ),
+    index("forwarding_attempts_rule_id_idx").on(table.ruleId),
+    index("forwarding_attempts_forwarded_email_id_idx").on(
+      table.forwardedEmailId,
+    ),
+  ],
+);
+
+export type ForwardingAttempt = typeof forwardingAttempts.$inferSelect;
+export type ForwardingAttemptInsert = typeof forwardingAttempts.$inferInsert;
 
 export const emailEvents = pgTable(
   "email_events",
@@ -712,6 +905,46 @@ export const automationRuns = pgTable(
       t.automationId,
       t.createdAt,
     ),
+  ],
+);
+
+export type DashboardExportJobFilters = Record<
+  string,
+  string | number | boolean | null
+>;
+
+export const dashboardExportJobs = pgTable(
+  "dashboard_export_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdByEmail: text("created_by_email"),
+    resource: varchar("resource", { length: 64 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("completed"),
+    format: varchar("format", { length: 16 }).notNull().default("csv"),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    filters: jsonb("filters").$type<DashboardExportJobFilters>().notNull(),
+    filename: varchar("filename", { length: 255 }).notNull(),
+    content: text("content"),
+    rowCount: integer("row_count").notNull().default(0),
+    byteSize: integer("byte_size").notNull().default(0),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    downloadedAt: timestamp("downloaded_at", { withTimezone: true }),
+    downloadCount: integer("download_count").notNull().default(0),
+  },
+  (t) => [
+    index("dashboard_export_jobs_user_created_at_idx").on(
+      t.userId,
+      t.createdAt,
+    ),
+    index("dashboard_export_jobs_user_status_idx").on(t.userId, t.status),
+    index("dashboard_export_jobs_expires_at_idx").on(t.expiresAt),
   ],
 );
 

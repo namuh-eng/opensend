@@ -12,7 +12,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { db } from "../client";
-import { logs } from "../schema";
+import { emails, logs } from "../schema";
 
 export const logRepo = {
   async findById(id: string) {
@@ -71,6 +71,8 @@ export const logRepo = {
     dateTo?: Date;
     userAgent?: string;
     search?: string;
+    tagName?: string;
+    tagValue?: string;
   }) {
     const conditions: SQL[] = [eq(logs.userId, options.userId)];
 
@@ -109,6 +111,25 @@ export const logRepo = {
           sql`${logs.responseBody}::text ILIKE ${`%${options.search}%`}`,
           sql`${logs.document}::text ILIKE ${`%${options.search}%`}`,
         ) as SQL,
+      );
+    }
+    if (options.tagName) {
+      const tagPredicate = JSON.stringify(
+        options.tagValue === undefined
+          ? [{ name: options.tagName }]
+          : [{ name: options.tagName, value: options.tagValue }],
+      );
+      conditions.push(
+        sql`exists (
+          select 1 from ${emails}
+          where ${emails.userId} = ${options.userId}
+            and ${emails.userId} = ${logs.userId}
+            and (
+              ${emails.id}::text = ${logs.document}->>'emailId'
+              or coalesce(${logs.document}->'emailIds', '[]'::jsonb) ? ${emails.id}::text
+            )
+            and ${emails.tags} @> ${tagPredicate}::jsonb
+        )`,
       );
     }
 

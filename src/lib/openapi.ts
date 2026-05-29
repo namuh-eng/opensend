@@ -558,6 +558,26 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/emails/{id}/trace": {
+      get: {
+        tags: ["Emails"],
+        summary: "List the chronological trace for an email",
+        operationId: "listEmailTrace",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description:
+              "Chronological trace entries for request, queue, provider, webhook, and suppression evidence.",
+            content: jsonContent({
+              $ref: "#/components/schemas/EmailTrace",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
     "/api/emails/{id}/attachments": {
       get: {
         tags: ["Emails"],
@@ -689,6 +709,206 @@ export const openApiDocument = {
             description: "Attachment detail.",
             content: jsonContent({
               $ref: "#/components/schemas/ReceivedEmailAttachmentDetail",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+
+    "/api/receiving/routes": {
+      get: {
+        tags: ["Receiving"],
+        summary: "List receiving routes",
+        operationId: "listReceivingRoutes",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "domain_id",
+            in: "query",
+            schema: { type: "string", format: "uuid" },
+            description: "Limit routes to one owned receiving domain.",
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Receiving route list.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ReceivingRouteList",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      post: {
+        tags: ["Receiving"],
+        summary: "Create a receiving route",
+        operationId: "createReceivingRoute",
+        security: bearerSecurity,
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/CreateReceivingRouteRequest",
+          }),
+        },
+        responses: {
+          "201": {
+            description: "Created receiving route.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ReceivingRoute",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          "409": { $ref: "#/components/responses/ValidationError" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/receiving/routes/{id}": {
+      get: {
+        tags: ["Receiving"],
+        summary: "Retrieve a receiving route",
+        operationId: "getReceivingRoute",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Receiving route detail.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ReceivingRoute",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Receiving"],
+        summary: "Update a receiving route",
+        operationId: "updateReceivingRoute",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateReceivingRouteRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Updated receiving route.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ReceivingRoute",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          "409": { $ref: "#/components/responses/ValidationError" },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Receiving"],
+        summary: "Delete a receiving route",
+        operationId: "deleteReceivingRoute",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Deleted receiving route.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DeleteReceivingRouteResponse",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/receiving/forwarding-rules": {
+      get: {
+        tags: ["Receiving"],
+        summary: "List inbound forwarding rules",
+        operationId: "listForwardingRules",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "domain_id",
+            in: "query",
+            schema: { type: "string", format: "uuid" },
+            description: "Limit rules to one owned receiving domain.",
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Forwarding rule list.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ForwardingRuleList",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+      post: {
+        tags: ["Receiving"],
+        summary: "Create an inbound forwarding rule",
+        operationId: "createForwardingRule",
+        security: bearerSecurity,
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/CreateForwardingRuleRequest",
+          }),
+        },
+        responses: {
+          "201": {
+            description: "Created forwarding rule.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ForwardingRule",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          "409": { $ref: "#/components/responses/ValidationError" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/receiving/forwarding-rules/{id}": {
+      patch: {
+        tags: ["Receiving"],
+        summary: "Update an inbound forwarding rule",
+        operationId: "updateForwardingRule",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateForwardingRuleRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Updated forwarding rule.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ForwardingRule",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Receiving"],
+        summary: "Delete an inbound forwarding rule",
+        operationId: "deleteForwardingRule",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Deleted forwarding rule.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DeleteForwardingRuleResponse",
             }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
@@ -2244,6 +2464,28 @@ export const openApiDocument = {
             description: "Full-text search.",
             schema: { type: "string" },
           },
+          {
+            name: "tag_name",
+            in: "query",
+            description:
+              "Filter logs to requests linked to emails with this tag name. Uses the same tag validation as send requests.",
+            schema: {
+              type: "string",
+              maxLength: 256,
+              pattern: "^[A-Za-z0-9_-]+$",
+            },
+          },
+          {
+            name: "tag_value",
+            in: "query",
+            description:
+              "Optional tag value filter. Requires tag_name and may be an empty string.",
+            schema: {
+              type: "string",
+              maxLength: 256,
+              pattern: "^[A-Za-z0-9_-]*$",
+            },
+          },
         ],
         responses: {
           "200": {
@@ -2820,6 +3062,46 @@ export const openApiDocument = {
         },
         required: ["object", "data"],
       },
+      EmailTraceEvent: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["email_trace_event"] },
+          id: { type: "string" },
+          source: {
+            type: "string",
+            enum: ["request", "queue", "provider", "webhook", "suppression"],
+          },
+          type: { type: "string" },
+          created_at: { type: "string", format: "date-time" },
+          summary: { type: "string" },
+          details: { type: "object", additionalProperties: true },
+          related_id: { type: "string", nullable: true },
+          related_url: { type: "string", nullable: true },
+        },
+        required: [
+          "object",
+          "id",
+          "source",
+          "type",
+          "created_at",
+          "summary",
+          "details",
+          "related_id",
+          "related_url",
+        ],
+      },
+      EmailTrace: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["email_trace"] },
+          email_id: { type: "string", format: "uuid" },
+          data: {
+            type: "array",
+            items: { $ref: "#/components/schemas/EmailTraceEvent" },
+          },
+        },
+        required: ["object", "email_id", "data"],
+      },
       EmailAttachmentDetail: {
         type: "object",
         properties: {
@@ -2848,6 +3130,219 @@ export const openApiDocument = {
         },
         required: ["object", "data"],
       },
+
+      ReceivingRouteDecision: {
+        type: "object",
+        properties: {
+          recipient: { type: "string", format: "email" },
+          status: {
+            type: "string",
+            enum: ["exact", "alias", "catch_all", "unrouteable"],
+          },
+          domainId: { type: "string", format: "uuid" },
+          routeId: { type: "string", format: "uuid" },
+          routeType: {
+            type: "string",
+            enum: ["exact", "alias", "catch_all"],
+          },
+          localPart: { type: "string" },
+          targetAddress: { type: "string", format: "email" },
+        },
+        required: ["recipient", "status"],
+      },
+      ReceivingRoute: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["receiving_route"] },
+          id: { type: "string", format: "uuid" },
+          domain_id: { type: "string", format: "uuid" },
+          domain: { type: "string" },
+          type: {
+            type: "string",
+            enum: ["exact", "alias", "catch_all"],
+          },
+          local_part: { type: "string", nullable: true },
+          target_local_part: { type: "string" },
+          target_address: { type: "string", format: "email" },
+          created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "object",
+          "id",
+          "domain_id",
+          "domain",
+          "type",
+          "local_part",
+          "target_local_part",
+          "target_address",
+          "created_at",
+          "updated_at",
+        ],
+      },
+      ReceivingRouteList: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["list"] },
+          data: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ReceivingRoute" },
+          },
+        },
+        required: ["object", "data"],
+      },
+      CreateReceivingRouteRequest: {
+        type: "object",
+        properties: {
+          domain_id: { type: "string", format: "uuid" },
+          type: {
+            type: "string",
+            enum: ["exact", "alias", "catch_all"],
+          },
+          local_part: { type: "string", nullable: true },
+          target_local_part: { type: "string", nullable: true },
+        },
+        required: ["domain_id", "type"],
+      },
+      UpdateReceivingRouteRequest: {
+        type: "object",
+        properties: {
+          local_part: { type: "string", nullable: true },
+          target_local_part: { type: "string", nullable: true },
+        },
+      },
+      DeleteReceivingRouteResponse: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["receiving_route"] },
+          id: { type: "string", format: "uuid" },
+          deleted: { type: "boolean" },
+        },
+        required: ["object", "id", "deleted"],
+      },
+      ForwardingAttempt: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["forwarding_attempt"] },
+          id: { type: "string", format: "uuid" },
+          rule_id: { type: "string", format: "uuid", nullable: true },
+          received_email_id: { type: "string", format: "uuid" },
+          forwarded_email_id: {
+            type: "string",
+            format: "uuid",
+            nullable: true,
+          },
+          status: {
+            type: "string",
+            enum: ["queued", "skipped", "failed"],
+          },
+          reason: { type: "string" },
+          destinations: {
+            type: "array",
+            items: { type: "string", format: "email" },
+          },
+          retry_eligible: { type: "boolean" },
+          error_message: { type: "string", nullable: true },
+          forwarded_email_status: { type: "string", nullable: true },
+          created_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "object",
+          "id",
+          "received_email_id",
+          "status",
+          "reason",
+          "destinations",
+          "retry_eligible",
+          "created_at",
+        ],
+      },
+      ForwardingRule: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["forwarding_rule"] },
+          id: { type: "string", format: "uuid" },
+          domain_id: { type: "string", format: "uuid" },
+          domain: { type: "string" },
+          route_id: { type: "string", format: "uuid" },
+          route_type: {
+            type: "string",
+            enum: ["exact", "alias", "catch_all"],
+          },
+          route_local_part: { type: "string", nullable: true },
+          route_target_address: { type: "string", format: "email" },
+          destinations: {
+            type: "array",
+            items: { type: "string", format: "email" },
+          },
+          status: {
+            type: "string",
+            enum: ["active", "disabled", "invalid"],
+          },
+          invalid_reason: { type: "string", nullable: true },
+          last_attempt: { type: "object", nullable: true },
+          created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "object",
+          "id",
+          "domain_id",
+          "domain",
+          "route_id",
+          "route_target_address",
+          "destinations",
+          "status",
+          "created_at",
+          "updated_at",
+        ],
+      },
+      ForwardingRuleList: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["list"] },
+          data: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ForwardingRule" },
+          },
+        },
+        required: ["object", "data"],
+      },
+      CreateForwardingRuleRequest: {
+        type: "object",
+        properties: {
+          route_id: { type: "string", format: "uuid" },
+          destinations: {
+            type: "array",
+            minItems: 1,
+            maxItems: 25,
+            items: { type: "string", format: "email" },
+          },
+          status: { type: "string", enum: ["active", "disabled"] },
+        },
+        required: ["route_id", "destinations"],
+      },
+      UpdateForwardingRuleRequest: {
+        type: "object",
+        properties: {
+          destinations: {
+            type: "array",
+            minItems: 1,
+            maxItems: 25,
+            items: { type: "string", format: "email" },
+          },
+          status: { type: "string", enum: ["active", "disabled"] },
+        },
+      },
+      DeleteForwardingRuleResponse: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["forwarding_rule"] },
+          id: { type: "string", format: "uuid" },
+          deleted: { type: "boolean" },
+        },
+        required: ["object", "id", "deleted"],
+      },
       ReceivedEmailListItem: {
         type: "object",
         properties: {
@@ -2855,9 +3350,20 @@ export const openApiDocument = {
           from: { type: "string" },
           to: { type: "array", items: { type: "string", format: "email" } },
           subject: { type: "string" },
+          route_decisions: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ReceivingRouteDecision" },
+          },
           created_at: { type: "string", format: "date-time" },
         },
-        required: ["id", "from", "to", "subject", "created_at"],
+        required: [
+          "id",
+          "from",
+          "to",
+          "subject",
+          "route_decisions",
+          "created_at",
+        ],
       },
       ReceivedEmail: {
         type: "object",
@@ -2869,9 +3375,21 @@ export const openApiDocument = {
           subject: { type: "string" },
           html: { type: "string", nullable: true },
           text: { type: "string", nullable: true },
+          route_decisions: {
+            type: "array",
+            items: { $ref: "#/components/schemas/ReceivingRouteDecision" },
+          },
           created_at: { type: "string", format: "date-time" },
         },
-        required: ["object", "id", "from", "to", "subject", "created_at"],
+        required: [
+          "object",
+          "id",
+          "from",
+          "to",
+          "subject",
+          "route_decisions",
+          "created_at",
+        ],
       },
       ReceivedEmailList: {
         type: "object",
@@ -3595,6 +4113,9 @@ export const openApiDocument = {
           "email.bounced",
           "email.complained",
           "email.delivery_delayed",
+          "email.scheduled",
+          "email.delayed",
+          "email.suppressed",
           "email.opened",
           "email.clicked",
           "email.failed",

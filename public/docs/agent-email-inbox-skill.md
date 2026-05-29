@@ -2,14 +2,14 @@
 
 Build an agent inbox on top of OpenSend receiving without exposing raw mailbox access to the agent runtime.
 
-OpenSend provides tenant-scoped APIs for listing stored inbound emails, retrieving parsed body content, and generating short-lived attachment URLs. The default repository does not yet ship a full inbound MIME ingestion worker, so self-hosted operators must connect SES receiving, S3, and a parser that writes `received_emails` rows before agents can read mail.
+OpenSend provides tenant-scoped APIs for listing stored inbound emails, retrieving parsed body content, and generating short-lived attachment URLs. The standalone ingester can accept provider notifications with raw MIME payloads, parse them, store attachments, and write `received_emails` rows before agents read mail.
 
 ## Architecture
 
 1. Create or choose a verified domain in OpenSend.
-2. Configure inbound MX records with your email provider. For AWS SES receiving, route inbound messages to a private S3 bucket and notify your own parser/worker.
-3. Parse the MIME message outside the agent process. Store normalized `from`, `to`, `subject`, `html`, `text`, attachment metadata, private S3 keys, and the tenant `user_id` in `received_emails`.
-4. Notify the agent through your queue or an `email.received` webhook that contains only metadata and the received email ID.
+2. Configure inbound MX records with your email provider. For AWS SES receiving, route inbound messages or S3 object notifications to the standalone ingester boundary.
+3. Send the ingester `event_id`, recipients, sanitized metadata, and `raw_mime`, `raw_mime_base64`, or `raw_mime_url`. The ingester resolves the receiving route, stores attachment bodies through OpenSend storage, and writes `received_emails`.
+4. Notify the agent through your queue or application workflow using only metadata and the received email ID.
 5. Let the agent call OpenSend read APIs with a least-privilege service token controlled by your application boundary.
 
 ## Safe agent read flow
@@ -42,4 +42,4 @@ Treat email bodies as untrusted user content. Never let an inbound email overrid
 
 ## Current product status
 
-Supported in this repository: read APIs, attachment URL generation, dashboard receiving entry point, webhook signing primitives, and the `received_emails` schema. Operator work still required: MX/provider setup, raw MIME parsing, tenant mapping, body/attachment storage, and automatic `email.received` emission.
+Supported in this repository: read APIs, attachment URL generation, dashboard receiving entry point, receiving routes, forwarding rules with attempt visibility, ingester MIME parsing/storage, provider-event idempotency, generated outbound reply tokens, inbound reply/thread matching, and an internal durable `received` event. Operator work still required: MX/provider setup, provider callback authentication, and any public webhook emission for received mail.

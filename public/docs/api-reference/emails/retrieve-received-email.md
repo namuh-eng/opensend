@@ -31,11 +31,31 @@ Authorization: Bearer os_YOUR_API_KEY
   "subject": "New support request",
   "html": "<p>Hello from a customer.</p>",
   "text": "Hello from a customer.",
+  "route_decisions": [
+    {
+      "recipient": "agent@inbound.example.com",
+      "status": "exact",
+      "routeId": "22222222-2222-4222-8222-222222222222",
+      "routeType": "exact",
+      "targetAddress": "agent@inbound.example.com"
+    }
+  ],
+  "reply_match_status": "matched",
+  "thread_id": "11111111-2222-4333-8444-555555555555",
+  "reply_to_email_id": "11111111-2222-4333-8444-555555555555",
+  "contact_id": "99999999-2222-4333-8444-555555555555",
+  "thread": {
+    "thread_id": "11111111-2222-4333-8444-555555555555",
+    "match_status": "matched",
+    "original_email_id": "11111111-2222-4333-8444-555555555555",
+    "contact_id": "99999999-2222-4333-8444-555555555555",
+    "messages": []
+  },
   "created_at": "2026-05-10T00:00:00.000Z"
 }
 ```
 
-`html` and `text` can be `null` when your inbound parser did not store that body part. Attachment binaries are not returned from this endpoint; list and retrieve attachment metadata separately.
+`html` and `text` can be `null` when your inbound parser did not store that body part. `route_decisions` explains exact, alias, catch-all, or unrouteable routing for each recipient and is empty for legacy rows. Reply fields show whether the message matched an outbound email thread. Unmatched messages remain visible with `reply_match_status: "unmatched"` and null thread IDs. Attachment binaries are not returned from this endpoint; list and retrieve attachment metadata separately.
 
 ## Self-hosting notes
 

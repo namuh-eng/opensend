@@ -24,6 +24,11 @@ export const receivedEmailRepo = {
         from: receivedEmails.from,
         to: receivedEmails.to,
         subject: receivedEmails.subject,
+        routeDecisions: receivedEmails.routeDecisions,
+        replyMatchStatus: receivedEmails.replyMatchStatus,
+        threadId: receivedEmails.threadId,
+        replyToEmailId: receivedEmails.replyToEmailId,
+        contactId: receivedEmails.contactId,
         createdAt: receivedEmails.createdAt,
       })
       .from(receivedEmails)

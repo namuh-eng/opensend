@@ -1,4 +1,14 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  type SQL,
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import { db } from "../client";
 import {
   type SuppressionReason,
@@ -8,6 +18,16 @@ import {
 } from "../schema";
 
 export type SuppressionRecord = typeof emailSuppressions.$inferSelect;
+
+export type SuppressionListFilters = {
+  search?: string;
+  reason?: SuppressionReason;
+  source?: "manual" | "operator" | "ses";
+  createdAfter?: Date;
+  createdBefore?: Date;
+  domain?: string;
+  topicId?: string;
+};
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -31,11 +51,65 @@ export const suppressionRepo = {
       );
   },
 
-  async list(options: { userId: string; limit?: number; after?: string }) {
+  async list(options: {
+    userId: string;
+    limit?: number;
+    after?: string;
+    filters?: SuppressionListFilters;
+  }) {
     const limit = options.limit ?? 50;
-    const conditions = [eq(emailSuppressions.userId, options.userId)];
+    const conditions: SQL[] = [eq(emailSuppressions.userId, options.userId)];
     if (options.after)
       conditions.push(sql`${emailSuppressions.id} < ${options.after}`);
+
+    const filters = options.filters;
+    const search = filters?.search?.trim();
+    if (search) {
+      const pattern = `%${search}%`;
+      const searchCondition = or(
+        sql`${emailSuppressions.id}::text ILIKE ${pattern}`,
+        sql`${emailSuppressions.email} ILIKE ${pattern}`,
+        sql`${emailSuppressions.sourceEmailId}::text ILIKE ${pattern}`,
+        sql`${emailSuppressions.sourceMessageId} ILIKE ${pattern}`,
+      );
+      if (searchCondition) conditions.push(searchCondition);
+    }
+
+    if (filters?.reason)
+      conditions.push(eq(emailSuppressions.reason, filters.reason));
+    if (filters?.source)
+      conditions.push(
+        sql`${emailSuppressions.metadata}->>'source' = ${filters.source}`,
+      );
+    if (filters?.createdAfter)
+      conditions.push(
+        gte(emailSuppressions.suppressedAt, filters.createdAfter),
+      );
+    if (filters?.createdBefore)
+      conditions.push(
+        lte(emailSuppressions.suppressedAt, filters.createdBefore),
+      );
+
+    const domain = filters?.domain?.trim().toLowerCase();
+    if (domain) {
+      const pattern = `%${domain}%`;
+      conditions.push(sql`exists (
+        select 1 from ${emails}
+        where ${emails.id} = ${emailSuppressions.sourceEmailId}
+          and ${emails.userId} = ${options.userId}
+          and lower(${emails.from}) like ${pattern}
+      )`);
+    }
+
+    const topicId = filters?.topicId?.trim();
+    if (topicId) {
+      conditions.push(sql`exists (
+        select 1 from ${emails}
+        where ${emails.id} = ${emailSuppressions.sourceEmailId}
+          and ${emails.userId} = ${options.userId}
+          and ${emails.topicId}::text = ${topicId}
+      )`);
+    }
 
     const rows = await db
       .select()

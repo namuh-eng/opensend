@@ -1,5 +1,6 @@
 import {
   createBackgroundJob,
+  createInboundEmailIngestionService,
   createTelemetryContext,
   domainService,
   emailEventRepo,
@@ -91,6 +92,12 @@ function getSesSuppressionOutcome(
 
 function isAuthorizedJobRequest(authHeader: string | undefined): boolean {
   const token = process.env.INGESTER_JOB_TOKEN?.trim();
+  if (!token) return true;
+  return timingSafeStringEqual(authHeader, `Bearer ${token}`);
+}
+
+function isAuthorizedInboundRequest(authHeader: string | undefined): boolean {
+  const token = process.env.INGESTER_INBOUND_TOKEN?.trim();
   if (!token) return true;
   return timingSafeStringEqual(authHeader, `Bearer ${token}`);
 }
@@ -294,6 +301,100 @@ app.post("/webhooks/stripe", async (c) => {
       },
     });
     return c.text("Internal Server Error", 500);
+  }
+});
+
+app.post("/events/inbound", async (c) => {
+  const telemetry = createTelemetryContext({
+    service: "ingester",
+    operation: "POST /events/inbound",
+    headers: {
+      traceparent: c.req.header("traceparent"),
+      tracestate: c.req.header("tracestate"),
+      "x-correlation-id": c.req.header("x-correlation-id"),
+    },
+  });
+
+  if (!isAuthorizedInboundRequest(c.req.header("authorization"))) {
+    return c.text("Unauthorized", 401);
+  }
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json(
+      { ok: false, status: "malformed_mime", reason: "Invalid JSON body" },
+      400,
+    );
+  }
+
+  if (!isRecord(body) || typeof body.event_id !== "string") {
+    return c.json(
+      {
+        ok: false,
+        status: "malformed_mime",
+        reason: "Inbound payload requires event_id",
+      },
+      422,
+    );
+  }
+
+  const recipients = Array.isArray(body.recipients)
+    ? body.recipients.filter(
+        (recipient): recipient is string => typeof recipient === "string",
+      )
+    : undefined;
+
+  const metadata = isRecord(body.metadata) ? body.metadata : undefined;
+  const service = createInboundEmailIngestionService();
+
+  try {
+    const outcome = await service.process({
+      provider: typeof body.provider === "string" ? body.provider : "generic",
+      eventId: body.event_id,
+      messageId:
+        typeof body.message_id === "string" ? body.message_id : undefined,
+      recipients,
+      rawMime: typeof body.raw_mime === "string" ? body.raw_mime : undefined,
+      rawMimeBase64:
+        typeof body.raw_mime_base64 === "string"
+          ? body.raw_mime_base64
+          : undefined,
+      rawMimeUrl:
+        typeof body.raw_mime_url === "string" ? body.raw_mime_url : undefined,
+      metadata,
+    });
+
+    const status = outcome.status === "processed" ? 202 : 200;
+    logTelemetry("info", "inbound.event.ingested", telemetry, {
+      inbound_status: outcome.status,
+      provider_event_id: outcome.provider_event_id,
+      received_email_id:
+        "received_email_id" in outcome ? outcome.received_email_id : undefined,
+    });
+
+    emitCloudWatchMetric(telemetry, {
+      metrics: [{ name: "InboundEventIngested", value: 1, unit: "Count" }],
+      dimensions: {
+        Service: "ingester",
+        Operation: "inbound.ingest",
+        Outcome: outcome.status,
+      },
+    });
+
+    return c.json({ ok: outcome.status === "processed", ...outcome }, status);
+  } catch (error) {
+    recordTelemetryError(telemetry, "inbound.ingest.failed", error);
+    emitCloudWatchMetric(telemetry, {
+      metrics: [{ name: "InboundEventIngestFailed", value: 1, unit: "Count" }],
+      dimensions: {
+        Service: "ingester",
+        Operation: "inbound.ingest",
+        Outcome: "failed",
+      },
+    });
+    return c.json({ ok: false, error: "Internal Server Error" }, 500);
   }
 });
 

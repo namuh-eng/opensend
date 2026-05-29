@@ -33,6 +33,19 @@ Authorization: Bearer os_YOUR_API_KEY
       "from": "support@example.com",
       "to": ["agent@inbound.example.com"],
       "subject": "New support request",
+      "route_decisions": [
+        {
+          "recipient": "agent@inbound.example.com",
+          "status": "exact",
+          "routeId": "22222222-2222-4222-8222-222222222222",
+          "routeType": "exact",
+          "targetAddress": "agent@inbound.example.com"
+        }
+      ],
+      "reply_match_status": "unmatched",
+      "thread_id": null,
+      "reply_to_email_id": null,
+      "contact_id": null,
       "created_at": "2026-05-10T00:00:00.000Z"
     }
   ],
@@ -40,8 +53,8 @@ Authorization: Bearer os_YOUR_API_KEY
 }
 ```
 
-Rows are scoped to the owner of the API key. Empty lists are returned as `200` responses with `data: []`.
+Rows are scoped to the owner of the API key. `route_decisions` is an empty array for legacy rows inserted before route audit metadata existed. `reply_match_status` is `matched` when the ingester validated a tenant/domain-scoped reply token and linked the message to an outbound email thread; otherwise it is `unmatched`. Empty lists are returned as `200` responses with `data: []`.
 
 ## Self-hosting notes
 
-OpenSend currently exposes the read API for inbound rows that your deployment stores in the `received_emails` table. Configure SES receiving, S3 storage, and any parser/ingestion worker in your own deployment before expecting rows to appear. The standalone ingester currently handles SES/SNS sending lifecycle events; full inbound MIME ingestion is an operator integration point, not a hosted promise in this repository.
+OpenSend includes a standalone ingester foundation for inbound MIME notifications at `POST /events/inbound`. Configure MX records and provider receipt rules for your deployment, then send provider notifications with raw MIME payloads or fetch URLs to the ingester. The ingester writes `received_emails` only after resolving the recipient to one tenant and storing attachments through the storage abstraction.

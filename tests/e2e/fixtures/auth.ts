@@ -38,6 +38,10 @@ function getDatabaseUrl(): string | null {
   return process.env.DATABASE_URL ?? null;
 }
 
+function requireBetterAuthSecret(): string | null {
+  return process.env.BETTER_AUTH_SECRET ?? null;
+}
+
 export function getE2EBaseUrl(): string {
   return (
     process.env.E2E_BASE_URL ??
@@ -73,8 +77,13 @@ function hashApiKey(rawKey: string): string {
 }
 
 export function signBetterAuthSessionToken(sessionToken: string): string {
-  const secret =
-    process.env.BETTER_AUTH_SECRET ?? "better-auth-secret-12345678901234567890";
+  const secret = requireBetterAuthSecret();
+  if (!secret) {
+    throw new Error(
+      "BETTER_AUTH_SECRET is required for auth-backed E2E session cookies",
+    );
+  }
+
   const signature = createHmac("sha256", secret)
     .update(sessionToken)
     .digest("base64");
@@ -89,6 +98,10 @@ export async function cleanupE2ERun(
   const apiKeyPrefix = `e2e-api-key-${runId}`;
   const emailPattern = `%@${runId}.e2e.opensend.test`;
 
+  await client.query(
+    "delete from dashboard_export_jobs where user_id like $1",
+    [`${userPrefix}%`],
+  );
   await client.query(
     `delete from webhook_deliveries
      where event_id in (
@@ -108,11 +121,24 @@ export async function cleanupE2ERun(
   await client.query("delete from email_events where user_id like $1", [
     `${userPrefix}%`,
   ]);
+  await client.query("delete from forwarding_attempts where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query("delete from forwarding_rules where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query(
+    "delete from inbound_provider_events where user_id like $1 or raw_metadata->>'test_run_id' = $2",
+    [`${userPrefix}%`, runId],
+  );
   await client.query(
     "delete from email_suppressions where user_id like $1 or email like $2",
     [`${userPrefix}%`, emailPattern],
   );
   await client.query("delete from received_emails where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query("delete from receiving_routes where user_id like $1", [
     `${userPrefix}%`,
   ]);
   await client.query("delete from emails where user_id like $1", [
@@ -148,6 +174,9 @@ export async function cleanupE2ERun(
     "delete from segments where user_id like $1 or document->>'test_run_id' = $2",
     [`${userPrefix}%`, runId],
   );
+  await client.query("delete from domains where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query(
     "delete from api_keys where user_id like $1 or name like $2 or document->>'test_run_id' = $3",
     [`${userPrefix}%`, `${apiKeyPrefix}%`, runId],
@@ -290,6 +319,13 @@ export const test = base.extend<AuthFixtures>({
         sameSite: "Lax",
       },
     ]);
+
+    const sessionResponse = await page.request.get("/api/auth/get-session");
+    expect(sessionResponse.ok()).toBe(true);
+    const sessionBody = (await sessionResponse.json()) as {
+      user?: { id?: string };
+    } | null;
+    expect(sessionBody?.user?.id).toBe(e2eUser.id);
 
     await use(page);
   },

@@ -18,6 +18,7 @@
 - [Send emails with Flask](https://opensend.namuh.co/docs/send-with-flask.md): Use the Python SDK from Flask routes, CLI commands, or background workers.
 - [Send emails with Django](https://opensend.namuh.co/docs/send-with-django.md): Use the Python SDK from Django views, management commands, or background jobs.
 - [Send emails with Go](https://opensend.namuh.co/docs/send-with-go.md): Send email from Go with the first-party OpenSend Go SDK.
+- [Send emails with Java and Kotlin](https://opensend.namuh.co/docs/send-with-java.md): Use the first-party OpenSend JVM SDK from plain Java, Kotlin, Spring Boot services, workers, and command-line applications. The package lives in this repository at packages/jvm-sdk while registry publishing is prepared.
 - [Send emails with Ruby](https://opensend.namuh.co/docs/send-with-ruby.md): Send email from Ruby with the first-party OpenSend Ruby SDK. It works in Rails, Sinatra, Ruby scripts, and background jobs.
 - [Send emails with Rails](https://opensend.namuh.co/docs/send-with-rails.md): Use the Ruby SDK from Rails controllers, jobs, mailer adapters, or service objects.
 - [Send emails with Sinatra](https://opensend.namuh.co/docs/send-with-sinatra.md): Use the Ruby SDK from Sinatra routes or background jobs.
@@ -30,11 +31,14 @@
 - [React Email Skill](https://opensend.namuh.co/docs/react-email-skill.md): Build HTML email with React components.
 - [Email Best Practices Skill](https://opensend.namuh.co/docs/email-best-practices-skill.md): Guardrails for production email systems.
 - [Custom Event Schemas](https://opensend.namuh.co/docs/custom-event-schemas.md): Define and validate custom event payloads.
+- [Send emails with PHP](https://opensend.namuh.co/docs/send-with-php.md): Send email from PHP with the first-party OpenSend PHP SDK. This first SDK slice supports the core single-email send path, idempotency keys, typed request/response objects, and typed OpenSend API errors.
 - [Introduction](https://opensend.namuh.co/docs/api-reference/introduction.md): Core concepts for the OpenSend API.
 - [Authentication](https://opensend.namuh.co/docs/api-reference/authentication.md): How API key authentication works in OpenSend.
 - [Pagination](https://opensend.namuh.co/docs/api-reference/pagination.md): OpenSend collection endpoints use cursor-style pagination where the route supports it. The API keeps pagination deliberately simple so self-hosted deployments and generated clients can share the same contract.
 - [Errors](https://opensend.namuh.co/docs/api-reference/errors.md): Common OpenSend API error shapes and status codes.
 - [Usage Limits](https://opensend.namuh.co/docs/api-reference/rate-limit.md): Rate limits, quotas, and operational limits.
+- [Receiving Routes API](https://opensend.namuh.co/docs/api-reference/receiving-routes.md): Create, list, update, retrieve, and delete receiving routes for verified receiving domains.
+- [Forwarding Rules API](https://opensend.namuh.co/docs/api-reference/forwarding-rules.md): Create, list, update, and delete automatic inbound forwarding rules for receiving routes.
 - [Create API Key](https://opensend.namuh.co/docs/api-reference/api-keys/create-api-key.md): Create a new API key. This page documents the OpenSend-owned API contract for POST /api-keys.
 - [Delete API Key](https://opensend.namuh.co/docs/api-reference/api-keys/delete-api-key.md): Delete an API key. This page documents the OpenSend-owned API contract for DELETE /api-keys/{id}.
 - [List API Keys](https://opensend.namuh.co/docs/api-reference/api-keys/list-api-keys.md): List API keys for the authenticated tenant. This page documents the OpenSend-owned API contract for GET /api-keys.
@@ -68,6 +72,7 @@
 - [Verify Domain](https://opensend.namuh.co/docs/api-reference/domains/verify-domain.md): Ask OpenSend to re-check DNS for a domain and return the current verification state.
 - [Cancel Email](https://opensend.namuh.co/docs/api-reference/emails/cancel-email.md): Cancel a scheduled email.
 - [List Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-email-attachments.md): List attachments associated with a sent email.
+- [List Email Trace](https://opensend.namuh.co/docs/api-reference/emails/list-email-trace.md): List the chronological trace for one sent email.
 - [List Sent Emails](https://opensend.namuh.co/docs/api-reference/emails/list-emails.md): List sent, queued, and scheduled emails for the authenticated tenant.
 - [List Received Email Attachments](https://opensend.namuh.co/docs/api-reference/emails/list-received-email-attachments.md): List attachment metadata stored with one received email.
 - [List Received Emails](https://opensend.namuh.co/docs/api-reference/emails/list-received-emails.md): List inbound email rows stored for the authenticated OpenSend tenant.
@@ -87,8 +92,11 @@
 - [Retrieve Segment](https://opensend.namuh.co/docs/api-reference/segments/get-segment.md): Retrieve a segment. This page documents the OpenSend-owned API contract for GET /segments/{id}.
 - [List Segment Contacts](https://opensend.namuh.co/docs/api-reference/segments/list-segment-contacts.md): List contacts in a segment. This page documents the OpenSend-owned API contract for GET /segments/{id}/contacts.
 - [List Segments](https://opensend.namuh.co/docs/api-reference/segments/list-segments.md): List segments. This page documents the OpenSend-owned API contract for GET /segments.
-- [Delete Suppression](https://opensend.namuh.co/docs/api-reference/suppressions/delete-suppression.md): Remove a recipient from suppressions. This page documents the OpenSend-owned API contract for DELETE /api/suppressions/{email}.
-- [List Suppressions](https://opensend.namuh.co/docs/api-reference/suppressions/list-suppressions.md): List suppressed recipients. This page documents the OpenSend-owned API contract for GET /api/suppressions.
+- [Create Suppression](https://opensend.namuh.co/docs/api-reference/suppressions/create-suppression.md): Create or update one tenant-scoped suppression.
+- [Delete Suppression](https://opensend.namuh.co/docs/api-reference/suppressions/delete-suppression.md): Remove one tenant-scoped suppression by email address.
+- [Export Suppressions](https://opensend.namuh.co/docs/api-reference/suppressions/export-suppressions.md): Export tenant-scoped suppressions as sanitized CSV.
+- [Import Suppressions](https://opensend.namuh.co/docs/api-reference/suppressions/import-suppressions.md): Import a bounded CSV of tenant-scoped suppressions.
+- [List Suppressions](https://opensend.namuh.co/docs/api-reference/suppressions/list-suppressions.md): List tenant-scoped suppressed recipients for the authenticated OpenSend account.
 - [Create Template](https://opensend.namuh.co/docs/api-reference/templates/create-template.md): Create a reusable template. This page documents the OpenSend-owned API contract for POST /templates.
 - [Delete Template](https://opensend.namuh.co/docs/api-reference/templates/delete-template.md): Delete a template. This page documents the OpenSend-owned API contract for DELETE /templates/{id}.
 - [Duplicate Template](https://opensend.namuh.co/docs/api-reference/templates/duplicate-template.md): Duplicate a template. This page documents the OpenSend-owned API contract for POST /templates/{id}/duplicate.
@@ -111,7 +119,7 @@
 - [Attachments](https://opensend.namuh.co/docs/dashboard/emails/attachments.md): How to send and inspect attachments.
 - [Custom Headers](https://opensend.namuh.co/docs/dashboard/emails/custom-headers.md): Custom headers let application code attach provider-safe metadata to an email. Headers are submitted through the API or SDK and are useful for internal correlation, customer support, and downstream processing.
 - [Email Bounces](https://opensend.namuh.co/docs/dashboard/emails/email-bounces.md): Bounces are delivery-provider events recorded after SES rejects or later reports a message as undeliverable. In the dashboard, bounce information appears through the email lifecycle status, related logs, metrics, and suppression indicators.
-- [Email Suppressions](https://opensend.namuh.co/docs/dashboard/emails/email-suppressions.md): Suppressions prevent OpenSend from sending to addresses that should not receive mail. They can be created by bounce/complaint events, unsubscribe flows, or manual API actions. The dashboard surfaces suppression state on email detail and audience/contact views.
+- [Email Suppressions](https://opensend.namuh.co/docs/dashboard/emails/email-suppressions.md): Suppressions prevent OpenSend from sending to addresses that should not receive mail. They can be created by hard bounce/complaint events or manual dashboard/API actions.
 - [Idempotency Keys](https://opensend.namuh.co/docs/dashboard/emails/idempotency-keys.md): Idempotency keys prevent duplicate accepted sends when application code retries after a timeout, crash, or provider webhook replay. OpenSend supports idempotency for single email sends, batch sends, broadcast creation/sending, and selected write APIs.
 - [Schedule Email](https://opensend.namuh.co/docs/dashboard/emails/schedule-email.md): Scheduled email lets application code queue a message for future delivery with the scheduledat field. The dashboard shows the accepted email record immediately; the worker sends it when the scheduled time is reached.
 - [Email Tags](https://opensend.namuh.co/docs/dashboard/emails/tags.md): Tags are structured name/value labels attached at send time. Use tags to group related email activity by campaign, workflow, tenant, product area, or internal object ID.
@@ -136,14 +144,16 @@
 - [Automation Wait for Event Step](https://opensend.namuh.co/docs/dashboard/automations/wait-for-event.md): Wait-for-event pauses a run until a matching custom event arrives or the wait expires. It is useful for flows such as "send a reminder unless the user completes setup".
 - [Automation Runs](https://opensend.namuh.co/docs/dashboard/automations/runs.md): Runs show how individual contacts or events moved through an automation. Use run detail pages for support, QA, and debugging production flows.
 - [Dashboard Webhooks](https://opensend.namuh.co/docs/dashboard/webhooks/introduction.md): The Webhooks dashboard manages outbound event subscriptions. Use it to create endpoints, choose event types, inspect delivery attempts, disable destinations, and replay failed or historical deliveries.
-- [Dashboard Suppressions](https://opensend.namuh.co/docs/dashboard/suppressions/introduction.md): OpenSend suppression behavior is visible across email detail, contacts, unsubscribe workflows, and APIs. There is not a separate full suppressions dashboard page in this repo yet; use the available dashboard surfaces plus the suppressions API for operational management.
+- [Dashboard Suppressions](https://opensend.namuh.co/docs/dashboard/suppressions/introduction.md): The Suppressions dashboard is the dedicated operational surface for addresses OpenSend will not send to for the current tenant. It is separate from Audience contacts and topic preferences so support teams can manage delivery-safety records without confusing them with marketing subscription state.
 - [Dashboard Logs](https://opensend.namuh.co/docs/dashboard/logs/introduction.md): Logs are the low-level request and operational records used to troubleshoot OpenSend. They complement Emails, Broadcasts, Automations, and Webhooks by showing API method, path, status, timestamps, and error context.
+- [Dashboard Export Center](https://opensend.namuh.co/docs/dashboard/export-center.md): The Export Center creates dashboard-session CSV exports for stable OpenSend resources without widening the public API-key surface. It is intended for operational downloads from the authenticated dashboard, not server-to-server automation.
 - [Receiving Overview](https://opensend.namuh.co/docs/dashboard/receiving/introduction.md): Receiving is the OpenSend area for inbound email rows that your deployment stores for a verified domain.
 - [Receiving Custom Domains](https://opensend.namuh.co/docs/dashboard/receiving/custom-domains.md): Use a custom domain or subdomain for inbound addresses that route into OpenSend-backed storage.
+- [Receiving Routing](https://opensend.namuh.co/docs/dashboard/receiving/routing.md): Receiving routes decide which stored inbox target should own an inbound recipient on a verified receiving domain. They do not forward mail, send replies, or create provider DNS records.
 - [Get Received Email Content](https://opensend.namuh.co/docs/dashboard/receiving/get-email-content.md): Use the received email detail API to fetch parsed content after your receiving worker stores a row.
 - [Receiving Attachments](https://opensend.namuh.co/docs/dashboard/receiving/attachments.md): Received email attachments are represented as metadata plus a private object key stored by your receiving worker.
-- [Forward Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/forward-emails.md): Automatic forwarding is not implemented in the OpenSend repository today.
-- [Reply To Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/reply-to-emails.md): OpenSend does not currently provide a one-click inbound reply API.
+- [Forward Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/forward-emails.md): OpenSend can automatically forward stored inbound messages after MIME ingestion and receiving-route resolution succeeds.
+- [Reply To Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/reply-to-emails.md): OpenSend now links inbound replies to outbound messages when the sending domain is also a verified receiving domain.
 - [Managing Webhooks](https://opensend.namuh.co/docs/webhooks/introduction.md): Use OpenSend webhooks to receive signed lifecycle events from your own OpenSend deployment.
 - [Event Types](https://opensend.namuh.co/docs/webhooks/event-types.md): OpenSend accepts the following webhook subscription event types.
 - [Verify Webhook Requests](https://opensend.namuh.co/docs/webhooks/verify-webhooks-requests.md): Verify every OpenSend webhook request before trusting the payload.
@@ -156,12 +166,15 @@
 - [email.bounced](https://opensend.namuh.co/docs/webhooks/emails/bounced.md): Provider bounce notification received.
 - [email.clicked](https://opensend.namuh.co/docs/webhooks/emails/clicked.md): Tracked link redirect was requested.
 - [email.complained](https://opensend.namuh.co/docs/webhooks/emails/complained.md): Provider complaint notification received.
+- [email.delayed](https://opensend.namuh.co/docs/webhooks/emails/delayed.md): Provider retry delay recorded by the queue worker.
 - [email.delivered](https://opensend.namuh.co/docs/webhooks/emails/delivered.md): Provider delivery notification received.
 - [email.deliverydelayed](https://opensend.namuh.co/docs/webhooks/emails/delivery-delayed.md): Provider delivery delay notification received.
 - [email.failed](https://opensend.namuh.co/docs/webhooks/emails/failed.md): Provider reject, rendering failure, or retry exhaustion recorded.
 - [email.opened](https://opensend.namuh.co/docs/webhooks/emails/opened.md): Open tracking pixel was requested.
 - [email.received](https://opensend.namuh.co/docs/webhooks/emails/received.md): Inbound receiving is currently a deployment integration point: the repository includes read APIs and storage schema for received email rows, but it does not include a complete SES inbound MIME parser that emits this event automatically. If you build that parser for your self-hosted deployment, use the payload shape below so downstream agents and webhook consumers can rely on a stable contract.
+- [email.scheduled](https://opensend.namuh.co/docs/webhooks/emails/scheduled.md): Future delivery accepted and stored.
 - [email.sent](https://opensend.namuh.co/docs/webhooks/emails/sent.md): Provider send notification received.
+- [email.suppressed](https://opensend.namuh.co/docs/webhooks/emails/suppressed.md): Send rejected by suppression policy.
 - [Retries and Replays](https://opensend.namuh.co/docs/webhooks/retries-and-replays.md): OpenSend records webhook delivery attempts and retries failed deliveries.
 - [SPF, DKIM, and DMARC for OpenSend](https://opensend.namuh.co/docs/knowledge-base/spf-dkim-dmarc.md): Mailbox providers use SPF, DKIM, and DMARC to decide whether a sender is authenticated. OpenSend surfaces the DNS records needed for your deployment, but the domain owner is responsible for publishing and maintaining them.
 - [What if my domain is not verifying?](https://opensend.namuh.co/docs/knowledge-base/what-if-my-domain-is-not-verifying.md): Domain verification fails when OpenSend or the provider cannot see the expected DNS records. Most failures are record-name mistakes, duplicate TXT records, wrong DNS provider, or propagation delays.
@@ -179,7 +192,7 @@
 - [What sending feature should I use?](https://opensend.namuh.co/docs/knowledge-base/what-sending-feature-to-use.md): OpenSend has several sending surfaces. Choose the one that matches the job instead of forcing every workflow through one endpoint.
 - [What attachment types are not supported?](https://opensend.namuh.co/docs/knowledge-base/what-attachment-types-are-not-supported.md): OpenSend accepts attachments through the email API and SMTP relay, but operators should restrict unsafe or oversized files according to their security policy and provider limits.
 - [Self Hosting](https://opensend.namuh.co/docs/self-hosting.md): Run OpenSend on your own infrastructure with Docker Compose, PostgreSQL, AWS SES/S3, and the standalone ingester service.
-- [Ingester Deployment](https://opensend.namuh.co/docs/ingester-deploy.md): Deploy the SES/SNS ingester and queue worker.
+- [Ingester Deployment](https://opensend.namuh.co/docs/ingester-deploy.md): Deploy the standalone ingester and queue worker. Provider callbacks should target the ingester service, not the Next.js app URL.
 - [Security](https://opensend.namuh.co/docs/security.md): Security model overview.
 - [Observability](https://opensend.namuh.co/docs/observability.md): Operate OpenSend in production.
 

@@ -37,6 +37,9 @@ function makeEmail(overrides: Partial<EmailRow> = {}): EmailRow {
     userId: "user-1",
     topicId: null,
     idempotencyKey: null,
+    threadId: null,
+    replyAddress: null,
+    replyToken: null,
     ...overrides,
   };
 }
@@ -97,6 +100,8 @@ describe("email detail service boundary", () => {
       "subject",
       "html",
       "text",
+      "reply_address",
+      "thread_id",
       "cc",
       "bcc",
       "reply_to",
@@ -119,6 +124,8 @@ describe("email detail service boundary", () => {
       subject: "Hello",
       html: "<p>Hello</p>",
       text: null,
+      reply_address: null,
+      thread_id: null,
       cc: null,
       bcc: null,
       reply_to: null,
