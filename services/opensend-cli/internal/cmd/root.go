@@ -49,6 +49,7 @@ func init() {
 	rootCmd.AddCommand(apiKeysCmd)
 	rootCmd.AddCommand(logsCmd)
 	rootCmd.AddCommand(sendCmd)
+	rootCmd.AddCommand(doctorCmd)
 }
 
 // envOrDefault returns the value of the named environment variable, or def if unset/empty.
