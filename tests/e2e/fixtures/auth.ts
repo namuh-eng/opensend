@@ -38,6 +38,10 @@ function getDatabaseUrl(): string | null {
   return process.env.DATABASE_URL ?? null;
 }
 
+function requireBetterAuthSecret(): string | null {
+  return process.env.BETTER_AUTH_SECRET ?? null;
+}
+
 export function getE2EBaseUrl(): string {
   return (
     process.env.E2E_BASE_URL ??
@@ -73,8 +77,13 @@ function hashApiKey(rawKey: string): string {
 }
 
 export function signBetterAuthSessionToken(sessionToken: string): string {
-  const secret =
-    process.env.BETTER_AUTH_SECRET ?? "better-auth-secret-12345678901234567890";
+  const secret = requireBetterAuthSecret();
+  if (!secret) {
+    throw new Error(
+      "BETTER_AUTH_SECRET is required for auth-backed E2E session cookies",
+    );
+  }
+
   const signature = createHmac("sha256", secret)
     .update(sessionToken)
     .digest("base64");
@@ -310,6 +319,13 @@ export const test = base.extend<AuthFixtures>({
         sameSite: "Lax",
       },
     ]);
+
+    const sessionResponse = await page.request.get("/api/auth/get-session");
+    expect(sessionResponse.ok()).toBe(true);
+    const sessionBody = (await sessionResponse.json()) as {
+      user?: { id?: string };
+    } | null;
+    expect(sessionBody?.user?.id).toBe(e2eUser.id);
 
     await use(page);
   },
