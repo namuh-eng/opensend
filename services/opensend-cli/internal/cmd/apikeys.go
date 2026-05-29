@@ -122,12 +122,13 @@ func runApiKeysList(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 3, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tPERMISSIONS\tCREATED")
+	fmt.Fprintln(w, "ID\tNAME\tPERMISSIONS\tLAST USED\tCREATED")
 	for _, k := range listResp.Data {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 			k.ID,
 			k.Name,
 			orDash(k.Permission),
+			formatCreated(k.LastUsedAt),
 			formatCreated(k.CreatedAt),
 		)
 	}

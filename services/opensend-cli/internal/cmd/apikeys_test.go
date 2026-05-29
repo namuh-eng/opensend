@@ -12,7 +12,7 @@ import (
 var mockAPIKeys = apiKeyListResponse{
 	Object: "list",
 	Data: []apiKeyListItem{
-		{ID: "key_abc123", Name: "Production", Permission: "full_access", CreatedAt: "2025-01-15T10:00:00.000Z"},
+		{ID: "key_abc123", Name: "Production", Permission: "full_access", CreatedAt: "2025-01-15T10:00:00.000Z", LastUsedAt: "2026-05-28T14:22:00.000Z"},
 		{ID: "key_def456", Name: "Read Only", Permission: "read_only", CreatedAt: "2025-03-20T08:30:00.000Z"},
 	},
 	HasMore: false,
@@ -49,7 +49,7 @@ func TestAPIKeysListHappyPath(t *testing.T) {
 	}
 
 	got := out.String()
-	for _, want := range []string{"key_abc123", "Production", "full_access", "key_def456", "Read Only", "ID", "NAME"} {
+	for _, want := range []string{"key_abc123", "Production", "full_access", "key_def456", "Read Only", "ID", "NAME", "LAST USED"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("expected %q in output, got:\n%s", want, got)
 		}
@@ -234,6 +234,69 @@ func TestAPIKeysRevokeNoAPIKey(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "API key required") {
 		t.Errorf("expected 'API key required' in error, got: %v", err)
+	}
+}
+
+func TestAPIKeysRevokeStdinPromptYes(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	origEndpoint, origAPIKey, origYes := endpoint, apiKey, apiKeyRevokeYes
+	endpoint, apiKey = srv.URL, "test-key"
+	apiKeyRevokeYes = false
+	defer func() {
+		endpoint, apiKey, apiKeyRevokeYes = origEndpoint, origAPIKey, origYes
+	}()
+
+	var out bytes.Buffer
+	apiKeysRevokeCmd.SetOut(&out)
+	apiKeysRevokeCmd.SetIn(strings.NewReader("y\n"))
+	defer apiKeysRevokeCmd.SetIn(nil)
+
+	if err := runApiKeysRevoke(apiKeysRevokeCmd, []string{"key_abc123"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "Revoke API key key_abc123?") {
+		t.Errorf("expected confirmation prompt in output, got:\n%s", got)
+	}
+	if !strings.Contains(got, "revoked") {
+		t.Errorf("expected 'revoked' in output after 'y', got:\n%s", got)
+	}
+}
+
+func TestAPIKeysRevokeStdinPromptNoAborts(t *testing.T) {
+	hit := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hit = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	origEndpoint, origAPIKey, origYes := endpoint, apiKey, apiKeyRevokeYes
+	endpoint, apiKey = srv.URL, "test-key"
+	apiKeyRevokeYes = false
+	defer func() {
+		endpoint, apiKey, apiKeyRevokeYes = origEndpoint, origAPIKey, origYes
+	}()
+
+	var out bytes.Buffer
+	apiKeysRevokeCmd.SetOut(&out)
+	apiKeysRevokeCmd.SetIn(strings.NewReader("n\n"))
+	defer apiKeysRevokeCmd.SetIn(nil)
+
+	if err := runApiKeysRevoke(apiKeysRevokeCmd, []string{"key_abc123"}); err != nil {
+		t.Fatalf("unexpected error when aborting: %v", err)
+	}
+
+	if hit {
+		t.Error("expected DELETE not to be called when user answered 'n'")
+	}
+	if !strings.Contains(out.String(), "Aborted") {
+		t.Errorf("expected 'Aborted' in output, got:\n%s", out.String())
 	}
 }
 
