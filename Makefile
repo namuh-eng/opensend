@@ -1,4 +1,7 @@
-.PHONY: check test test-e2e typecheck lint format fix all dev build clean setup
+.PHONY: check test test-e2e typecheck lint format fix all dev build clean setup cli-build cli-test cli-check go-all
+
+# Go CLI version (override with make cli-build VERSION=1.2.3)
+VERSION ?= dev
 
 # Full validation: check + test
 all: check test
@@ -57,6 +60,36 @@ setup:
 	@echo "→ Seeding database..." && bunx tsx scripts/seed.ts
 	@echo "\n✓ Setup complete! Run 'make dev' to start the server."
 
+# ── Go CLI ───────────────────────────────────────────────────────────────────
+
+CLI_MODULE = github.com/namuh-eng/opensend/services/opensend-cli/internal/version
+
+# Build the opensend binary into bin/opensend.
+# Override version: make cli-build VERSION=1.2.3
+cli-build:
+	@mkdir -p bin
+	@echo "→ Building opensend CLI..."
+	cd services/opensend-cli && go build \
+		-ldflags "-X $(CLI_MODULE).Version=$(VERSION) \
+		          -X $(CLI_MODULE).Commit=$(shell git rev-parse --short HEAD) \
+		          -X $(CLI_MODULE).BuildDate=$(shell date -u +%Y-%m-%dT%H:%M:%SZ)" \
+		-o ../../bin/opensend ./
+	@echo "  ✓ bin/opensend built"
+
+# Run Go unit tests.
+cli-test:
+	@echo "→ Go Tests..." && cd services/opensend-cli && go test ./... && echo "  ✓ Go Tests passed"
+
+# Vet + test (used in CI).
+cli-check:
+	@echo "→ Go Vet..." && cd services/opensend-cli && go vet ./... && echo "  ✓ Go Vet passed"
+	@$(MAKE) cli-test
+
+# Aggregate target: run all Go checks.
+go-all: cli-check
+
+# ── Cleanup ───────────────────────────────────────────────────────────────────
+
 # Clean build artifacts
 clean:
-	rm -rf .next dist node_modules/.cache
+	rm -rf .next dist node_modules/.cache bin/opensend
