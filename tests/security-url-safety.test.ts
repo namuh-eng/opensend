@@ -3,6 +3,7 @@ import {
   _resetUrlSafetyCacheForTests,
   assertSafeOutboundUrl,
   parseAndValidateUrlSync,
+  safeOutboundFetch,
 } from "@opensend/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,6 +47,16 @@ describe("url-safety / parseAndValidateUrlSync", () => {
     expect(parseAndValidateUrlSync("http://10.0.0.5/", "create").ok).toBe(
       false,
     );
+  });
+
+  it.each([
+    "http://[::1]/",
+    "http://[fe80::1]/",
+    "http://[fd00::1]/",
+    "http://[::ffff:127.0.0.1]/",
+    "http://[::ffff:169.254.169.254]/",
+  ])("rejects private IPv6 literal %s", (url) => {
+    expect(parseAndValidateUrlSync(url, "create").ok).toBe(false);
   });
 
   it("rejects metadata.google.internal", () => {
@@ -153,5 +164,44 @@ describe("url-safety / assertSafeOutboundUrl (DNS-resolved)", () => {
         dnsLookup: lookup,
       }),
     ).rejects.toBeInstanceOf(UnsafeOutboundUrlError);
+  });
+});
+
+describe("url-safety / safeOutboundFetch", () => {
+  beforeEach(() => {
+    _resetUrlSafetyCacheForTests();
+    process.env.ALLOW_PRIVATE_WEBHOOK_URLS = undefined;
+  });
+
+  it("rejects private literals before opening an outbound request", async () => {
+    await expect(
+      safeOutboundFetch(
+        "http://[::ffff:169.254.169.254]/latest/meta-data",
+        { redirect: "error" },
+        { context: "dispatch" },
+      ),
+    ).rejects.toBeInstanceOf(UnsafeOutboundUrlError);
+  });
+
+  it("resolves DNS for every pinned fetch instead of trusting the preflight cache", async () => {
+    const lookup = vi
+      .fn()
+      .mockResolvedValueOnce([{ address: "93.184.216.34", family: 4 }])
+      .mockResolvedValueOnce([{ address: "10.0.0.5", family: 4 }]);
+
+    await assertSafeOutboundUrl("https://cached-fetch.example/hook", {
+      context: "dispatch",
+      dnsLookup: lookup,
+    });
+
+    await expect(
+      safeOutboundFetch(
+        "https://cached-fetch.example/hook",
+        { redirect: "error" },
+        { context: "dispatch", dnsLookup: lookup },
+      ),
+    ).rejects.toBeInstanceOf(UnsafeOutboundUrlError);
+
+    expect(lookup).toHaveBeenCalledTimes(2);
   });
 });

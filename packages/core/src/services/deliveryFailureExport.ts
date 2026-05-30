@@ -6,6 +6,7 @@ import {
   type DeliveryFailureSuppressionRow,
   deliveryFailureExportRepo,
 } from "../db/repositories/deliveryFailureExportRepo";
+import { escapeCsvValue } from "../security/csv-escape";
 
 export const DELIVERY_FAILURE_EXPORT_STATUSES = [
   "bounced",
@@ -193,14 +194,6 @@ function suppressionRowToCsvRow(
   };
 }
 
-function escapeCsv(value: unknown): string {
-  const raw = String(value ?? "");
-  if (/[",\n\r]/.test(raw)) {
-    return `"${raw.replace(/"/g, '""')}"`;
-  }
-  return raw;
-}
-
 export function serializeDeliveryFailureCsv(
   rows: DeliveryFailureExportCsvRow[],
 ): string {
@@ -208,7 +201,7 @@ export function serializeDeliveryFailureCsv(
     DELIVERY_FAILURE_EXPORT_HEADERS.join(","),
     ...rows.map((row) =>
       DELIVERY_FAILURE_EXPORT_HEADERS.map((header) =>
-        escapeCsv(row[header]),
+        escapeCsvValue(row[header]),
       ).join(","),
     ),
   ].join("\n");

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseAndValidateUrlSync } from "../security/url-safety";
 import { publicApiErrorEnvelopeSchema } from "./public-api-errors";
 
 // ── Common Fragments ──────────────────────────────────────────────
@@ -29,15 +30,6 @@ export const tagSchema = z.object({
     .max(256, EMAIL_TAG_LENGTH_MESSAGE)
     .regex(EMAIL_TAG_PATTERN, EMAIL_TAG_PATTERN_MESSAGE),
 });
-
-function hasAllowedAttachmentUrlScheme(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
 
 function getBase64EncodedSize(byteLength: number): number {
   return Math.ceil(byteLength / 3) * 4;
@@ -84,10 +76,17 @@ export const attachmentSchema = z
       });
     }
 
-    if (attachment.path && !hasAllowedAttachmentUrlScheme(attachment.path)) {
+    const urlVerdict = attachment.path
+      ? parseAndValidateUrlSync(attachment.path, "dispatch")
+      : null;
+
+    if (urlVerdict && !urlVerdict.ok) {
       ctx.addIssue({
         code: "custom",
-        message: "attachment path must use http or https",
+        message:
+          urlVerdict.reason === "blocked_protocol"
+            ? "attachment path must use http or https"
+            : "attachment path is not allowed",
         path: ["path"],
       });
     }

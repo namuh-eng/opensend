@@ -84,6 +84,35 @@ describe("send email public contract boundary", () => {
     expect(oversized.success).toBe(false);
   });
 
+  it("rejects private-network attachment URLs at the public contract boundary", () => {
+    for (const path of [
+      "http://169.254.169.254/latest/meta-data",
+      "http://[::1]/metadata",
+      "http://[fe80::1]/metadata",
+      "http://[fd00::1]/metadata",
+      "http://[::ffff:127.0.0.1]/metadata",
+      "http://[::ffff:169.254.169.254]/metadata",
+    ]) {
+      const result = sendEmailSchema.safeParse({
+        ...validSendPayload,
+        attachments: [
+          {
+            filename: "metadata.txt",
+            path,
+          },
+        ],
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        const details = zodValidationDetails(result.error);
+        expect(details.fieldErrors["attachments.0.path"]).toContain(
+          "attachment path is not allowed",
+        );
+      }
+    }
+  });
+
   it("defines public success response fields and casing for send and batch send", () => {
     expect(sendEmailResponseSchema.parse({ id: "email_123" })).toEqual({
       id: "email_123",

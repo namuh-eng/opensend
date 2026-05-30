@@ -88,7 +88,9 @@ Set these on the ingester service:
 
 ```bash
 BACKGROUND_WORKER_POLL=true
-INGESTER_JOB_TOKEN=<random-bearer-token>
+INGESTER_JOB_TOKEN=<32+-char-random-bearer-token>
+# Required only when using /events/inbound in production.
+INGESTER_INBOUND_TOKEN=<32+-char-random-bearer-token>
 ```
 
 For hosted Stripe billing cutover, also set these on the ingester service from
@@ -112,7 +114,7 @@ environment before sending Stripe traffic to the endpoint. See
 [`hosted-stripe-cutover.md`](hosted-stripe-cutover.md) for the full validation
 checklist.
 
-Set the same `INGESTER_JOB_TOKEN` on any scheduler that calls `/jobs/*`. Compose also accepts an optional scheduler cadence override:
+Set the same 32+ character `INGESTER_JOB_TOKEN` on any scheduler that calls `/jobs/*`; production ingesters reject missing job tokens. Compose also accepts an optional scheduler cadence override:
 
 ```bash
 INGESTER_SCHEDULER_INTERVAL_SECONDS=60
@@ -224,7 +226,7 @@ Before pointing production SES SNS at a freshly stood-up ingester, verify:
   `https://events.<your-domain>/webhooks/stripe` and the ingester has
   `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`.
 - The SQS queue exists with a redrive policy + DLQ.
-- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when the token is configured.
+- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}`.
 - Domain verification runbook passed: create/use a pending domain, confirm SES is verified, do not click **Verify DNS Records**, wait for the scheduler, and confirm the OpenSend DB/dashboard flips to `verified`.
 - Migrations ran successfully against the production database before the new
   image started.

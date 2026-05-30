@@ -1,4 +1,9 @@
-import { authorizeDashboardOrApiKey, getServerSession } from "@/lib/api-auth";
+import {
+  authorizeDashboardOrApiKey,
+  getServerSession,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 
 type BroadcastRouteAuth = NonNullable<
   Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
@@ -15,9 +20,12 @@ async function getUserIdFromAuth(
 
 export async function resolveBroadcastRouteUserId(
   authHeader: string | null | undefined,
-): Promise<string | null> {
+): Promise<string | Response> {
   const auth = await authorizeDashboardOrApiKey(authHeader);
-  if (!auth) return null;
+  if (!auth) return unauthorizedResponse();
 
-  return getUserIdFromAuth(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
+  if (permissionError) return permissionError;
+
+  return (await getUserIdFromAuth(auth)) ?? unauthorizedResponse();
 }

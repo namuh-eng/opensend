@@ -3,6 +3,7 @@ import {
   getServerSession,
   unauthorizedResponse,
 } from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { configurationSetService, dedicatedIpPoolRepo } from "@opensend/core";
 import { NextResponse } from "next/server";
 
@@ -11,6 +12,9 @@ async function resolveUserId(req: Request): Promise<string | Response> {
     req.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
+  if (permissionError) return permissionError;
 
   if ("dashboard" in auth) {
     const session = await getServerSession();
