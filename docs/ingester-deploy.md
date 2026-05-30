@@ -93,6 +93,13 @@ INGESTER_JOB_TOKEN=<32+-char-random-bearer-token>
 INGESTER_INBOUND_TOKEN=<32+-char-random-bearer-token>
 ```
 
+For ECS deploys through `scripts/deploy.sh`, store the job token in AWS Secrets
+Manager. The script injects it into the ingester task definition as
+`INGESTER_JOB_TOKEN` without reading or printing the value. With the default
+`PRODUCT=opensend`, the lookup name is `opensend/ingester/job-token`; override
+with `INGESTER_JOB_TOKEN_SECRET_ID` or pass an exact
+`INGESTER_JOB_TOKEN_SECRET_ARN` if your deployment uses a different name.
+
 For hosted Stripe billing cutover, also set these on the ingester service from
 the deployment secret manager:
 

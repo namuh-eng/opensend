@@ -59,6 +59,18 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     );
   });
 
+  it("deploy script injects the required ingester job token into ECS task definitions", () => {
+    const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
+    expect(script).toContain("INGESTER_JOB_TOKEN_SECRET_ID");
+    expect(script).toContain("${PRODUCT}/ingester/job-token");
+    expect(script).toContain("INGESTER_JOB_TOKEN_SECRET_ARN");
+    expect(script).toContain('"name": "INGESTER_JOB_TOKEN"');
+    expect(script).toContain("register_ingester_task_definition");
+    expect(script).toContain(
+      'redeploy "${ING_SERVICE}" "${ING_TASK_DEFINITION}"',
+    );
+  });
+
   it("deploy script runs migrations before ECS service redeploys", () => {
     const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
     expect(script).toContain("bash scripts/deploy.sh migrate");

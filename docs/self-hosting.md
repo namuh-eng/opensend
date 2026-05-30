@@ -131,14 +131,19 @@ contributor-facing set; the table below adds the production-only entries.
 
 ### AWS ECS deploy secret wiring
 
-The repo deploy script registers a fresh app task definition before updating
-the ECS app service. It injects `WEBHOOK_SECRET_ENCRYPTION_KEY` from AWS
-Secrets Manager and never reads or prints the secret value. By default it looks
-up the secret named `opensend/webhook/secret-encryption-key` when
-`PRODUCT=opensend`; override that lookup with
-`WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID` or pass an exact
-`WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN` when your bootstrap uses a different
-name.
+The repo deploy script registers fresh app and ingester task definitions before
+updating ECS services. It injects required production secrets from AWS Secrets
+Manager and never reads or prints secret values. By default, when
+`PRODUCT=opensend`, it looks up:
+
+- `opensend/webhook/secret-encryption-key` for app
+  `WEBHOOK_SECRET_ENCRYPTION_KEY`.
+- `opensend/ingester/job-token` for ingester `INGESTER_JOB_TOKEN`.
+
+Override those lookups with `WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID` or
+`INGESTER_JOB_TOKEN_SECRET_ID`; pass exact
+`WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN` or `INGESTER_JOB_TOKEN_SECRET_ARN`
+when your bootstrap uses different names.
 
 ### Hosted Stripe billing
 

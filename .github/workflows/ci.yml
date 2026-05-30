@@ -133,6 +133,7 @@ jobs:
         run: |
           cp .env.example .env
           node -e "const fs=require('fs'); const path='.env'; let env=fs.readFileSync(path,'utf8'); if(/^DASHBOARD_KEY=$/m.test(env)){ env=env.replace(/^DASHBOARD_KEY=$/m, 'DASHBOARD_KEY=ci-test-key'); } else if(!/^DASHBOARD_KEY=/m.test(env)){ env += '\nDASHBOARD_KEY=ci-test-key\n'; } fs.writeFileSync(path, env);"
+          printf '\nINGESTER_JOB_TOKEN=ci-test-ingester-job-token-000000\n' >> .env
 
       - name: Validate Docker Compose config
         run: docker compose config
