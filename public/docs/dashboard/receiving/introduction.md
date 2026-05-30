@@ -17,7 +17,7 @@ The current product surface includes a dashboard entry point, received-email rea
 
 - MX records that route inbound messages to your provider.
 - Provider receiving rules, such as SES receipt rules that deliver raw messages or S3 object notifications to the ingester boundary.
-- Deployment-specific authentication for provider callbacks, usually `INGESTER_INBOUND_TOKEN` plus provider-side network controls.
+- Deployment-specific authentication for provider callbacks. Production ingesters require `INGESTER_INBOUND_TOKEN` on inbound MIME callbacks, and provider-side network controls are still recommended.
 - Optional forwarding, reply workflows, or public webhook emission after storage; those are not part of the ingestion foundation.
 
 ## Recommended setup order

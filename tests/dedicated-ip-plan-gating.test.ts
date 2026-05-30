@@ -7,6 +7,7 @@ const mockUnauthorizedResponse = vi.hoisted(
   () => () =>
     new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 }),
 );
+const mockRequireFullAccessForApiKeyCaller = vi.hoisted(() => vi.fn());
 const mockListForUser = vi.hoisted(() => vi.fn());
 const mockCountForUser = vi.hoisted(() => vi.fn());
 const mockCreate = vi.hoisted(() => vi.fn());
@@ -18,6 +19,10 @@ vi.mock("@/lib/api-auth", () => ({
   authorizeDashboardOrApiKey: mockAuthorizeDashboardOrApiKey,
   getServerSession: mockGetServerSession,
   unauthorizedResponse: mockUnauthorizedResponse,
+}));
+
+vi.mock("@/lib/api-key-permissions", () => ({
+  requireFullAccessForApiKeyCaller: mockRequireFullAccessForApiKeyCaller,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -59,7 +64,10 @@ import { GET, POST } from "@/app/api/dedicated-ips/route";
 const SESSION = { user: { id: "user-1", email: "test@example.com" } };
 
 describe("GET /api/dedicated-ips", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireFullAccessForApiKeyCaller.mockReturnValue(null);
+  });
 
   it("returns 401 when unauthenticated", async () => {
     mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce(null);
@@ -83,7 +91,10 @@ describe("GET /api/dedicated-ips", () => {
 });
 
 describe("POST /api/dedicated-ips — plan gating", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRequireFullAccessForApiKeyCaller.mockReturnValue(null);
+  });
 
   it("returns 401 when unauthenticated", async () => {
     mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce(null);
@@ -93,6 +104,32 @@ describe("POST /api/dedicated-ips — plan gating", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(401);
+  });
+
+  it("rejects sending-only API keys before provisioning provider resources", async () => {
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({
+      apiKeyId: "key-send",
+      permission: "sending_access",
+      domain: null,
+      userId: "user-1",
+    });
+    mockRequireFullAccessForApiKeyCaller.mockReturnValueOnce(
+      Response.json(
+        {
+          error:
+            "This API key does not have permission to access this resource.",
+        },
+        { status: 403 },
+      ),
+    );
+
+    const req = new Request("http://localhost/api/dedicated-ips", {
+      method: "POST",
+      body: JSON.stringify({ name: "Pool", ses_pool_name: "ses-pool" }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(403);
+    expect(mockCreateDedicatedIpPool).not.toHaveBeenCalled();
   });
 
   it("returns 403 when plan has dedicatedIpsEnabled=false", async () => {

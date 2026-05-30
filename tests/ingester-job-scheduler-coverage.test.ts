@@ -56,7 +56,9 @@ describe("ingester job scheduler coverage", () => {
 
     expect(schedulerSource).toContain('getEnv("INGESTER_JOB_TOKEN")');
     expect(schedulerSource).toContain("authorization: `Bearer ${token}`");
-    expect(compose).toContain("INGESTER_JOB_TOKEN: ${INGESTER_JOB_TOKEN:-}");
+    expect(compose).toContain(
+      "INGESTER_JOB_TOKEN: ${INGESTER_JOB_TOKEN:?Set INGESTER_JOB_TOKEN in .env (32+ chars)}",
+    );
     expect(docs).toContain("Authorization: Bearer ${INGESTER_JOB_TOKEN}");
   });
 });

@@ -882,12 +882,16 @@ describe("automation runner", () => {
       setup.deps,
     );
 
-    expect(setup.deps.updateContact).toHaveBeenCalledWith(contact.id, {
-      email: "new@example.com",
-      firstName: "Grace",
-      unsubscribed: true,
-      customProperties: { plan: "pro", invoice: "inv_1" },
-    });
+    expect(setup.deps.updateContact).toHaveBeenCalledWith(
+      contact.id,
+      "user_1",
+      {
+        email: "new@example.com",
+        firstName: "Grace",
+        unsubscribed: true,
+        customProperties: { plan: "pro", invoice: "inv_1" },
+      },
+    );
     expect(setup.updates[0]).toMatchObject({
       status: "queued",
       currentStepKey: "end",
@@ -1025,7 +1029,7 @@ describe("automation runner", () => {
       setup.deps,
     );
 
-    expect(setup.deps.deleteContact).toHaveBeenCalledWith(contact.id);
+    expect(setup.deps.deleteContact).toHaveBeenCalledWith(contact.id, "user_1");
     expect(setup.sendEmail).not.toHaveBeenCalled();
     expect(setup.updates[0]).toMatchObject({
       status: "completed",
@@ -1035,6 +1039,36 @@ describe("automation runner", () => {
     expect(setup.updates[0]?.stepStates?.delete).toMatchObject({
       status: "completed",
       output: { deleted_contact_id: contact.id },
+    });
+  });
+
+  it("uses the automation tenant when deleting from a legacy run without user_id", async () => {
+    const deleteStep: AutomationStep = {
+      ...steps[1],
+      key: "delete",
+      type: "contact_delete",
+      config: {},
+      position: 0,
+    };
+    const getContact = vi.fn().mockResolvedValue(contact);
+    const deleteContact = vi.fn().mockResolvedValue({ id: contact.id });
+    const setup = deps({
+      listSteps: vi.fn().mockResolvedValue([deleteStep]),
+      getContact,
+      deleteContact,
+    });
+
+    await processAutomationRunStep(
+      run({ currentStepKey: "delete", userId: null }),
+      setup.deps,
+    );
+
+    expect(getContact).toHaveBeenCalledWith(contact.id, automation.userId);
+    expect(deleteContact).toHaveBeenCalledWith(contact.id, automation.userId);
+    expect(setup.updates[0]).toMatchObject({
+      status: "completed",
+      currentStepKey: null,
+      contactId: null,
     });
   });
 

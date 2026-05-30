@@ -6,9 +6,9 @@ Deploy the standalone ingester and queue worker. Provider callbacks should targe
 
 - `POST /events/ses` — SES/SNS sending lifecycle notifications for delivered, bounced, complained, opened, and clicked events.
 - `POST /events/inbound` — inbound MIME provider notifications. The payload must include `event_id` and either `raw_mime`, `raw_mime_base64`, or `raw_mime_url`.
-- `POST /jobs/poll`, `/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify` — internal job endpoints, optionally protected by `INGESTER_JOB_TOKEN`.
+- `POST /jobs/poll`, `/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify` — internal job endpoints protected by a required production `INGESTER_JOB_TOKEN`.
 
-Set `INGESTER_INBOUND_TOKEN` to require `Authorization: Bearer <token>` on inbound MIME notifications.
+Set `INGESTER_INBOUND_TOKEN` to require `Authorization: Bearer <token>` on inbound MIME notifications. Production ingesters reject `/events/inbound` requests when the token is missing.
 
 ## Inbound payload
 

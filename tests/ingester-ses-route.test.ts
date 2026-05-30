@@ -461,6 +461,35 @@ describe("SES SNS ingestion route", () => {
     expect(mockDomainReconcileAllPendingVerifications).not.toHaveBeenCalled();
   });
 
+  it("fails closed for production job endpoints when no bearer token is configured", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("INGESTER_JOB_TOKEN", "");
+
+    const app = (await import("../packages/ingester/src/index")).default;
+    const response = await app.request("http://localhost/jobs/domain-verify", {
+      method: "POST",
+    });
+
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe("Unauthorized");
+    expect(mockDomainReconcileAllPendingVerifications).not.toHaveBeenCalled();
+  });
+
+  it("fails closed for production inbound MIME callbacks when no bearer token is configured", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("INGESTER_INBOUND_TOKEN", "");
+
+    const app = (await import("../packages/ingester/src/index")).default;
+    const response = await app.request("http://localhost/events/inbound", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ event_id: "evt-1" }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(await response.text()).toBe("Unauthorized");
+  });
+
   it("verifies the SNS signature, persists a normalized event, and queues webhook delivery", async () => {
     const persistedEvent = {
       id: "evt-1",
