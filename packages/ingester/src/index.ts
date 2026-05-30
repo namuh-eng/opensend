@@ -1,8 +1,8 @@
 import {
   createBackgroundJob,
+  createDomainService,
   createInboundEmailIngestionService,
   createTelemetryContext,
-  domainService,
   emailEventRepo,
   emailService,
   emitCloudWatchMetric,
@@ -17,6 +17,9 @@ import {
   webhookRepo,
 } from "@opensend/core";
 import { Hono } from "hono";
+import { invalidateDomainCaches } from "./cache/domain-cache";
+
+const domainService = createDomainService({ invalidateDomainCaches });
 import { webhookDispatcher } from "./dispatcher";
 import { queueWorker } from "./queue-worker";
 import { Sentry } from "./sentry";
@@ -189,6 +192,11 @@ app.post("/jobs/domain-verify", async (c) =>
       updated: result.updated,
       unchanged: result.unchanged,
       failed: result.failed,
+      changes: result.changes.map((c) => ({
+        id: c.domainId,
+        prev: c.previousStatus,
+        next: c.nextStatus,
+      })),
     });
 
     emitCloudWatchMetric(telemetry, {

@@ -12,8 +12,6 @@
 #                  webhooks on http://localhost:${INGESTER_PORT:-3016}.
 #   - scheduler  : Durable short-interval driver for ingester /jobs/* scans.
 #
-# The experimental Go shadow skeleton lives at services/ingester-go and defaults to 3027,
-# but is intentionally not wired into Compose.
 #
 # Optional overrides (all read from .env):
 #   - PORT                        : host port for the app (default 3015)
@@ -103,8 +101,7 @@ services:
       start_period: 10s
 
   # Production Bun/Hono service for inbound webhooks (SES bounces/complaints, Stripe billing
-  # events, scheduled-email worker). The Go ingester skeleton under services/ingester-go
-  # is experimental/shadow-only and must not receive production traffic yet. Point your SES SNS topic and Stripe webhook at:
+  # events, scheduled-email worker). Point your SES SNS topic and Stripe webhook at:
   #   http://<host>:${INGESTER_PORT:-3016}/events/ses
   #   http://<host>:${INGESTER_PORT:-3016}/webhooks/stripe
   # Set BACKGROUND_WORKER_POLL=true to enable the SQS long-poll loop in this container.
@@ -133,6 +130,9 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       BILLING_NOTIFICATION_FROM_EMAIL: ${BILLING_NOTIFICATION_FROM_EMAIL:-}
+      # Optional — required only for domain-cache invalidation. Uses the same
+      # Redis instance as the app. Leave unset for a basic local stack.
+      REDIS_URL: ${REDIS_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

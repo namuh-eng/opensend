@@ -109,10 +109,13 @@ describe("Domain DNS Records Tab (feature-025)", () => {
     expect(sendingToggle.getAttribute("data-state")).toBe("checked");
   });
 
-  it("renders DMARC as a separate policy section", () => {
+  it("renders DMARC nested under Sending with starter-policy guidance", () => {
     render(<DomainDetail domain={domainWithRecords} />);
     expect(screen.getByText("DMARC Policy")).toBeTruthy();
-    expect(screen.getByText(/evaluate SPF and DKIM alignment/)).toBeTruthy();
+    // Helper copy explains DMARC is send-side, not receive-side.
+    expect(
+      screen.getByText(/Tells other mail servers what to do/),
+    ).toBeTruthy();
     expect(screen.getByText("_dmarc.updates.foreverbrowsing.com")).toBeTruthy();
     expect(screen.getByText("v=DMARC1; p=none;")).toBeTruthy();
   });
