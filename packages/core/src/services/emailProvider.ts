@@ -8,7 +8,11 @@ import {
   SESv2Client,
   SendEmailCommand,
 } from "@aws-sdk/client-sesv2";
-import { sanitizeHeaderName, sanitizeHeaderValue } from "../security";
+import {
+  safeMimeBoundary,
+  sanitizeHeaderName,
+  sanitizeHeaderValue,
+} from "../security";
 import {
   type EncryptedBlob,
   decryptSecret,
@@ -330,16 +334,20 @@ function buildMimeMessage(params: {
   headers?: Record<string, string>;
   attachments?: EmailAttachment[];
 }): string {
-  const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const boundary = safeMimeBoundary("----=_Part");
   const lines: string[] = [];
 
-  lines.push(`From: ${params.from}`);
-  lines.push(`To: ${params.to.join(", ")}`);
-  if (params.cc?.length) lines.push(`Cc: ${params.cc.join(", ")}`);
-  if (params.bcc?.length) lines.push(`Bcc: ${params.bcc.join(", ")}`);
-  lines.push(`Subject: ${params.subject}`);
+  lines.push(`From: ${sanitizeHeaderValue("From", params.from)}`);
+  lines.push(`To: ${sanitizeHeaderValue("To", params.to.join(", "))}`);
+  if (params.cc?.length)
+    lines.push(`Cc: ${sanitizeHeaderValue("Cc", params.cc.join(", "))}`);
+  if (params.bcc?.length)
+    lines.push(`Bcc: ${sanitizeHeaderValue("Bcc", params.bcc.join(", "))}`);
+  lines.push(`Subject: ${sanitizeHeaderValue("Subject", params.subject)}`);
   if (params.replyTo?.length)
-    lines.push(`Reply-To: ${params.replyTo.join(", ")}`);
+    lines.push(
+      `Reply-To: ${sanitizeHeaderValue("Reply-To", params.replyTo.join(", "))}`,
+    );
   if (params.headers) {
     for (const [key, value] of Object.entries(params.headers)) {
       const safeName = sanitizeHeaderName(key);
@@ -364,20 +372,25 @@ function buildMimeMessage(params: {
   }
 
   for (const attachment of params.attachments ?? []) {
-    const contentType =
+    const safeFilename = sanitizeAttachmentFilename(attachment.filename);
+    const contentType = sanitizeHeaderValue(
+      "Content-Type",
       attachment.contentType ??
-      attachment.content_type ??
-      inferContentType(attachment.filename);
+        attachment.content_type ??
+        inferContentType(attachment.filename),
+    );
     const contentId = attachment.contentId ?? attachment.content_id;
 
     lines.push(`--${boundary}`);
-    lines.push(`Content-Type: ${contentType}; name="${attachment.filename}"`);
+    lines.push(`Content-Type: ${contentType}; name="${safeFilename}"`);
     lines.push("Content-Transfer-Encoding: base64");
     if (contentId) {
-      lines.push(`Content-ID: ${formatContentId(contentId)}`);
+      lines.push(
+        `Content-ID: ${sanitizeHeaderValue("Content-ID", formatContentId(contentId))}`,
+      );
     }
     lines.push(
-      `Content-Disposition: ${contentId ? "inline" : "attachment"}; filename="${attachment.filename}"`,
+      `Content-Disposition: ${contentId ? "inline" : "attachment"}; filename="${safeFilename}"`,
     );
     lines.push("");
     lines.push(attachment.content);
@@ -385,6 +398,13 @@ function buildMimeMessage(params: {
 
   lines.push(`--${boundary}--`);
   return lines.join("\r\n");
+}
+
+function sanitizeAttachmentFilename(name: string): string {
+  return sanitizeHeaderValue("attachment.filename", name).replace(
+    /["\\]/g,
+    "_",
+  );
 }
 
 function inferContentType(filename: string): string {

@@ -122,7 +122,8 @@ contributor-facing set; the table below adds the production-only entries.
 | `BACKGROUND_JOBS_REQUIRE_QUEUE=true` | Fail API publish when the queue URL is missing instead of silently skipping. Required in production. |
 | `BACKGROUND_JOBS_EVENT_BUS_NAME` | Optional EventBridge bus for job lifecycle events. |
 | `BACKGROUND_WORKER_POLL=true` | Set on the **ingester** service only. Enables long-poll SQS consumer. |
-| `INGESTER_JOB_TOKEN` | Bearer token required for `/jobs/*` endpoints when the scheduler/EventBridge invokes them over HTTP. |
+| `INGESTER_JOB_TOKEN` | Required 32+ character bearer token for `/jobs/*` endpoints when the scheduler/EventBridge invokes them over HTTP. Docker Compose refuses to start the ingester/scheduler without it. |
+| `INGESTER_INBOUND_TOKEN` | Optional for local development. In production, `/events/inbound` rejects requests unless this bearer token is configured and sent by the inbound provider. |
 | `INGESTER_SCHEDULER_INTERVAL_SECONDS` | Compose scheduler cadence for `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify`. Default `60`; minimum `10`. |
 | `RATE_LIMIT_BACKEND` | `disabled` (single-process dev), or `redis` (production). |
 | `REDIS_URL` | TLS Redis endpoint, e.g. `rediss://default:<password>@<endpoint>:6379`. Used for rate limiting AND auth/domain metadata cache. |
@@ -366,7 +367,7 @@ Three periodic scans need to run every minute:
 - **Domain verification**: reconcile SES-verified domains and flip OpenSend
   domain/record status to `verified` without clicking **Verify DNS Records**.
 
-Docker Compose runs the durable `scheduler` sidecar by default. It posts to all three ingester job endpoints every `INGESTER_SCHEDULER_INTERVAL_SECONDS` seconds and includes `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when the token is configured.
+Docker Compose runs the durable `scheduler` sidecar by default. It posts to all three ingester job endpoints every `INGESTER_SCHEDULER_INTERVAL_SECONDS` seconds and includes `Authorization: Bearer ${INGESTER_JOB_TOKEN}`. Set a 32+ character `INGESTER_JOB_TOKEN` before starting Compose.
 
 Two other production patterns can drive the same endpoints:
 
@@ -396,7 +397,7 @@ To verify the automatic domain reconciler in a deployment:
 3. Do **not** click **Verify DNS Records** in OpenSend.
 4. Wait one scheduler interval plus SES/API latency (normally 1-2 minutes with the default 60-second cadence).
 5. Confirm the OpenSend dashboard or database now shows the domain status and DNS record badges as `verified`.
-6. If it does not flip, inspect the scheduler and ingester logs for `/jobs/domain-verify` responses and verify the scheduler is sending `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when `INGESTER_JOB_TOKEN` is set on the ingester.
+6. If it does not flip, inspect the scheduler and ingester logs for `/jobs/domain-verify` responses and verify the scheduler and ingester share the same `INGESTER_JOB_TOKEN`.
 
 ### Local dev fallback
 

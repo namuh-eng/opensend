@@ -159,4 +159,23 @@ describe("delivery failure export service", () => {
       'id,recipient,status,reason,source_email_id,source_message_id,created_at,updated_at\nid-1,"quoted,""recipient""@example.com",bounced,"smtp\nfailed",id-1,,2026-05-01T12:00:00.000Z,',
     );
   });
+
+  it("neutralizes spreadsheet formulas in CSV exports", () => {
+    const rows: DeliveryFailureExportCsvRow[] = [
+      {
+        id: "id-1",
+        recipient: '=HYPERLINK("https://evil.example")',
+        status: "suppressed",
+        reason: "+cmd",
+        source_email_id: "id-1",
+        source_message_id: "",
+        created_at: "2026-05-01T12:00:00.000Z",
+        updated_at: "",
+      },
+    ];
+
+    expect(serializeDeliveryFailureCsv(rows)).toContain(
+      '"\'=HYPERLINK(""https://evil.example"")",suppressed,\'+cmd',
+    );
+  });
 });

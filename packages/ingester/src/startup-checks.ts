@@ -34,9 +34,19 @@ export function runIngesterStartupChecks(): void {
   const jobToken = process.env.INGESTER_JOB_TOKEN?.trim();
   if (isProd() && (!jobToken || jobToken.length < 32)) {
     logJson(
-      "warn",
+      "error",
       { event: "security.startup.weak_job_token" },
-      "INGESTER_JOB_TOKEN missing or shorter than 32 chars in production",
+      "INGESTER_JOB_TOKEN missing/too short — refusing to boot",
+    );
+    throw new Error("INGESTER_JOB_TOKEN missing/too short in production");
+  }
+
+  const inboundToken = process.env.INGESTER_INBOUND_TOKEN?.trim();
+  if (isProd() && (!inboundToken || inboundToken.length < 32)) {
+    logJson(
+      "warn",
+      { event: "security.startup.weak_inbound_token" },
+      "INGESTER_INBOUND_TOKEN missing/too short — /events/inbound rejects requests until configured",
     );
   }
 }

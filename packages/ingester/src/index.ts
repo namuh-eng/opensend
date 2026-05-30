@@ -95,13 +95,13 @@ function getSesSuppressionOutcome(
 
 function isAuthorizedJobRequest(authHeader: string | undefined): boolean {
   const token = process.env.INGESTER_JOB_TOKEN?.trim();
-  if (!token) return true;
+  if (!token) return process.env.NODE_ENV !== "production";
   return timingSafeStringEqual(authHeader, `Bearer ${token}`);
 }
 
 function isAuthorizedInboundRequest(authHeader: string | undefined): boolean {
   const token = process.env.INGESTER_INBOUND_TOKEN?.trim();
-  if (!token) return true;
+  if (!token) return process.env.NODE_ENV !== "production";
   return timingSafeStringEqual(authHeader, `Bearer ${token}`);
 }
 

@@ -105,6 +105,25 @@ describe("EmailProviderService", () => {
     expect(raw).toContain("aW1hZ2U=");
   });
 
+  it("rejects CRLF injection in raw MIME headers before sending", async () => {
+    const { EmailProviderService } = await import(
+      "../packages/core/src/services/emailProvider"
+    );
+    const provider = new EmailProviderService();
+
+    await expect(
+      provider.sendEmail({
+        from: "hello@example.com",
+        to: ["user@example.com"],
+        subject: "Hello\r\nBcc: attacker@example.com",
+        html: "<p>Hello</p>",
+        attachments: [{ filename: "note.txt", content: "aGVsbG8=" }],
+      }),
+    ).rejects.toMatchObject({ code: "MIME_HEADER_INJECTION" });
+
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
   it("creates and reuses SES clients per requested region", async () => {
     mockSend
       .mockResolvedValueOnce({ MessageId: "eu-message" })

@@ -1,4 +1,3 @@
-import { unauthorizedResponse } from "@/lib/api-auth";
 import { BroadcastServiceError, createBroadcastService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 import { resolveBroadcastRouteUserId } from "./auth";
@@ -24,10 +23,11 @@ function broadcastListResponse(
 }
 
 export async function GET(request: NextRequest) {
-  const userId = await resolveBroadcastRouteUserId(
+  const userIdOrResponse = await resolveBroadcastRouteUserId(
     request.headers.get("authorization"),
   );
-  if (!userId) return unauthorizedResponse();
+  if (userIdOrResponse instanceof Response) return userIdOrResponse;
+  const userId = userIdOrResponse;
 
   try {
     const url = request.nextUrl;
@@ -52,10 +52,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const userId = await resolveBroadcastRouteUserId(
+  const userIdOrResponse = await resolveBroadcastRouteUserId(
     request.headers.get("authorization"),
   );
-  if (!userId) return unauthorizedResponse();
+  if (userIdOrResponse instanceof Response) return userIdOrResponse;
+  const userId = userIdOrResponse;
 
   try {
     const body = await request.json();
