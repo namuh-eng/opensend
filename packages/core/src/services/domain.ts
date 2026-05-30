@@ -221,9 +221,15 @@ export type DomainServiceDependencies = {
     domain: string,
     options?: { region?: string },
   ) => Promise<void>;
-  invalidateDomainCaches?: (domain: {
-    id: string;
-    name: string;
+  /**
+   * Invalidates dashboard caches after a domain mutation.
+   * REQUIRED at construction. The injected implementation MAY no-op when its
+   * backing cache is unconfigured (e.g., REDIS_URL unset on a self-host) —
+   * correctness is then guaranteed by cache TTL expiry and the manual Verify path.
+   */
+  invalidateDomainCaches: (params: {
+    id?: string | null;
+    name?: string | null;
     region?: string | null;
   }) => Promise<void>;
   syncDomainConfigurationSet?: (input: {
@@ -354,10 +360,16 @@ export function createDomainService({
     domainIdentityProvider.getDomainIdentity(domain, options),
   deleteDomainIdentity = (domain: string, options?: { region?: string }) =>
     domainIdentityProvider.deleteDomainIdentity(domain, options),
-  invalidateDomainCaches = async () => {},
+  invalidateDomainCaches,
   syncDomainConfigurationSet = (input) =>
     configurationSetService.syncDomainConfigurationSet(input),
-}: DomainServiceDependencies = {}) {
+}: DomainServiceDependencies) {
+  if (!invalidateDomainCaches) {
+    throw new Error(
+      "createDomainService: invalidateDomainCaches is required — " +
+        "domain mutations without cache invalidation cause stale dashboard reads.",
+    );
+  }
   return {
     async listDomains(options: {
       limit?: number;
@@ -471,6 +483,19 @@ export function createDomainService({
       const statusChanged = domain.status !== nextStatus;
 
       if (!statusChanged && !recordsChanged) {
+        console.log(
+          JSON.stringify({
+            level: "debug",
+            event: "domain.cache.repair_invalidate",
+            domain_id: id,
+            reason: "reconcile_unchanged_path",
+          }),
+        );
+        await invalidateDomainCaches({
+          id,
+          name: domain.name,
+          region: domain.region,
+        });
         return { status: "unchanged", domain };
       }
 
@@ -565,25 +590,3 @@ export function createDomainService({
     },
   };
 }
-
-export class DomainService {
-  private readonly service: ReturnType<typeof createDomainService>;
-
-  constructor(dependencies: DomainServiceDependencies = {}) {
-    this.service = createDomainService(dependencies);
-  }
-
-  async create(params: { name: string; region?: string }) {
-    return await this.service.createDomain(params);
-  }
-
-  async verify(id: string) {
-    return await this.service.verify(id);
-  }
-
-  async delete(id: string) {
-    return await this.service.delete(id);
-  }
-}
-
-export const domainService = createDomainService();

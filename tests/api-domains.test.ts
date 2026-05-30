@@ -66,9 +66,6 @@ vi.mock("@opensend/core", () => ({
   buildDmarcRecordName: (domain: string) => `_dmarc.${domain}`,
   createDomainService: mockCreateDomainService,
   createDomainDetailService: mockCreateDomainDetailService,
-  domainService: {
-    reconcileVerification: mockReconcileVerification,
-  },
   getEffectiveReturnPathLabel: (value: string | null | undefined) =>
     value?.trim() || "send",
 }));
@@ -87,6 +84,14 @@ vi.mock("@/lib/ses", () => ({
   createDomainIdentity: mockCreateDomainIdentity,
   deleteDomainIdentity: mockDeleteDomainIdentity,
   getDomainIdentity: mockGetDomainIdentity,
+}));
+
+vi.mock("@/lib/domain-cache", () => ({
+  getCachedDomainById: vi
+    .fn()
+    .mockImplementation(() => mockDb.query.domains.findFirst()),
+  getCachedDomainIdentity: vi.fn(),
+  invalidateDomainCaches: vi.fn().mockResolvedValue(undefined),
 }));
 
 const AUTH_RESULT = {
@@ -142,6 +147,7 @@ describe("Domain API validation", () => {
     mockCreateDomainService.mockImplementation(() => ({
       createDomain: mockCreateDomain,
       listDomains: mockListDomains,
+      reconcileVerification: mockReconcileVerification,
     }));
     mockCreateDomainDetailService.mockImplementation(() => ({
       getDomainDetail: mockGetDomainDetail,

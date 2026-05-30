@@ -63,6 +63,12 @@ function createRepository(overrides: Partial<DomainRepository> = {}) {
 }
 
 describe("domain service", () => {
+  it("createDomainService({}) throws containing 'invalidateDomainCaches'", () => {
+    expect(() =>
+      createDomainService({} as Parameters<typeof createDomainService>[0]),
+    ).toThrow("invalidateDomainCaches");
+  });
+
   it("uses the core domain identity provider when route adapters do not inject SES", async () => {
     const inserted: DomainInsert[] = [];
     const createDomainIdentity = vi
@@ -82,7 +88,10 @@ describe("domain service", () => {
     });
 
     try {
-      const service = createDomainService({ repository });
+      const service = createDomainService({
+        repository,
+        invalidateDomainCaches: vi.fn(),
+      });
       await service.createDomain({ name: "Example.COM", userId: "user-1" });
 
       expect(createDomainIdentity).toHaveBeenCalledWith("example.com", {
@@ -117,9 +126,9 @@ describe("domain service", () => {
     }));
     const invalidateDomainCaches =
       vi.fn<
-        (_: {
-          id: string;
-          name: string;
+        (params: {
+          id?: string | null;
+          name?: string | null;
           region?: string | null;
         }) => Promise<void>
       >();
@@ -248,6 +257,7 @@ describe("domain service", () => {
         },
       }),
       createDomainIdentity: async () => ({ dkimTokens: [] }),
+      invalidateDomainCaches: vi.fn(),
     });
 
     await service.createDomain({ name: "example.com" });
@@ -330,6 +340,7 @@ describe("domain service", () => {
     const service = createDomainService({
       repository,
       getDomainIdentity,
+      invalidateDomainCaches: vi.fn(),
     });
 
     const result = await service.reconcileVerification("dom-1");
@@ -356,10 +367,12 @@ describe("domain service", () => {
     }
   });
 
-  it("reconciles verification: returns unchanged when status and records are stable", async () => {
+  it("reconciles verification: returns unchanged when status and records are stable — invalidates caches on unchanged path", async () => {
     const updates: Array<{ id: string; data: Partial<DomainInsert> }> = [];
     const existingDomain = domainRow({
       id: "dom-2",
+      name: "example.com",
+      region: "us-east-1",
       status: "pending",
       records: [
         {
@@ -380,16 +393,33 @@ describe("domain service", () => {
         return [domainRow({ ...existingDomain, ...data })];
       },
     });
+    const invalidateDomainCaches =
+      vi.fn<
+        (params: {
+          id?: string | null;
+          name?: string | null;
+          region?: string | null;
+        }) => Promise<void>
+      >();
 
     const service = createDomainService({
       repository,
       getDomainIdentity: async () => ({ verified: false }),
+      invalidateDomainCaches,
     });
 
     const result = await service.reconcileVerification("dom-2");
 
     expect(result.status).toBe("unchanged");
     expect(updates).toHaveLength(0);
+    // The unchanged path now calls invalidateDomainCaches once as a cache-repair
+    // step to fix stale entries that might have been set before the last update.
+    expect(invalidateDomainCaches).toHaveBeenCalledOnce();
+    expect(invalidateDomainCaches).toHaveBeenCalledWith({
+      id: "dom-2",
+      name: "example.com",
+      region: "us-east-1",
+    });
   });
 
   it("reconcileAllPendingVerifications: tolerates per-domain failures", async () => {
@@ -431,6 +461,7 @@ describe("domain service", () => {
         if (name === "a.example") return { verified: true };
         throw new Error("ses unavailable");
       },
+      invalidateDomainCaches: vi.fn(),
     });
 
     const result = await service.reconcileAllPendingVerifications();
@@ -464,6 +495,7 @@ describe("domain service", () => {
           };
         },
       }),
+      invalidateDomainCaches: vi.fn(),
     });
 
     const result = await service.listDomains({

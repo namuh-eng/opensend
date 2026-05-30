@@ -133,6 +133,9 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       BILLING_NOTIFICATION_FROM_EMAIL: ${BILLING_NOTIFICATION_FROM_EMAIL:-}
+      # Optional — required only for domain-cache invalidation. Uses the same
+      # Redis instance as the app. Leave unset for a basic local stack.
+      REDIS_URL: ${REDIS_URL:-}
     depends_on:
       postgres:
         condition: service_healthy

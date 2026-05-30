@@ -3,33 +3,22 @@ import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
 import { type GetDomainResult, getDomainIdentity } from "@/lib/ses";
 import { validDomainRegions } from "@/lib/validation/domains";
+import {
+  getDomainByIdCacheKey,
+  getDomainIdentityCacheKey,
+  getLegacyDomainIdentityCacheKey,
+} from "@opensend/core";
 import { eq } from "drizzle-orm";
 
 const DOMAIN_DB_CACHE_TTL_SECONDS = 300;
 const DOMAIN_IDENTITY_CACHE_TTL_SECONDS = 120;
+const DEFAULT_SES_REGION = "us-east-1";
 
 type DomainRow = typeof domains.$inferSelect;
-
-function getDomainByIdCacheKey(id: string): string {
-  return `domain:by-id:${id}`;
-}
-
-const DEFAULT_SES_REGION = "us-east-1";
 
 function normalizeSesRegion(region: string | null | undefined): string {
   const trimmed = region?.trim();
   return trimmed || DEFAULT_SES_REGION;
-}
-
-function getLegacyDomainIdentityCacheKey(domainName: string): string {
-  return `domain:identity:${domainName.trim().toLowerCase()}`;
-}
-
-function getDomainIdentityCacheKey(
-  domainName: string,
-  region?: string,
-): string {
-  return `domain:identity:${normalizeSesRegion(region)}:${domainName.trim().toLowerCase()}`;
 }
 
 function logDomainCache(

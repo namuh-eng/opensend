@@ -86,5 +86,8 @@ export * from "./services/publicStatus";
 export * from "./services/invites";
 export * from "./services/unsubscribePageSettings";
 export * from "./jobs/background-jobs";
+export * from "./jobs/scheduled-jobs";
+export * from "./cache/domain-cache-keys";
+export * from "./db/repositories/schedulerHeartbeatRepo";
 export * from "./observability/telemetry";
 export * from "./security";
