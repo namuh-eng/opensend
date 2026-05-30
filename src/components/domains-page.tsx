@@ -12,7 +12,7 @@ import {
 } from "@/components/use-dashboard-csv-export";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export interface DomainListItem {
   id: string;
@@ -90,7 +90,52 @@ export function DomainsPage({ domains }: DomainsPageProps) {
   const [regionFilter, setRegionFilter] = useState("");
   const [page, setPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(40);
+  const [actionMenuId, setActionMenuId] = useState<string | null>(null);
+  const [actingId, setActingId] = useState<string | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement>(null);
   const { exportState, exportCsv } = useDashboardCsvExport("domains");
+
+  useEffect(() => {
+    if (!actionMenuId) return;
+    const handleClick = (e: MouseEvent) => {
+      if (
+        actionMenuRef.current &&
+        !actionMenuRef.current.contains(e.target as Node)
+      ) {
+        setActionMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [actionMenuId]);
+
+  const handleVerify = async (id: string) => {
+    setActingId(id);
+    setActionMenuId(null);
+    try {
+      await fetch(`/api/domains/${id}/verify`, { method: "POST" });
+      router.refresh();
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    setActionMenuId(null);
+    if (!confirm(`Delete domain "${name}"? This cannot be undone.`)) return;
+    setActingId(id);
+    try {
+      await fetch(`/api/domains/${id}`, { method: "DELETE" });
+      router.refresh();
+    } finally {
+      setActingId(null);
+    }
+  };
+
+  const handleCopyId = (id: string) => {
+    setActionMenuId(null);
+    void navigator.clipboard?.writeText(id);
+  };
 
   const filteredDomains = useMemo(() => {
     let result = domains;
@@ -192,7 +237,21 @@ export function DomainsPage({ domains }: DomainsPageProps) {
           </thead>
           <tbody>
             {paginatedDomains.map((domain) => (
-              <DomainRow key={domain.id} domain={domain} />
+              <DomainRow
+                key={domain.id}
+                domain={domain}
+                menuOpen={actionMenuId === domain.id}
+                acting={actingId === domain.id}
+                menuRef={actionMenuId === domain.id ? actionMenuRef : null}
+                onToggleMenu={() =>
+                  setActionMenuId((current) =>
+                    current === domain.id ? null : domain.id,
+                  )
+                }
+                onVerify={() => handleVerify(domain.id)}
+                onDelete={() => handleDelete(domain.id, domain.name)}
+                onCopyId={() => handleCopyId(domain.id)}
+              />
             ))}
           </tbody>
         </table>
@@ -326,7 +385,28 @@ export function DomainsPage({ domains }: DomainsPageProps) {
   );
 }
 
-function DomainRow({ domain }: { domain: DomainListItem }) {
+interface DomainRowProps {
+  domain: DomainListItem;
+  menuOpen: boolean;
+  acting: boolean;
+  menuRef: React.RefObject<HTMLDivElement | null> | null;
+  onToggleMenu: () => void;
+  onVerify: () => void;
+  onDelete: () => void;
+  onCopyId: () => void;
+}
+
+function DomainRow({
+  domain,
+  menuOpen,
+  acting,
+  menuRef,
+  onToggleMenu,
+  onVerify,
+  onDelete,
+  onCopyId,
+}: DomainRowProps) {
+  const isVerified = domain.status === "verified";
   return (
     <tr className="border-b border-line hover:bg-bg-2 transition-colors">
       <td className="px-3 py-2 text-[14px] text-fg">
@@ -353,23 +433,67 @@ function DomainRow({ domain }: { domain: DomainListItem }) {
         {formatRelativeTime(domain.createdAt)}
       </td>
       <td className="w-10 px-3 py-2 relative">
-        <button
-          type="button"
-          aria-label="More actions"
-          className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
-        >
-          <svg
-            aria-hidden="true"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="currentColor"
+        <div ref={menuRef}>
+          <button
+            type="button"
+            aria-label="More actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            disabled={acting}
+            onClick={onToggleMenu}
+            className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors disabled:opacity-50"
           >
-            <circle cx="12" cy="5" r="1.5" />
-            <circle cx="12" cy="12" r="1.5" />
-            <circle cx="12" cy="19" r="1.5" />
-          </svg>
-        </button>
+            <svg
+              aria-hidden="true"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <circle cx="12" cy="5" r="1.5" />
+              <circle cx="12" cy="12" r="1.5" />
+              <circle cx="12" cy="19" r="1.5" />
+            </svg>
+          </button>
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full mt-1 w-[180px] bg-bg-card border border-line rounded-md shadow-lg z-50 py-1"
+            >
+              {!isVerified && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={onVerify}
+                  className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
+                >
+                  Verify now
+                </button>
+              )}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={onCopyId}
+                className="w-full px-3 py-1.5 text-left text-[13px] text-fg-2 hover:bg-white/[0.08] hover:text-fg transition-colors"
+              >
+                Copy ID
+              </button>
+              {isVerified && (
+                <>
+                  <div className="my-1 border-t border-line" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={onDelete}
+                    className="w-full px-3 py-1.5 text-left text-[13px] text-red-400 hover:bg-white/[0.08] hover:text-red-300 transition-colors"
+                  >
+                    Delete domain
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </td>
     </tr>
   );
