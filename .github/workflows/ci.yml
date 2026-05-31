@@ -132,7 +132,26 @@ jobs:
       - name: Prepare documented local env
         run: |
           cp .env.example .env
-          node -e "const fs=require('fs'); const path='.env'; let env=fs.readFileSync(path,'utf8'); if(/^DASHBOARD_KEY=$/m.test(env)){ env=env.replace(/^DASHBOARD_KEY=$/m, 'DASHBOARD_KEY=ci-test-key'); } else if(!/^DASHBOARD_KEY=/m.test(env)){ env += '\nDASHBOARD_KEY=ci-test-key\n'; } fs.writeFileSync(path, env);"
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = ".env";
+          let env = fs.readFileSync(path, "utf8");
+
+          function upsertEnv(name, value) {
+            const active = new RegExp(`^${name}=.*$`, "m");
+            const commented = new RegExp(`^# ${name}=.*$`, "m");
+            if (active.test(env)) {
+              env = env.replace(active, `${name}=${value}`);
+            } else if (commented.test(env)) {
+              env = env.replace(commented, `${name}=${value}`);
+            } else {
+              env += `\n${name}=${value}\n`;
+            }
+          }
+
+          upsertEnv("INGESTER_JOB_TOKEN", "ci-test-ingester-job-token-000000");
+          fs.writeFileSync(path, env);
+          NODE
 
       - name: Validate Docker Compose config
         run: docker compose config
