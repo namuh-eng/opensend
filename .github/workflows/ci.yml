@@ -136,13 +136,15 @@ jobs:
           const fs = require("node:fs");
           const path = ".env";
           let env = fs.readFileSync(path, "utf8");
-          const ensure = (key, value) => {
-            const pattern = new RegExp(`^#?\\s*${key}=.*$`, "m");
-            const line = `${key}=${value}`;
+
+          function upsertEnv(name, value) {
+            const pattern = new RegExp(`^#?\\s*${name}=.*$`, "m");
+            const line = `${name}=${value}`;
             env = pattern.test(env) ? env.replace(pattern, line) : `${env}\n${line}\n`;
-          };
-          ensure("DASHBOARD_KEY", "ci-test-key");
-          ensure("INGESTER_JOB_TOKEN", "ci-test-ingester-job-token-32chars");
+          }
+
+          upsertEnv("DASHBOARD_KEY", "ci-test-key");
+          upsertEnv("INGESTER_JOB_TOKEN", "ci-test-ingester-job-token-000000");
           fs.writeFileSync(path, env);
           NODE
 
