@@ -132,23 +132,18 @@ jobs:
       - name: Prepare documented local env
         run: |
           cp .env.example .env
-          node <<'NODE'
+          node - <<'NODE'
           const fs = require("node:fs");
           const path = ".env";
           let env = fs.readFileSync(path, "utf8");
 
           function upsertEnv(name, value) {
-            const active = new RegExp(`^${name}=.*$`, "m");
-            const commented = new RegExp(`^# ${name}=.*$`, "m");
-            if (active.test(env)) {
-              env = env.replace(active, `${name}=${value}`);
-            } else if (commented.test(env)) {
-              env = env.replace(commented, `${name}=${value}`);
-            } else {
-              env += `\n${name}=${value}\n`;
-            }
+            const pattern = new RegExp(`^#?\\s*${name}=.*$`, "m");
+            const line = `${name}=${value}`;
+            env = pattern.test(env) ? env.replace(pattern, line) : `${env}\n${line}\n`;
           }
 
+          upsertEnv("DASHBOARD_KEY", "ci-test-key");
           upsertEnv("INGESTER_JOB_TOKEN", "ci-test-ingester-job-token-000000");
           fs.writeFileSync(path, env);
           NODE
