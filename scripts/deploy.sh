@@ -43,7 +43,10 @@ WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN="${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET
 
 ING_REPO="${PRODUCT}-ingester"
 ING_SERVICE="${PRODUCT}-ingester"
+ING_CONTAINER_NAME="${ING_CONTAINER_NAME:-${PRODUCT}-ingester}"
 ING_DOCKERFILE="${ING_DOCKERFILE:-packages/ingester/Dockerfile}"
+INGESTER_JOB_TOKEN_SECRET_ID="${INGESTER_JOB_TOKEN_SECRET_ID:-${PRODUCT}/ingester-job-token}"
+INGESTER_JOB_TOKEN_SECRET_ARN="${INGESTER_JOB_TOKEN_SECRET_ARN:-}"
 
 color() { printf "\033[1;%sm%s\033[0m\n" "$1" "$2"; }
 info()  { color 36 "$*"; }
@@ -100,6 +103,19 @@ webhook_secret_encryption_key_secret_arn() {
 
   aws secretsmanager describe-secret \
     --secret-id "${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID}" \
+    --region "${AWS_REGION}" \
+    --query 'ARN' \
+    --output text
+}
+
+ingester_job_token_secret_arn() {
+  if [[ -n "${INGESTER_JOB_TOKEN_SECRET_ARN}" ]]; then
+    printf "%s\n" "${INGESTER_JOB_TOKEN_SECRET_ARN}"
+    return
+  fi
+
+  aws secretsmanager describe-secret \
+    --secret-id "${INGESTER_JOB_TOKEN_SECRET_ID}" \
     --region "${AWS_REGION}" \
     --query 'ARN' \
     --output text
@@ -192,6 +208,113 @@ register_app_task_definition() {
   task_file="$(mktemp)"
 
   write_app_task_definition "${base_task_definition}" "${app_image}" "${webhook_secret_arn}" "${task_file}"
+
+  aws ecs register-task-definition \
+    --cli-input-json "file://${task_file}" \
+    --region "${AWS_REGION}" \
+    --query 'taskDefinition.taskDefinitionArn' \
+    --output text
+}
+
+ingester_task_definition() {
+  aws ecs describe-services \
+    --cluster "${CLUSTER}" \
+    --services "${ING_SERVICE}" \
+    --region "${AWS_REGION}" \
+    --query 'services[0].taskDefinition' \
+    --output text
+}
+
+write_ingester_task_definition() {
+  local base_task_definition="$1" ingester_image="$2" job_token_arn="$3" output_file="$4"
+  local base_task_file
+  base_task_file="$(mktemp)"
+
+  aws ecs describe-task-definition \
+    --task-definition "${base_task_definition}" \
+    --region "${AWS_REGION}" \
+    --query 'taskDefinition' \
+    --output json > "${base_task_file}"
+
+  python3 - "${base_task_file}" "${ingester_image}" "${ING_CONTAINER_NAME}" "${job_token_arn}" > "${output_file}" <<'PY'
+import copy
+import json
+import sys
+
+base_task_file, ingester_image, container_name, job_token_arn = sys.argv[1:5]
+with open(base_task_file, "r", encoding="utf-8") as handle:
+    task = json.load(handle)
+
+allowed_task_keys = [
+    "taskRoleArn",
+    "executionRoleArn",
+    "networkMode",
+    "volumes",
+    "placementConstraints",
+    "requiresCompatibilities",
+    "cpu",
+    "memory",
+    "runtimePlatform",
+    "ephemeralStorage",
+    "proxyConfiguration",
+    "inferenceAccelerators",
+    "pidMode",
+    "ipcMode",
+]
+
+definition = {"family": task.get("family")}
+for key in allowed_task_keys:
+    value = task.get(key)
+    if value not in (None, [], {}):
+        definition[key] = value
+
+containers = copy.deepcopy(task.get("containerDefinitions") or [])
+selected = next(
+    (container for container in containers if container.get("name") == container_name),
+    None,
+)
+if selected is None:
+    raise SystemExit(f"base task definition has no {container_name!r} container")
+
+selected["image"] = ingester_image
+
+environment = selected.setdefault("environment", [])
+required_environment = {
+    "NODE_ENV": "production",
+    "HOST": "0.0.0.0",
+}
+for name, value in required_environment.items():
+    for item in environment:
+        if item.get("name") == name:
+            item["value"] = value
+            break
+    else:
+        environment.append({"name": name, "value": value})
+
+secrets = selected.setdefault("secrets", [])
+required_secret = {
+    "name": "INGESTER_JOB_TOKEN",
+    "valueFrom": job_token_arn,
+}
+for index, secret in enumerate(secrets):
+    if secret.get("name") == required_secret["name"]:
+        secrets[index] = required_secret
+        break
+else:
+    secrets.append(required_secret)
+
+definition["containerDefinitions"] = containers
+json.dump(definition, sys.stdout)
+PY
+}
+
+register_ingester_task_definition() {
+  local ingester_image="$1" base_task_definition job_token_arn task_file
+  base_task_definition="$(ingester_task_definition)"
+  job_token_arn="$(ingester_job_token_secret_arn)"
+  task_file="$(mktemp)"
+
+  write_ingester_task_definition "${base_task_definition}" "${ingester_image}" "${job_token_arn}" "${task_file}"
 
   aws ecs register-task-definition \
     --cli-input-json "file://${task_file}" \
@@ -402,7 +525,12 @@ deploy_app() {
 }
 
 deploy_ingester() {
+  local ingester_image="${ECR_BASE}/${ING_REPO}:${IMAGE_TAG}"
   build_and_push "${ING_REPO}" "${ING_DOCKERFILE}" ""
+
+  info "→ Register ECS ingester task definition"
+  ING_TASK_DEFINITION="$(register_ingester_task_definition "${ingester_image}")"
+  ok "  registered ${ING_TASK_DEFINITION}"
 }
 
 target="${1:-all}"
@@ -417,7 +545,7 @@ case "${target}" in
   ingester)
     deploy_ingester
     run_migrations
-    redeploy "${ING_SERVICE}"
+    redeploy "${ING_SERVICE}" "${ING_TASK_DEFINITION}"
     wait_stable "${ING_SERVICE}"
     ;;
   migrate)
@@ -428,7 +556,7 @@ case "${target}" in
     deploy_ingester
     run_migrations
     redeploy "${APP_SERVICE}" "${APP_TASK_DEFINITION}"
-    redeploy "${ING_SERVICE}"
+    redeploy "${ING_SERVICE}" "${ING_TASK_DEFINITION}"
     wait_stable "${APP_SERVICE}" &
     APP_PID=$!
     wait_stable "${ING_SERVICE}" &
