@@ -13,6 +13,12 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(config).toContain('output: "standalone"');
   });
 
+  it("allows PostHog browser assets in the production CSP", () => {
+    const config = readFileSync(join(root, "next.config.js"), "utf-8");
+    expect(config).toContain("https://us-assets.i.posthog.com");
+    expect(config).toContain("connect-src 'self' https:");
+  });
+
   it("Dockerfile exists with multi-stage build", () => {
     const dockerfile = readFileSync(join(root, "Dockerfile"), "utf-8");
     expect(dockerfile).toContain("FROM oven/bun:1.3.8-alpine AS base");
