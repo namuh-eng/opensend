@@ -29,6 +29,7 @@ function initOnce() {
       maskTextSelector: "[data-private], input, textarea",
     },
   });
+  posthog.capture("$pageview");
   initialized = true;
 }
 
