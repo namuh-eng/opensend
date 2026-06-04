@@ -52,8 +52,17 @@ describe("PosthogProvider", () => {
         expect.objectContaining({
           capture_pageview: "history_change",
           capture_pageleave: true,
+          loaded: expect.any(Function),
         }),
       );
+    });
+
+    const initConfig = posthogMock.init.mock.calls[0]?.[1];
+    initConfig.loaded({
+      capture: posthogMock.capture,
+    });
+
+    await waitFor(() => {
       expect(posthogMock.capture).toHaveBeenCalledWith("$pageview");
     });
   });

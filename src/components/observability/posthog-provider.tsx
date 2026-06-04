@@ -28,8 +28,10 @@ function initOnce() {
       maskAllInputs: true,
       maskTextSelector: "[data-private], input, textarea",
     },
+    loaded: (client) => {
+      client.capture("$pageview");
+    },
   });
-  posthog.capture("$pageview");
   initialized = true;
 }
 
