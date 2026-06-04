@@ -6,6 +6,16 @@ const posthogMock = vi.hoisted(() => ({
   capture: vi.fn(),
   init: vi.fn(),
 }));
+const storageMock = vi.hoisted(() => {
+  const entries = new Map<string, string>();
+  return {
+    clear: vi.fn(() => entries.clear()),
+    getItem: vi.fn((key: string) => entries.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => {
+      entries.set(key, value);
+    }),
+  };
+});
 
 vi.mock("posthog-js", () => ({
   default: {
@@ -25,14 +35,24 @@ describe("PosthogProvider", () => {
     vi.resetModules();
     vi.unstubAllEnvs();
     vi.useRealTimers();
+    storageMock.clear();
     posthogMock.capture.mockClear();
     posthogMock.init.mockClear();
+    vi.stubGlobal("localStorage", storageMock);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response('{"status":"Ok"}'))),
+    );
+    vi.stubGlobal("crypto", {
+      randomUUID: vi.fn(() => "test-distinct-id"),
+    });
   });
 
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
   });
 
   it("captures the initial browser pageview when PostHog is configured", async () => {
@@ -59,11 +79,31 @@ describe("PosthogProvider", () => {
       }),
     );
 
-    expect(posthogMock.capture).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
     act(() => {
       vi.advanceTimersByTime(1000);
     });
-    expect(posthogMock.capture).toHaveBeenCalledWith("$pageview");
+    expect(fetch).toHaveBeenCalledWith(
+      "https://us.i.posthog.com/capture/",
+      expect.objectContaining({
+        method: "POST",
+        keepalive: true,
+        body: expect.stringContaining('"event":"$pageview"'),
+      }),
+    );
+    expect(
+      JSON.parse(vi.mocked(fetch).mock.calls[0]?.[1]?.body as string),
+    ).toEqual(
+      expect.objectContaining({
+        api_key: "phc_test",
+        distinct_id: "test-distinct-id",
+        event: "$pageview",
+        properties: expect.objectContaining({
+          $lib: "opensend-web",
+          token: "phc_test",
+        }),
+      }),
+    );
   });
 
   it("does not initialize or capture when PostHog is not configured", async () => {
