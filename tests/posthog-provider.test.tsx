@@ -1,4 +1,4 @@
-import { cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, waitFor } from "@testing-library/react";
 import type React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -24,47 +24,46 @@ describe("PosthogProvider", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllEnvs();
+    vi.useRealTimers();
     posthogMock.capture.mockClear();
     posthogMock.init.mockClear();
   });
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.unstubAllEnvs();
   });
 
   it("captures the initial browser pageview when PostHog is configured", async () => {
+    vi.useFakeTimers();
     vi.stubEnv("NEXT_PUBLIC_POSTHOG_KEY", "phc_test");
 
     const { PosthogProvider } = await import(
       "@/components/observability/posthog-provider"
     );
 
-    render(
-      <PosthogProvider>
-        <span>App</span>
-      </PosthogProvider>,
-    );
-
-    await waitFor(() => {
-      expect(posthogMock.init).toHaveBeenCalledWith(
-        "phc_test",
-        expect.objectContaining({
-          capture_pageview: "history_change",
-          capture_pageleave: true,
-          loaded: expect.any(Function),
-        }),
+    act(() => {
+      render(
+        <PosthogProvider>
+          <span>App</span>
+        </PosthogProvider>,
       );
     });
 
-    const initConfig = posthogMock.init.mock.calls[0]?.[1];
-    initConfig.loaded({
-      capture: posthogMock.capture,
-    });
+    expect(posthogMock.init).toHaveBeenCalledWith(
+      "phc_test",
+      expect.objectContaining({
+        capture_pageview: "history_change",
+        capture_pageleave: true,
+      }),
+    );
 
-    await waitFor(() => {
-      expect(posthogMock.capture).toHaveBeenCalledWith("$pageview");
+    expect(posthogMock.capture).not.toHaveBeenCalled();
+    act(() => {
+      vi.advanceTimersByTime(1000);
     });
+    expect(posthogMock.capture).toHaveBeenCalledWith("$pageview");
   });
 
   it("does not initialize or capture when PostHog is not configured", async () => {
