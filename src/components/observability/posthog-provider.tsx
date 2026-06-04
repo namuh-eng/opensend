@@ -28,9 +28,6 @@ function initOnce() {
       maskAllInputs: true,
       maskTextSelector: "[data-private], input, textarea",
     },
-    loaded: (client) => {
-      client.capture("$pageview");
-    },
   });
   initialized = true;
 }
@@ -38,6 +35,11 @@ function initOnce() {
 export function PosthogProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     initOnce();
+    if (!POSTHOG_KEY) return;
+    const pageviewTimer = window.setTimeout(() => {
+      posthog.capture("$pageview");
+    }, 1000);
+    return () => window.clearTimeout(pageviewTimer);
   }, []);
 
   if (!POSTHOG_KEY) return <>{children}</>;
