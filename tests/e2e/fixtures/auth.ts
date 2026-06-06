@@ -219,6 +219,32 @@ export async function cleanupE2ERun(
   await client.query('delete from "session" where user_id like $1', [
     `${userPrefix}%`,
   ]);
+  await client.query(
+    `delete from workspace_entitlements
+     where workspace_id in (
+       select id from workspaces where owner_user_id like $1
+       union
+       select workspace_id from workspace_memberships where user_id like $1
+     )`,
+    [`${userPrefix}%`],
+  );
+  await client.query(
+    `delete from workspace_invitations
+     where workspace_id in (
+       select id from workspaces where owner_user_id like $1
+       union
+       select workspace_id from workspace_memberships where user_id like $1
+     )
+     or email like $2`,
+    [`${userPrefix}%`, emailPattern],
+  );
+  await client.query(
+    "delete from workspace_memberships where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query("delete from workspaces where owner_user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query('delete from "account" where user_id like $1', [
     `${userPrefix}%`,
   ]);

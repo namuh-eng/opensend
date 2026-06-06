@@ -107,6 +107,7 @@ const DOC_ORDER = [
   "guides/webhook-storage.md",
   "guides/settings-team-unsubscribe-operator-guide.md",
   "dashboard/api-keys/introduction.md",
+  "dashboard/teams/introduction.md",
   "dashboard/emails/introduction.md",
   "dashboard/emails/attachments.md",
   "dashboard/emails/custom-headers.md",
