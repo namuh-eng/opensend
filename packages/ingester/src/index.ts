@@ -1,8 +1,8 @@
 import {
   createBackgroundJob,
+  createDomainService,
   createInboundEmailIngestionService,
   createTelemetryContext,
-  domainService,
   emailEventRepo,
   emailService,
   emitCloudWatchMetric,
@@ -17,6 +17,9 @@ import {
   webhookRepo,
 } from "@opensend/core";
 import { Hono } from "hono";
+import { invalidateDomainCaches } from "./cache/domain-cache";
+
+const domainService = createDomainService({ invalidateDomainCaches });
 import { webhookDispatcher } from "./dispatcher";
 import { queueWorker } from "./queue-worker";
 import { Sentry } from "./sentry";
@@ -92,13 +95,13 @@ function getSesSuppressionOutcome(
 
 function isAuthorizedJobRequest(authHeader: string | undefined): boolean {
   const token = process.env.INGESTER_JOB_TOKEN?.trim();
-  if (!token) return true;
+  if (!token) return process.env.NODE_ENV !== "production";
   return timingSafeStringEqual(authHeader, `Bearer ${token}`);
 }
 
 function isAuthorizedInboundRequest(authHeader: string | undefined): boolean {
   const token = process.env.INGESTER_INBOUND_TOKEN?.trim();
-  if (!token) return true;
+  if (!token) return process.env.NODE_ENV !== "production";
   return timingSafeStringEqual(authHeader, `Bearer ${token}`);
 }
 
@@ -189,6 +192,11 @@ app.post("/jobs/domain-verify", async (c) =>
       updated: result.updated,
       unchanged: result.unchanged,
       failed: result.failed,
+      changes: result.changes.map((c) => ({
+        id: c.domainId,
+        prev: c.previousStatus,
+        next: c.nextStatus,
+      })),
     });
 
     emitCloudWatchMetric(telemetry, {

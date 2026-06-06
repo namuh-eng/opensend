@@ -60,14 +60,18 @@ export interface AutomationRunnerDeps {
   getAutomation: (id: string) => Promise<Automation | null>;
   listSteps: (automationId: string) => Promise<AutomationStep[]>;
   getDelivery: (id: string) => Promise<CustomEventDelivery | null>;
-  getContact: (id: string) => Promise<Contact | null>;
+  getContact: (id: string, userId?: string | null) => Promise<Contact | null>;
   getTemplate: (id: string) => Promise<Template | null>;
   sendEmail: (input: RunnerSendEmailInput) => Promise<{ id: string }>;
   updateContact: (
     id: string,
+    userId: string | null | undefined,
     data: Partial<typeof contacts.$inferInsert>,
   ) => Promise<Contact | null>;
-  deleteContact: (id: string) => Promise<{ id: string } | null>;
+  deleteContact: (
+    id: string,
+    userId?: string | null,
+  ) => Promise<{ id: string } | null>;
   getSegment: (id: string, userId?: string | null) => Promise<Segment | null>;
   addContactToSegmentMembership: (input: {
     contactId: string;
@@ -116,10 +120,12 @@ const defaultDeps: AutomationRunnerDeps = {
       })) ?? null
     );
   },
-  async getContact(id) {
+  async getContact(id, userId) {
+    if (!userId) return null;
     return (
-      (await db.query.contacts.findFirst({ where: eq(contacts.id, id) })) ??
-      null
+      (await db.query.contacts.findFirst({
+        where: and(eq(contacts.id, id), eq(contacts.userId, userId)),
+      })) ?? null
     );
   },
   async getTemplate(id) {
@@ -131,18 +137,20 @@ const defaultDeps: AutomationRunnerDeps = {
   async sendEmail(input) {
     return await emailService.send(input);
   },
-  async updateContact(id, data) {
+  async updateContact(id, userId, data) {
+    if (!userId) return null;
     const [updated] = await db
       .update(contacts)
       .set(data)
-      .where(eq(contacts.id, id))
+      .where(and(eq(contacts.id, id), eq(contacts.userId, userId)))
       .returning();
     return updated ?? null;
   },
-  async deleteContact(id) {
+  async deleteContact(id, userId) {
+    if (!userId) return null;
     const [deleted] = await db
       .delete(contacts)
-      .where(eq(contacts.id, id))
+      .where(and(eq(contacts.id, id), eq(contacts.userId, userId)))
       .returning({ id: contacts.id });
     return deleted ?? null;
   },
@@ -583,7 +591,10 @@ async function processConditionStep(
   const delivery = run.triggerEventId
     ? await deps.getDelivery(run.triggerEventId)
     : null;
-  const contact = run.contactId ? await deps.getContact(run.contactId) : null;
+  const userId = run.userId ?? automation.userId ?? null;
+  const contact = run.contactId
+    ? await deps.getContact(run.contactId, userId)
+    : null;
   const matched = evaluateConditionPredicate(
     config,
     buildConditionContext(delivery, contact, states),
@@ -818,7 +829,8 @@ async function processContactUpdateStep(
     );
   }
 
-  const contact = await deps.getContact(run.contactId);
+  const userId = run.userId ?? automation.userId ?? null;
+  const contact = await deps.getContact(run.contactId, userId);
   if (!contact) {
     return await failRun(
       deps,
@@ -839,7 +851,7 @@ async function processContactUpdateStep(
 
   if (changedFields.length > 0) {
     try {
-      const updated = await deps.updateContact(contact.id, data);
+      const updated = await deps.updateContact(contact.id, userId, data);
       if (!updated) {
         return await failRun(
           deps,
@@ -874,6 +886,7 @@ async function processContactUpdateStep(
 async function processContactDeleteStep(
   deps: AutomationRunnerDeps,
   run: AutomationRun,
+  automation: Automation,
   step: AutomationStep,
   states: StepStates,
   now: Date,
@@ -897,7 +910,8 @@ async function processContactDeleteStep(
     });
   }
 
-  const contact = await deps.getContact(run.contactId);
+  const userId = run.userId ?? automation.userId ?? null;
+  const contact = await deps.getContact(run.contactId, userId);
   if (!contact) {
     return await failRun(
       deps,
@@ -909,7 +923,7 @@ async function processContactDeleteStep(
     );
   }
 
-  const deleted = await deps.deleteContact(contact.id);
+  const deleted = await deps.deleteContact(contact.id, userId);
   if (!deleted) {
     return await failRun(
       deps,
@@ -957,7 +971,8 @@ async function processAddToSegmentStep(
     );
   }
 
-  const contact = await deps.getContact(run.contactId);
+  const userId = run.userId ?? automation.userId ?? null;
+  const contact = await deps.getContact(run.contactId, userId);
   if (!contact) {
     return await failRun(
       deps,
@@ -970,7 +985,6 @@ async function processAddToSegmentStep(
   }
 
   const config = normalizeAddToSegmentConfig(step.config ?? {});
-  const userId = run.userId ?? automation.userId ?? null;
   const segment = await deps.getSegment(config.segment_id, userId);
   if (!segment) {
     return await failRun(
@@ -1016,7 +1030,8 @@ async function processSendEmailStep(
     );
   }
 
-  const contact = await deps.getContact(run.contactId);
+  const userId = run.userId ?? automation.userId ?? null;
+  const contact = await deps.getContact(run.contactId, userId);
   if (!contact) {
     return await failRun(deps, run, step.key, states, now, "contact not found");
   }
@@ -1266,7 +1281,14 @@ export async function processAutomationRunStep(
     }
 
     if (step.type === "contact_delete") {
-      return await processContactDeleteStep(deps, run, step, states, now);
+      return await processContactDeleteStep(
+        deps,
+        run,
+        automation,
+        step,
+        states,
+        now,
+      );
     }
 
     if (step.type === "add_to_segment") {

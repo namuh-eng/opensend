@@ -1,0 +1,25 @@
+=== Bun vs Go Worker Benchmark — Fri May 29 06:05:17 UTC 2026 ===
+
+--- Go (services/opensend-cli/internal/bench) ---
+goos: darwin
+goarch: arm64
+pkg: github.com/namuh-eng/opensend/services/opensend-cli/internal/bench
+cpu: Apple M3 Pro
+BenchmarkJSONDecodeSESEvent-12     	  426424	      8279 ns/op	 221.89 MB/s	    3264 B/op	      15 allocs/op
+BenchmarkHMACSign-12               	 5929518	       633.2 ns/op	 777.03 MB/s	    1840 B/op	      12 allocs/op
+BenchmarkWebhookDispatch1000-12    	      93	  41465778 ns/op	  11.87 MB/s	 8382722 B/op	   96865 allocs/op
+PASS
+ok  	github.com/namuh-eng/opensend/services/opensend-cli/internal/bench	15.195s
+
+--- Bun (bench/bun-worker-bench.test.ts) ---
+bun test v1.3.8 (b64edcb4)
+
+bench/bun-worker-bench.test.ts:
+  Bun JSON.parse ses-event: 2563.3 ns/op  (390,116 ops/sec, 100000 iterations, 256.3 ms total)
+  Bun HMAC-SHA256 sign: 1150.0 ns/op  (869,566 ops/sec, 100000 iterations, 115.0 ms total)
+  Bun webhook dispatch 1000 POSTs: 41066716.6 ns/op  (24 ops/sec, 5 iterations, 205.3 ms total)
+
+ 3 pass
+ 0 fail
+Ran 3 tests across 1 file. [703.00ms]
+

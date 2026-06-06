@@ -1055,3 +1055,17 @@ export const stripeEventsProcessed = pgTable(
   },
   (t) => [index("stripe_events_processed_processed_at_idx").on(t.processedAt)],
 );
+
+// ── Scheduler Observability ─────────────────────────────────────────────────
+
+/**
+ * One row per scheduled job; upserted after every successful invocation.
+ * Used by /api/health/scheduler to report stale or missing jobs.
+ */
+export const schedulerHeartbeats = pgTable("scheduler_heartbeats", {
+  jobName: text("job_name").primaryKey(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastResult: jsonb("last_result"),
+});

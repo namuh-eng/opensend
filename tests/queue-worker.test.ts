@@ -18,12 +18,14 @@ const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
 const mockApplyEmailTracking = vi.hoisted(() => vi.fn());
 const mockCreateEmailTrackingToken = vi.hoisted(() => vi.fn());
+const mockSafeOutboundFetch = vi.hoisted(() => vi.fn());
 
 vi.mock("@opensend/core", () => ({
   createBackgroundJob: (job: Record<string, unknown>) => ({
     ...job,
     requestedAt: "2026-04-28T00:00:00.000Z",
   }),
+  safeOutboundFetch: mockSafeOutboundFetch,
   createEmailTrackingToken: mockCreateEmailTrackingToken,
   createTelemetryContext: (input: {
     service: string;
@@ -150,6 +152,7 @@ describe("QueueWorker", () => {
           ? `${payload.kind}:${payload.targetUrl}`
           : payload.kind,
     );
+    mockSafeOutboundFetch.mockResolvedValue(new Response("remote file"));
   });
 
   afterEach(() => {
@@ -423,6 +426,60 @@ describe("QueueWorker", () => {
     );
   });
 
+  it("validates remote attachment URLs before fetching provider payloads", async () => {
+    const unsafeUrl = "http://169.254.169.254/latest/meta-data";
+    mockFindById.mockResolvedValue({
+      id: "email-unsafe-attachment",
+      from: "sender@example.com",
+      to: ["user@example.com"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "",
+      headers: {},
+      attachments: [{ filename: "secret.txt", path: unsafeUrl }],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+    mockSafeOutboundFetch.mockRejectedValueOnce(
+      new Error("Unsafe outbound URL"),
+    );
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({
+      providerMaxAttempts: 1,
+      queueUrl: null,
+    });
+
+    await expect(
+      worker.processJob({
+        id: "email.send:email-unsafe-attachment",
+        type: "email.send",
+        source: "api",
+        requestedAt: "2026-04-28T00:00:00.000Z",
+        emailId: "email-unsafe-attachment",
+      }),
+    ).resolves.toEqual({
+      status: "failed",
+      reason: "provider_retries_exhausted",
+    });
+
+    expect(mockSafeOutboundFetch).toHaveBeenCalledWith(
+      unsafeUrl,
+      {
+        redirect: "error",
+        signal: expect.any(AbortSignal),
+      },
+      { context: "dispatch" },
+    );
+    expect(mockSendEmail).not.toHaveBeenCalled();
+  });
+
   it("simulates delivered resend.dev recipients without calling the provider", async () => {
     mockFindById.mockResolvedValue({
       id: "email-sandbox-delivered",
@@ -621,14 +678,11 @@ describe("QueueWorker", () => {
   });
 
   it("resolves URL path attachments and preserves content_type and content_id", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response("remote file", {
-          status: 200,
-          headers: { "content-length": "11" },
-        }),
-      ),
+    mockSafeOutboundFetch.mockResolvedValueOnce(
+      new Response("remote file", {
+        status: 200,
+        headers: { "content-length": "11" },
+      }),
     );
     mockFindById.mockResolvedValue({
       id: "email-path",
@@ -668,11 +722,13 @@ describe("QueueWorker", () => {
       }),
     ).resolves.toEqual({ status: "sent" });
 
-    expect(fetch).toHaveBeenCalledWith(
+    expect(mockSafeOutboundFetch).toHaveBeenCalledWith(
       "https://cdn.example.com/remote-logo.png",
       {
+        redirect: "error",
         signal: expect.any(AbortSignal),
       },
+      { context: "dispatch" },
     );
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -689,14 +745,11 @@ describe("QueueWorker", () => {
   });
 
   it("fails queued delivery explicitly when fetched attachments exceed 40MB encoded", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response("", {
-          status: 200,
-          headers: { "content-length": String(30 * 1024 * 1024 + 1) },
-        }),
-      ),
+    mockSafeOutboundFetch.mockResolvedValueOnce(
+      new Response("", {
+        status: 200,
+        headers: { "content-length": String(30 * 1024 * 1024 + 1) },
+      }),
     );
     mockFindById.mockResolvedValue({
       id: "email-large-path",

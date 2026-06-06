@@ -6,8 +6,6 @@ The production ingester is the Bun/Hono service in `packages/ingester`. It is a 
 2. Background job execution (queued email sends, scheduled-email scans,
    webhook dispatch, webhook retry scans, and domain verification reconciliation)
 
-A separate Go skeleton now exists at `services/ingester-go` for the planned issue #71 data-plane migration. It is experimental and shadow-only: it exposes static `GET /health` and `GET /readyz` endpoints on local port `3027` by default, but it does **not** process SES/SNS events, jobs, Stripe webhooks, or webhook fan-out. Keep production traffic on `packages/ingester` until future parity and cutover slices explicitly change this.
-
 In Docker Compose it runs side-by-side with the app. In production we strongly
 recommend running it as a **separate service** so webhook bursts and worker
 stalls don't contend with dashboard requests.
@@ -28,19 +26,10 @@ Endpoints:
 - Ingester health: `http://localhost:${INGESTER_PORT:-3016}/health`
 - SES SNS webhook target: `http://localhost:${INGESTER_PORT:-3016}/events/ses`
 - Stripe billing webhook target: `http://localhost:${INGESTER_PORT:-3016}/webhooks/stripe`
-- Experimental Go ingester health, when run separately: `http://localhost:3027/health`
 
 ```bash
 docker compose ps ingester
 docker compose logs -f ingester
-```
-
-The Go ingester skeleton is not wired into Compose on purpose. Run it separately for shadow validation:
-
-```bash
-cd services/ingester-go
-go test ./...
-go run .
 ```
 
 ## Production shape
@@ -52,7 +41,6 @@ and SQS:
 | --- | --- | --- | --- |
 | App | `Dockerfile` (default target) | `app.yourdomain.com` and `api.app.yourdomain.com` | `8080` |
 | Ingester | `packages/ingester/Dockerfile` | `events.app.yourdomain.com` | `3016` |
-| Go ingester skeleton | `services/ingester-go/Dockerfile` | none; shadow-only | `3027` |
 
 If your platform has host-based routing (AWS ALB, GCP Load Balancer, Cloudflare
 Spectrum), point each hostname at its target service. The events host has to
@@ -67,14 +55,6 @@ docker buildx build --platform linux/amd64 \
 docker buildx build --platform linux/amd64 \
   -f packages/ingester/Dockerfile \
   -t yourorg/opensend-ingester:latest --push .
-```
-
-Optional shadow-only Go ingester image build:
-
-```bash
-docker buildx build --platform linux/amd64 \
-  -f services/ingester-go/Dockerfile \
-  -t yourorg/opensend-ingester-go:shadow --push .
 ```
 
 Run a one-shot migrator container against the production `DATABASE_URL`
@@ -108,7 +88,9 @@ Set these on the ingester service:
 
 ```bash
 BACKGROUND_WORKER_POLL=true
-INGESTER_JOB_TOKEN=<random-bearer-token>
+INGESTER_JOB_TOKEN=<32+-char-random-bearer-token>
+# Required only when using /events/inbound in production.
+INGESTER_INBOUND_TOKEN=<32+-char-random-bearer-token>
 ```
 
 For hosted Stripe billing cutover, also set these on the ingester service from
@@ -132,7 +114,7 @@ environment before sending Stripe traffic to the endpoint. See
 [`hosted-stripe-cutover.md`](hosted-stripe-cutover.md) for the full validation
 checklist.
 
-Set the same `INGESTER_JOB_TOKEN` on any scheduler that calls `/jobs/*`. Compose also accepts an optional scheduler cadence override:
+Set the same 32+ character `INGESTER_JOB_TOKEN` on any scheduler that calls `/jobs/*`; production ingesters reject missing job tokens. Compose also accepts an optional scheduler cadence override:
 
 ```bash
 INGESTER_SCHEDULER_INTERVAL_SECONDS=60
@@ -244,7 +226,7 @@ Before pointing production SES SNS at a freshly stood-up ingester, verify:
   `https://events.<your-domain>/webhooks/stripe` and the ingester has
   `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`.
 - The SQS queue exists with a redrive policy + DLQ.
-- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when the token is configured.
+- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}`.
 - Domain verification runbook passed: create/use a pending domain, confirm SES is verified, do not click **Verify DNS Records**, wait for the scheduler, and confirm the OpenSend DB/dashboard flips to `verified`.
 - Migrations ran successfully against the production database before the new
   image started.

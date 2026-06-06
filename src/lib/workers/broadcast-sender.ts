@@ -55,12 +55,29 @@ export async function processScheduledBroadcasts() {
         lastName: string | null;
       }[] = [];
 
+      const broadcastUserId = broadcast.userId;
+      if (!broadcastUserId) {
+        await db
+          .update(broadcasts)
+          .set({ status: "failed" })
+          .where(eq(broadcasts.id, broadcast.id));
+        console.error(
+          `Failed to process broadcast ${broadcast.id}: missing owner`,
+        );
+        continue;
+      }
+
       if (broadcast.audienceId) {
         // Resolve segment contacts (naive JSON check for now)
         const [segment] = await db
           .select({ name: segments.name })
           .from(segments)
-          .where(eq(segments.id, broadcast.audienceId))
+          .where(
+            and(
+              eq(segments.id, broadcast.audienceId),
+              eq(segments.userId, broadcastUserId),
+            ),
+          )
           .limit(1);
         if (segment) {
           targetContacts = await db
@@ -74,6 +91,7 @@ export async function processScheduledBroadcasts() {
             .where(
               and(
                 eq(contacts.unsubscribed, false),
+                eq(contacts.userId, broadcastUserId),
                 sql`${contacts.segments} ? ${segment.name}`,
               ),
             );
@@ -88,7 +106,12 @@ export async function processScheduledBroadcasts() {
             lastName: contacts.lastName,
           })
           .from(contacts)
-          .where(eq(contacts.unsubscribed, false));
+          .where(
+            and(
+              eq(contacts.unsubscribed, false),
+              eq(contacts.userId, broadcastUserId),
+            ),
+          );
       }
 
       // 4. Perform fanout (create individual email records)

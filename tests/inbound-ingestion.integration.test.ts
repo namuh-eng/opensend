@@ -236,6 +236,23 @@ describeIfDb("inbound MIME ingestion with real Postgres", () => {
     expect(duplicateRows.rows[0]?.status).toBe("duplicate_provider_event");
   });
 
+  it("rejects unsafe raw MIME URLs before fetching remote content", async () => {
+    const service = createInboundEmailIngestionService();
+
+    await expect(
+      service.process({
+        provider: "fixture",
+        eventId: `${marker}-raw-url-ssrf`,
+        recipients: [`support@${domainA}`],
+        rawMimeUrl: "http://169.254.169.254/latest/meta-data",
+        metadata: { test_run_id: marker },
+      }),
+    ).resolves.toMatchObject({
+      status: "malformed_mime",
+      reason: "Raw MIME URL is not allowed",
+    });
+  });
+
   it("creates a persisted forwarding attempt and outbound send row after inbound routing", async () => {
     const routeRows = await client.query<{ id: string }>(
       "select id from receiving_routes where user_id = $1 and local_part = 'support' limit 1",
