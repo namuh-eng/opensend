@@ -2,7 +2,13 @@ import { and, desc, eq } from "drizzle-orm";
 import { db } from "../client";
 import { dedicatedIpPools } from "../schema";
 
-export type DedicatedIpPoolStatus = "pending" | "active" | "failed";
+export type DedicatedIpPoolStatus =
+  | "requested"
+  | "provisioned"
+  | "warming"
+  | "active"
+  | "suspended"
+  | "retired";
 export type DedicatedIpPoolScalingMode = "STANDARD" | "MANAGED";
 
 export const dedicatedIpPoolRepo = {
@@ -53,6 +59,34 @@ export const dedicatedIpPoolRepo = {
       .update(dedicatedIpPools)
       .set({ status, updatedAt: new Date() })
       .where(eq(dedicatedIpPools.id, id))
+      .returning();
+    return row;
+  },
+
+  async updateForUser(
+    id: string,
+    userId: string,
+    updates: Partial<
+      Pick<
+        typeof dedicatedIpPools.$inferInsert,
+        | "name"
+        | "sesPoolName"
+        | "scalingMode"
+        | "status"
+        | "provider"
+        | "operatorNotes"
+        | "provisionedAt"
+        | "warmingStartedAt"
+        | "retiredAt"
+      >
+    >,
+  ) {
+    const [row] = await db
+      .update(dedicatedIpPools)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(
+        and(eq(dedicatedIpPools.id, id), eq(dedicatedIpPools.userId, userId)),
+      )
       .returning();
     return row;
   },

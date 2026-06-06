@@ -1055,6 +1055,52 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/domains/{id}/deliverability": {
+      get: {
+        tags: ["Domains"],
+        summary: "Get domain deliverability readiness",
+        description:
+          "Returns BIMI DNS/readiness checks and manual Apple Branded Mail status for a tenant-owned domain. This endpoint reports readiness/status only and does not provision provider resources.",
+        operationId: "getDomainDeliverabilityReadiness",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Domain deliverability readiness.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DomainDeliverabilityStatus",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Domains"],
+        summary: "Update domain deliverability operator metadata",
+        description:
+          "Stores BIMI metadata hints and Apple Branded Mail operator notes. It does not submit provider applications or alter DNS.",
+        operationId: "updateDomainDeliverabilityReadiness",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateDomainDeliverabilityRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Updated domain deliverability metadata.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DomainDeliverabilityStatus",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
     "/api/domains/{id}/verify": {
       post: {
         tags: ["Domains"],
@@ -2366,12 +2412,12 @@ export const openApiDocument = {
     "/api/dedicated-ips": {
       get: {
         tags: ["Dedicated IPs"],
-        summary: "List dedicated IP pools",
+        summary: "List dedicated IP lifecycle records",
         operationId: "listDedicatedIpPools",
         security: bearerSecurity,
         responses: {
           "200": {
-            description: "List of dedicated IP pools.",
+            description: "List of dedicated IP lifecycle records.",
             content: jsonContent({
               $ref: "#/components/schemas/DedicatedIpPoolList",
             }),
@@ -2381,9 +2427,9 @@ export const openApiDocument = {
       },
       post: {
         tags: ["Dedicated IPs"],
-        summary: "Create a dedicated IP pool",
+        summary: "Create a dedicated IP lifecycle request",
         description:
-          "Creates a new dedicated IP pool in the email provider and records it in the database. Requires the caller's plan to have `dedicated_ips_enabled`.",
+          "Creates a manual dedicated IP lifecycle record with status `requested`. This v1 endpoint does not provision provider IPs or start warmup flows. Requires the caller's plan to have `dedicated_ips_enabled`.",
         operationId: "createDedicatedIpPool",
         security: bearerSecurity,
         requestBody: {
@@ -2408,7 +2454,7 @@ export const openApiDocument = {
     "/api/dedicated-ips/{id}": {
       get: {
         tags: ["Dedicated IPs"],
-        summary: "Retrieve a dedicated IP pool",
+        summary: "Retrieve a dedicated IP lifecycle record",
         operationId: "getDedicatedIpPool",
         security: bearerSecurity,
         parameters: [idPathParameter],
@@ -2425,13 +2471,13 @@ export const openApiDocument = {
       },
       delete: {
         tags: ["Dedicated IPs"],
-        summary: "Delete a dedicated IP pool",
+        summary: "Retire a dedicated IP lifecycle record",
         operationId: "deleteDedicatedIpPool",
         security: bearerSecurity,
         parameters: [idPathParameter],
         responses: {
           "200": {
-            description: "Pool deleted.",
+            description: "Pool retired.",
             content: jsonContent({
               $ref: "#/components/schemas/DedicatedIpPoolDeleted",
             }),
@@ -3118,9 +3164,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["template"] },
           id: { type: "string" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       TemplateReference: {
         type: "object",
@@ -3553,9 +3600,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["receiving_route"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       ForwardingAttempt: {
         type: "object",
@@ -3676,9 +3724,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["forwarding_rule"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       ReceivedEmailListItem: {
         type: "object",
@@ -3914,9 +3963,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["contact"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       ContactSegmentList: {
         type: "object",
@@ -4268,9 +4318,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["broadcast"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       BroadcastMetrics: {
         type: "object",
@@ -4612,9 +4663,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["webhook"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       WebhookDeliveryReplayResponse: {
         type: "object",
@@ -4912,6 +4964,109 @@ export const openApiDocument = {
           },
         },
       },
+      // ── Domain deliverability readiness ─────────────────────────
+      DomainDeliverabilityStatus: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["domain_deliverability_status"] },
+          id: { type: "string", format: "uuid" },
+          domain_id: { type: "string", format: "uuid" },
+          bimi: {
+            type: "object",
+            properties: {
+              status: {
+                type: "string",
+                enum: [
+                  "not_configured",
+                  "action_required",
+                  "manual_review",
+                  "ready",
+                ],
+              },
+              selector: { type: "string" },
+              record_name: { type: "string" },
+              logo_url: { type: "string", nullable: true },
+              certificate_url: { type: "string", nullable: true },
+              notes: { type: "string", nullable: true },
+              checks: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    key: { type: "string" },
+                    label: { type: "string" },
+                    status: {
+                      type: "string",
+                      enum: ["pass", "warning", "fail", "info"],
+                    },
+                    message: { type: "string" },
+                  },
+                  required: ["key", "label", "status", "message"],
+                },
+              },
+            },
+            required: ["status", "selector", "record_name", "checks"],
+          },
+          apple_branded_mail: {
+            type: "object",
+            properties: {
+              status: {
+                type: "string",
+                enum: [
+                  "not_started",
+                  "requested",
+                  "approved",
+                  "rejected",
+                  "manual_review",
+                ],
+              },
+              notes: { type: "string", nullable: true },
+              mode: { type: "string", enum: ["operator_notes_only"] },
+            },
+            required: ["status", "mode"],
+          },
+          last_checked_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "object",
+          "id",
+          "domain_id",
+          "bimi",
+          "apple_branded_mail",
+          "created_at",
+          "updated_at",
+        ],
+      },
+      UpdateDomainDeliverabilityRequest: {
+        type: "object",
+        properties: {
+          bimi_selector: { type: "string", maxLength: 63 },
+          bimi_logo_url: { type: "string", nullable: true },
+          bimi_certificate_url: { type: "string", nullable: true },
+          bimi_notes: { type: "string", nullable: true, maxLength: 4000 },
+          apple_branded_mail_status: {
+            type: "string",
+            enum: [
+              "not_started",
+              "requested",
+              "approved",
+              "rejected",
+              "manual_review",
+            ],
+          },
+          apple_branded_mail_notes: {
+            type: "string",
+            nullable: true,
+            maxLength: 4000,
+          },
+        },
+      },
       // ── Dedicated IPs ─────────────────────────────────────────────
       DedicatedIpPool: {
         type: "object",
@@ -4919,22 +5074,46 @@ export const openApiDocument = {
           object: { type: "string", enum: ["dedicated_ip_pool"] },
           id: { type: "string", format: "uuid" },
           name: { type: "string" },
+          provider: { type: "string", enum: ["manual"] },
+          provider_pool_name: { type: "string", nullable: true },
           ses_pool_name: { type: "string" },
           scaling_mode: { type: "string", enum: ["STANDARD", "MANAGED"] },
           status: {
             type: "string",
-            enum: ["pending", "active", "failed"],
+            enum: [
+              "requested",
+              "provisioned",
+              "warming",
+              "active",
+              "suspended",
+              "retired",
+            ],
           },
+          operator_notes: { type: "string", nullable: true },
+          provisioned_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          warming_started_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          retired_at: { type: "string", format: "date-time", nullable: true },
           created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
         },
         required: [
           "object",
           "id",
           "name",
+          "provider",
           "ses_pool_name",
           "scaling_mode",
           "status",
           "created_at",
+          "updated_at",
         ],
       },
       DedicatedIpPoolList: {
@@ -4957,11 +5136,18 @@ export const openApiDocument = {
             maxLength: 255,
             description: "User-facing label for the pool.",
           },
+          provider_pool_name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 255,
+            description:
+              "Optional operator/provider reference. No provider provisioning is triggered.",
+          },
           ses_pool_name: {
             type: "string",
             minLength: 1,
             maxLength: 255,
-            description: "The AWS SES dedicated IP pool name.",
+            description: "Deprecated alias for provider_pool_name.",
           },
           scaling_mode: {
             type: "string",
@@ -4969,16 +5155,17 @@ export const openApiDocument = {
             description: "SES scaling mode. Defaults to MANAGED.",
           },
         },
-        required: ["name", "ses_pool_name"],
+        required: ["name"],
       },
       DedicatedIpPoolDeleted: {
         type: "object",
         properties: {
           object: { type: "string", enum: ["dedicated_ip_pool"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
     },
     responses: {

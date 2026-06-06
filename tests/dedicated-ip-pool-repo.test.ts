@@ -38,6 +38,11 @@ const POOL = {
   sesPoolName: "my-ses-pool",
   scalingMode: "MANAGED",
   status: "active",
+  provider: "manual",
+  operatorNotes: null,
+  provisionedAt: null,
+  warmingStartedAt: null,
+  retiredAt: null,
   createdAt: new Date("2026-01-01T00:00:00Z"),
   updatedAt: new Date("2026-01-01T00:00:00Z"),
 } as const;
@@ -107,7 +112,7 @@ describe("dedicatedIpPoolRepo", () => {
     it("sets status", async () => {
       const returningMock = vi
         .fn()
-        .mockResolvedValueOnce([{ ...POOL, status: "failed" }]);
+        .mockResolvedValueOnce([{ ...POOL, status: "suspended" }]);
       const whereMock = vi
         .fn()
         .mockReturnValueOnce({ returning: returningMock });
@@ -116,9 +121,9 @@ describe("dedicatedIpPoolRepo", () => {
 
       const result = await dedicatedIpPoolRepo.updateStatus(
         "pool-uuid-1",
-        "failed",
+        "suspended",
       );
-      expect(result).toMatchObject({ status: "failed" });
+      expect(result).toMatchObject({ status: "suspended" });
     });
   });
 

@@ -46,15 +46,19 @@ export default async function DedicatedIpsPage() {
     return (
       <div className="max-w-2xl space-y-4">
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold text-fg">Dedicated IP Pools</h1>
+          <h1 className="text-2xl font-semibold text-fg">
+            Dedicated IP Lifecycle
+          </h1>
           <p className="text-[14px] text-fg-2">
-            Dedicated IP pools are not available on your current plan.
+            Dedicated IP lifecycle tracking is not available on your current
+            plan.
           </p>
         </div>
         <div className="rounded-lg border border-line bg-bg-2 p-4">
           <p className="text-[13px] text-fg-2">
-            Upgrade your plan to access dedicated IP pools for improved
-            deliverability and TLS enforcement per domain.
+            Upgrade your plan to request dedicated IP support and track manual
+            lifecycle states. OpenSend v1 does not provision or warm provider
+            IPs automatically.
           </p>
         </div>
         <Link
@@ -71,10 +75,12 @@ export default async function DedicatedIpsPage() {
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold text-fg">Dedicated IP Pools</h1>
+          <h1 className="text-2xl font-semibold text-fg">
+            Dedicated IP Lifecycle
+          </h1>
           <p className="text-[14px] text-fg-2">
-            Manage dedicated IP pools for your sending domains. You are using{" "}
-            {pools.length} of {maxDedicatedIps} pool
+            Track manual dedicated IP requests for your sending domains. You are
+            using {pools.length} of {maxDedicatedIps} lifecycle record
             {maxDedicatedIps !== 1 ? "s" : ""}.
           </p>
         </div>
@@ -83,15 +89,16 @@ export default async function DedicatedIpsPage() {
       {pools.length === 0 ? (
         <div className="rounded-lg border border-line bg-bg-2 p-6 text-center">
           <p className="text-[14px] text-fg-2">
-            No dedicated IP pools yet. Create one via the API and assign it to a
-            domain.
+            No dedicated IP lifecycle records yet. Create a request via the API;
+            an operator can mark it provisioned, warming, active, suspended, or
+            retired.
           </p>
           <p className="mt-2 text-[13px] text-fg-3">
             Use{" "}
             <code className="rounded bg-bg-3 px-1 py-0.5 text-[12px]">
               POST /api/dedicated-ips
             </code>{" "}
-            to create a pool.
+            to create a manual lifecycle request.
           </p>
         </div>
       ) : (
@@ -104,7 +111,7 @@ export default async function DedicatedIpsPage() {
               <div className="space-y-0.5">
                 <p className="text-[14px] font-medium text-fg">{pool.name}</p>
                 <p className="text-[12px] text-fg-2">
-                  SES pool:{" "}
+                  Provider reference:{" "}
                   <span className="font-mono">{pool.sesPoolName}</span>
                   {" · "}
                   {pool.scalingMode}
@@ -114,7 +121,7 @@ export default async function DedicatedIpsPage() {
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
                   pool.status === "active"
                     ? "bg-green-900/40 text-green-400"
-                    : pool.status === "failed"
+                    : pool.status === "suspended" || pool.status === "retired"
                       ? "bg-red-900/40 text-red-400"
                       : "bg-yellow-900/40 text-yellow-400"
                 }`}
@@ -127,19 +134,15 @@ export default async function DedicatedIpsPage() {
       )}
 
       <div className="rounded-lg border border-line bg-bg-2 p-4">
-        <p className="text-[13px] font-medium text-fg">
-          Assign a pool to a domain
-        </p>
+        <p className="text-[13px] font-medium text-fg">Manual lifecycle only</p>
         <p className="mt-1 text-[13px] text-fg-2">
           Use{" "}
           <code className="rounded bg-bg-3 px-1 py-0.5 text-[12px]">
-            PATCH /api/domains/:id
+            PATCH /api/dedicated-ips/:id
           </code>{" "}
-          with{" "}
-          <code className="rounded bg-bg-3 px-1 py-0.5 text-[12px]">
-            dedicated_ip_pool_id
-          </code>{" "}
-          to route sending traffic for that domain through a specific pool.
+          responses to inspect lifecycle state. Provider provisioning, IP
+          warmup, and provider assignment are operator-managed in this v1
+          readiness/status slice.
         </p>
       </div>
     </div>
