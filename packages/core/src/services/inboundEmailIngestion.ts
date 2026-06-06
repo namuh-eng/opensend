@@ -2,6 +2,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { db } from "../db/client";
 import { inboundProviderEventRepo } from "../db/repositories/inboundProviderEventRepo";
 import { emailEvents, receivedEmails } from "../db/schema";
+import {
+  UnsafeOutboundUrlError,
+  safeOutboundFetch,
+} from "../security/url-safety";
 import { forwardingRuleService } from "./forwardingRules";
 import {
   InboundMimeParseError,
@@ -54,7 +58,7 @@ export type InboundEmailIngestionOutcome =
     };
 
 export type InboundEmailIngestionDependencies = {
-  fetchImpl?: typeof fetch;
+  safeFetch?: typeof safeOutboundFetch;
   uploadFile?: (
     key: string,
     body: Buffer,
@@ -74,6 +78,8 @@ type StoredAttachment = {
 
 const DEFAULT_PROVIDER = "generic";
 const MAX_METADATA_STRING = 512;
+const DEFAULT_MAX_RAW_MIME_BYTES = 25 * 1024 * 1024;
+const RAW_MIME_FETCH_TIMEOUT_MS = 10_000;
 const SECRET_KEY_PATTERN = /secret|token|authorization|signature|password|key/i;
 
 function normalizeProvider(value: string | undefined): string {
@@ -129,7 +135,8 @@ function decodeRawMime(input: InboundProviderNotification): Buffer | null {
 
 async function fetchRawMime(
   input: InboundProviderNotification,
-  fetchImpl: typeof fetch,
+  safeFetch: typeof safeOutboundFetch,
+  maxBytes = DEFAULT_MAX_RAW_MIME_BYTES,
 ): Promise<Buffer> {
   const local = decodeRawMime(input);
   if (local) return local;
@@ -141,16 +148,91 @@ async function fetchRawMime(
     );
   }
 
-  const response = await fetchImpl(input.rawMimeUrl, {
-    headers: { Accept: "message/rfc822, text/plain, */*" },
-  });
-  if (!response.ok) {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    RAW_MIME_FETCH_TIMEOUT_MS,
+  );
+
+  try {
+    let response: Response;
+    try {
+      response = await safeFetch(
+        input.rawMimeUrl,
+        {
+          headers: { Accept: "message/rfc822, text/plain, */*" },
+          redirect: "error",
+          signal: controller.signal,
+        },
+        { context: "dispatch" },
+      );
+    } catch (error) {
+      if (error instanceof UnsafeOutboundUrlError) {
+        throw new InboundMimeParseError(
+          "malformed_mime",
+          "Raw MIME URL is not allowed",
+        );
+      }
+      throw error;
+    }
+    if (!response.ok) {
+      throw new InboundMimeParseError(
+        "malformed_mime",
+        `Raw MIME fetch failed with HTTP ${response.status}`,
+      );
+    }
+    return await readResponseBufferWithLimit(response, maxBytes);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function readResponseBufferWithLimit(
+  response: Response,
+  maxBytes: number,
+): Promise<Buffer> {
+  const contentLength = response.headers.get("content-length");
+  if (
+    contentLength &&
+    Number.isFinite(Number(contentLength)) &&
+    Number(contentLength) > maxBytes
+  ) {
     throw new InboundMimeParseError(
-      "malformed_mime",
-      `Raw MIME fetch failed with HTTP ${response.status}`,
+      "oversized_message",
+      `MIME payload exceeds ${maxBytes} bytes`,
     );
   }
-  return Buffer.from(await response.arrayBuffer());
+
+  if (!response.body) {
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.byteLength > maxBytes) {
+      throw new InboundMimeParseError(
+        "oversized_message",
+        `MIME payload exceeds ${maxBytes} bytes`,
+      );
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  while (true) {
+    const result = await reader.read();
+    if (result.done) break;
+
+    totalBytes += result.value.byteLength;
+    if (totalBytes > maxBytes) {
+      throw new InboundMimeParseError(
+        "oversized_message",
+        `MIME payload exceeds ${maxBytes} bytes`,
+      );
+    }
+    chunks.push(result.value);
+  }
+
+  return Buffer.concat(chunks, totalBytes);
 }
 
 function mergeRecipients(
@@ -237,7 +319,7 @@ async function cleanupStoredAttachments(
 export function createInboundEmailIngestionService(
   dependencies: InboundEmailIngestionDependencies = {},
 ) {
-  const fetchImpl = dependencies.fetchImpl ?? fetch;
+  const safeFetch = dependencies.safeFetch ?? safeOutboundFetch;
   const uploadFile =
     dependencies.uploadFile ?? storageService.uploadFile.bind(storageService);
   const deleteFile =
@@ -307,9 +389,10 @@ export function createInboundEmailIngestionService(
 
       let parsed: ParsedInboundMime;
       try {
-        parsed = parseInboundMime(await fetchRawMime(notification, fetchImpl), {
-          maxBytes,
-        });
+        parsed = parseInboundMime(
+          await fetchRawMime(notification, safeFetch, maxBytes),
+          { maxBytes },
+        );
       } catch (error) {
         if (error instanceof InboundMimeParseError) {
           return await markTerminal({

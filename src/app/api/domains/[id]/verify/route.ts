@@ -15,7 +15,12 @@ import {
 } from "@/lib/domain-cache";
 import { queueEvent } from "@/lib/events";
 import { verifyDomainParamsSchema } from "@/lib/validation/domains";
-import { domainService, getEffectiveReturnPathLabel } from "@opensend/core";
+import {
+  createDomainService,
+  getEffectiveReturnPathLabel,
+} from "@opensend/core";
+
+const domainService = createDomainService({ invalidateDomainCaches });
 
 export async function POST(
   request: Request,
@@ -58,23 +63,14 @@ export async function POST(
       return Response.json({ error: "Domain not found" }, { status: 404 });
     }
 
+    // Cache invalidation is owned by the service. Do not re-add a route-layer call.
     const result = await domainService.reconcileVerification(id);
 
     if (result.status === "not_found") {
-      await invalidateDomainCaches({
-        id,
-        name: domain.name,
-        region: domain.region,
-      });
       return Response.json({ error: "Domain not found" }, { status: 404 });
     }
 
     const reconciled = result.domain;
-    await invalidateDomainCaches({
-      id: reconciled.id,
-      name: reconciled.name,
-      region: reconciled.region,
-    });
 
     if (result.status === "updated") {
       await queueEvent({

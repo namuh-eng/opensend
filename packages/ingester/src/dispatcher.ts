@@ -1,8 +1,8 @@
 import {
   UnsafeOutboundUrlError,
-  assertSafeOutboundUrl,
   emailEventRepo,
   resolveWebhookSigningSecret,
+  safeOutboundFetch,
   signWebhookPayload,
   toWebhookEventType,
   webhookDeliveryRepo,
@@ -15,7 +15,7 @@ const DEFAULT_MAX_ATTEMPTS = DEFAULT_RETRY_DELAYS_SECONDS.length + 1;
 const RESPONSE_BODY_SNIPPET_LIMIT = 1_000;
 
 type WebhookDispatcherOptions = {
-  fetchImpl?: typeof fetch;
+  fetchImpl?: typeof safeOutboundFetch;
   now?: () => Date;
   retryDelaysSeconds?: number[];
   maxAttempts?: number;
@@ -23,14 +23,14 @@ type WebhookDispatcherOptions = {
 };
 
 export class WebhookDispatcher {
-  private readonly fetchImpl: typeof fetch;
+  private readonly fetchImpl: typeof safeOutboundFetch;
   private readonly now: () => Date;
   private readonly retryDelaysSeconds: number[];
   private readonly maxAttempts: number;
   private readonly timeoutMs: number;
 
   constructor(options: WebhookDispatcherOptions = {}) {
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? safeOutboundFetch;
     this.now = options.now ?? (() => new Date());
     this.retryDelaysSeconds =
       options.retryDelaysSeconds ?? DEFAULT_RETRY_DELAYS_SECONDS;
@@ -96,8 +96,23 @@ export class WebhookDispatcher {
     );
 
     try {
+      let response: Response;
       try {
-        await assertSafeOutboundUrl(webhook.url, { context: "dispatch" });
+        response = await this.fetchImpl(
+          webhook.url,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "svix-id": msgId,
+              "svix-timestamp": timestamp,
+              "svix-signature": signature,
+            },
+            body,
+            signal: AbortSignal.timeout(this.timeoutMs),
+          },
+          { context: "dispatch" },
+        );
       } catch (err) {
         if (err instanceof UnsafeOutboundUrlError) {
           return await this.markTerminal(
@@ -107,17 +122,6 @@ export class WebhookDispatcher {
         }
         throw err;
       }
-      const response = await this.fetchImpl(webhook.url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "svix-id": msgId,
-          "svix-timestamp": timestamp,
-          "svix-signature": signature,
-        },
-        body,
-        signal: AbortSignal.timeout(this.timeoutMs),
-      });
 
       const responseBody = this.toSnippet(await response.text());
       const nextRetryAt = response.ok

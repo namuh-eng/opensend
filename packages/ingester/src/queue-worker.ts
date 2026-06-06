@@ -29,6 +29,7 @@ import {
   parseBackgroundJob,
   publishBackgroundJob,
   recordTelemetryError,
+  safeOutboundFetch,
   startTelemetrySpan,
   suppressionRepo,
   toWebhookEventType,
@@ -954,7 +955,14 @@ async function fetchAttachmentContent(path: string): Promise<Uint8Array> {
   );
 
   try {
-    const response = await fetch(path, { signal: controller.signal });
+    const response = await safeOutboundFetch(
+      path,
+      {
+        redirect: "error",
+        signal: controller.signal,
+      },
+      { context: "dispatch" },
+    );
     if (!response.ok) {
       throw new Error(
         `Attachment fetch failed for ${path}: ${response.status} ${response.statusText}`,

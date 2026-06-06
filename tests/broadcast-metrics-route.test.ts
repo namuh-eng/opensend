@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
+const mockRequireFullAccessForApiKeyCaller = vi.hoisted(() => vi.fn());
 const mockReadDashboardAggregateCache = vi.hoisted(() => vi.fn());
 const mockWriteDashboardAggregateCache = vi.hoisted(() => vi.fn());
 const mockBroadcastService = vi.hoisted(() => ({
@@ -40,6 +41,10 @@ vi.mock("@/lib/api-auth", () => ({
   getServerSession: mockGetServerSession,
 }));
 
+vi.mock("@/lib/api-key-permissions", () => ({
+  requireFullAccessForApiKeyCaller: mockRequireFullAccessForApiKeyCaller,
+}));
+
 vi.mock("@/lib/cache/dashboard-aggregates", () => ({
   BROADCAST_METRICS_CACHE_TTL_SECONDS: 120,
   getBroadcastMetricsCacheKey: (params: {
@@ -62,9 +67,12 @@ describe("broadcast metrics route cache", () => {
     vi.clearAllMocks();
     mockAuthorizeDashboardOrApiKey.mockResolvedValue({
       apiKeyId: "k1",
+      permission: "full_access",
+      domain: null,
       userId: "user-1",
     });
     mockGetServerSession.mockResolvedValue(null);
+    mockRequireFullAccessForApiKeyCaller.mockReturnValue(null);
     mockReadDashboardAggregateCache.mockResolvedValue(null);
     mockWriteDashboardAggregateCache.mockResolvedValue(undefined);
   });

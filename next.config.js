@@ -26,7 +26,7 @@ const securityHeaders = [
       // Next.js inlines runtime JS; the explicit nonce path requires more
       // wiring than this lockdown commit. Use 'unsafe-inline' for now and
       // tighten with nonces in a follow-up.
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us-assets.i.posthog.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",

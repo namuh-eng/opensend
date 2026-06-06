@@ -126,7 +126,6 @@ Local ports:
 | Next.js app + API          | `3015` | `make dev` or `bun run dev`           |
 | Bun/Hono ingester          | `3016` | `bun run start:ingester` or Compose   |
 | Control-plane API skeleton | `3026` | `bun run dev:api`                     |
-| Experimental Go ingester   | `3027` | `cd services/ingester-go && go run .` |
 
 ### 4. Environment variables that matter first
 
@@ -395,7 +394,7 @@ packages/
 
 services/
 ├── api/             # Bun + Hono control-plane API skeleton, port 3026
-└── ingester-go/     # Experimental Go ingester skeleton, port 3027
+└── opensend-cli/    # Go CLI (opensend) — api-keys, logs, send, doctor, domains, health
 
 tests/               # Vitest unit tests
 tests/e2e/           # Playwright E2E tests
@@ -441,7 +440,7 @@ Useful package commands:
 ```bash
 bun run dev:api              # control-plane API skeleton on :3026
 bun run start:ingester       # production ingester locally on :3016
-cd services/ingester-go && go test ./...
+make cli-check               # Go CLI vet + tests
 cd packages/go-sdk && go test ./...
 ruby -I packages/ruby-sdk/lib packages/ruby-sdk/test/opensend_test.rb
 ```

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
 import { automationRepo } from "../db/repositories/automationRepo";
 import { automationRunRepo } from "../db/repositories/automationRunRepo";
@@ -151,14 +151,25 @@ function defaultRepository(): CustomEventBoundaryRepository {
     findByName: (name, userId) => customEventRepo.findByName(name, userId),
     deleteForUser: (id, userId) => customEventRepo.deleteForUser(id, userId),
     resolveContactId: async (input) => {
-      if (input.contactId) return input.contactId;
+      if (!input.userId) return null;
+
+      if (input.contactId) {
+        const existing = await db.query.contacts.findFirst({
+          where: and(
+            eq(contacts.id, input.contactId),
+            eq(contacts.userId, input.userId),
+          ),
+        });
+        return existing?.id ?? null;
+      }
       if (!input.email) return null;
 
       const normalizedEmail = input.email.toLowerCase().trim();
       const existing = await db.query.contacts.findFirst({
         where: eq(contacts.email, normalizedEmail),
       });
-      if (existing) return existing.id;
+      if (existing)
+        return existing.userId === input.userId ? existing.id : null;
 
       const [created] = await db
         .insert(contacts)
