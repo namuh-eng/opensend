@@ -87,6 +87,14 @@ const COMMANDS: CommandItem[] = [
     keywords: ["events", "endpoints"],
   },
   {
+    id: "integrations",
+    label: "Integrations",
+    group: "Configure",
+    icon: "webhooks",
+    href: "/integrations",
+    keywords: ["zapier", "connector", "apps"],
+  },
+  {
     id: "api-keys",
     label: "API Keys",
     group: "Configure",

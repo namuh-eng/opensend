@@ -50,6 +50,7 @@ const GROUPS: NavGroup[] = [
       { href: "/audience", label: "Audience", icon: "audience" },
       { href: "/suppressions", label: "Suppressions", icon: "suppressions" },
       { href: "/webhooks", label: "Webhooks", icon: "webhooks" },
+      { href: "/integrations", label: "Integrations", icon: "webhooks" },
       { href: "/api-keys", label: "API Keys", icon: "keys" },
     ],
   },

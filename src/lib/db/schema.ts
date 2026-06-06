@@ -561,6 +561,67 @@ export const webhooks = pgTable("webhooks", {
   userId: text("user_id"),
 });
 
+export type IntegrationProvider = "webhook";
+export type IntegrationConnectionStatus = "connected" | "disconnected";
+export type IntegrationHealthStatus = "unknown" | "healthy" | "unhealthy";
+
+export type IntegrationConnectionConfig = {
+  webhook?: {
+    endpointHost?: string;
+    endpointPreview?: string;
+    hasSigningSecret?: boolean;
+  };
+};
+
+export const integrationConnections = pgTable(
+  "integration_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    provider: varchar("provider", { length: 64 })
+      .$type<IntegrationProvider>()
+      .notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    status: varchar("status", { length: 32 })
+      .$type<IntegrationConnectionStatus>()
+      .notNull()
+      .default("connected"),
+    scopes: jsonb("scopes").notNull().$type<string[]>(),
+    config: jsonb("config").notNull().$type<IntegrationConnectionConfig>(),
+    credentialsEnc: text("credentials_enc").notNull(),
+    healthStatus: varchar("health_status", { length: 32 })
+      .$type<IntegrationHealthStatus>()
+      .notNull()
+      .default("unknown"),
+    lastHealthCheckAt: timestamp("last_health_check_at", {
+      withTimezone: true,
+    }),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("integration_connections_user_provider_idx").on(
+      table.userId,
+      table.provider,
+    ),
+    index("integration_connections_user_status_idx").on(
+      table.userId,
+      table.status,
+    ),
+  ],
+);
+
+export type IntegrationConnection = typeof integrationConnections.$inferSelect;
+export type IntegrationConnectionInsert =
+  typeof integrationConnections.$inferInsert;
+
 export const templates = pgTable("templates", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull().default("Untitled Template"),

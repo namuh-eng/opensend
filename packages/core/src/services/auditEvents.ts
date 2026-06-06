@@ -27,6 +27,9 @@ export type AuditAction =
   | "webhook.created"
   | "webhook.updated"
   | "webhook.deleted"
+  | "integration.connected"
+  | "integration.updated"
+  | "integration.disconnected"
   | "settings.updated"
   | "team.updated"
   | "team.invitation.created"
@@ -41,6 +44,7 @@ export type AuditTargetType =
   | "receiving_route"
   | "forwarding_rule"
   | "webhook"
+  | "integration"
   | "settings"
   | "team";
 

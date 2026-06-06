@@ -80,6 +80,27 @@ function requireBetterAuthSecret(logger: Logger): void {
   }
 }
 
+function requireIntegrationSecretKey(logger: Logger): void {
+  const key =
+    process.env.INTEGRATION_SECRET_ENCRYPTION_KEY ??
+    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  if (!key || key.length < 16) {
+    if (isProd()) {
+      logger.error(
+        { event: "security.startup.missing_integration_key" },
+        "INTEGRATION_SECRET_ENCRYPTION_KEY missing or too short (>=16 chars required) — refusing to boot",
+      );
+      throw new Error(
+        "INTEGRATION_SECRET_ENCRYPTION_KEY missing/too short in production",
+      );
+    }
+    logger.warn(
+      { event: "security.startup.missing_integration_key_dev" },
+      "INTEGRATION_SECRET_ENCRYPTION_KEY missing or too short — integration connectors cannot store credentials until configured",
+    );
+  }
+}
+
 function warnIfRateLimitDisabled(logger: Logger): void {
   if (!isProd()) return;
   const backend = (process.env.RATE_LIMIT_BACKEND ?? "").toLowerCase();
@@ -117,6 +138,7 @@ function requirePostgresPassword(logger: Logger): void {
 export function runStartupChecks(logger: Logger = defaultLogger): void {
   requireWebhookSecretKey(logger);
   requireBetterAuthSecret(logger);
+  requireIntegrationSecretKey(logger);
   warnIfRateLimitDisabled(logger);
   requirePostgresPassword(logger);
 }
