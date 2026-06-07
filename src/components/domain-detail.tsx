@@ -611,6 +611,10 @@ function buildReceivingRecord(domain: DomainDetailData): DomainDnsRecord {
   };
 }
 
+function recommendedReceivingSubdomain(domainName: string): string {
+  return `inbound.${domainName}`;
+}
+
 function RecordsTab({ domain }: { domain: DomainDetailData }) {
   const router = useRouter();
   const [sendingEnabled, setSendingEnabled] = useState(domain.sendingEnabled);
@@ -814,11 +818,19 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
           </button>
         </div>
         <p className="text-[13px] text-fg-2 mb-4">
-          Receive inbound mail for this domain. For hosted SES receiving, point
-          the receipt rule S3/SNS notification at the OpenSend ingester before
-          publishing MX; changing root domain MX can move existing mailbox
-          traffic.
+          Receive inbound mail for this exact domain after your provider receipt
+          rule is connected to the OpenSend ingester.
         </p>
+        <div className="mb-4 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2">
+          <p className="text-[12px] leading-5 text-amber-200">
+            Changing MX on a domain with an existing mailbox can move that
+            mailbox traffic to OpenSend. To keep current inboxes untouched, add{" "}
+            <span className="font-mono text-fg">
+              {recommendedReceivingSubdomain(domain.name)}
+            </span>{" "}
+            as a separate domain and enable receiving there instead.
+          </p>
+        </div>
         <p className="text-[13px] text-blue-400 mb-2">Inbound MX</p>
         <DNSRecordTable
           records={receivingRecords.length > 0 ? receivingRecords : null}
