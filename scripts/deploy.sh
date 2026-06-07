@@ -48,6 +48,8 @@ ING_CONTAINER_NAME="${ING_CONTAINER_NAME:-${PRODUCT}-ingester}"
 ING_DOCKERFILE="${ING_DOCKERFILE:-packages/ingester/Dockerfile}"
 INGESTER_JOB_TOKEN_SECRET_ID="${INGESTER_JOB_TOKEN_SECRET_ID:-${PRODUCT}/ingester-job-token}"
 INGESTER_JOB_TOKEN_SECRET_ARN="${INGESTER_JOB_TOKEN_SECRET_ARN:-}"
+INGESTER_INBOUND_TOKEN_SECRET_ID="${INGESTER_INBOUND_TOKEN_SECRET_ID:-${PRODUCT}/ingester-inbound-token}"
+INGESTER_INBOUND_TOKEN_SECRET_ARN="${INGESTER_INBOUND_TOKEN_SECRET_ARN:-}"
 
 SCHED_SERVICE="${SCHED_SERVICE:-${PRODUCT}-scheduler}"
 SCHED_CONTAINER_NAME="${SCHED_CONTAINER_NAME:-${PRODUCT}-scheduler}"
@@ -130,6 +132,19 @@ ingester_job_token_secret_arn() {
     --region "${AWS_REGION}" \
     --query 'ARN' \
     --output text
+}
+
+ingester_inbound_token_secret_arn() {
+  if [[ -n "${INGESTER_INBOUND_TOKEN_SECRET_ARN}" ]]; then
+    printf "%s\n" "${INGESTER_INBOUND_TOKEN_SECRET_ARN}"
+    return
+  fi
+
+  aws secretsmanager describe-secret \
+    --secret-id "${INGESTER_INBOUND_TOKEN_SECRET_ID}" \
+    --region "${AWS_REGION}" \
+    --query 'ARN' \
+    --output text 2>/dev/null || true
 }
 
 write_service_network_configuration() {
@@ -237,9 +252,10 @@ ingester_task_definition() {
 }
 
 write_ingester_task_definition() {
-  local base_task_definition="$1" ingester_image="$2" job_token_arn="$3" output_file="$4"
-  local base_task_file
+  local base_task_definition="$1" ingester_image="$2" job_token_arn="$3" inbound_token_arn="$4" app_task_definition="$5" output_file="$6"
+  local base_task_file app_task_file
   base_task_file="$(mktemp)"
+  app_task_file="$(mktemp)"
 
   aws ecs describe-task-definition \
     --task-definition "${base_task_definition}" \
@@ -247,14 +263,29 @@ write_ingester_task_definition() {
     --query 'taskDefinition' \
     --output json > "${base_task_file}"
 
-  python3 - "${base_task_file}" "${ingester_image}" "${ING_CONTAINER_NAME}" "${job_token_arn}" > "${output_file}" <<'PY'
+  aws ecs describe-task-definition \
+    --task-definition "${app_task_definition}" \
+    --region "${AWS_REGION}" \
+    --query 'taskDefinition' \
+    --output json > "${app_task_file}"
+
+  python3 - "${base_task_file}" "${app_task_file}" "${ingester_image}" "${ING_CONTAINER_NAME}" "${job_token_arn}" "${inbound_token_arn}" > "${output_file}" <<'PY'
 import copy
 import json
 import sys
 
-base_task_file, ingester_image, container_name, job_token_arn = sys.argv[1:5]
+(
+    base_task_file,
+    app_task_file,
+    ingester_image,
+    container_name,
+    job_token_arn,
+    inbound_token_arn,
+) = sys.argv[1:7]
 with open(base_task_file, "r", encoding="utf-8") as handle:
     task = json.load(handle)
+with open(app_task_file, "r", encoding="utf-8") as handle:
+    app_task = json.load(handle)
 
 allowed_task_keys = [
     "taskRoleArn",
@@ -290,10 +321,24 @@ if selected is None:
 selected["image"] = ingester_image
 
 environment = selected.setdefault("environment", [])
+app_containers = app_task.get("containerDefinitions") or []
+app_environment = {
+    item.get("name"): item.get("value")
+    for container in app_containers
+    for item in (container.get("environment") or [])
+    if item.get("name") and item.get("value") is not None
+}
 required_environment = {
     "NODE_ENV": "production",
     "HOST": "0.0.0.0",
 }
+for name in ["AWS_REGION", "S3_BUCKET_NAME"]:
+    if name in app_environment:
+        required_environment[name] = app_environment[name]
+if "SES_INBOUND_BUCKET_NAME" in app_environment:
+    required_environment["SES_INBOUND_BUCKET_NAME"] = app_environment[
+        "SES_INBOUND_BUCKET_NAME"
+    ]
 for name, value in required_environment.items():
     for item in environment:
         if item.get("name") == name:
@@ -307,12 +352,19 @@ required_secret = {
     "name": "INGESTER_JOB_TOKEN",
     "valueFrom": job_token_arn,
 }
-for index, secret in enumerate(secrets):
-    if secret.get("name") == required_secret["name"]:
-        secrets[index] = required_secret
-        break
-else:
-    secrets.append(required_secret)
+required_secrets = [required_secret]
+if inbound_token_arn:
+    required_secrets.append(
+        {"name": "INGESTER_INBOUND_TOKEN", "valueFrom": inbound_token_arn}
+    )
+
+for required_secret in required_secrets:
+    for index, secret in enumerate(secrets):
+        if secret.get("name") == required_secret["name"]:
+            secrets[index] = required_secret
+            break
+    else:
+        secrets.append(required_secret)
 
 definition["containerDefinitions"] = containers
 json.dump(definition, sys.stdout)
@@ -320,12 +372,20 @@ PY
 }
 
 register_ingester_task_definition() {
-  local ingester_image="$1" base_task_definition job_token_arn task_file
+  local ingester_image="$1" base_task_definition app_base_task_definition job_token_arn inbound_token_arn task_file
   base_task_definition="$(ingester_task_definition)"
+  app_base_task_definition="$(app_task_definition)"
   job_token_arn="$(ingester_job_token_secret_arn)"
+  inbound_token_arn="$(ingester_inbound_token_secret_arn)"
   task_file="$(mktemp)"
 
-  write_ingester_task_definition "${base_task_definition}" "${ingester_image}" "${job_token_arn}" "${task_file}"
+  write_ingester_task_definition \
+    "${base_task_definition}" \
+    "${ingester_image}" \
+    "${job_token_arn}" \
+    "${inbound_token_arn}" \
+    "${app_base_task_definition}" \
+    "${task_file}"
 
   aws ecs register-task-definition \
     --cli-input-json "file://${task_file}" \
