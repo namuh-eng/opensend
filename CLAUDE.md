@@ -51,6 +51,13 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 - `docker compose up -d` — full stack with Postgres + auto-migration
 
 
+## Worktrees
+- Use the `hack/` scripts to manage per-branch git worktrees — don't hand-roll `git worktree add`.
+- `./hack/create_worktree.sh [name] [base_branch]` (or `./hack/create_worktree.sh origin/some-branch`) — creates a worktree under `$HOME/wt/opensend` (override with `OPENSEND_WORKTREE_OVERRIDE_BASE`). It copies untracked agent config (`.claude`/`.codex`/`.agents`), symlinks every `.env*` (except `.env.example`) and `.mcp.json` back to the main checkout, and runs `bun install`, rolling back on failure. No name → a generated one; no base → current branch.
+- `./hack/cleanup_worktree.sh [name]` — removes a worktree (best-effort stops its dev server), prompts before deleting the branch, and prunes. No args lists the worktrees.
+- Secrets live only in the main checkout's `.env` and are symlinked in — never copy real `.env` files into a worktree. The dev `PORT` is shared via that symlink; replace it with a real `.env` in the worktree to run multiple dev servers at once.
+
+
 ## Documentation Standards
 - Public docs must be OpenSend-owned first-party content. Do not route users to third-party docs from OpenSend docs pages, `llms.txt`, examples, or public navigation.
 - Canonical LLM documentation lives at `/docs/llms.txt`. Root `/llms.txt` may redirect there, but do not maintain a separate root LLM corpus.
