@@ -57,11 +57,42 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
   it("deploy script injects required production app secrets into ECS task definitions", () => {
     const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
     expect(script).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID");
+    expect(script).toContain("TRACKING_SECRET_SECRET_ID");
     expect(script).toContain("aws secretsmanager describe-secret");
     expect(script).toContain('"name": "WEBHOOK_SECRET_ENCRYPTION_KEY"');
+    expect(script).toContain('"name": "TRACKING_SECRET"');
     expect(script).toContain("register_app_task_definition");
     expect(script).toContain(
       'redeploy "${APP_SERVICE}" "${APP_TASK_DEFINITION}"',
+    );
+  });
+
+  it("deploy script injects the SES events SNS topic ARN into the app task environment when configured", () => {
+    const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
+    expect(script).toContain(
+      'SES_EVENTS_SNS_TOPIC_ARN="${SES_EVENTS_SNS_TOPIC_ARN:-}"',
+    );
+    expect(script).toContain('"name": "SES_EVENTS_SNS_TOPIC_ARN"');
+    expect(script).toContain('"value": ses_events_sns_topic_arn');
+    expect(script).toContain('"SES_EVENTS_SNS_TOPIC_ARN"');
+    expect(script).toContain(
+      'write_app_task_definition "${base_task_definition}" "${app_image}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${SES_EVENTS_SNS_TOPIC_ARN}" "${task_file}"',
+    );
+  });
+
+  it("deploy script injects the SES events SNS topic ARN into the ingester task environment", () => {
+    const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
+    expect(script).toContain(
+      'write_ingester_task_definition \\\n    "${base_task_definition}" \\\n    "${ingester_image}"',
+    );
+    expect(script).toContain(
+      '"${SES_EVENTS_SNS_TOPIC_ARN}" \\\n    "${task_file}"',
+    );
+    expect(script).toContain(
+      'for name in ["AWS_REGION", "S3_BUCKET_NAME", "SES_EVENTS_SNS_TOPIC_ARN"]',
+    );
+    expect(script).toContain(
+      'required_environment["SES_EVENTS_SNS_TOPIC_ARN"] = ses_events_sns_topic_arn',
     );
   });
 
@@ -70,7 +101,9 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(script).toContain("INGESTER_INBOUND_TOKEN_SECRET_ID");
     expect(script).toContain("ingester_inbound_token_secret_arn");
     expect(script).toContain('"name": "INGESTER_INBOUND_TOKEN"');
-    expect(script).toContain('for name in ["AWS_REGION", "S3_BUCKET_NAME"]');
+    expect(script).toContain(
+      'for name in ["AWS_REGION", "S3_BUCKET_NAME", "SES_EVENTS_SNS_TOPIC_ARN"]',
+    );
     expect(script).toContain('"SES_INBOUND_BUCKET_NAME"');
     expect(script).toContain("app_task_definition");
   });

@@ -41,6 +41,9 @@ APP_LOG_GROUP="${APP_LOG_GROUP:-/ecs/${APP_SERVICE}}"
 APP_LOG_STREAM_PREFIX="${APP_LOG_STREAM_PREFIX:-app}"
 WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID="${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID:-${PRODUCT}/webhook/secret-encryption-key}"
 WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN="${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN:-}"
+TRACKING_SECRET_SECRET_ID="${TRACKING_SECRET_SECRET_ID:-${PRODUCT}/tracking-secret}"
+TRACKING_SECRET_SECRET_ARN="${TRACKING_SECRET_SECRET_ARN:-}"
+SES_EVENTS_SNS_TOPIC_ARN="${SES_EVENTS_SNS_TOPIC_ARN:-}"
 
 ING_REPO="${PRODUCT}-ingester"
 ING_SERVICE="${PRODUCT}-ingester"
@@ -121,6 +124,19 @@ webhook_secret_encryption_key_secret_arn() {
     --output text
 }
 
+tracking_secret_secret_arn() {
+  if [[ -n "${TRACKING_SECRET_SECRET_ARN}" ]]; then
+    printf "%s\n" "${TRACKING_SECRET_SECRET_ARN}"
+    return
+  fi
+
+  aws secretsmanager describe-secret \
+    --secret-id "${TRACKING_SECRET_SECRET_ID}" \
+    --region "${AWS_REGION}" \
+    --query 'ARN' \
+    --output text
+}
+
 ingester_job_token_secret_arn() {
   if [[ -n "${INGESTER_JOB_TOKEN_SECRET_ARN}" ]]; then
     printf "%s\n" "${INGESTER_JOB_TOKEN_SECRET_ARN}"
@@ -159,7 +175,7 @@ write_service_network_configuration() {
 }
 
 write_app_task_definition() {
-  local base_task_definition="$1" app_image="$2" webhook_secret_arn="$3" output_file="$4"
+  local base_task_definition="$1" app_image="$2" webhook_secret_arn="$3" tracking_secret_arn="$4" ses_events_sns_topic_arn="$5" output_file="$6"
   local base_task_file
   base_task_file="$(mktemp)"
 
@@ -169,12 +185,19 @@ write_app_task_definition() {
     --query 'taskDefinition' \
     --output json > "${base_task_file}"
 
-  python3 - "${base_task_file}" "${app_image}" "${APP_CONTAINER_NAME}" "${webhook_secret_arn}" > "${output_file}" <<'PY'
+  python3 - "${base_task_file}" "${app_image}" "${APP_CONTAINER_NAME}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${ses_events_sns_topic_arn}" > "${output_file}" <<'PY'
 import copy
 import json
 import sys
 
-base_task_file, app_image, container_name, webhook_secret_arn = sys.argv[1:5]
+(
+    base_task_file,
+    app_image,
+    container_name,
+    webhook_secret_arn,
+    tracking_secret_arn,
+    ses_events_sns_topic_arn,
+) = sys.argv[1:7]
 with open(base_task_file, "r", encoding="utf-8") as handle:
     task = json.load(handle)
 
@@ -210,17 +233,37 @@ if selected is None:
     raise SystemExit(f"base task definition has no {container_name!r} container")
 
 selected["image"] = app_image
+if ses_events_sns_topic_arn:
+    environment = selected.setdefault("environment", [])
+    required_environment = {
+        "name": "SES_EVENTS_SNS_TOPIC_ARN",
+        "value": ses_events_sns_topic_arn,
+    }
+    for index, item in enumerate(environment):
+        if item.get("name") == required_environment["name"]:
+            environment[index] = required_environment
+            break
+    else:
+        environment.append(required_environment)
+
 secrets = selected.setdefault("secrets", [])
-required_secret = {
-    "name": "WEBHOOK_SECRET_ENCRYPTION_KEY",
-    "valueFrom": webhook_secret_arn,
-}
-for index, secret in enumerate(secrets):
-    if secret.get("name") == required_secret["name"]:
-        secrets[index] = required_secret
-        break
-else:
-    secrets.append(required_secret)
+required_secrets = [
+    {
+        "name": "WEBHOOK_SECRET_ENCRYPTION_KEY",
+        "valueFrom": webhook_secret_arn,
+    },
+    {
+        "name": "TRACKING_SECRET",
+        "valueFrom": tracking_secret_arn,
+    },
+]
+for required_secret in required_secrets:
+    for index, secret in enumerate(secrets):
+        if secret.get("name") == required_secret["name"]:
+            secrets[index] = required_secret
+            break
+    else:
+        secrets.append(required_secret)
 
 definition["containerDefinitions"] = containers
 json.dump(definition, sys.stdout)
@@ -228,12 +271,13 @@ PY
 }
 
 register_app_task_definition() {
-  local app_image="$1" base_task_definition webhook_secret_arn task_file
+  local app_image="$1" base_task_definition webhook_secret_arn tracking_secret_arn task_file
   base_task_definition="$(app_task_definition)"
   webhook_secret_arn="$(webhook_secret_encryption_key_secret_arn)"
+  tracking_secret_arn="$(tracking_secret_secret_arn)"
   task_file="$(mktemp)"
 
-  write_app_task_definition "${base_task_definition}" "${app_image}" "${webhook_secret_arn}" "${task_file}"
+  write_app_task_definition "${base_task_definition}" "${app_image}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${SES_EVENTS_SNS_TOPIC_ARN}" "${task_file}"
 
   aws ecs register-task-definition \
     --cli-input-json "file://${task_file}" \
@@ -252,7 +296,7 @@ ingester_task_definition() {
 }
 
 write_ingester_task_definition() {
-  local base_task_definition="$1" ingester_image="$2" job_token_arn="$3" inbound_token_arn="$4" app_task_definition="$5" output_file="$6"
+  local base_task_definition="$1" ingester_image="$2" job_token_arn="$3" inbound_token_arn="$4" tracking_secret_arn="$5" app_task_definition="$6" ses_events_sns_topic_arn="$7" output_file="$8"
   local base_task_file app_task_file
   base_task_file="$(mktemp)"
   app_task_file="$(mktemp)"
@@ -269,7 +313,7 @@ write_ingester_task_definition() {
     --query 'taskDefinition' \
     --output json > "${app_task_file}"
 
-  python3 - "${base_task_file}" "${app_task_file}" "${ingester_image}" "${ING_CONTAINER_NAME}" "${job_token_arn}" "${inbound_token_arn}" > "${output_file}" <<'PY'
+  python3 - "${base_task_file}" "${app_task_file}" "${ingester_image}" "${ING_CONTAINER_NAME}" "${job_token_arn}" "${inbound_token_arn}" "${tracking_secret_arn}" "${ses_events_sns_topic_arn}" > "${output_file}" <<'PY'
 import copy
 import json
 import sys
@@ -281,7 +325,9 @@ import sys
     container_name,
     job_token_arn,
     inbound_token_arn,
-) = sys.argv[1:7]
+    tracking_secret_arn,
+    ses_events_sns_topic_arn,
+) = sys.argv[1:9]
 with open(base_task_file, "r", encoding="utf-8") as handle:
     task = json.load(handle)
 with open(app_task_file, "r", encoding="utf-8") as handle:
@@ -332,9 +378,11 @@ required_environment = {
     "NODE_ENV": "production",
     "HOST": "0.0.0.0",
 }
-for name in ["AWS_REGION", "S3_BUCKET_NAME"]:
+for name in ["AWS_REGION", "S3_BUCKET_NAME", "SES_EVENTS_SNS_TOPIC_ARN"]:
     if name in app_environment:
         required_environment[name] = app_environment[name]
+if ses_events_sns_topic_arn:
+    required_environment["SES_EVENTS_SNS_TOPIC_ARN"] = ses_events_sns_topic_arn
 if "SES_INBOUND_BUCKET_NAME" in app_environment:
     required_environment["SES_INBOUND_BUCKET_NAME"] = app_environment[
         "SES_INBOUND_BUCKET_NAME"
@@ -352,7 +400,10 @@ required_secret = {
     "name": "INGESTER_JOB_TOKEN",
     "valueFrom": job_token_arn,
 }
-required_secrets = [required_secret]
+required_secrets = [
+    required_secret,
+    {"name": "TRACKING_SECRET", "valueFrom": tracking_secret_arn},
+]
 if inbound_token_arn:
     required_secrets.append(
         {"name": "INGESTER_INBOUND_TOKEN", "valueFrom": inbound_token_arn}
@@ -372,11 +423,12 @@ PY
 }
 
 register_ingester_task_definition() {
-  local ingester_image="$1" base_task_definition app_base_task_definition job_token_arn inbound_token_arn task_file
+  local ingester_image="$1" base_task_definition app_base_task_definition job_token_arn inbound_token_arn tracking_secret_arn task_file
   base_task_definition="$(ingester_task_definition)"
   app_base_task_definition="$(app_task_definition)"
   job_token_arn="$(ingester_job_token_secret_arn)"
   inbound_token_arn="$(ingester_inbound_token_secret_arn)"
+  tracking_secret_arn="$(tracking_secret_secret_arn)"
   task_file="$(mktemp)"
 
   write_ingester_task_definition \
@@ -384,7 +436,9 @@ register_ingester_task_definition() {
     "${ingester_image}" \
     "${job_token_arn}" \
     "${inbound_token_arn}" \
+    "${tracking_secret_arn}" \
     "${app_base_task_definition}" \
+    "${SES_EVENTS_SNS_TOPIC_ARN}" \
     "${task_file}"
 
   aws ecs register-task-definition \

@@ -51,7 +51,7 @@ vi.mock("@/lib/cache/dashboard-aggregates", () => ({
     userId: string;
     broadcastId: string;
   }) =>
-    `dashboard-aggregate:v1:broadcast-metrics:${params.userId}:${params.broadcastId}`,
+    `dashboard-aggregate:v2:broadcast-metrics:${params.userId}:${params.broadcastId}`,
   readDashboardAggregateCache: mockReadDashboardAggregateCache,
   writeDashboardAggregateCache: mockWriteDashboardAggregateCache,
 }));

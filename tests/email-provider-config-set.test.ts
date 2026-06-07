@@ -74,4 +74,64 @@ describe("EmailProviderService.sendEmail with configurationSetName", () => {
     const callArg = MockSendEmailCommand.mock.calls[0][0];
     expect(callArg.ConfigurationSetName).toBeUndefined();
   });
+
+  it("stamps a trusted entity id header and SES message tag for simple sends", async () => {
+    mockSend.mockResolvedValueOnce({ MessageId: "msg-entity" });
+    const svc = new EmailProviderService();
+
+    await svc.sendEmail({
+      from: "sender@example.com",
+      to: ["recipient@example.com"],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      headers: {
+        "x-entity-id": "attacker-controlled",
+        "X-Customer-Header": "kept",
+      },
+      emailId: "550e8400-e29b-41d4-a716-446655440000",
+    });
+
+    const callArg = MockSendEmailCommand.mock.calls[0][0];
+    expect(callArg.EmailTags).toEqual([
+      {
+        Name: "X-Entity-ID",
+        Value: "550e8400-e29b-41d4-a716-446655440000",
+      },
+    ]);
+    expect(callArg.Content.Simple.Headers).toEqual([
+      { Name: "X-Customer-Header", Value: "kept" },
+      {
+        Name: "X-Entity-ID",
+        Value: "550e8400-e29b-41d4-a716-446655440000",
+      },
+    ]);
+  });
+
+  it("stamps a trusted entity id header and SES message tag for raw attachment sends", async () => {
+    mockSend.mockResolvedValueOnce({ MessageId: "msg-raw-entity" });
+    const svc = new EmailProviderService();
+
+    await svc.sendEmail({
+      from: "sender@example.com",
+      to: ["recipient@example.com"],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      headers: { "X-Entity-ID": "attacker-controlled" },
+      attachments: [{ filename: "hello.txt", content: "aGVsbG8=" }],
+      emailId: "550e8400-e29b-41d4-a716-446655440000",
+    });
+
+    const callArg = MockSendEmailCommand.mock.calls[0][0];
+    const rawMessage = new TextDecoder().decode(callArg.Content.Raw.Data);
+    expect(callArg.EmailTags).toEqual([
+      {
+        Name: "X-Entity-ID",
+        Value: "550e8400-e29b-41d4-a716-446655440000",
+      },
+    ]);
+    expect(rawMessage).toContain(
+      "X-Entity-ID: 550e8400-e29b-41d4-a716-446655440000",
+    );
+    expect(rawMessage).not.toContain("attacker-controlled");
+  });
 });

@@ -8,6 +8,17 @@ const STATUS_BY_EVENT_TYPE: Record<string, string> = {
   complained: "complained",
 };
 
+async function withDerivedUserId(data: typeof emailEvents.$inferInsert) {
+  if (data.userId || !data.emailId) return data;
+
+  const email = await db.query.emails.findFirst({
+    columns: { userId: true },
+    where: eq(emails.id, data.emailId),
+  });
+
+  return email?.userId ? { ...data, userId: email.userId } : data;
+}
+
 export const emailEventRepo = {
   async findById(id: string) {
     return await db.query.emailEvents.findFirst({
@@ -16,15 +27,19 @@ export const emailEventRepo = {
   },
 
   async create(data: typeof emailEvents.$inferInsert) {
+    const eventData = await withDerivedUserId(data);
     return await db.transaction(async (tx) => {
-      const [event] = await tx.insert(emailEvents).values(data).returning();
-      const nextStatus = STATUS_BY_EVENT_TYPE[data.type];
+      const [event] = await tx
+        .insert(emailEvents)
+        .values(eventData)
+        .returning();
+      const nextStatus = STATUS_BY_EVENT_TYPE[eventData.type];
 
-      if (nextStatus && data.emailId) {
+      if (nextStatus && eventData.emailId) {
         await tx
           .update(emails)
           .set({ status: nextStatus })
-          .where(eq(emails.id, data.emailId));
+          .where(eq(emails.id, eventData.emailId));
       }
 
       return event;
@@ -38,14 +53,15 @@ export const emailEventRepo = {
   },
 
   async createOrIgnoreDuplicate(data: typeof emailEvents.$inferInsert) {
+    const eventData = await withDerivedUserId(data);
     if (!data.sourceId) {
-      return { event: await this.create(data), created: true };
+      return { event: await this.create(eventData), created: true };
     }
 
     const insertedEvent = await db.transaction(async (tx) => {
       const [event] = await tx
         .insert(emailEvents)
-        .values(data)
+        .values(eventData)
         .onConflictDoNothing({ target: emailEvents.sourceId })
         .returning();
 
@@ -53,13 +69,13 @@ export const emailEventRepo = {
         return null;
       }
 
-      const nextStatus = STATUS_BY_EVENT_TYPE[data.type];
+      const nextStatus = STATUS_BY_EVENT_TYPE[eventData.type];
 
-      if (nextStatus && data.emailId) {
+      if (nextStatus && eventData.emailId) {
         await tx
           .update(emails)
           .set({ status: nextStatus })
-          .where(eq(emails.id, data.emailId));
+          .where(eq(emails.id, eventData.emailId));
       }
 
       return event;

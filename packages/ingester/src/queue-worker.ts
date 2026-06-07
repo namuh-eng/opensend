@@ -460,6 +460,7 @@ export class QueueWorker {
         region: sesRegion,
         configurationSetName:
           deliveryDomain?.sesConfigurationSetName ?? undefined,
+        emailId: email.id,
       });
       const sendDurationMs = finishTelemetrySpan(sesSpan, { status: "ok" });
 

@@ -2,11 +2,16 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import {
   CreateConfigurationSetCommand,
+  CreateConfigurationSetEventDestinationCommand,
   CreateDedicatedIpPoolCommand,
   DeleteConfigurationSetCommand,
   DeleteDedicatedIpPoolCommand,
+  type EventDestinationDefinition,
+  type EventType,
+  GetConfigurationSetEventDestinationsCommand,
   PutConfigurationSetDeliveryOptionsCommand,
   SESv2Client,
+  UpdateConfigurationSetEventDestinationCommand,
 } from "@aws-sdk/client-sesv2";
 
 const hasAwsCredentials =
@@ -17,6 +22,16 @@ const hasAwsCredentials =
 const useDevStub = process.env.NODE_ENV === "development" && !hasAwsCredentials;
 
 const DEFAULT_SES_REGION = "us-east-1";
+export const SES_EVENTS_DESTINATION_NAME = "opensend-sns-events";
+export const SES_EVENTS_MATCHING_EVENT_TYPES = [
+  "SEND",
+  "DELIVERY",
+  "BOUNCE",
+  "COMPLAINT",
+  "DELIVERY_DELAY",
+  "REJECT",
+  "RENDERING_FAILURE",
+] as const satisfies readonly EventType[];
 
 function normalizeSesRegion(region: string | null | undefined): string {
   const trimmed = region?.trim();
@@ -147,6 +162,115 @@ export class ConfigurationSetService {
   }
 
   /**
+   * Upsert the SNS event destination used by the SES/SNS ingester.
+   */
+  async upsertConfigurationSetEventDestination(input: {
+    configurationSetName: string;
+    topicArn: string;
+    region?: string;
+  }): Promise<void> {
+    const topicArn = input.topicArn.trim();
+    if (!topicArn) return;
+
+    const eventDestination = buildSesEventsSnsDestination(topicArn);
+
+    if (useDevStub) {
+      console.log(
+        `[DEV] Would upsert SES config set event destination: ${input.configurationSetName}/${SES_EVENTS_DESTINATION_NAME}`,
+      );
+      return;
+    }
+
+    const client = this.getClient(input.region);
+    const current = await client.send(
+      new GetConfigurationSetEventDestinationsCommand({
+        ConfigurationSetName: input.configurationSetName,
+      }),
+    );
+    const existing = current.EventDestinations?.find(
+      (destination) => destination.Name === SES_EVENTS_DESTINATION_NAME,
+    );
+
+    if (existing) {
+      await client.send(
+        new UpdateConfigurationSetEventDestinationCommand({
+          ConfigurationSetName: input.configurationSetName,
+          EventDestinationName: SES_EVENTS_DESTINATION_NAME,
+          EventDestination: eventDestination,
+        }),
+      );
+      return;
+    }
+
+    try {
+      await client.send(
+        new CreateConfigurationSetEventDestinationCommand({
+          ConfigurationSetName: input.configurationSetName,
+          EventDestinationName: SES_EVENTS_DESTINATION_NAME,
+          EventDestination: eventDestination,
+        }),
+      );
+    } catch (err) {
+      if (!isAlreadyExistsError(err)) throw err;
+      await client.send(
+        new UpdateConfigurationSetEventDestinationCommand({
+          ConfigurationSetName: input.configurationSetName,
+          EventDestinationName: SES_EVENTS_DESTINATION_NAME,
+          EventDestination: eventDestination,
+        }),
+      );
+    }
+  }
+
+  async getConfigurationSetEventDestinationState(input: {
+    configurationSetName: string;
+    region?: string;
+  }): Promise<{
+    configured: boolean;
+    enabled: boolean | null;
+    topicArn: string | null;
+    matchingEventTypes: string[];
+  }> {
+    if (useDevStub) {
+      return {
+        configured: false,
+        enabled: null,
+        topicArn: null,
+        matchingEventTypes: [],
+      };
+    }
+
+    const current = await this.getClient(input.region).send(
+      new GetConfigurationSetEventDestinationsCommand({
+        ConfigurationSetName: input.configurationSetName,
+      }),
+    );
+    const destination = current.EventDestinations?.find(
+      (item) => item.Name === SES_EVENTS_DESTINATION_NAME,
+    );
+
+    return {
+      configured: Boolean(destination),
+      enabled: destination?.Enabled ?? null,
+      topicArn: destination?.SnsDestination?.TopicArn ?? null,
+      matchingEventTypes: destination?.MatchingEventTypes ?? [],
+    };
+  }
+
+  async getDomainConfigurationSetEventDestinationState(input: {
+    domainId: string;
+    existingConfigSetName?: string | null;
+    region?: string;
+  }) {
+    const configurationSetName =
+      input.existingConfigSetName ?? `opensend-domain-${input.domainId}`;
+    return await this.getConfigurationSetEventDestinationState({
+      configurationSetName,
+      region: input.region,
+    });
+  }
+
+  /**
    * Delete a SES configuration set (best-effort, ignores not-found).
    */
   async deleteConfigurationSet(input: {
@@ -180,6 +304,7 @@ export class ConfigurationSetService {
     tls: string | null | undefined;
     dedicatedIpPoolSesName?: string | null;
     existingConfigSetName?: string | null;
+    eventDestinationTopicArn?: string | null;
     region?: string;
   }): Promise<string> {
     const configSetName =
@@ -216,8 +341,28 @@ export class ConfigurationSetService {
       }
     }
 
+    if (input.eventDestinationTopicArn?.trim()) {
+      await this.upsertConfigurationSetEventDestination({
+        configurationSetName: configSetName,
+        topicArn: input.eventDestinationTopicArn,
+        region: input.region,
+      });
+    }
+
     return configSetName;
   }
+}
+
+function buildSesEventsSnsDestination(
+  topicArn: string,
+): EventDestinationDefinition {
+  return {
+    Enabled: true,
+    MatchingEventTypes: [...SES_EVENTS_MATCHING_EVENT_TYPES],
+    SnsDestination: {
+      TopicArn: topicArn,
+    },
+  };
 }
 
 function isNotFoundException(error: unknown): boolean {
