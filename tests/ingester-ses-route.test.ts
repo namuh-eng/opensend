@@ -526,7 +526,7 @@ describe("SES SNS ingestion route", () => {
     const app = (await import("../packages/ingester/src/index")).default;
     const envelope = createSignedEnvelope({
       sesMessage: {
-        eventType: "Received",
+        notificationType: "Received",
         mail: {
           messageId: "ses-inbound-msg-1",
           destination: ["support@example.test"],
