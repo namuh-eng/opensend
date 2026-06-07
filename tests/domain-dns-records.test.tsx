@@ -230,6 +230,19 @@ describe("Domain DNS Records Tab (feature-025)", () => {
     expect(screen.getByText("Manual")).toBeTruthy();
   });
 
+  it("warns users to use a receiving subdomain when root MX may host mailboxes", () => {
+    render(
+      <DomainDetail
+        domain={{ ...domainWithRecords, receivingEnabled: true }}
+      />,
+    );
+
+    expect(screen.getByText(/Changing MX on a domain/)).toBeTruthy();
+    expect(
+      screen.getByText("inbound.updates.foreverbrowsing.com"),
+    ).toBeTruthy();
+  });
+
   it("does not show an inbound MX target before receiving is enabled", () => {
     render(<DomainDetail domain={domainWithRecords} />);
 
