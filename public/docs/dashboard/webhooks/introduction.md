@@ -12,4 +12,4 @@ The Webhooks dashboard manages outbound event subscriptions. Use it to create en
 
 ## Caveats
 
-Webhook delivery requires the dispatcher/worker path. In self-hosted deployments, configure the ingester/worker and keep endpoint timeouts under the documented delivery timeout. The reserved `email.received` contract is for operator-owned inbound ingestion and is not part of default subscription creation.
+Webhook delivery requires the dispatcher/worker path. In self-hosted deployments, configure the ingester/worker and keep endpoint timeouts under the documented delivery timeout. `email.received` subscriptions are available for receiving-enabled domains and are queued after inbound MIME ingestion commits the received email row.

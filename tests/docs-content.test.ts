@@ -291,8 +291,6 @@ describe("webhook event docs", () => {
       expect(eventTypes).toContain(`\`${eventType}\``);
     }
     expect(eventTypes).toContain("email.received");
-    expect(eventTypes).toContain(
-      "not part of the default webhook subscription",
-    );
+    expect(eventTypes).toContain("metadata-only");
   });
 });

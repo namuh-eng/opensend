@@ -34,6 +34,9 @@ async function cleanup(client: Client, marker: string): Promise<void> {
   await client.query("delete from email_events where user_id like $1", [
     `${marker}%`,
   ]);
+  await client.query("delete from webhooks where user_id like $1", [
+    `${marker}%`,
+  ]);
   await client.query("delete from forwarding_attempts where user_id like $1", [
     `${marker}%`,
   ]);
@@ -234,6 +237,131 @@ describeIfDb("inbound MIME ingestion with real Postgres", () => {
       [eventId],
     );
     expect(duplicateRows.rows[0]?.status).toBe("duplicate_provider_event");
+  });
+
+  it("queues pending email.received webhook deliveries for subscribed tenant webhooks", async () => {
+    const webhookId = randomUUID();
+    await client.query(
+      "insert into webhooks (id, url, event_types, status, user_id) values ($1, $2, $3::jsonb, 'active', $4)",
+      [
+        webhookId,
+        "https://example.test/inbound-webhook",
+        JSON.stringify(["email.received"]),
+        tenantA,
+      ],
+    );
+
+    const outcome = await createInboundEmailIngestionService().process({
+      provider: "fixture",
+      eventId: `${marker}-received-webhook`,
+      messageId: `${marker}-received-webhook-msg`,
+      recipients: [`support@${domainA}`],
+      rawMime: buildMime({
+        from: "sender@example.test",
+        to: `support@${domainA}`,
+        subject: "Webhook me",
+      }),
+      metadata: { test_run_id: marker },
+    });
+
+    expect(outcome).toMatchObject({ status: "processed", user_id: tenantA });
+    if (outcome.status !== "processed") {
+      throw new Error("Expected processed inbound message");
+    }
+
+    const deliveryRows = await client.query<{
+      webhook_id: string;
+      status: string;
+      attempt: number;
+      event_type: string;
+      email_id: string | null;
+      payload: { received_email_id?: string };
+    }>(
+      `select
+        wd.webhook_id,
+        wd.status,
+        wd.attempt,
+        ee.type as event_type,
+        ee.email_id,
+        ee.payload
+       from webhook_deliveries wd
+       join email_events ee on ee.id = wd.event_id
+       where wd.webhook_id = $1 and ee.id = $2`,
+      [webhookId, outcome.event_id],
+    );
+
+    expect(deliveryRows.rows).toEqual([
+      {
+        webhook_id: webhookId,
+        status: "pending",
+        attempt: 0,
+        event_type: "received",
+        email_id: null,
+        payload: expect.objectContaining({
+          received_email_id: outcome.received_email_id,
+        }),
+      },
+    ]);
+  });
+
+  it("marks inbound messages over quota before storage or received-email persistence", async () => {
+    let uploadCalls = 0;
+    const service = createInboundEmailIngestionService({
+      reserveEmailQuota: async () => ({
+        ok: false,
+        info: {
+          resource: "emails",
+          plan: "free",
+          limit: 1,
+          used: 1,
+        },
+      }),
+      uploadFile: async () => {
+        uploadCalls += 1;
+        throw new Error("upload should not be reached");
+      },
+    });
+
+    const eventId = `${marker}-quota-exceeded`;
+    const outcome = await service.process({
+      provider: "fixture",
+      eventId,
+      messageId: `${marker}-quota-exceeded-msg`,
+      recipients: [`support@${domainA}`],
+      rawMime: buildMime({
+        from: "sender@example.test",
+        to: `support@${domainA}`,
+        subject: "Quota blocked",
+        attachment: true,
+      }),
+      metadata: { test_run_id: marker },
+    });
+
+    expect(outcome).toMatchObject({
+      status: "quota_exceeded",
+      reason: "Monthly email quota exceeded for plan free",
+    });
+    expect(uploadCalls).toBe(0);
+
+    const receivedRows = await client.query<{ count: string }>(
+      "select count(*) from received_emails where user_id = $1 and subject = 'Quota blocked'",
+      [tenantA],
+    );
+    expect(receivedRows.rows[0]?.count).toBe("0");
+
+    const providerRows = await client.query<{
+      status: string;
+      user_id: string | null;
+      terminal_reason: string | null;
+    }>(
+      "select status, user_id, terminal_reason from inbound_provider_events where provider_event_id = $1",
+      [eventId],
+    );
+    expect(providerRows.rows[0]).toEqual({
+      status: "quota_exceeded",
+      user_id: tenantA,
+      terminal_reason: "Monthly email quota exceeded for plan free",
+    });
   });
 
   it("rejects unsafe raw MIME URLs before fetching remote content", async () => {

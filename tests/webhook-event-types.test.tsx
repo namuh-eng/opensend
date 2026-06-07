@@ -41,13 +41,15 @@ describe("webhook event type support", () => {
         events: ["delivered"],
       }).success,
     ).toBe(false);
+  });
 
+  it("accepts email.received subscriptions", () => {
     expect(
       createWebhookSchema.safeParse({
         endpoint: "https://example.com/webhooks",
         events: ["email.received"],
       }).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("renders dashboard event labels from the shared supported set", () => {

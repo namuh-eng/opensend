@@ -9,6 +9,7 @@ export type InboundProviderEventStatus =
   | "missing_domain"
   | "oversized_message"
   | "storage_failure"
+  | "quota_exceeded"
   | "duplicate_provider_event";
 
 type CreateProcessingInput = {
