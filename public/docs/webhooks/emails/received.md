@@ -1,8 +1,10 @@
 # email.received
 
-`email.received` is the event name OpenSend reserves for inbound email notifications.
+OpenSend emits `email.received` after committing an inbound email row for a receiving-enabled domain.
 
-Inbound receiving is currently a deployment integration point: the repository includes read APIs and storage schema for received email rows, but it does not include a complete SES inbound MIME parser that emits this event automatically. If you build that parser for your self-hosted deployment, use the payload shape below so downstream agents and webhook consumers can rely on a stable contract.
+## When it is emitted
+
+OpenSend emits this event after the standalone ingester accepts an inbound provider notification, parses the raw MIME message, resolves the recipient to one tenant, stores the received email row, and commits attachment metadata. The event is not emitted for malformed messages, duplicate provider events, unrouteable messages, oversized messages, storage failures, or messages blocked by hosted quota.
 
 ## Recommended payload
 
@@ -33,7 +35,3 @@ Keep the webhook payload metadata-only. Retrieve bodies with `GET /emails/receiv
 ## Delivery and verification
 
 OpenSend webhook deliveries use the same signing and retry guidance as other events. Verify the `svix-id`, `svix-timestamp`, and `svix-signature` headers before acting on the inbound email. See [Verify webhook requests](../verify-webhooks-requests.md) and [Retries and replays](../retries-and-replays.md).
-
-## Operator status
-
-This page documents the first-party contract to use when inbound ingestion is enabled in your deployment. Hosted or self-hosted installs that only run the default SES/SNS lifecycle ingester should not expect `email.received` events until an inbound receiving worker is added.

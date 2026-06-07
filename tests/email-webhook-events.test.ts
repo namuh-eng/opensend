@@ -19,6 +19,7 @@ describe("enqueueEmailWebhookEvent", () => {
     ["email.scheduled", "scheduled"],
     ["email.delayed", "delayed"],
     ["email.suppressed", "suppressed"],
+    ["email.received", "received"],
   ] as const)(
     "persists %s and tenant-scoped pending delivery rows",
     async (webhookEventType, storedEventType) => {
@@ -56,15 +57,19 @@ describe("enqueueEmailWebhookEvent", () => {
         "../packages/core/src/services/email-webhook-events"
       );
       const receivedAt = new Date("2026-05-28T00:00:00.000Z");
+      const payload =
+        webhookEventType === "email.received"
+          ? { received_email_id: "received-1" }
+          : {
+              email_id: "email-1",
+              happened_at: receivedAt.toISOString(),
+            };
       const result = await enqueueEmailWebhookEvent({
         type: webhookEventType,
         userId: "user-1",
-        emailId: "email-1",
+        emailId: webhookEventType === "email.received" ? null : "email-1",
         sourceId: `${storedEventType}:email-1`,
-        payload: {
-          email_id: "email-1",
-          happened_at: receivedAt.toISOString(),
-        },
+        payload,
         receivedAt,
       });
 
@@ -75,13 +80,10 @@ describe("enqueueEmailWebhookEvent", () => {
       const eventValues =
         tx.insert.mock.results[0]?.value.values.mock.calls[0]?.[0];
       expect(eventValues).toMatchObject({
-        emailId: "email-1",
+        emailId: webhookEventType === "email.received" ? null : "email-1",
         sourceId: `${storedEventType}:email-1`,
         type: storedEventType,
-        payload: {
-          email_id: "email-1",
-          happened_at: receivedAt.toISOString(),
-        },
+        payload,
         userId: "user-1",
         receivedAt,
       });
@@ -107,11 +109,11 @@ describe("enqueueEmailWebhookEvent", () => {
 
     await expect(
       enqueueEmailWebhookEvent({
-        type: "email.received" as never,
+        type: "email.unknown" as never,
         userId: "user-1",
         payload: {},
       }),
-    ).rejects.toThrow("Unsupported webhook event type: email.received");
+    ).rejects.toThrow("Unsupported webhook event type: email.unknown");
     expect(mockTransaction).not.toHaveBeenCalled();
   });
 });
