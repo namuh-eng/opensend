@@ -171,7 +171,7 @@
 - [email.deliverydelayed](https://opensend.namuh.co/docs/webhooks/emails/delivery-delayed.md): Provider delivery delay notification received.
 - [email.failed](https://opensend.namuh.co/docs/webhooks/emails/failed.md): Provider reject, rendering failure, or retry exhaustion recorded.
 - [email.opened](https://opensend.namuh.co/docs/webhooks/emails/opened.md): Open tracking pixel was requested.
-- [email.received](https://opensend.namuh.co/docs/webhooks/emails/received.md): Inbound receiving is currently a deployment integration point: the repository includes read APIs and storage schema for received email rows, but it does not include a complete SES inbound MIME parser that emits this event automatically. If you build that parser for your self-hosted deployment, use the payload shape below so downstream agents and webhook consumers can rely on a stable contract.
+- [email.received](https://opensend.namuh.co/docs/webhooks/emails/received.md): OpenSend emits email.received after committing an inbound email row for a receiving-enabled domain.
 - [email.scheduled](https://opensend.namuh.co/docs/webhooks/emails/scheduled.md): Future delivery accepted and stored.
 - [email.sent](https://opensend.namuh.co/docs/webhooks/emails/sent.md): Provider send notification received.
 - [email.suppressed](https://opensend.namuh.co/docs/webhooks/emails/suppressed.md): Send rejected by suppression policy.

@@ -1,7 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import { inboundProviderEventRepo } from "../db/repositories/inboundProviderEventRepo";
-import { emailEvents, receivedEmails } from "../db/schema";
+import {
+  emailEvents,
+  receivedEmails,
+  webhookDeliveries,
+  webhooks,
+} from "../db/schema";
 import {
   UnsafeOutboundUrlError,
   safeOutboundFetch,
@@ -21,6 +27,10 @@ import {
   resolveInboundReply,
 } from "./replyThreading";
 import { storageService } from "./storage";
+import {
+  releaseTransactionalEmailQuota,
+  reserveTransactionalEmailQuota,
+} from "./usageQuota";
 
 export type InboundProviderNotification = {
   provider: string;
@@ -39,6 +49,7 @@ export type InboundEmailIngestionStatus =
   | "missing_domain"
   | "oversized_message"
   | "storage_failure"
+  | "quota_exceeded"
   | "duplicate_provider_event";
 
 export type InboundEmailIngestionOutcome =
@@ -66,6 +77,8 @@ export type InboundEmailIngestionDependencies = {
   ) => Promise<{ key: string; url: string }>;
   deleteFile?: (key: string) => Promise<void>;
   maxBytes?: number;
+  reserveEmailQuota?: typeof reserveTransactionalEmailQuota;
+  releaseEmailQuota?: typeof releaseTransactionalEmailQuota;
 };
 
 type StoredAttachment = {
@@ -325,6 +338,10 @@ export function createInboundEmailIngestionService(
   const deleteFile =
     dependencies.deleteFile ?? storageService.deleteFile.bind(storageService);
   const maxBytes = dependencies.maxBytes;
+  const reserveEmailQuota =
+    dependencies.reserveEmailQuota ?? reserveTransactionalEmailQuota;
+  const releaseEmailQuota =
+    dependencies.releaseEmailQuota ?? releaseTransactionalEmailQuota;
   const receivingRouteService = createReceivingRouteService();
 
   async function markTerminal(input: {
@@ -441,6 +458,18 @@ export function createInboundEmailIngestionService(
         });
       }
 
+      const quota = await reserveEmailQuota(tenant.userId, 1);
+      if (!quota.ok) {
+        return await markTerminal({
+          eventId: created.event.id,
+          providerEventId,
+          status: "quota_exceeded",
+          reason: `Monthly email quota exceeded for plan ${quota.info.plan}`,
+          userId: tenant.userId,
+        });
+      }
+      const quotaReserved = !quota.bypassed;
+
       const receivedEmailId = randomUUID();
       const storedAttachments: StoredAttachment[] = [];
       const uploadedKeys: string[] = [];
@@ -464,6 +493,9 @@ export function createInboundEmailIngestionService(
           });
         }
       } catch (error) {
+        if (quotaReserved) {
+          await releaseEmailQuota(tenant.userId, 1);
+        }
         await cleanupStoredAttachments(uploadedKeys, deleteFile);
         return await markTerminal({
           eventId: created.event.id,
@@ -531,6 +563,29 @@ export function createInboundEmailIngestionService(
             })
             .returning();
 
+          const matchingWebhooks = await tx
+            .select({ id: webhooks.id })
+            .from(webhooks)
+            .where(
+              and(
+                eq(webhooks.userId, tenant.userId),
+                eq(webhooks.status, "active"),
+                sql`${webhooks.eventTypes} ? ${"email.received"}`,
+              ),
+            );
+
+          if (matchingWebhooks.length > 0) {
+            await tx.insert(webhookDeliveries).values(
+              matchingWebhooks.map((webhook) => ({
+                webhookId: webhook.id,
+                eventId: event.id,
+                status: "pending",
+                attempt: 0,
+                nextRetryAt: null,
+              })),
+            );
+          }
+
           return { received, event };
         });
 
@@ -563,6 +618,9 @@ export function createInboundEmailIngestionService(
           attachments: storedAttachments.length,
         };
       } catch (error) {
+        if (quotaReserved) {
+          await releaseEmailQuota(tenant.userId, 1);
+        }
         await cleanupStoredAttachments(uploadedKeys, deleteFile);
         return await markTerminal({
           eventId: created.event.id,

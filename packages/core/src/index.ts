@@ -72,6 +72,7 @@ export * from "./services/configurationSet";
 export * from "./services/tracking";
 export * from "./services/trackingRoute";
 export * from "./services/sandboxTestRecipients";
+export * from "./services/usageQuota";
 export * from "./services/storage";
 export * from "./services/template";
 export * from "./services/template-renderer";
