@@ -19,7 +19,7 @@ OpenSend received-email rows must include the tenant `user_id`. Your inbound wor
 
 ## Dashboard status
 
-The dashboard can show receiving-capable domains, but MX validation and provider receipt-rule creation are still operator-owned. Label your internal runbook clearly so users know whether receiving is enabled for a domain or only prepared in DNS.
+The dashboard can show receiving-capable domains, but MX validation and provider receipt-rule creation are still operator-owned. For hosted SES receiving, create a receipt rule that stores raw MIME in S3 and publishes SNS notifications to the ingester `/events/inbound/ses-s3` endpoint. Label your internal runbook clearly so users know whether receiving is enabled for a domain or only prepared in DNS.
 
 ## Routing rules
 

@@ -1,6 +1,6 @@
 import { getCached, setCache } from "@/lib/cache/redis";
 
-const DASHBOARD_AGGREGATE_CACHE_PREFIX = "dashboard-aggregate:v1";
+const DASHBOARD_AGGREGATE_CACHE_PREFIX = "dashboard-aggregate:v2";
 
 export const DASHBOARD_METRICS_CACHE_TTL_SECONDS = 60;
 export const BROADCAST_METRICS_CACHE_TTL_SECONDS = 120;

@@ -31,7 +31,7 @@ vi.mock("@/lib/cache/dashboard-aggregates", () => ({
     tagName: string | null;
     tagValue: string | null;
   }) =>
-    `dashboard-aggregate:v1:metrics:${userId}:${range}:${domain ?? "all"}:${eventType ?? "all"}:${tagName ?? "all"}:${tagValue ?? "all"}`,
+    `dashboard-aggregate:v2:metrics:${userId}:${range}:${domain ?? "all"}:${eventType ?? "all"}:${tagName ?? "all"}:${tagValue ?? "all"}`,
   readDashboardAggregateCache: mockReadDashboardAggregateCache,
   writeDashboardAggregateCache: mockWriteDashboardAggregateCache,
 }));
@@ -133,7 +133,7 @@ describe("metrics route adapter", () => {
     expect(mockWriteDashboardAggregateCache).not.toHaveBeenCalled();
     await expect(response.json()).resolves.toMatchObject({ totalEmails: 99 });
     expect(mockReadDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:delivered:campaign:launch",
+      "dashboard-aggregate:v2:metrics:user-1:last_7_days:example.com:delivered:campaign:launch",
     );
   });
 
@@ -173,7 +173,7 @@ describe("metrics route adapter", () => {
       millisecond: 999,
     });
     expect(mockWriteDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:opened:campaign:all",
+      "dashboard-aggregate:v2:metrics:user-1:last_7_days:example.com:opened:campaign:all",
       freshPayload,
       60,
     );

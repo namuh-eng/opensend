@@ -7,6 +7,7 @@ export const SUPPORTED_WEBHOOK_EVENT_TYPES = [
   "email.scheduled",
   "email.delayed",
   "email.suppressed",
+  "email.received",
   "email.opened",
   "email.clicked",
   "email.failed",

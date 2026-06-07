@@ -35,7 +35,7 @@ const GROUPS: NavGroup[] = [
     items: [{ href: "/today", label: "Today", icon: "overview" }],
   },
   {
-    label: "Send",
+    label: "Messaging",
     items: [
       { href: "/emails", label: "Emails", icon: "emails" },
       { href: "/broadcasts", label: "Broadcasts", icon: "broadcasts" },

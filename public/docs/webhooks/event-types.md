@@ -22,9 +22,9 @@ OpenSend accepts the following webhook subscription event types.
 | `domain.updated` | Domain update, verify, or reconcile paths | Includes verification-state changes when available. |
 | `domain.deleted` | Domain delete API | Emitted after domain deletion succeeds. |
 
-## Reserved but not currently emitted by default
+## Inbound receiving
 
-`email.received` is documented as an inbound receiving contract for deployments that add their own MIME ingestion worker. It is not part of the default webhook subscription validation list in this repository today.
+`email.received` is emitted after the OpenSend ingester commits an inbound email row for a receiving-enabled domain. Its webhook payload is metadata-only; retrieve content and attachments through the received-email APIs.
 
 ## Payload shape
 

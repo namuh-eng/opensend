@@ -56,6 +56,7 @@ const hasAwsCredentials =
 const useDevStub = process.env.NODE_ENV === "development" && !hasAwsCredentials;
 
 const DEFAULT_SES_REGION = "us-east-1";
+const OPENSEND_ENTITY_ID_HEADER = "X-Entity-ID";
 
 function normalizeSesRegion(region: string | null | undefined): string {
   const trimmed = region?.trim();
@@ -88,7 +89,12 @@ export class EmailProviderService {
     attachments?: EmailAttachment[];
     region?: string;
     configurationSetName?: string | null;
+    emailId?: string | null;
   }) {
+    const headers = withOpenSendEntityIdHeader(params.headers, params.emailId);
+    const emailTags = params.emailId
+      ? [{ Name: OPENSEND_ENTITY_ID_HEADER, Value: params.emailId }]
+      : undefined;
     const command =
       params.attachments && params.attachments.length > 0
         ? new SendEmailCommand({
@@ -100,9 +106,12 @@ export class EmailProviderService {
             },
             Content: {
               Raw: {
-                Data: new TextEncoder().encode(buildMimeMessage(params)),
+                Data: new TextEncoder().encode(
+                  buildMimeMessage({ ...params, headers }),
+                ),
               },
             },
+            ...(emailTags ? { EmailTags: emailTags } : {}),
             ...(params.configurationSetName
               ? { ConfigurationSetName: params.configurationSetName }
               : {}),
@@ -121,8 +130,8 @@ export class EmailProviderService {
                   Html: params.html ? { Data: params.html } : undefined,
                   Text: params.text ? { Data: params.text } : undefined,
                 },
-                Headers: params.headers
-                  ? Object.entries(params.headers).map(([name, value]) => {
+                Headers: headers
+                  ? Object.entries(headers).map(([name, value]) => {
                       const safeName = sanitizeHeaderName(name);
                       return {
                         Name: safeName,
@@ -133,6 +142,7 @@ export class EmailProviderService {
               },
             },
             ReplyToAddresses: params.replyTo,
+            ...(emailTags ? { EmailTags: emailTags } : {}),
             ...(params.configurationSetName
               ? { ConfigurationSetName: params.configurationSetName }
               : {}),
@@ -321,6 +331,24 @@ function isAlreadyExistsError(error: unknown): boolean {
 }
 
 export const emailProvider = new EmailProviderService();
+
+function withOpenSendEntityIdHeader(
+  headers: Record<string, string> | undefined,
+  emailId: string | null | undefined,
+): Record<string, string> | undefined {
+  const nextHeaders = Object.fromEntries(
+    Object.entries(headers ?? {}).filter(
+      ([name]) =>
+        name.toLowerCase() !== OPENSEND_ENTITY_ID_HEADER.toLowerCase(),
+    ),
+  );
+
+  if (emailId) {
+    nextHeaders[OPENSEND_ENTITY_ID_HEADER] = emailId;
+  }
+
+  return Object.keys(nextHeaders).length > 0 ? nextHeaders : undefined;
+}
 
 function buildMimeMessage(params: {
   from: string;

@@ -214,4 +214,41 @@ describe("Domain DNS Records Tab (feature-025)", () => {
     const receivingToggle = screen.getByTestId("receiving-toggle");
     expect(receivingToggle.getAttribute("data-state")).toBe("checked");
   });
+
+  it("shows the SES inbound MX record when receiving is enabled", () => {
+    render(
+      <DomainDetail
+        domain={{ ...domainWithRecords, receivingEnabled: true }}
+      />,
+    );
+
+    expect(screen.getByText("Inbound MX")).toBeTruthy();
+    expect(
+      screen.getByText("inbound-smtp.us-east-1.amazonaws.com"),
+    ).toBeTruthy();
+    expect(screen.getAllByText("10").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Manual")).toBeTruthy();
+  });
+
+  it("warns users to use a receiving subdomain when root MX may host mailboxes", () => {
+    render(
+      <DomainDetail
+        domain={{ ...domainWithRecords, receivingEnabled: true }}
+      />,
+    );
+
+    expect(screen.getByText(/Changing MX on a domain/)).toBeTruthy();
+    expect(
+      screen.getByText("inbound.updates.foreverbrowsing.com"),
+    ).toBeTruthy();
+  });
+
+  it("does not show an inbound MX target before receiving is enabled", () => {
+    render(<DomainDetail domain={domainWithRecords} />);
+
+    expect(screen.getByText("Inbound MX")).toBeTruthy();
+    expect(
+      screen.queryByText("inbound-smtp.us-east-1.amazonaws.com"),
+    ).toBeNull();
+  });
 });

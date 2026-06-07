@@ -18,9 +18,13 @@ const mockInvalidateDomainCaches = vi
   .mockResolvedValue(undefined);
 
 const mockCreateOrIgnoreDuplicate = vi.fn();
+const mockFindEmailById = vi.fn();
+const mockCreateInboundEmailIngestionService = vi.fn();
+const mockInboundProcess = vi.fn();
 const mockDomainReconcileAllPendingVerifications = vi.fn();
 const mockEnqueueDomainEvent = vi.fn();
 const mockWebhookList = vi.fn();
+const mockWebhookListForUserDispatch = vi.fn();
 const mockEnqueue = vi.fn();
 const mockDispatchDelivery = vi.fn();
 const mockPublishBackgroundJob = vi.fn();
@@ -28,6 +32,19 @@ const mockEmitCloudWatchMetric = vi.fn();
 const mockLogTelemetry = vi.fn();
 const mockRecordTelemetryError = vi.fn();
 const mockSuppressFromSesEvent = vi.fn();
+const mockS3Send = vi.fn();
+const SES_EVENTS_TOPIC_ARN = "arn:aws:sns:us-east-1:123456789012:ses-events";
+
+vi.mock("@aws-sdk/client-s3", () => ({
+  GetObjectCommand: class MockGetObjectCommand {
+    constructor(readonly input: Record<string, unknown>) {}
+  },
+  S3Client: class MockS3Client {
+    send(command: unknown) {
+      return mockS3Send(command);
+    }
+  },
+}));
 
 vi.mock("@opensend/core", () => {
   const testTraceparent =
@@ -48,6 +65,7 @@ vi.mock("@opensend/core", () => {
       ...job,
       requestedAt: "2026-04-28T00:00:00.000Z",
     }),
+    createInboundEmailIngestionService: mockCreateInboundEmailIngestionService,
     createTelemetryContext: (input: {
       service: string;
       operation: string;
@@ -110,6 +128,9 @@ vi.mock("@opensend/core", () => {
     emailEventRepo: {
       createOrIgnoreDuplicate: mockCreateOrIgnoreDuplicate,
     },
+    emailRepo: {
+      findById: mockFindEmailById,
+    },
     emitCloudWatchMetric: mockEmitCloudWatchMetric,
     enqueueDomainEvent: mockEnqueueDomainEvent,
     getTelemetryCarrier: (context: {
@@ -145,6 +166,7 @@ vi.mock("@opensend/core", () => {
     },
     webhookRepo: {
       listForDispatch: mockWebhookList,
+      listForUserDispatch: mockWebhookListForUserDispatch,
     },
   };
 });
@@ -240,7 +262,7 @@ function createSignedEnvelope(options?: {
   const base = {
     Type: messageType,
     MessageId: "sns-msg-1",
-    TopicArn: "arn:aws:sns:us-east-1:123456789012:ses-events",
+    TopicArn: SES_EVENTS_TOPIC_ARN,
     Message:
       messageType === "Notification"
         ? JSON.stringify(sesMessage)
@@ -296,6 +318,7 @@ describe("SES SNS ingestion route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     vi.unstubAllEnvs();
+    vi.stubEnv("SES_EVENTS_SNS_TOPIC_ARN", SES_EVENTS_TOPIC_ARN);
 
     mockDomainReconcileAllPendingVerifications.mockResolvedValue({
       scanned: 0,
@@ -314,19 +337,40 @@ describe("SES SNS ingestion route", () => {
       status: "skipped",
       reason: "queue_url_missing",
     });
-    mockWebhookList.mockResolvedValue({
+    mockWebhookListForUserDispatch.mockResolvedValue({
       data: [
         {
           id: "hook-1",
+          userId: "user-1",
           status: "active",
           eventTypes: ["email.delivered"],
         },
       ],
     });
+    mockFindEmailById.mockResolvedValue({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      userId: "user-1",
+    });
     mockEmitCloudWatchMetric.mockReset();
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
     mockSuppressFromSesEvent.mockResolvedValue([]);
+    mockInboundProcess.mockResolvedValue({
+      status: "processed",
+      provider_event_id: "sns-inbound-msg-1",
+      received_email_id: "received-1",
+      event_id: "event-1",
+      user_id: "user-1",
+      attachments: 0,
+    });
+    mockCreateInboundEmailIngestionService.mockReturnValue({
+      process: mockInboundProcess,
+    });
+    mockS3Send.mockResolvedValue({
+      Body: Buffer.from(
+        "From: sender@example.test\r\nTo: support@example.test\r\nSubject: SES inbound\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello",
+      ),
+    });
 
     vi.stubGlobal(
       "fetch",
@@ -490,6 +534,111 @@ describe("SES SNS ingestion route", () => {
     expect(await response.text()).toBe("Unauthorized");
   });
 
+  it("ingests signed SES receipt-rule S3 notifications through the inbound MIME service", async () => {
+    vi.stubEnv("SES_INBOUND_BUCKET_NAME", "opensend-inbound-mail");
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope({
+      sesMessage: {
+        notificationType: "Received",
+        mail: {
+          messageId: "ses-inbound-msg-1",
+          destination: ["support@example.test"],
+          headers: [],
+        },
+        receipt: {
+          recipients: ["support@example.test"],
+          action: {
+            type: "S3",
+            bucketName: "opensend-inbound-mail",
+            objectKey: "inbound/example/ses-inbound-msg-1",
+          },
+        },
+      },
+    });
+
+    const response = await app.request(
+      "http://localhost/events/inbound/ses-s3",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-amz-sns-message-type": "Notification",
+        },
+        body: JSON.stringify(envelope),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      status: "processed",
+      received_email_id: "received-1",
+    });
+    expect(mockS3Send).toHaveBeenCalledTimes(1);
+    expect(mockS3Send.mock.calls[0]?.[0]).toMatchObject({
+      input: {
+        Bucket: "opensend-inbound-mail",
+        Key: "inbound/example/ses-inbound-msg-1",
+      },
+    });
+    expect(mockInboundProcess).toHaveBeenCalledWith({
+      provider: "aws-ses-receiving",
+      eventId: "sns-msg-1",
+      messageId: "ses-inbound-msg-1",
+      recipients: ["support@example.test"],
+      rawMimeBase64: Buffer.from(
+        "From: sender@example.test\r\nTo: support@example.test\r\nSubject: SES inbound\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello",
+      ).toString("base64"),
+      metadata: {
+        sns_message_id: "sns-msg-1",
+        sns_topic_arn: "arn:aws:sns:us-east-1:123456789012:ses-events",
+        ses_event_type: "Received",
+        ses_message_id: "ses-inbound-msg-1",
+        s3_bucket: "opensend-inbound-mail",
+        s3_key: "inbound/example/ses-inbound-msg-1",
+      },
+    });
+  });
+
+  it("rejects SES receipt-rule S3 notifications from an unexpected bucket", async () => {
+    vi.stubEnv("SES_INBOUND_BUCKET_NAME", "opensend-inbound-mail");
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope({
+      sesMessage: {
+        eventType: "Received",
+        mail: {
+          messageId: "ses-inbound-msg-2",
+          destination: ["support@example.test"],
+          headers: [],
+        },
+        receipt: {
+          action: {
+            type: "S3",
+            bucketName: "attacker-bucket",
+            objectKey: "mail",
+          },
+        },
+      },
+    });
+
+    const response = await app.request(
+      "http://localhost/events/inbound/ses-s3",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-amz-sns-message-type": "Notification",
+        },
+        body: JSON.stringify(envelope),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain("S3 bucket is not allowed");
+    expect(mockS3Send).not.toHaveBeenCalled();
+    expect(mockInboundProcess).not.toHaveBeenCalled();
+  });
+
   it("verifies the SNS signature, persists a normalized event, and queues webhook delivery", async () => {
     const persistedEvent = {
       id: "evt-1",
@@ -520,10 +669,17 @@ describe("SES SNS ingestion route", () => {
     expect(response.status).toBe(200);
     expect(mockCreateOrIgnoreDuplicate).toHaveBeenCalledWith({
       emailId: "550e8400-e29b-41d4-a716-446655440000",
+      userId: "user-1",
       sourceId: "sns-msg-1",
       type: "delivered",
       payload: { smtpResponse: "250 ok" },
     });
+    expect(mockWebhookListForUserDispatch).toHaveBeenCalledWith({
+      userId: "user-1",
+      eventType: "email.delivered",
+      limit: 100,
+    });
+    expect(mockWebhookList).not.toHaveBeenCalled();
     expect(mockEnqueue).toHaveBeenCalledWith("hook-1", persistedEvent.id);
     expect(mockPublishBackgroundJob).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -545,6 +701,123 @@ describe("SES SNS ingestion route", () => {
     expect(mockDispatchDelivery).not.toHaveBeenCalled();
   });
 
+  it("queries SES webhook dispatch by event owner before applying the limit", async () => {
+    const persistedEvent = {
+      id: "evt-owner-hook",
+      emailId: "550e8400-e29b-41d4-a716-446655440000",
+      sourceId: "sns-msg-1",
+      type: "delivered",
+      payload: { smtpResponse: "250 ok" },
+    };
+    mockCreateOrIgnoreDuplicate.mockResolvedValue({
+      event: persistedEvent,
+      created: true,
+    });
+    mockWebhookList.mockResolvedValue({
+      data: Array.from({ length: 101 }, (_, index) => ({
+        id: `hook-other-${index}`,
+        userId: "other-user",
+        status: "active",
+        eventTypes: ["email.delivered"],
+      })),
+    });
+    mockWebhookListForUserDispatch.mockResolvedValue({
+      data: [
+        {
+          id: "hook-owner-after-global-limit",
+          userId: "user-1",
+          status: "active",
+          eventTypes: ["email.delivered"],
+        },
+      ],
+    });
+
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope();
+
+    const response = await app.request("http://localhost/events/ses", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-amz-sns-message-type": "Notification",
+      },
+      body: JSON.stringify(envelope),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockWebhookListForUserDispatch).toHaveBeenCalledWith({
+      userId: "user-1",
+      eventType: "email.delivered",
+      limit: 100,
+    });
+    expect(mockWebhookList).not.toHaveBeenCalled();
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      "hook-owner-after-global-limit",
+      persistedEvent.id,
+    );
+  });
+
+  it("rejects SES notifications from an unconfigured SNS topic before side effects", async () => {
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope({
+      overrides: {
+        TopicArn: "arn:aws:sns:us-east-1:123456789012:attacker-topic",
+      },
+    });
+
+    const response = await app.request("http://localhost/events/ses", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-amz-sns-message-type": "Notification",
+      },
+      body: JSON.stringify(envelope),
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain("SES SNS topic is not allowed");
+    expect(mockFindEmailById).not.toHaveBeenCalled();
+    expect(mockCreateOrIgnoreDuplicate).not.toHaveBeenCalled();
+    expect(mockSuppressFromSesEvent).not.toHaveBeenCalled();
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects SES subscription confirmations from an unconfigured SNS topic before confirming", async () => {
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope({
+      messageType: "SubscriptionConfirmation",
+      overrides: {
+        TopicArn: "arn:aws:sns:us-east-1:123456789012:attacker-topic",
+      },
+    });
+
+    const response = await app.request("http://localhost/events/ses", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-amz-sns-message-type": "SubscriptionConfirmation",
+      },
+      body: JSON.stringify(envelope),
+    });
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain("SES SNS topic is not allowed");
+    const fetchedUrls = vi
+      .mocked(fetch)
+      .mock.calls.map(([input]) =>
+        input instanceof Request ? input.url : String(input),
+      );
+    expect(fetchedUrls).not.toContain(
+      "https://sns.us-east-1.amazonaws.com/?Action=ConfirmSubscription",
+    );
+    expect(mockFindEmailById).not.toHaveBeenCalled();
+    expect(mockCreateOrIgnoreDuplicate).not.toHaveBeenCalled();
+    expect(mockSuppressFromSesEvent).not.toHaveBeenCalled();
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+  });
+
   it("creates user-scoped suppressions for permanent bounce recipients", async () => {
     const persistedEvent = {
       id: "evt-bounce-1",
@@ -560,7 +833,7 @@ describe("SES SNS ingestion route", () => {
       event: persistedEvent,
       created: true,
     });
-    mockWebhookList.mockResolvedValue({ data: [] });
+    mockWebhookListForUserDispatch.mockResolvedValue({ data: [] });
     mockSuppressFromSesEvent.mockResolvedValue([{ id: "suppression-1" }]);
 
     const app = (await import("../packages/ingester/src/index")).default;
@@ -601,6 +874,109 @@ describe("SES SNS ingestion route", () => {
       sourceMessageId: "ses-msg-bounce-1",
       metadata: { bounceType: "Permanent" },
     });
+  });
+
+  it("acks stale SES events for unknown email ids without creating tenantless events", async () => {
+    mockFindEmailById.mockResolvedValue(null);
+
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope();
+
+    const response = await app.request("http://localhost/events/ses", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-amz-sns-message-type": "Notification",
+      },
+      body: JSON.stringify(envelope),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockCreateOrIgnoreDuplicate).not.toHaveBeenCalled();
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+    expect(mockLogTelemetry).toHaveBeenCalledWith(
+      "warn",
+      "ses.event.unknown_email_id",
+      expect.any(Object),
+      expect.objectContaining({
+        email_id: "550e8400-e29b-41d4-a716-446655440000",
+      }),
+    );
+  });
+
+  it("acks SES events for ownerless emails without creating tenantless events", async () => {
+    mockFindEmailById.mockResolvedValue({
+      id: "550e8400-e29b-41d4-a716-446655440000",
+      userId: null,
+    });
+
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope();
+
+    const response = await app.request("http://localhost/events/ses", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-amz-sns-message-type": "Notification",
+      },
+      body: JSON.stringify(envelope),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockCreateOrIgnoreDuplicate).not.toHaveBeenCalled();
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+    expect(mockLogTelemetry).toHaveBeenCalledWith(
+      "warn",
+      "ses.event.email_missing_user_id",
+      expect.any(Object),
+      expect.objectContaining({
+        email_id: "550e8400-e29b-41d4-a716-446655440000",
+      }),
+    );
+  });
+
+  it("does not queue webhooks owned by a different user", async () => {
+    mockWebhookListForUserDispatch.mockResolvedValue({
+      data: [
+        {
+          id: "hook-other-user",
+          userId: "other-user",
+          status: "active",
+          eventTypes: ["email.delivered"],
+        },
+      ],
+    });
+    mockCreateOrIgnoreDuplicate.mockResolvedValue({
+      event: {
+        id: "evt-cross-tenant",
+        emailId: "550e8400-e29b-41d4-a716-446655440000",
+        sourceId: "sns-msg-1",
+        type: "delivered",
+        payload: { smtpResponse: "250 ok" },
+      },
+      created: true,
+    });
+
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope();
+
+    const response = await app.request("http://localhost/events/ses", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-amz-sns-message-type": "Notification",
+      },
+      body: JSON.stringify(envelope),
+    });
+
+    expect(response.status).toBe(200);
+    expect(mockCreateOrIgnoreDuplicate).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user-1" }),
+    );
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
   });
 
   it("rejects invalid SNS signatures before touching persistence", async () => {
@@ -657,7 +1033,7 @@ describe("SES SNS ingestion route", () => {
     expect(mockEnqueue).not.toHaveBeenCalled();
     expect(mockDispatchDelivery).not.toHaveBeenCalled();
     expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
-    expect(mockWebhookList).not.toHaveBeenCalled();
+    expect(mockWebhookListForUserDispatch).not.toHaveBeenCalled();
   });
 
   it("rejects malformed SES notifications with a 400", async () => {

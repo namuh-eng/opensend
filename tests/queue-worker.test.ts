@@ -200,6 +200,7 @@ describe("QueueWorker", () => {
         to: ["user@example.com"],
         attachments: [{ filename: "inline.txt", content: "aGVsbG8=" }],
         region: "us-east-1",
+        emailId: "email-1",
       }),
     );
     expect(mockUpdateEmail).toHaveBeenNthCalledWith(2, "email-1", {

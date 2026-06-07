@@ -29,6 +29,8 @@ export interface DomainDetailData {
   events: Array<{ type: string; timestamp: string }>;
 }
 
+type DomainDnsRecord = NonNullable<DomainDetailData["records"]>[number];
+
 interface DomainDetailProps {
   domain: DomainDetailData;
 }
@@ -525,7 +527,7 @@ function CopyButton({ value }: { value: string }) {
 function DNSRecordTable({
   records,
 }: {
-  records: DomainDetailData["records"];
+  records: DomainDnsRecord[] | null;
 }) {
   const rows = records || [];
   return (
@@ -598,6 +600,21 @@ function DNSRecordTable({
   );
 }
 
+function buildReceivingRecord(domain: DomainDetailData): DomainDnsRecord {
+  return {
+    type: "MX",
+    name: domain.name,
+    value: `inbound-smtp.${domain.region}.amazonaws.com`,
+    status: "manual",
+    ttl: "Auto",
+    priority: 10,
+  };
+}
+
+function recommendedReceivingSubdomain(domainName: string): string {
+  return `inbound.${domainName}`;
+}
+
 function RecordsTab({ domain }: { domain: DomainDetailData }) {
   const router = useRouter();
   const [sendingEnabled, setSendingEnabled] = useState(domain.sendingEnabled);
@@ -666,6 +683,9 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
   const trackingRecords = records.filter(
     (r) => r.type === "CNAME" && !r.name.includes("_domainkey"),
   );
+  const receivingRecords = receivingEnabled
+    ? [buildReceivingRecord(domain)]
+    : [];
 
   return (
     <div className="bg-bg-3 border border-line rounded-lg p-6">
@@ -771,7 +791,7 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
 
       {/* Section 4: Enable Receiving */}
       <div className="border-t border-line pt-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-1">
           <h3 className="text-[14px] font-semibold text-fg">
             Enable Receiving
           </h3>
@@ -797,6 +817,24 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
             />
           </button>
         </div>
+        <p className="text-[13px] text-fg-2 mb-4">
+          Receive inbound mail for this exact domain after your provider receipt
+          rule is connected to the OpenSend ingester.
+        </p>
+        <div className="mb-4 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2">
+          <p className="text-[12px] leading-5 text-amber-200">
+            Changing MX on a domain with an existing mailbox can move that
+            mailbox traffic to OpenSend. To keep current inboxes untouched, add{" "}
+            <span className="font-mono text-fg">
+              {recommendedReceivingSubdomain(domain.name)}
+            </span>{" "}
+            as a separate domain and enable receiving there instead.
+          </p>
+        </div>
+        <p className="text-[13px] text-blue-400 mb-2">Inbound MX</p>
+        <DNSRecordTable
+          records={receivingRecords.length > 0 ? receivingRecords : null}
+        />
       </div>
     </div>
   );
