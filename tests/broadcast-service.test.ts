@@ -292,7 +292,7 @@ describe("broadcast service boundary", () => {
     const cache: BroadcastMetricsCache = {
       ttlSeconds: 120,
       getKey(input) {
-        return `dashboard-aggregate:v1:broadcast-metrics:${input.userId}:${input.broadcastId}`;
+        return `dashboard-aggregate:v2:broadcast-metrics:${input.userId}:${input.broadcastId}`;
       },
       async read() {
         return null;
@@ -351,7 +351,7 @@ describe("broadcast service boundary", () => {
     });
     expect(writes).toEqual([
       {
-        key: "dashboard-aggregate:v1:broadcast-metrics:user-5:broadcast-5",
+        key: "dashboard-aggregate:v2:broadcast-metrics:user-5:broadcast-5",
         value: result.payload,
         ttlSeconds: 120,
       },

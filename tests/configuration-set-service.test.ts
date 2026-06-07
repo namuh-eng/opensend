@@ -18,10 +18,28 @@ vi.mock("@aws-sdk/client-sesv2", () => {
       _name: "CreateConfigurationSetCommand",
       input,
     })),
+    CreateConfigurationSetEventDestinationCommand: vi
+      .fn()
+      .mockImplementation((input) => ({
+        _name: "CreateConfigurationSetEventDestinationCommand",
+        input,
+      })),
+    GetConfigurationSetEventDestinationsCommand: vi
+      .fn()
+      .mockImplementation((input) => ({
+        _name: "GetConfigurationSetEventDestinationsCommand",
+        input,
+      })),
     PutConfigurationSetDeliveryOptionsCommand: vi
       .fn()
       .mockImplementation((input) => ({
         _name: "PutConfigurationSetDeliveryOptionsCommand",
+        input,
+      })),
+    UpdateConfigurationSetEventDestinationCommand: vi
+      .fn()
+      .mockImplementation((input) => ({
+        _name: "UpdateConfigurationSetEventDestinationCommand",
         input,
       })),
     DeleteConfigurationSetCommand: vi.fn().mockImplementation((input) => ({
@@ -145,5 +163,104 @@ describe("ConfigurationSetService", () => {
     expect(mockSend).toHaveBeenCalledTimes(2);
     const updateCmd = mockSend.mock.calls[1][0];
     expect(updateCmd._name).toBe("PutConfigurationSetDeliveryOptionsCommand");
+  });
+
+  it("syncDomainConfigurationSet creates an SNS event destination when a topic ARN is configured", async () => {
+    mockSend
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ EventDestinations: [] })
+      .mockResolvedValueOnce({});
+    const svc = new ConfigurationSetService();
+
+    await svc.syncDomainConfigurationSet({
+      domainId: "domain-id-events",
+      tls: "required",
+      eventDestinationTopicArn:
+        "arn:aws:sns:us-east-1:123456789012:opensend-ses-events",
+    });
+
+    expect(mockSend).toHaveBeenCalledTimes(3);
+    expect(mockSend.mock.calls[1][0]._name).toBe(
+      "GetConfigurationSetEventDestinationsCommand",
+    );
+    const destinationCmd = mockSend.mock.calls[2][0];
+    expect(destinationCmd._name).toBe(
+      "CreateConfigurationSetEventDestinationCommand",
+    );
+    expect(destinationCmd.input).toMatchObject({
+      ConfigurationSetName: "opensend-domain-domain-id-events",
+      EventDestinationName: "opensend-sns-events",
+      EventDestination: {
+        Enabled: true,
+        MatchingEventTypes: [
+          "SEND",
+          "DELIVERY",
+          "BOUNCE",
+          "COMPLAINT",
+          "DELIVERY_DELAY",
+          "REJECT",
+          "RENDERING_FAILURE",
+        ],
+        SnsDestination: {
+          TopicArn: "arn:aws:sns:us-east-1:123456789012:opensend-ses-events",
+        },
+      },
+    });
+  });
+
+  it("syncDomainConfigurationSet updates an existing SNS event destination", async () => {
+    mockSend
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        EventDestinations: [{ Name: "opensend-sns-events" }],
+      })
+      .mockResolvedValueOnce({});
+    const svc = new ConfigurationSetService();
+
+    await svc.syncDomainConfigurationSet({
+      domainId: "domain-id-events",
+      tls: "opportunistic",
+      existingConfigSetName: "opensend-domain-domain-id-events",
+      eventDestinationTopicArn:
+        "arn:aws:sns:us-east-1:123456789012:opensend-ses-events",
+    });
+
+    expect(mockSend).toHaveBeenCalledTimes(3);
+    expect(mockSend.mock.calls[0][0]._name).toBe(
+      "PutConfigurationSetDeliveryOptionsCommand",
+    );
+    expect(mockSend.mock.calls[1][0]._name).toBe(
+      "GetConfigurationSetEventDestinationsCommand",
+    );
+    expect(mockSend.mock.calls[2][0]._name).toBe(
+      "UpdateConfigurationSetEventDestinationCommand",
+    );
+  });
+
+  it("reads the configured SNS event destination state", async () => {
+    mockSend.mockResolvedValueOnce({
+      EventDestinations: [
+        {
+          Name: "opensend-sns-events",
+          Enabled: true,
+          SnsDestination: {
+            TopicArn: "arn:aws:sns:us-east-1:123456789012:opensend-ses-events",
+          },
+          MatchingEventTypes: ["SEND", "DELIVERY"],
+        },
+      ],
+    });
+    const svc = new ConfigurationSetService();
+
+    await expect(
+      svc.getConfigurationSetEventDestinationState({
+        configurationSetName: "opensend-domain-domain-id-events",
+      }),
+    ).resolves.toEqual({
+      configured: true,
+      enabled: true,
+      topicArn: "arn:aws:sns:us-east-1:123456789012:opensend-ses-events",
+      matchingEventTypes: ["SEND", "DELIVERY"],
+    });
   });
 });

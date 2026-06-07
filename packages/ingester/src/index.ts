@@ -5,6 +5,7 @@ import {
   createInboundEmailIngestionService,
   createTelemetryContext,
   emailEventRepo,
+  emailRepo,
   emailService,
   emitCloudWatchMetric,
   enqueueDomainEvent,
@@ -107,6 +108,19 @@ function isAuthorizedInboundRequest(authHeader: string | undefined): boolean {
   const token = process.env.INGESTER_INBOUND_TOKEN?.trim();
   if (!token) return process.env.NODE_ENV !== "production";
   return timingSafeStringEqual(authHeader, `Bearer ${token}`);
+}
+
+function getExpectedSesEventsTopicArn(): string | null {
+  const raw = process.env.SES_EVENTS_SNS_TOPIC_ARN?.trim();
+  if (!raw || raw === "undefined" || raw === "null") return null;
+  return raw;
+}
+
+function assertAllowedSesEventsTopicArn(topicArn: string): void {
+  const expectedTopicArn = getExpectedSesEventsTopicArn();
+  if (!expectedTopicArn || topicArn !== expectedTopicArn) {
+    throw new SnsValidationError("SES SNS topic is not allowed", 403);
+  }
 }
 
 function readStringField(
@@ -662,6 +676,7 @@ app.post("/events/ses", async (c) => {
     const snsMessage = parseSnsEnvelope(body, snsType);
 
     await verifySnsSignature(snsMessage);
+    assertAllowedSesEventsTopicArn(snsMessage.TopicArn);
 
     if (snsMessage.Type === "SubscriptionConfirmation") {
       logTelemetry("info", "ses.sns.subscription_confirmation", telemetry, {
@@ -730,8 +745,28 @@ app.post("/events/ses", async (c) => {
       return c.text("OK");
     }
 
+    const email = await emailRepo.findById(emailId);
+    if (!email) {
+      logTelemetry("warn", "ses.event.unknown_email_id", telemetry, {
+        ses_message_id: sesId,
+        ses_event_type: eventType,
+        email_id: emailId,
+      });
+      return c.text("OK");
+    }
+
+    if (!email.userId) {
+      logTelemetry("warn", "ses.event.email_missing_user_id", telemetry, {
+        ses_message_id: sesId,
+        ses_event_type: eventType,
+        email_id: emailId,
+      });
+      return c.text("OK");
+    }
+
     const { event, created } = await emailEventRepo.createOrIgnoreDuplicate({
       emailId,
+      userId: email.userId,
       sourceId: snsMessage.MessageId,
       type: normalizedEvent.type,
       payload: sesMessage[normalizedEvent.payloadKey] || sesMessage,
@@ -780,25 +815,34 @@ app.post("/events/ses", async (c) => {
       return c.text("OK");
     }
 
-    const { data: hooks } = await webhookRepo.listForDispatch({ limit: 100 });
+    const { data: hooks } = await webhookRepo.listForUserDispatch({
+      userId: email.userId,
+      eventType: webhookEventType,
+      limit: 100,
+    });
     for (const hook of hooks) {
       const types = hook.eventTypes as string[];
-      if (hook.status === "active" && types.includes(webhookEventType)) {
-        const delivery = await webhookDispatcher.enqueue(hook.id, event.id);
-        await publishBackgroundJob(
-          createBackgroundJob({
-            id: `webhook.dispatch:${delivery.id}`,
-            type: "webhook.dispatch",
-            source: "ses-ingest",
-            deliveryId: delivery.id,
-            trace: getTelemetryCarrier(telemetry),
-          }),
-          {
-            deduplicationId: `webhook.dispatch:${delivery.id}`,
-            groupId: "webhook.dispatch",
-          },
-        );
+      if (
+        hook.userId !== email.userId ||
+        hook.status !== "active" ||
+        !types.includes(webhookEventType)
+      ) {
+        continue;
       }
+      const delivery = await webhookDispatcher.enqueue(hook.id, event.id);
+      await publishBackgroundJob(
+        createBackgroundJob({
+          id: `webhook.dispatch:${delivery.id}`,
+          type: "webhook.dispatch",
+          source: "ses-ingest",
+          deliveryId: delivery.id,
+          trace: getTelemetryCarrier(telemetry),
+        }),
+        {
+          deduplicationId: `webhook.dispatch:${delivery.id}`,
+          groupId: "webhook.dispatch",
+        },
+      );
     }
 
     return c.text("OK");

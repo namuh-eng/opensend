@@ -14,6 +14,7 @@
     "check": "node scripts/check-changed-files.mjs",
     "check:full": "bun run typecheck && bun run lint",
     "billing:preflight": "bun src/lib/billing/cutover-preflight.ts",
+    "deliverability:preflight": "bun src/lib/deliverability/repair-preflight.ts",
     "hooks:install": "node scripts/install-git-hooks.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

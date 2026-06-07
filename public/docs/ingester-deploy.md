@@ -10,6 +10,17 @@ Deploy the standalone ingester and queue worker. Provider callbacks should targe
 
 Set `INGESTER_INBOUND_TOKEN` to require `Authorization: Bearer <token>` on inbound MIME notifications. Production ingesters reject `/events/inbound` requests when the token is missing.
 
+## SES delivery feedback
+
+Delivery, bounce, complaint, and delivery-delay metrics require SES configuration sets to publish events to the ingester SNS topic. Set `SES_EVENTS_SNS_TOPIC_ARN` on both the app and ingester services, subscribe that topic to `https://events.yourdomain.com/events/ses`, then run:
+
+```bash
+bun run deliverability:preflight -- --domain example.com --json --strict
+bun run deliverability:preflight -- --repair --domain example.com --json --strict
+```
+
+The preflight/repair report lists the previous and resulting `ses_configuration_set_name`, database write-back status, and SES event-destination state. Start with one verified domain, prove a new validation send creates a user-scoped `email_events` row, then repair the verified-domain batch.
+
 ## Inbound payload
 
 ```json

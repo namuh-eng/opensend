@@ -225,6 +225,52 @@ Don't leave SES pointing at the app/API host once the split is active —
 events would be processed by the dashboard's request loop instead of the
 worker.
 
+## Deliverability feedback preflight and repair
+
+Delivery, bounce, complaint, and delivery-delay dashboard metrics require each
+sending domain's SES configuration set to publish provider events to the
+ingester SNS topic. Configure both the app and ingester runtime with:
+
+```bash
+SES_EVENTS_SNS_TOPIC_ARN=arn:aws:sns:<region>:<account>:<topic-name>
+```
+
+Run the read-only preflight before redeploying or repairing production:
+
+```bash
+bun run deliverability:preflight -- --domain example.com --json --strict
+```
+
+The report lists verified domains, the previous
+`domains.ses_configuration_set_name` value, the resulting value, whether the
+database write-back exists, and the SES event-destination state. It does not
+print secrets.
+
+After IAM, SNS topic subscription, and app/ingester runtime env are in place, repair a
+single domain first:
+
+```bash
+bun run deliverability:preflight -- --repair --domain example.com --json --strict
+```
+
+Then repair the verified-domain batch:
+
+```bash
+bun run deliverability:preflight -- --repair --limit 500 --json --strict
+```
+
+Live validation for a production incident should prove all of these boundaries:
+
+- IAM on the app task role allows SES configuration-set and event-destination
+  read/create/update actions.
+- `SES_EVENTS_SNS_TOPIC_ARN` is present on the app and ingester task definitions.
+- SES shows the `opensend-sns-events` destination enabled on the repaired
+  configuration set and pointing at the SNS topic.
+- The repaired domain row has `ses_configuration_set_name` populated.
+- A new validation send carries `X-Entity-ID`/SES message tag correlation,
+  creates an `email_events` row with `user_id`, and appears in the Today or
+  Metrics dashboard without showing the provider-feedback **Not wired** state.
+
 ## Observability
 
 The app and ingester emit structured JSON logs, W3C/OpenTelemetry-compatible

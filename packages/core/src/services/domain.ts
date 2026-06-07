@@ -1,3 +1,4 @@
+import { dedicatedIpPoolRepo } from "../db/repositories/dedicatedIpPoolRepo";
 import { domainRepo } from "../db/repositories/domainRepo";
 import type { domains } from "../db/schema";
 import { configurationSetService } from "./configurationSet";
@@ -56,6 +57,14 @@ export function getTrackingCnameTarget(): string {
     ) ||
     DEFAULT_TRACKING_CNAME_TARGET
   );
+}
+
+export function getSesEventsSnsTopicArn(): string | null {
+  const topicArn = process.env.SES_EVENTS_SNS_TOPIC_ARN?.trim();
+  if (!topicArn || topicArn === "undefined" || topicArn === "null") {
+    return null;
+  }
+  return topicArn;
 }
 
 export function buildTrackingSubdomainRecordName(
@@ -237,6 +246,7 @@ export type DomainServiceDependencies = {
     tls: string | null | undefined;
     dedicatedIpPoolSesName?: string | null;
     existingConfigSetName?: string | null;
+    eventDestinationTopicArn?: string | null;
     region?: string;
   }) => Promise<string>;
 };
@@ -370,6 +380,48 @@ export function createDomainService({
         "domain mutations without cache invalidation cause stale dashboard reads.",
     );
   }
+
+  async function resolveDedicatedIpPoolSesName(
+    domain: DomainRow,
+  ): Promise<string | null> {
+    if (!domain.dedicatedIpPoolId) return null;
+    const pool = await dedicatedIpPoolRepo.findById(domain.dedicatedIpPoolId);
+    return pool?.sesPoolName ?? null;
+  }
+
+  async function syncAndPersistDomainConfigurationSet(
+    domain: DomainRow,
+  ): Promise<DomainRow> {
+    try {
+      const configSetName = await syncDomainConfigurationSet({
+        domainId: domain.id,
+        tls: domain.tls,
+        dedicatedIpPoolSesName: await resolveDedicatedIpPoolSesName(domain),
+        existingConfigSetName: domain.sesConfigurationSetName ?? null,
+        eventDestinationTopicArn: getSesEventsSnsTopicArn(),
+        region: domain.region,
+      });
+
+      if (domain.sesConfigurationSetName === configSetName) {
+        return domain;
+      }
+
+      const [updated] = await repository.update(domain.id, {
+        sesConfigurationSetName: configSetName,
+      });
+      if (!updated) return domain;
+      return { ...domain, sesConfigurationSetName: configSetName };
+    } catch (configErr) {
+      // Config-set provisioning failure is non-fatal: callers may already have
+      // committed domain state. Log and proceed without claiming provider events.
+      console.warn(
+        `Failed to sync SES config set for domain ${domain.id}:`,
+        configErr,
+      );
+      return domain;
+    }
+  }
+
   return {
     async listDomains(options: {
       limit?: number;
@@ -427,33 +479,16 @@ export function createDomainService({
         dkimPrivateKeyIv: identity.dkimPrivateKeyEnc?.iv ?? null,
       });
 
-      // Provision the SES configuration set for TLS enforcement + pool assignment
-      try {
-        const configSetName = await syncDomainConfigurationSet({
-          domainId: row.id,
-          tls: row.tls,
-          dedicatedIpPoolSesName: null,
-          region: row.region,
-        });
-        await repository.update(row.id, {
-          sesConfigurationSetName: configSetName,
-        });
-      } catch (configErr) {
-        // Config-set provisioning failure is non-fatal: the domain row is
-        // already committed. Log and proceed without a config set.
-        console.warn(
-          `Failed to sync SES config set for domain ${row.id}:`,
-          configErr,
-        );
-      }
+      const domainWithConfigSet =
+        await syncAndPersistDomainConfigurationSet(row);
 
       await invalidateDomainCaches({
-        id: row.id,
-        name: row.name,
-        region: row.region,
+        id: domainWithConfigSet.id,
+        name: domainWithConfigSet.name,
+        region: domainWithConfigSet.region,
       });
 
-      return toDomainDetail(row);
+      return toDomainDetail(domainWithConfigSet);
     },
 
     async reconcileVerification(id: string): Promise<DomainReconcileResult> {
@@ -483,6 +518,10 @@ export function createDomainService({
       const statusChanged = domain.status !== nextStatus;
 
       if (!statusChanged && !recordsChanged) {
+        const repairedDomain =
+          nextStatus === "verified"
+            ? await syncAndPersistDomainConfigurationSet(domain)
+            : domain;
         console.log(
           JSON.stringify({
             level: "debug",
@@ -493,10 +532,10 @@ export function createDomainService({
         );
         await invalidateDomainCaches({
           id,
-          name: domain.name,
-          region: domain.region,
+          name: repairedDomain.name,
+          region: repairedDomain.region,
         });
-        return { status: "unchanged", domain };
+        return { status: "unchanged", domain: repairedDomain };
       }
 
       const previousStatus = domain.status;
@@ -514,19 +553,24 @@ export function createDomainService({
         return { status: "not_found" };
       }
 
+      const repairedUpdated =
+        nextStatus === "verified"
+          ? await syncAndPersistDomainConfigurationSet(updated)
+          : updated;
+
       await invalidateDomainCaches({
-        id: updated.id,
-        name: updated.name,
-        region: updated.region,
+        id: repairedUpdated.id,
+        name: repairedUpdated.name,
+        region: repairedUpdated.region,
       });
 
       if (!statusChanged) {
-        return { status: "unchanged", domain: updated };
+        return { status: "unchanged", domain: repairedUpdated };
       }
 
       return {
         status: "updated",
-        domain: updated,
+        domain: repairedUpdated,
         previousStatus,
       };
     },
