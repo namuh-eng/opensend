@@ -814,9 +814,10 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
           </button>
         </div>
         <p className="text-[13px] text-fg-2 mb-4">
-          Receive inbound mail for this domain. Publish the MX record only after
-          your SES receipt rules and OpenSend ingester are ready; changing root
-          domain MX can move existing mailbox traffic.
+          Receive inbound mail for this domain. For hosted SES receiving, point
+          the receipt rule S3/SNS notification at the OpenSend ingester before
+          publishing MX; changing root domain MX can move existing mailbox
+          traffic.
         </p>
         <p className="text-[13px] text-blue-400 mb-2">Inbound MX</p>
         <DNSRecordTable

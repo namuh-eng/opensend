@@ -33,7 +33,7 @@ Open an outbound email detail page to see the generated reply address and conver
 
 1. Verify the sending domain in OpenSend and enable the `receiving` capability.
 2. Publish inbound MX/provider records for that domain.
-3. Route provider notifications or raw MIME fetches to the standalone ingester `POST /events/inbound` endpoint.
+3. Route provider notifications or raw MIME fetches to the standalone ingester. Use `POST /events/inbound/ses-s3` for SES receipt-rule S3/SNS notifications, or `POST /events/inbound` for a trusted provider that can POST raw MIME directly.
 4. Configure `INGESTER_INBOUND_TOKEN` for production provider callbacks; production ingesters reject inbound MIME requests without it.
 5. Set `OPENSEND_REPLY_TOKEN_SECRET` consistently for the app and ingester processes. If omitted, OpenSend falls back to the auth secret variables when present; production deployments should use an explicit secret so reply tokens survive app restarts and deploys.
 6. Keep route/catch-all policies narrow enough to avoid receiving mail for unrelated tenants. Cross-tenant or invalid tokens are stored as unmatched messages for the resolved recipient-domain tenant; arbitrary unrouted mail without a reply token remains rejected as missing-domain.
