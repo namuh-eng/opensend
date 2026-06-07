@@ -4,7 +4,11 @@ import { dedicatedIpPoolRepo } from "../db/repositories/dedicatedIpPoolRepo";
 import { domainRepo } from "../db/repositories/domainRepo";
 import { domains } from "../db/schema";
 import { configurationSetService } from "./configurationSet";
-import { getEffectiveReturnPathLabel, syncTrackingCnameRecord } from "./domain";
+import {
+  getEffectiveReturnPathLabel,
+  getSesEventsSnsTopicArn,
+  syncTrackingCnameRecord,
+} from "./domain";
 import {
   cloudflareDnsCleanupProvider,
   domainIdentityProvider,
@@ -350,7 +354,7 @@ export function createDomainDetailService({
         };
       }
 
-      const updated = await updateDomainForUser({
+      let updated = await updateDomainForUser({
         id: input.id,
         userId: input.userId,
         updates,
@@ -379,13 +383,25 @@ export function createDomainDetailService({
             );
             dedicatedIpPoolSesName = pool?.sesPoolName ?? null;
           }
-          await configurationSetService.syncDomainConfigurationSet({
-            domainId: updated.id,
-            tls: updated.tls,
-            dedicatedIpPoolSesName,
-            existingConfigSetName: updated.sesConfigurationSetName ?? null,
-            region: updated.region,
-          });
+          const configSetName =
+            await configurationSetService.syncDomainConfigurationSet({
+              domainId: updated.id,
+              tls: updated.tls,
+              dedicatedIpPoolSesName,
+              existingConfigSetName: updated.sesConfigurationSetName ?? null,
+              eventDestinationTopicArn: getSesEventsSnsTopicArn(),
+              region: updated.region,
+            });
+          if (updated.sesConfigurationSetName !== configSetName) {
+            const updatedWithConfigSet = await updateDomainForUser({
+              id: input.id,
+              userId: input.userId,
+              updates: { sesConfigurationSetName: configSetName },
+            });
+            if (updatedWithConfigSet) {
+              updated = updatedWithConfigSet;
+            }
+          }
         } catch (configErr) {
           console.warn(
             `Failed to sync SES config set for domain ${updated.id}:`,

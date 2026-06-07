@@ -1,6 +1,13 @@
-import { type SQL, and, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { type SQL, and, eq, gte, lte, sql } from "drizzle-orm";
 import { db } from "../db/client";
-import { contacts, domains, emails, plans, segments } from "../db/schema";
+import {
+  contacts,
+  domains,
+  emailEvents,
+  emails,
+  plans,
+  segments,
+} from "../db/schema";
 import { FREE_PLAN_DEFAULTS, FREE_PLAN_SLUG } from "../dto";
 
 // Last-resort fallback used only when the plans table is empty (cold start
@@ -55,7 +62,7 @@ async function defaultLoadPlanLimits(): Promise<PlanUsageLimits | null> {
   }
 }
 
-const EVENT_TYPE_TO_STATUS: Record<string, string[]> = {
+const EVENT_TYPE_TO_EVENT_TYPES: Record<string, string[]> = {
   received: ["delivered", "opened", "clicked"],
   delivered: ["delivered"],
   opened: ["opened"],
@@ -69,6 +76,25 @@ const EVENT_TYPE_TO_STATUS: Record<string, string[]> = {
 };
 
 const senderDomainSql = sql<string>`substring(${emails.from} from '@([^>]+)')`;
+
+function emailEventExists(eventTypes: string[]): SQL<unknown> {
+  return sql`exists (
+    select 1
+    from ${emailEvents}
+    where ${emailEvents.emailId} = ${emails.id}
+      and ${emailEvents.type} in ${eventTypes}
+  )`;
+}
+
+function bouncedEmailEventExists(extraCondition?: SQL<unknown>): SQL<unknown> {
+  return sql`exists (
+    select 1
+    from ${emailEvents}
+    where ${emailEvents.emailId} = ${emails.id}
+      and ${emailEvents.type} = 'bounced'
+      ${extraCondition ? sql`and ${extraCondition}` : sql``}
+  )`;
+}
 
 export type DashboardMetricsStats = {
   total: number;
@@ -317,12 +343,12 @@ const defaultDashboardAggregateRepository: DashboardAggregateRepository = {
     const [stats] = await db
       .select({
         total: sql<number>`count(*)::int`,
-        delivered: sql<number>`count(*) filter (where ${emails.status} = 'delivered')::int`,
-        bounced: sql<number>`count(*) filter (where ${emails.status} in ('bounced', 'hard_bounced', 'soft_bounced'))::int`,
-        hard_bounced: sql<number>`count(*) filter (where ${emails.status} = 'hard_bounced')::int`,
-        soft_bounced: sql<number>`count(*) filter (where ${emails.status} = 'soft_bounced')::int`,
-        undetermined_bounced: sql<number>`count(*) filter (where ${emails.status} = 'bounced')::int`,
-        complained: sql<number>`count(*) filter (where ${emails.status} = 'complained')::int`,
+        delivered: sql<number>`count(*) filter (where ${emailEventExists(["delivered"])})::int`,
+        bounced: sql<number>`count(*) filter (where ${bouncedEmailEventExists()})::int`,
+        hard_bounced: sql<number>`count(*) filter (where ${bouncedEmailEventExists(sql`${emailEvents.payload}->>'bounceType' = 'Permanent'`)})::int`,
+        soft_bounced: sql<number>`count(*) filter (where ${bouncedEmailEventExists(sql`${emailEvents.payload}->>'bounceType' = 'Transient'`)})::int`,
+        undetermined_bounced: sql<number>`count(*) filter (where ${bouncedEmailEventExists(sql`coalesce(${emailEvents.payload}->>'bounceType', '') not in ('Permanent', 'Transient')`)})::int`,
+        complained: sql<number>`count(*) filter (where ${emailEventExists(["complained"])})::int`,
       })
       .from(emails)
       .where(and(...metricConditions(input)));
@@ -333,7 +359,7 @@ const defaultDashboardAggregateRepository: DashboardAggregateRepository = {
   async listDailyCounts(input) {
     const conditions = metricConditions(input);
     if (input.statuses && input.statuses.length > 0) {
-      conditions.push(inArray(emails.status, input.statuses));
+      conditions.push(emailEventExists(input.statuses));
     }
 
     return await db
@@ -352,7 +378,7 @@ const defaultDashboardAggregateRepository: DashboardAggregateRepository = {
       .select({
         date: sql<string>`to_char(${emails.createdAt}::date, 'YYYY-MM-DD')`,
         total: sql<number>`count(*)::int`,
-        bounced: sql<number>`count(*) filter (where ${emails.status} in ('bounced', 'hard_bounced', 'soft_bounced'))::int`,
+        bounced: sql<number>`count(*) filter (where ${bouncedEmailEventExists()})::int`,
       })
       .from(emails)
       .where(and(...metricConditions(input)))
@@ -365,7 +391,7 @@ const defaultDashboardAggregateRepository: DashboardAggregateRepository = {
       .select({
         date: sql<string>`to_char(${emails.createdAt}::date, 'YYYY-MM-DD')`,
         total: sql<number>`count(*)::int`,
-        complained: sql<number>`count(*) filter (where ${emails.status} = 'complained')::int`,
+        complained: sql<number>`count(*) filter (where ${emailEventExists(["complained"])})::int`,
       })
       .from(emails)
       .where(and(...metricConditions(input)))
@@ -378,7 +404,7 @@ const defaultDashboardAggregateRepository: DashboardAggregateRepository = {
       .select({
         domain: senderDomainSql,
         total: sql<number>`count(*)::int`,
-        delivered: sql<number>`count(*) filter (where ${emails.status} = 'delivered')::int`,
+        delivered: sql<number>`count(*) filter (where ${emailEventExists(["delivered"])})::int`,
       })
       .from(emails)
       .where(and(...metricConditions(input)))
@@ -388,7 +414,10 @@ const defaultDashboardAggregateRepository: DashboardAggregateRepository = {
 
   async listTagBreakdown(input) {
     const rows = await db
-      .select({ tags: emails.tags, status: emails.status })
+      .select({
+        tags: emails.tags,
+        delivered: sql<boolean>`${emailEventExists(["delivered"])}`,
+      })
       .from(emails)
       .where(and(...metricConditions(input)))
       .orderBy(sql`${emails.createdAt} desc`)
@@ -407,7 +436,7 @@ const defaultDashboardAggregateRepository: DashboardAggregateRepository = {
           delivered: 0,
         };
         existing.total += 1;
-        if (row.status === "delivered") existing.delivered += 1;
+        if (row.delivered) existing.delivered += 1;
         statsByTag.set(key, existing);
       }
     }
@@ -476,7 +505,7 @@ function roundRate(numerator: number, denominator: number): number {
 
 function getEventStatuses(eventType: string | null): string[] | undefined {
   if (!eventType || eventType === "all") return undefined;
-  return EVENT_TYPE_TO_STATUS[eventType];
+  return EVENT_TYPE_TO_EVENT_TYPES[eventType];
 }
 
 function getUsageBounds(now: Date): DashboardUsageCountInput {
