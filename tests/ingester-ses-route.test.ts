@@ -18,6 +18,8 @@ const mockInvalidateDomainCaches = vi
   .mockResolvedValue(undefined);
 
 const mockCreateOrIgnoreDuplicate = vi.fn();
+const mockCreateInboundEmailIngestionService = vi.fn();
+const mockInboundProcess = vi.fn();
 const mockDomainReconcileAllPendingVerifications = vi.fn();
 const mockEnqueueDomainEvent = vi.fn();
 const mockWebhookList = vi.fn();
@@ -28,6 +30,18 @@ const mockEmitCloudWatchMetric = vi.fn();
 const mockLogTelemetry = vi.fn();
 const mockRecordTelemetryError = vi.fn();
 const mockSuppressFromSesEvent = vi.fn();
+const mockS3Send = vi.fn();
+
+vi.mock("@aws-sdk/client-s3", () => ({
+  GetObjectCommand: class MockGetObjectCommand {
+    constructor(readonly input: Record<string, unknown>) {}
+  },
+  S3Client: class MockS3Client {
+    send(command: unknown) {
+      return mockS3Send(command);
+    }
+  },
+}));
 
 vi.mock("@opensend/core", () => {
   const testTraceparent =
@@ -48,6 +62,7 @@ vi.mock("@opensend/core", () => {
       ...job,
       requestedAt: "2026-04-28T00:00:00.000Z",
     }),
+    createInboundEmailIngestionService: mockCreateInboundEmailIngestionService,
     createTelemetryContext: (input: {
       service: string;
       operation: string;
@@ -327,6 +342,22 @@ describe("SES SNS ingestion route", () => {
     mockLogTelemetry.mockReset();
     mockRecordTelemetryError.mockReset();
     mockSuppressFromSesEvent.mockResolvedValue([]);
+    mockInboundProcess.mockResolvedValue({
+      status: "processed",
+      provider_event_id: "sns-inbound-msg-1",
+      received_email_id: "received-1",
+      event_id: "event-1",
+      user_id: "user-1",
+      attachments: 0,
+    });
+    mockCreateInboundEmailIngestionService.mockReturnValue({
+      process: mockInboundProcess,
+    });
+    mockS3Send.mockResolvedValue({
+      Body: Buffer.from(
+        "From: sender@example.test\r\nTo: support@example.test\r\nSubject: SES inbound\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello",
+      ),
+    });
 
     vi.stubGlobal(
       "fetch",
@@ -488,6 +519,111 @@ describe("SES SNS ingestion route", () => {
 
     expect(response.status).toBe(401);
     expect(await response.text()).toBe("Unauthorized");
+  });
+
+  it("ingests signed SES receipt-rule S3 notifications through the inbound MIME service", async () => {
+    vi.stubEnv("SES_INBOUND_BUCKET_NAME", "opensend-inbound-mail");
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope({
+      sesMessage: {
+        eventType: "Received",
+        mail: {
+          messageId: "ses-inbound-msg-1",
+          destination: ["support@example.test"],
+          headers: [],
+        },
+        receipt: {
+          recipients: ["support@example.test"],
+          action: {
+            type: "S3",
+            bucketName: "opensend-inbound-mail",
+            objectKey: "inbound/example/ses-inbound-msg-1",
+          },
+        },
+      },
+    });
+
+    const response = await app.request(
+      "http://localhost/events/inbound/ses-s3",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-amz-sns-message-type": "Notification",
+        },
+        body: JSON.stringify(envelope),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: true,
+      status: "processed",
+      received_email_id: "received-1",
+    });
+    expect(mockS3Send).toHaveBeenCalledTimes(1);
+    expect(mockS3Send.mock.calls[0]?.[0]).toMatchObject({
+      input: {
+        Bucket: "opensend-inbound-mail",
+        Key: "inbound/example/ses-inbound-msg-1",
+      },
+    });
+    expect(mockInboundProcess).toHaveBeenCalledWith({
+      provider: "aws-ses-receiving",
+      eventId: "sns-msg-1",
+      messageId: "ses-inbound-msg-1",
+      recipients: ["support@example.test"],
+      rawMimeBase64: Buffer.from(
+        "From: sender@example.test\r\nTo: support@example.test\r\nSubject: SES inbound\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nHello",
+      ).toString("base64"),
+      metadata: {
+        sns_message_id: "sns-msg-1",
+        sns_topic_arn: "arn:aws:sns:us-east-1:123456789012:ses-events",
+        ses_event_type: "Received",
+        ses_message_id: "ses-inbound-msg-1",
+        s3_bucket: "opensend-inbound-mail",
+        s3_key: "inbound/example/ses-inbound-msg-1",
+      },
+    });
+  });
+
+  it("rejects SES receipt-rule S3 notifications from an unexpected bucket", async () => {
+    vi.stubEnv("SES_INBOUND_BUCKET_NAME", "opensend-inbound-mail");
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope({
+      sesMessage: {
+        eventType: "Received",
+        mail: {
+          messageId: "ses-inbound-msg-2",
+          destination: ["support@example.test"],
+          headers: [],
+        },
+        receipt: {
+          action: {
+            type: "S3",
+            bucketName: "attacker-bucket",
+            objectKey: "mail",
+          },
+        },
+      },
+    });
+
+    const response = await app.request(
+      "http://localhost/events/inbound/ses-s3",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-amz-sns-message-type": "Notification",
+        },
+        body: JSON.stringify(envelope),
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toContain("S3 bucket is not allowed");
+    expect(mockS3Send).not.toHaveBeenCalled();
+    expect(mockInboundProcess).not.toHaveBeenCalled();
   });
 
   it("verifies the SNS signature, persists a normalized event, and queues webhook delivery", async () => {
