@@ -65,6 +65,16 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     );
   });
 
+  it("deploy script carries receiving storage config into the ingester task definition", () => {
+    const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
+    expect(script).toContain("INGESTER_INBOUND_TOKEN_SECRET_ID");
+    expect(script).toContain("ingester_inbound_token_secret_arn");
+    expect(script).toContain('"name": "INGESTER_INBOUND_TOKEN"');
+    expect(script).toContain('for name in ["AWS_REGION", "S3_BUCKET_NAME"]');
+    expect(script).toContain('"SES_INBOUND_BUCKET_NAME"');
+    expect(script).toContain("app_task_definition");
+  });
+
   it("deploy script runs migrations before ECS service redeploys", () => {
     const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
     expect(script).toContain("bash scripts/deploy.sh migrate");
