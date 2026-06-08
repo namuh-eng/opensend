@@ -9,6 +9,10 @@ import {
   templates,
   topics,
   webhooks,
+  workspaceEntitlements,
+  workspaceInvitations,
+  workspaceMemberships,
+  workspaces,
 } from "@/lib/db/schema";
 import { getTableColumns, getTableName } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
@@ -26,6 +30,39 @@ describe("Database schema", () => {
       expect(getTableName(webhooks)).toBe("webhooks");
       expect(getTableName(templates)).toBe("templates");
       expect(getTableName(logs)).toBe("logs");
+      expect(getTableName(workspaces)).toBe("workspaces");
+      expect(getTableName(workspaceMemberships)).toBe("workspace_memberships");
+      expect(getTableName(workspaceInvitations)).toBe("workspace_invitations");
+      expect(getTableName(workspaceEntitlements)).toBe(
+        "workspace_entitlements",
+      );
+    });
+  });
+
+  describe("Workspace foundation columns", () => {
+    it("stores workspace ownership, memberships, invitations, and entitlement checks", () => {
+      const workspaceCols = getTableColumns(workspaces);
+      expect(workspaceCols.id).toBeDefined();
+      expect(workspaceCols.name).toBeDefined();
+      expect(workspaceCols.ownerUserId.notNull).toBe(true);
+
+      const membershipCols = getTableColumns(workspaceMemberships);
+      expect(membershipCols.workspaceId.notNull).toBe(true);
+      expect(membershipCols.userId.notNull).toBe(true);
+      expect(membershipCols.role.notNull).toBe(true);
+
+      const invitationCols = getTableColumns(workspaceInvitations);
+      expect(invitationCols.workspaceId.notNull).toBe(true);
+      expect(invitationCols.email.notNull).toBe(true);
+      expect(invitationCols.role.notNull).toBe(true);
+      expect(invitationCols.tokenHash.notNull).toBe(true);
+      expect(invitationCols.expiresAt.notNull).toBe(true);
+
+      const entitlementCols = getTableColumns(workspaceEntitlements);
+      expect(entitlementCols.workspaceId.notNull).toBe(true);
+      expect(entitlementCols.key.notNull).toBe(true);
+      expect(entitlementCols.enabled.notNull).toBe(true);
+      expect(entitlementCols.limit).toBeDefined();
     });
   });
 

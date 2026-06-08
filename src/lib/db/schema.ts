@@ -63,6 +63,133 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp("updated_at"),
 });
 
+// ── Workspace / Team Tables ────────────────────────────────────────
+
+export type WorkspaceRole = "owner" | "admin" | "member";
+export type WorkspaceInvitationStatus =
+  | "pending"
+  | "accepted"
+  | "revoked"
+  | "expired";
+export type WorkspaceEntitlementSource = "self_hosted" | "hosted" | "manual";
+
+export const workspaces = pgTable(
+  "workspaces",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    ownerUserId: text("owner_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspaces_owner_user_id_idx").on(t.ownerUserId),
+    index("workspaces_created_at_idx").on(t.createdAt),
+  ],
+);
+
+export const workspaceMemberships = pgTable(
+  "workspace_memberships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: varchar("role", { length: 20 }).$type<WorkspaceRole>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspace_memberships_workspace_user_idx").on(
+      t.workspaceId,
+      t.userId,
+    ),
+    index("workspace_memberships_user_id_idx").on(t.userId),
+    index("workspace_memberships_workspace_role_idx").on(t.workspaceId, t.role),
+  ],
+);
+
+export const workspaceInvitations = pgTable(
+  "workspace_invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    email: varchar("email", { length: 320 }).notNull(),
+    role: varchar("role", { length: 20 }).$type<WorkspaceRole>().notNull(),
+    tokenHash: text("token_hash").notNull(),
+    invitedByUserId: text("invited_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 20 })
+      .$type<WorkspaceInvitationStatus>()
+      .notNull()
+      .default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspace_invitations_token_hash_idx").on(t.tokenHash),
+    index("workspace_invitations_workspace_status_idx").on(
+      t.workspaceId,
+      t.status,
+    ),
+    index("workspace_invitations_email_status_idx").on(t.email, t.status),
+  ],
+);
+
+export const workspaceEntitlements = pgTable(
+  "workspace_entitlements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    key: varchar("key", { length: 100 }).notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    limit: integer("limit"),
+    source: varchar("source", { length: 20 })
+      .$type<WorkspaceEntitlementSource>()
+      .notNull()
+      .default("self_hosted"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspace_entitlements_workspace_key_idx").on(
+      t.workspaceId,
+      t.key,
+    ),
+    index("workspace_entitlements_key_idx").on(t.key),
+  ],
+);
+
 // ── Application Tables ──────────────────────────────────────────────
 
 export const dedicatedIpPools = pgTable(
