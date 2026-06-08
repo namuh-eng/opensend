@@ -1,6 +1,6 @@
 # Delete Contact Segment
 
-Remove a contact from a segment. This page documents the OpenSend-owned API contract for `DELETE /api/contacts/{id}/segments/{segment_id}`.
+Remove an existing contact from an existing segment. This page documents the OpenSend-owned API contract for `DELETE /api/contacts/{id}/segments/{segment_id}`.
 
 `DELETE /api/contacts/{id}/segments/{segment_id}`
 
@@ -14,31 +14,32 @@ Authorization: Bearer os_YOUR_API_KEY
 
 ## When to use it
 
-Contact routes manage audience records for the authenticated tenant. Segment and topic relationship endpoints only affect the target contact and never expose another tenant's audience data. Delete or detach the target record for the authenticated tenant. Treat deletes as irreversible unless the resource-specific docs state otherwise.
+Use this route to detach one tenant-scoped contact from one tenant-scoped segment. It only changes the contact-to-segment relationship; it does not delete the contact or the segment resource.
 
 ## Parameters
 
-Path parameters identify the tenant-scoped resource. JSON body fields are validated by the route before any database write.
+- `id` — contact ID or email for the authenticated tenant.
+- `segment_id` — segment ID for the authenticated tenant.
 
 ## Request example
 
-```json
-{
-  "email": "ada@example.com",
-  "firstName": "Ada",
-  "lastName": "Lovelace"
-}
+No JSON body is required.
+
+```http
+DELETE /api/contacts/520784e2-887d-4c25-b53c-4ad46ad38100/segments/78261eea-8f8b-4381-83c6-79fa7120f1cf
+Authorization: Bearer os_YOUR_API_KEY
 ```
 
 ## Response
 
-Successful responses return JSON scoped to the authenticated tenant. A representative response shape is:
+Successful responses confirm the relationship mutation:
 
 ```json
 {
-  "id": "contact_123",
-  "email": "ada@example.com",
-  "subscribed": true
+  "object": "contact_segment",
+  "contact_id": "520784e2-887d-4c25-b53c-4ad46ad38100",
+  "segment_id": "78261eea-8f8b-4381-83c6-79fa7120f1cf",
+  "deleted": true
 }
 ```
 

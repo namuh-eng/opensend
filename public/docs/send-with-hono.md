@@ -10,11 +10,11 @@ npm install hono opensend
 
 ```ts
 import { Hono } from "hono";
-import { Resend } from "opensend";
+import { Opensend } from "opensend";
 
 const app = new Hono();
 
-const resend = new Resend(process.env.OPENSEND_API_KEY, {
+const opensend = new Opensend(process.env.OPENSEND_API_KEY, {
   baseUrl: process.env.OPENSEND_BASE_URL,
 });
 
@@ -24,7 +24,7 @@ app.post("/send", async (c) => {
     return c.json({ error: "email is required" }, 400);
   }
 
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await opensend.emails.send({
     from: "OpenSend <onboarding@updates.example.com>",
     to: body.email,
     subject: "Hello from Hono",

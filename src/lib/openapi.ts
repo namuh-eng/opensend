@@ -3607,16 +3607,17 @@ export const openApiDocument = {
       ContactTopicList: {
         type: "object",
         properties: {
-          object: { type: "string" },
+          object: { type: "string", enum: ["list"] },
           data: {
             type: "array",
             items: {
               type: "object",
               properties: {
-                topic_id: { type: "string", format: "uuid" },
-                subscribed: { type: "boolean" },
+                id: { type: "string", format: "uuid" },
+                name: { type: "string" },
+                subscription: { type: "string", enum: ["opt_in", "opt_out"] },
               },
-              required: ["topic_id", "subscribed"],
+              required: ["id", "name", "subscription"],
             },
           },
         },
@@ -3625,19 +3626,19 @@ export const openApiDocument = {
       UpdateContactTopicsRequest: {
         type: "object",
         properties: {
-          subscriptions: {
+          topics: {
             type: "array",
             items: {
               type: "object",
               properties: {
-                topic_id: { type: "string", format: "uuid" },
-                subscribed: { type: "boolean" },
+                id: { type: "string", format: "uuid" },
+                subscription: { type: "string", enum: ["opt_in", "opt_out"] },
               },
-              required: ["topic_id", "subscribed"],
+              required: ["id", "subscription"],
             },
           },
         },
-        required: ["subscriptions"],
+        required: ["topics"],
       },
       BulkContactRequest: {
         type: "object",
@@ -4431,9 +4432,42 @@ export const openApiDocument = {
       SendCustomEventResponse: {
         type: "object",
         properties: {
-          accepted: { type: "boolean" },
-          runs_resumed: { type: "integer" },
+          object: { type: "string", enum: ["event_delivery"] },
+          delivery: { $ref: "#/components/schemas/CustomEventDelivery" },
+          resumed_runs: {
+            type: "array",
+            items: { $ref: "#/components/schemas/AutomationRun" },
+          },
+          automation_runs: {
+            type: "array",
+            items: { $ref: "#/components/schemas/AutomationRun" },
+          },
         },
+        required: ["object", "delivery", "resumed_runs", "automation_runs"],
+      },
+      CustomEventDelivery: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["event_delivery"] },
+          id: { type: "string", format: "uuid" },
+          event: { type: "string" },
+          contact_id: { type: "string", format: "uuid", nullable: true },
+          email: { type: "string", format: "email", nullable: true },
+          payload: {
+            type: "object",
+            additionalProperties: true,
+          },
+          received_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "object",
+          "id",
+          "event",
+          "contact_id",
+          "email",
+          "payload",
+          "received_at",
+        ],
       },
       ErrorEnvelope: {
         type: "object",

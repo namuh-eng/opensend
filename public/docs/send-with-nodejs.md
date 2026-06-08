@@ -23,13 +23,13 @@ Do not prefix the key with `NEXT_PUBLIC_`, `VITE_`, or any client-side exposure 
 ## Send one email
 
 ```ts
-import { Resend } from "opensend";
+import { Opensend } from "opensend";
 
-const resend = new Resend(process.env.OPENSEND_API_KEY, {
+const opensend = new Opensend(process.env.OPENSEND_API_KEY, {
   baseUrl: process.env.OPENSEND_BASE_URL,
 });
 
-const { data, error } = await resend.emails.send({
+const { data, error } = await opensend.emails.send({
   from: "OpenSend <onboarding@updates.example.com>",
   to: ["user@example.com"],
   subject: "Hello from Node.js",
@@ -52,7 +52,7 @@ When `OPENSEND_BASE_URL` is absent, the SDK targets OpenSend Cloud at `https://o
 Use an idempotency key when a worker may retry after a timeout or crash. OpenSend stores idempotency decisions for 24 hours.
 
 ```ts
-await resend.emails.send(
+await opensend.emails.send(
   {
     from: "OpenSend <onboarding@updates.example.com>",
     to: "user@example.com",
@@ -73,7 +73,7 @@ npm install opensend react react-dom @react-email/components
 
 ```tsx
 import { Html, Text } from "@react-email/components";
-import { Resend } from "opensend";
+import { Opensend } from "opensend";
 
 function WelcomeEmail({ name }: { name: string }) {
   return (
@@ -83,9 +83,9 @@ function WelcomeEmail({ name }: { name: string }) {
   );
 }
 
-const resend = new Resend(process.env.OPENSEND_API_KEY);
+const opensend = new Opensend(process.env.OPENSEND_API_KEY);
 
-await resend.emails.send({
+await opensend.emails.send({
   from: "OpenSend <onboarding@updates.example.com>",
   to: "user@example.com",
   subject: "Welcome",
@@ -98,7 +98,7 @@ If `react-dom/server` is missing or rendering throws, the SDK returns a `react_r
 ## Batch sends
 
 ```ts
-const { data, error } = await resend.emails.sendBatch([
+const { data, error } = await opensend.emails.sendBatch([
   {
     from: "OpenSend <onboarding@updates.example.com>",
     to: "a@example.com",

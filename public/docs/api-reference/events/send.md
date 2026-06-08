@@ -14,11 +14,16 @@ Authorization: Bearer os_YOUR_API_KEY
 
 ## When to use it
 
-Event routes expose OpenSend automation events. Use them to inspect or send custom events that can trigger automations when your workspace has matching triggers configured. Trigger delivery for an already-created resource. The route validates ownership and current state before queueing work.
+Use this route to deliver a custom event for exactly one contact. Provide either `contact_id`/`contactId` or `email`, plus an optional `payload` object. If the event has a stored schema, OpenSend validates `payload` before recording the delivery or resuming automations.
 
 ## Parameters
 
-Path parameters identify the tenant-scoped resource. JSON body fields are validated by the route before any database write.
+JSON body fields are validated before any database write. The route accepts:
+
+- `event` — custom event name.
+- `contact_id` or `contactId` — contact ID to associate with the event.
+- `email` — contact email to resolve instead of a contact ID.
+- `payload` — optional object passed to automations and schema validation.
 
 ## Request example
 
@@ -26,26 +31,34 @@ Path parameters identify the tenant-scoped resource. JSON body fields are valida
 {
   "event": "user.signed_up",
   "email": "ada@example.com",
-  "properties": { "plan": "pro" }
+  "payload": { "plan": "pro" }
 }
 ```
 
 ## Response
 
-Successful responses return JSON scoped to the authenticated tenant. A representative response shape is:
+Successful responses return `202 Accepted` with the event delivery and any automation runs created or resumed:
 
 ```json
 {
-  "data": [
-    { "id": "event_123", "type": "user.signed_up" }
-  ],
-  "hasMore": false
+  "object": "event_delivery",
+  "delivery": {
+    "object": "event_delivery",
+    "id": "2d66f2de-0d0e-4a2d-8e66-831e3522d124",
+    "event": "user.signed_up",
+    "contact_id": "520784e2-887d-4c25-b53c-4ad46ad38100",
+    "email": "ada@example.com",
+    "payload": { "plan": "pro" },
+    "received_at": "2026-06-08T00:00:00.000Z"
+  },
+  "resumed_runs": [],
+  "automation_runs": []
 }
 ```
 
 ## Errors
 
-OpenSend returns structured errors for missing authentication, validation failures, not-found resources, quota/rate-limit conditions, and unexpected server failures. Treat `404` as either missing or not owned by the caller.
+OpenSend returns structured errors for missing authentication, invalid JSON, validation failures, schema mismatches, quota/rate-limit conditions, and unexpected server failures.
 
 ## Self-hosting notes
 

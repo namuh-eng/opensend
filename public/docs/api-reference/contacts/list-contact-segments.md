@@ -1,6 +1,6 @@
 # List Contact Segments
 
-List segments for a contact. This page documents the OpenSend-owned API contract for `GET /api/contacts/{id}/segments`.
+List segments assigned to a contact. This page documents the OpenSend-owned API contract for `GET /api/contacts/{id}/segments`.
 
 `GET /api/contacts/{id}/segments`
 
@@ -14,21 +14,27 @@ Authorization: Bearer os_YOUR_API_KEY
 
 ## When to use it
 
-Contact routes manage audience records for the authenticated tenant. Segment and topic relationship endpoints only affect the target contact and never expose another tenant's audience data. Return a tenant-scoped collection. Use pagination parameters when available instead of assuming a fixed result size.
+Use this route to inspect the segment memberships for one tenant-scoped contact. It does not create, update, or delete contact data.
 
 ## Parameters
 
-`limit` and `after` may be used on collection routes when the route supports cursor pagination.
+- `id` — contact ID or email for the authenticated tenant.
 
 ## Response
 
-Successful responses return JSON scoped to the authenticated tenant. A representative response shape is:
+Successful responses return the contact's segment memberships:
 
 ```json
 {
-  "id": "contact_123",
-  "email": "ada@example.com",
-  "subscribed": true
+  "object": "list",
+  "data": [
+    {
+      "id": "78261eea-8f8b-4381-83c6-79fa7120f1cf",
+      "name": "Newsletter Subscribers",
+      "created_at": "2026-06-08T00:00:00.000Z"
+    }
+  ],
+  "has_more": false
 }
 ```
 

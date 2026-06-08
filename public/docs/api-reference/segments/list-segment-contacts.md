@@ -14,20 +14,32 @@ Authorization: Bearer os_YOUR_API_KEY
 
 ## When to use it
 
-Segment routes manage audience groupings. Segment membership is tenant-scoped and can be used by broadcasts, automations, and dashboard audience filters. Return a tenant-scoped collection. Use pagination parameters when available instead of assuming a fixed result size.
+Use this route to page through contacts assigned to one tenant-scoped segment. It validates the segment belongs to the caller before returning contact rows.
 
 ## Parameters
 
-`limit` and `after` may be used on collection routes when the route supports cursor pagination.
+- `id` — segment ID for the authenticated tenant.
+- `limit` — optional page size.
+- `after` — optional cursor from the previous page.
 
 ## Response
 
-Successful responses return JSON scoped to the authenticated tenant. A representative response shape is:
+Successful responses return a paginated contact list for the segment:
 
 ```json
 {
-  "id": "segment_123",
-  "name": "Product qualified leads"
+  "object": "list",
+  "data": [
+    {
+      "id": "520784e2-887d-4c25-b53c-4ad46ad38100",
+      "email": "ada@example.com",
+      "firstName": "Ada",
+      "lastName": "Lovelace",
+      "unsubscribed": false,
+      "created_at": "2026-06-08T00:00:00.000Z"
+    }
+  ],
+  "has_more": false
 }
 ```
 

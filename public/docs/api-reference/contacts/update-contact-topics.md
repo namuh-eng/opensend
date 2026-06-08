@@ -14,31 +14,32 @@ Authorization: Bearer os_YOUR_API_KEY
 
 ## When to use it
 
-Contact routes manage audience records for the authenticated tenant. Segment and topic relationship endpoints only affect the target contact and never expose another tenant's audience data. Update the mutable fields for the target record. Fields not accepted by the API are ignored or rejected by route validation.
+Use this route to replace one contact's topic subscription preferences. It only updates topic relationship state; it does not update the contact's name, email, custom properties, or segment memberships.
 
 ## Parameters
 
-Path parameters identify the tenant-scoped resource. JSON body fields are validated by the route before any database write.
+- `id` — contact ID or email for the authenticated tenant.
 
 ## Request example
 
 ```json
 {
-  "email": "ada@example.com",
-  "firstName": "Ada",
-  "lastName": "Lovelace"
+  "topics": [
+    { "id": "7a93a5b0-4f2d-4f8e-8e50-9f043c2fd710", "subscription": "opt_in" },
+    { "id": "ab9b8b4e-b36d-44a1-8ff0-9971bb9aee4c", "subscription": "opt_out" }
+  ]
 }
 ```
 
 ## Response
 
-Successful responses return JSON scoped to the authenticated tenant. A representative response shape is:
+Successful responses confirm the topic relationship update:
 
 ```json
 {
-  "id": "contact_123",
-  "email": "ada@example.com",
-  "subscribed": true
+  "object": "contact_topics",
+  "contact_id": "520784e2-887d-4c25-b53c-4ad46ad38100",
+  "updated": true
 }
 ```
 
