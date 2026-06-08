@@ -115,6 +115,30 @@ const emailIdPathParameter: ParameterObject = {
   schema: { type: "string", format: "uuid" },
 };
 
+const contactIdPathParameter: ParameterObject = {
+  name: "contact_id",
+  in: "path",
+  required: true,
+  description: "Contact ID or email address.",
+  schema: { type: "string" },
+};
+
+const audienceIdPathParameter: ParameterObject = {
+  name: "audience_id",
+  in: "path",
+  required: true,
+  description: "Audience ID.",
+  schema: { type: "string" },
+};
+
+const apiKeyIdPathParameter: ParameterObject = {
+  name: "id",
+  in: "path",
+  required: true,
+  description: "API key ID.",
+  schema: { type: "string" },
+};
+
 const templateIdOrAliasPathParameter: ParameterObject = {
   name: "id",
   in: "path",
@@ -4637,6 +4661,12 @@ export const openApiDocument = {
 } as const satisfies OpenApiDocument;
 
 const compatibilityAliases: Record<string, string> = {
+  "/segments": "/api/segments",
+  "/segments/{id}": "/api/segments/{id}",
+  "/segments/{id}/contacts": "/api/segments/{id}/contacts",
+  "/broadcasts": "/api/broadcasts",
+  "/broadcasts/{id}": "/api/broadcasts/{id}",
+  "/broadcasts/{id}/send": "/api/broadcasts/{id}/send",
   "/domains": "/api/domains",
   "/domains/{id}": "/api/domains/{id}",
   "/domains/{id}/verify": "/api/domains/{id}/verify",
@@ -4649,6 +4679,8 @@ const compatibilityAliases: Record<string, string> = {
   "/logs": "/api/logs",
   "/logs/{id}": "/api/logs/{id}",
   "/emails/{id}": "/api/emails/{id}",
+  "/emails/{id}/events": "/api/emails/{id}/events",
+  "/emails/{id}/trace": "/api/emails/{id}/trace",
   "/emails/{id}/attachments": "/api/emails/{id}/attachments",
   "/emails/{id}/attachments/{attachmentId}":
     "/api/emails/{id}/attachments/{attachmentId}",
@@ -4665,6 +4697,212 @@ for (const [aliasPath, canonicalPath] of Object.entries(compatibilityAliases)) {
   const canonicalPathItem = mutablePaths[canonicalPath];
   if (canonicalPathItem) mutablePaths[aliasPath] = canonicalPathItem;
 }
+
+function withAliasDetails(
+  operation: OperationObject,
+  overrides: Partial<OperationObject>,
+): OperationObject {
+  return { ...operation, ...overrides };
+}
+
+const canonicalApiKeysPath = mutablePaths["/api/api-keys"];
+if (canonicalApiKeysPath?.get && canonicalApiKeysPath.post) {
+  mutablePaths["/api-keys"] = {
+    get: withAliasDetails(canonicalApiKeysPath.get, {
+      summary: "List API keys",
+      description:
+        "Root-compatible API-key collection alias. Browser dashboard GET /api-keys remains a signed-in dashboard page; API-like requests are rewritten to /api/api-keys by OpenSend middleware.",
+      operationId: "listApiKeysAlias",
+    }),
+    post: withAliasDetails(canonicalApiKeysPath.post, {
+      summary: "Create an API key",
+      description:
+        "Root-compatible API-key collection alias rewritten to POST /api/api-keys by OpenSend middleware.",
+      operationId: "createApiKeyAlias",
+    }),
+  };
+}
+
+const canonicalApiKeyDetailPath = mutablePaths["/api/api-keys/{id}"];
+if (canonicalApiKeyDetailPath?.delete) {
+  mutablePaths["/api-keys/{id}"] = {
+    delete: withAliasDetails(canonicalApiKeyDetailPath.delete, {
+      summary: "Delete an API key",
+      description:
+        "Root-compatible API-key delete alias rewritten to DELETE /api/api-keys/{id} by OpenSend middleware. Root GET/PATCH detail aliases are not implemented.",
+      operationId: "deleteApiKeyAlias",
+      parameters: [apiKeyIdPathParameter],
+    }),
+  };
+}
+
+const canonicalContactsPath = mutablePaths["/api/contacts"];
+if (canonicalContactsPath?.get && canonicalContactsPath.post) {
+  mutablePaths["/contacts"] = {
+    get: withAliasDetails(canonicalContactsPath.get, {
+      summary: "List contacts",
+      description:
+        "Root-compatible contacts collection route implemented by src/app/contacts/route.ts.",
+      operationId: "listContactsAlias",
+    }),
+    post: withAliasDetails(canonicalContactsPath.post, {
+      summary: "Create a contact",
+      description:
+        "Root-compatible contacts collection route implemented by src/app/contacts/route.ts.",
+      operationId: "createContactAlias",
+    }),
+  };
+}
+
+const canonicalContactDetailPath = mutablePaths["/api/contacts/{id}"];
+if (
+  canonicalContactDetailPath?.get &&
+  canonicalContactDetailPath.patch &&
+  canonicalContactDetailPath.delete
+) {
+  mutablePaths["/contacts/{contact_id}"] = {
+    get: withAliasDetails(canonicalContactDetailPath.get, {
+      summary: "Retrieve a contact",
+      description:
+        "Root-compatible contact detail route implemented by src/app/contacts/[contact_id]/route.ts.",
+      operationId: "getContactAlias",
+      parameters: [contactIdPathParameter],
+    }),
+    patch: withAliasDetails(canonicalContactDetailPath.patch, {
+      summary: "Update a contact",
+      description:
+        "Root-compatible contact detail route implemented by src/app/contacts/[contact_id]/route.ts.",
+      operationId: "updateContactAlias",
+      parameters: [contactIdPathParameter],
+    }),
+    delete: withAliasDetails(canonicalContactDetailPath.delete, {
+      summary: "Delete a contact",
+      description:
+        "Root-compatible contact detail route implemented by src/app/contacts/[contact_id]/route.ts.",
+      operationId: "deleteContactAlias",
+      parameters: [contactIdPathParameter],
+    }),
+  };
+}
+
+const audienceSchema = {
+  type: "object",
+  properties: {
+    object: { type: "string" },
+    id: { type: "string" },
+    name: { type: "string" },
+    created_at: { type: "string", format: "date-time" },
+  },
+  required: ["object", "id", "name"],
+} satisfies JsonSchema;
+
+const audienceListSchema = {
+  type: "object",
+  properties: {
+    object: { type: "string" },
+    data: {
+      type: "array",
+      items: audienceSchema,
+    },
+    has_more: { type: "boolean" },
+  },
+  required: ["object", "data", "has_more"],
+} satisfies JsonSchema;
+
+const deleteAudienceResponseSchema = {
+  type: "object",
+  properties: {
+    object: { type: "string" },
+    id: { type: "string" },
+    deleted: { type: "boolean" },
+  },
+  required: ["object", "id", "deleted"],
+} satisfies JsonSchema;
+
+mutablePaths["/audiences"] = {
+  get: {
+    tags: ["Segments"],
+    summary: "List audiences",
+    description:
+      "Resend-compatible audience alias implemented by src/app/audiences/route.ts using OpenSend segment storage.",
+    operationId: "listAudiencesAlias",
+    security: bearerSecurity,
+    parameters: [
+      ...paginationParameters,
+      {
+        name: "search",
+        in: "query",
+        description: "Full-text search filter.",
+        schema: { type: "string" },
+      },
+    ],
+    responses: {
+      "200": {
+        description: "Audience list.",
+        content: jsonContent(audienceListSchema),
+      },
+      ...errorResponses,
+    },
+  },
+  post: {
+    tags: ["Segments"],
+    summary: "Create an audience",
+    description:
+      "Resend-compatible audience alias implemented by src/app/audiences/route.ts using OpenSend segment storage.",
+    operationId: "createAudienceAlias",
+    security: bearerSecurity,
+    requestBody: {
+      required: true,
+      content: jsonContent({
+        $ref: "#/components/schemas/CreateSegmentRequest",
+      }),
+    },
+    responses: {
+      "201": {
+        description: "Created audience.",
+        content: jsonContent(audienceSchema),
+      },
+      ...errorResponses,
+    },
+  },
+};
+
+mutablePaths["/audiences/{audience_id}"] = {
+  get: {
+    tags: ["Segments"],
+    summary: "Retrieve an audience",
+    description:
+      "Resend-compatible audience detail alias implemented by src/app/audiences/[audience_id]/route.ts using OpenSend segment storage.",
+    operationId: "getAudienceAlias",
+    security: bearerSecurity,
+    parameters: [audienceIdPathParameter],
+    responses: {
+      "200": {
+        description: "Audience detail.",
+        content: jsonContent(audienceSchema),
+      },
+      "404": { $ref: "#/components/responses/NotFound" },
+      ...errorResponses,
+    },
+  },
+  delete: {
+    tags: ["Segments"],
+    summary: "Delete an audience",
+    description:
+      "Resend-compatible audience detail alias implemented by src/app/audiences/[audience_id]/route.ts using OpenSend segment storage.",
+    operationId: "deleteAudienceAlias",
+    security: bearerSecurity,
+    parameters: [audienceIdPathParameter],
+    responses: {
+      "200": {
+        description: "Audience deleted.",
+        content: jsonContent(deleteAudienceResponseSchema),
+      },
+      "404": { $ref: "#/components/responses/NotFound" },
+      ...errorResponses,
+    },
+  },
+};
 
 const canonicalEmailsPath = mutablePaths["/api/emails"];
 const existingEmailsAliasPath = mutablePaths["/emails"];
