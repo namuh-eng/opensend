@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS "integration_connections" (
+CREATE TABLE "integration_connections" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"user_id" text NOT NULL,
 	"provider" varchar(64) NOT NULL,
@@ -16,6 +16,5 @@ CREATE TABLE IF NOT EXISTS "integration_connections" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "integration_connections_user_provider_idx" ON "integration_connections" USING btree ("user_id","provider");
---> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "integration_connections_user_status_idx" ON "integration_connections" USING btree ("user_id","status");
+CREATE INDEX "integration_connections_user_provider_idx" ON "integration_connections" USING btree ("user_id","provider");--> statement-breakpoint
+CREATE INDEX "integration_connections_user_status_idx" ON "integration_connections" USING btree ("user_id","status");
