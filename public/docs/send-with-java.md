@@ -1,8 +1,21 @@
 # Send emails with Java and Kotlin
 
-Use the first-party OpenSend JVM SDK from plain Java, Kotlin, Spring Boot services, workers, and command-line applications. The package lives in this repository at `packages/jvm-sdk` while registry publishing is prepared.
+Use the first-party OpenSend JVM SDK from plain Java, Kotlin, Spring Boot services, workers, and command-line applications. The package lives in this repository at `packages/jvm-sdk` while registry publishing is prepared. This is a partial, blocking-only SDK for emails, contacts, domains, and suppressions; use the REST API and `/openapi.json` for other resources.
 
 The JVM SDK targets OpenSend Cloud by default at `https://opensend.namuh.co` and can point at self-hosted OpenSend by setting `OPENSEND_BASE_URL`.
+
+## Support level
+
+This JVM package is intentionally narrower than the full OpenSend REST API. It currently wraps:
+
+- `emails`: `POST /emails`, `POST /emails/batch`, `GET /api/emails`, `GET /api/emails/{id}`, `POST /emails/{id}/cancel`
+- `contacts`: `POST /contacts`, `GET /contacts`, `GET /contacts/{id}`, `PATCH /contacts/{id}`, `DELETE /contacts/{id}`
+- `domains`: `POST /api/domains`, `GET /api/domains`, `GET /api/domains/{id}`, `PATCH /api/domains/{id}`, `POST /api/domains/{id}/verify`, `DELETE /api/domains/{id}`
+- `suppressions`: `POST /api/suppressions`, `GET /api/suppressions`, `GET /api/suppressions/{email}`, `DELETE /api/suppressions/{email}`
+
+It does not expose JVM methods for API keys, broadcasts, audiences, segments,
+topics, templates, webhooks, logs, contact properties, events, automations,
+receiving, dedicated IPs, or unsubscribe-page settings yet.
 
 ## Install from the repository
 

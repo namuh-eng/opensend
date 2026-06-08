@@ -8,6 +8,11 @@ use OpenSend\Client;
 use OpenSend\Errors\ApiException;
 use OpenSend\ValueObjects\RequestOptions;
 
+// Support level: the PHP SDK is currently send-only. This example uses the
+// implemented client->emails->send(...) method for POST /emails. Use the REST
+// API and /openapi.json for other OpenSend resources until PHP resource clients
+// are added.
+
 $apiKey = getenv('OPENSEND_API_KEY');
 if (!is_string($apiKey) || trim($apiKey) === '') {
     fwrite(STDERR, "Set OPENSEND_API_KEY before running this example.\n");
