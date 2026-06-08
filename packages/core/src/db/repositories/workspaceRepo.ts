@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import { db } from "../client";
 import {
   user,
@@ -61,6 +61,18 @@ export const workspaceRepo = {
     });
   },
 
+  async findMembershipById(
+    id: string,
+    workspaceId: string,
+  ): Promise<WorkspaceMembershipRow | undefined> {
+    return await db.query.workspaceMemberships.findFirst({
+      where: and(
+        eq(workspaceMemberships.id, id),
+        eq(workspaceMemberships.workspaceId, workspaceId),
+      ),
+    });
+  },
+
   async upsertMembership(
     data: WorkspaceMembershipInsert,
   ): Promise<WorkspaceMembershipRow> {
@@ -95,6 +107,56 @@ export const workspaceRepo = {
       .innerJoin(user, eq(user.id, workspaceMemberships.userId))
       .where(eq(workspaceMemberships.workspaceId, workspaceId))
       .orderBy(asc(workspaceMemberships.createdAt));
+  },
+
+  async countMembershipsByRole(
+    workspaceId: string,
+    role: WorkspaceMembershipRow["role"],
+  ): Promise<number> {
+    const [row] = await db
+      .select({ value: count() })
+      .from(workspaceMemberships)
+      .where(
+        and(
+          eq(workspaceMemberships.workspaceId, workspaceId),
+          eq(workspaceMemberships.role, role),
+        ),
+      );
+    return row?.value ?? 0;
+  },
+
+  async updateMembershipRole(
+    id: string,
+    workspaceId: string,
+    role: WorkspaceMembershipRow["role"],
+  ): Promise<WorkspaceMembershipRow | undefined> {
+    const [updated] = await db
+      .update(workspaceMemberships)
+      .set({ role, updatedAt: new Date() })
+      .where(
+        and(
+          eq(workspaceMemberships.id, id),
+          eq(workspaceMemberships.workspaceId, workspaceId),
+        ),
+      )
+      .returning();
+    return updated;
+  },
+
+  async deleteMembership(
+    id: string,
+    workspaceId: string,
+  ): Promise<WorkspaceMembershipRow | undefined> {
+    const [deleted] = await db
+      .delete(workspaceMemberships)
+      .where(
+        and(
+          eq(workspaceMemberships.id, id),
+          eq(workspaceMemberships.workspaceId, workspaceId),
+        ),
+      )
+      .returning();
+    return deleted;
   },
 
   async createInvitation(

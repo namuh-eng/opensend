@@ -99,7 +99,7 @@ describe("docs content shell", () => {
       path.join(docsRoot, "guides/settings-team-unsubscribe-operator-guide.md"),
       "utf8",
     );
-    expect(operator).toContain("Team invitations and role editing are not");
+    expect(operator).toContain("Invitation email delivery is not automatic");
     expect(operator).toContain("preview-only");
   });
 

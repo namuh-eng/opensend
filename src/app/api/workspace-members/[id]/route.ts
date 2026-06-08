@@ -30,67 +30,27 @@ function dashboardWorkspaceAuditContext(input: {
   };
 }
 
-function parseInviteBody(
-  body: unknown,
-):
-  | { email: string; role: WorkspaceRole; expiresAt?: Date }
-  | { response: Response } {
+function parseRoleBody(body: unknown): WorkspaceRole | { response: Response } {
   const data =
     body && typeof body === "object" && !Array.isArray(body) ? body : {};
-  const record = data as Record<string, unknown>;
-  const role =
-    record.role === "admin" || record.role === "member"
-      ? record.role
-      : "member";
-  const expiresAt =
-    typeof record.expires_at === "string"
-      ? new Date(record.expires_at)
-      : undefined;
+  const role = (data as Record<string, unknown>).role;
 
-  if (expiresAt && Number.isNaN(expiresAt.getTime())) {
+  if (role !== "admin" && role !== "member") {
     return {
       response: NextResponse.json(
-        { error: "expires_at must be a valid ISO timestamp" },
+        { error: "role must be admin or member" },
         { status: 422 },
       ),
     };
   }
 
-  return {
-    email: typeof record.email === "string" ? record.email : "",
-    role,
-    expiresAt,
-  };
+  return role;
 }
 
-/**
- * GET /api/invites
- *
- * Lists members and pending invitation state for the selected workspace.
- */
-export async function GET(request: Request) {
-  const session = await auth.api.getSession({ headers: await headers() });
-  if (!session?.user?.id) return unauthorized();
-
-  try {
-    const members = await workspaceService.listWorkspaceMembers({
-      actorUserId: session.user.id,
-      actorName: session.user.name ?? null,
-      workspaceId: getRequestedWorkspaceId(request),
-    });
-    return NextResponse.json(members);
-  } catch (error) {
-    return mapWorkspaceServiceError(error);
-  }
-}
-
-/**
- * POST /api/invites
- *
- * Creates an expiring workspace invitation. The raw token is returned once so
- * self-hosted installs can deliver it through their own channel.
- */
-export async function POST(request: Request) {
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user?.id) return unauthorized();
 
@@ -101,23 +61,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const parsed = parseInviteBody(body);
-  if ("response" in parsed) return parsed.response;
+  const role = parseRoleBody(body);
+  if (typeof role !== "string") return role.response;
 
+  const { id } = await params;
   try {
     const workspaceId = getRequestedWorkspaceId(request);
-    const invitation = await workspaceService.createInvitation({
+    const member = await workspaceService.updateMemberRole({
       actorUserId: session.user.id,
       actorName: session.user.name ?? null,
       workspaceId,
-      email: parsed.email,
-      role: parsed.role,
-      expiresAt: parsed.expiresAt,
+      membershipId: id,
+      role,
     });
     const context = await workspaceService.resolveWorkspaceContext({
       actorUserId: session.user.id,
       actorName: session.user.name ?? null,
-      workspaceId,
+      workspaceId: member.workspace_id,
     });
     await recordAuditEvent({
       context: dashboardWorkspaceAuditContext({
@@ -125,17 +85,60 @@ export async function POST(request: Request) {
         actorUserId: session.user.id,
         actorEmail: session.user.email ?? null,
       }),
-      action: "team.invitation.created",
+      action: "team.member.role_changed",
       targetType: "team",
-      targetId: invitation.id,
+      targetId: member.membership_id,
       metadata: {
         workspace_id: context.workspaceId,
-        email: invitation.email,
-        role: invitation.role,
-        expires_at: invitation.expires_at,
+        user_id: member.user_id,
+        role: member.role,
       },
     });
-    return NextResponse.json(invitation, { status: 201 });
+
+    return NextResponse.json(member);
+  } catch (error) {
+    return mapWorkspaceServiceError(error);
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user?.id) return unauthorized();
+
+  const { id } = await params;
+  try {
+    const workspaceId = getRequestedWorkspaceId(request);
+    const member = await workspaceService.removeMember({
+      actorUserId: session.user.id,
+      actorName: session.user.name ?? null,
+      workspaceId,
+      membershipId: id,
+    });
+    const context = await workspaceService.resolveWorkspaceContext({
+      actorUserId: session.user.id,
+      actorName: session.user.name ?? null,
+      workspaceId: member.workspace_id,
+    });
+    await recordAuditEvent({
+      context: dashboardWorkspaceAuditContext({
+        tenantUserId: context.tenantUserId,
+        actorUserId: session.user.id,
+        actorEmail: session.user.email ?? null,
+      }),
+      action: "team.member.removed",
+      targetType: "team",
+      targetId: member.membership_id,
+      metadata: {
+        workspace_id: context.workspaceId,
+        user_id: member.user_id,
+        role: member.role,
+      },
+    });
+
+    return NextResponse.json(member);
   } catch (error) {
     return mapWorkspaceServiceError(error);
   }

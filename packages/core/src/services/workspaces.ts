@@ -73,6 +73,8 @@ export type WorkspaceServiceErrorCode =
   | "forbidden"
   | "invalid_email"
   | "invalid_role"
+  | "member_not_found"
+  | "last_owner"
   | "invite_not_found"
   | "invite_not_pending"
   | "invite_expired"
@@ -176,6 +178,17 @@ function toInvitation(row: WorkspaceInvitationRow) {
     created_at: row.createdAt,
     accepted_at: row.acceptedAt,
     revoked_at: row.revokedAt,
+  };
+}
+
+function toMembership(row: WorkspaceMembershipRow) {
+  return {
+    membership_id: row.id,
+    workspace_id: row.workspaceId,
+    user_id: row.userId,
+    role: row.role,
+    created_at: row.createdAt,
+    updated_at: row.updatedAt,
   };
 }
 
@@ -369,6 +382,122 @@ export function createWorkspaceService({
         );
       }
       return toInvitation(revoked);
+    },
+
+    async updateMemberRole(input: {
+      actorUserId: string;
+      actorName?: string | null;
+      workspaceId?: string | null;
+      membershipId: string;
+      role: WorkspaceRole;
+    }) {
+      const context = await requirePermission({
+        actorUserId: input.actorUserId,
+        actorName: input.actorName,
+        workspaceId: input.workspaceId,
+        action: "roles.manage",
+      });
+
+      if (!isAssignableRole(input.role)) {
+        throw new WorkspaceServiceError(
+          "invalid_role",
+          "Members can only be assigned admin or member roles.",
+        );
+      }
+
+      const target = await repository.findMembershipById(
+        input.membershipId,
+        context.workspaceId,
+      );
+      if (!target) {
+        throw new WorkspaceServiceError(
+          "member_not_found",
+          "Workspace member not found",
+        );
+      }
+
+      if (target.role === "owner") {
+        const ownerCount = await repository.countMembershipsByRole(
+          context.workspaceId,
+          "owner",
+        );
+        if (ownerCount <= 1) {
+          throw new WorkspaceServiceError(
+            "last_owner",
+            "The last workspace owner cannot be demoted.",
+          );
+        }
+      }
+
+      const updated = await repository.updateMembershipRole(
+        target.id,
+        context.workspaceId,
+        input.role,
+      );
+      if (!updated) {
+        throw new WorkspaceServiceError(
+          "member_not_found",
+          "Workspace member not found",
+        );
+      }
+
+      return toMembership(updated);
+    },
+
+    async removeMember(input: {
+      actorUserId: string;
+      actorName?: string | null;
+      workspaceId?: string | null;
+      membershipId: string;
+    }) {
+      const context = await requirePermission({
+        actorUserId: input.actorUserId,
+        actorName: input.actorName,
+        workspaceId: input.workspaceId,
+        action: "roles.manage",
+      });
+
+      const target = await repository.findMembershipById(
+        input.membershipId,
+        context.workspaceId,
+      );
+      if (!target) {
+        throw new WorkspaceServiceError(
+          "member_not_found",
+          "Workspace member not found",
+        );
+      }
+      if (target.userId === input.actorUserId) {
+        throw new WorkspaceServiceError(
+          "forbidden",
+          "Owners cannot remove their own membership from the Team settings MVP.",
+        );
+      }
+      if (target.role === "owner") {
+        const ownerCount = await repository.countMembershipsByRole(
+          context.workspaceId,
+          "owner",
+        );
+        if (ownerCount <= 1) {
+          throw new WorkspaceServiceError(
+            "last_owner",
+            "The last workspace owner cannot be removed.",
+          );
+        }
+      }
+
+      const removed = await repository.deleteMembership(
+        target.id,
+        context.workspaceId,
+      );
+      if (!removed) {
+        throw new WorkspaceServiceError(
+          "member_not_found",
+          "Workspace member not found",
+        );
+      }
+
+      return toMembership(removed);
     },
 
     async acceptInvitation(input: {

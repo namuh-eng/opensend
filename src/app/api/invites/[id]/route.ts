@@ -1,3 +1,4 @@
+import { recordAuditEvent } from "@/lib/audit-events";
 import { auth } from "@/lib/auth";
 import {
   getRequestedWorkspaceId,
@@ -11,6 +12,23 @@ function unauthorized() {
   return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
 
+function dashboardWorkspaceAuditContext(input: {
+  tenantUserId: string;
+  actorUserId: string;
+  actorEmail?: string | null;
+}) {
+  return {
+    userId: input.tenantUserId,
+    actor: {
+      type: "user" as const,
+      id: input.actorUserId,
+      email: input.actorEmail ?? null,
+    },
+    source: "dashboard" as const,
+    sourceApiKeyId: null,
+  };
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -20,11 +38,32 @@ export async function DELETE(
 
   const { id } = await params;
   try {
+    const workspaceId = getRequestedWorkspaceId(request);
     const invitation = await workspaceService.revokeInvitation({
       actorUserId: session.user.id,
       actorName: session.user.name ?? null,
-      workspaceId: getRequestedWorkspaceId(request),
+      workspaceId,
       invitationId: id,
+    });
+    const context = await workspaceService.resolveWorkspaceContext({
+      actorUserId: session.user.id,
+      actorName: session.user.name ?? null,
+      workspaceId,
+    });
+    await recordAuditEvent({
+      context: dashboardWorkspaceAuditContext({
+        tenantUserId: context.tenantUserId,
+        actorUserId: session.user.id,
+        actorEmail: session.user.email ?? null,
+      }),
+      action: "team.invitation.revoked",
+      targetType: "team",
+      targetId: invitation.id,
+      metadata: {
+        workspace_id: context.workspaceId,
+        email: invitation.email,
+        role: invitation.role,
+      },
     });
     return NextResponse.json(invitation);
   } catch (error) {
