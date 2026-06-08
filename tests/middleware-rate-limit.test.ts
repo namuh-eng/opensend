@@ -47,6 +47,22 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("x-middleware-next")).toBe("1");
   });
 
+  it("allows the local receiving preview page without a dashboard session", async () => {
+    mockGetSessionCookie.mockReturnValue(null);
+    const { middleware } = await import("@/middleware");
+
+    const response = await middleware(
+      makeRequest("https://example.com/dev/receiving-preview", {
+        method: "GET",
+        headers: { accept: "text/html" },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+  });
+
   it("skips API rate limiting when RATE_LIMIT_BACKEND is disabled", async () => {
     const { middleware } = await import("@/middleware");
 
