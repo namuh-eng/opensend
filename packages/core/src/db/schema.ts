@@ -202,7 +202,12 @@ export const dedicatedIpPools = pgTable(
     scalingMode: varchar("scaling_mode", { length: 20 })
       .notNull()
       .default("MANAGED"),
-    status: varchar("status", { length: 50 }).notNull().default("pending"),
+    status: varchar("status", { length: 50 }).notNull().default("requested"),
+    provider: varchar("provider", { length: 50 }).notNull().default("manual"),
+    operatorNotes: text("operator_notes"),
+    provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
+    warmingStartedAt: timestamp("warming_started_at", { withTimezone: true }),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -296,6 +301,45 @@ export const domains = pgTable("domains", {
     length: 255,
   }),
 });
+
+export const domainDeliverabilityStatuses = pgTable(
+  "domain_deliverability_statuses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    domainId: uuid("domain_id").notNull(),
+    bimiSelector: varchar("bimi_selector", { length: 63 })
+      .notNull()
+      .default("default"),
+    bimiStatus: varchar("bimi_status", { length: 32 })
+      .notNull()
+      .default("not_configured"),
+    bimiLogoUrl: varchar("bimi_logo_url", { length: 2048 }),
+    bimiCertificateUrl: varchar("bimi_certificate_url", { length: 2048 }),
+    bimiNotes: text("bimi_notes"),
+    appleBrandedMailStatus: varchar("apple_branded_mail_status", {
+      length: 32,
+    })
+      .notNull()
+      .default("not_started"),
+    appleBrandedMailNotes: text("apple_branded_mail_notes"),
+    lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("domain_deliverability_statuses_domain_id_idx").on(t.domainId),
+    index("domain_deliverability_statuses_user_id_idx").on(t.userId),
+    index("domain_deliverability_statuses_user_domain_idx").on(
+      t.userId,
+      t.domainId,
+    ),
+  ],
+);
 
 export const apiKeys = pgTable(
   "api_keys",

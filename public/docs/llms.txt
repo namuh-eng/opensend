@@ -73,7 +73,9 @@
 - [Update Contact](https://opensend.namuh.co/docs/api-reference/contacts/update-contact.md): Update contact fields. This page documents the OpenSend-owned API contract for PATCH /contacts/{contactid}.
 - [Auto Configure Domain](https://opensend.namuh.co/docs/api-reference/domains/auto-configure-domain.md): Write DNS records through configured Cloudflare credentials.
 - [Create Domain](https://opensend.namuh.co/docs/api-reference/domains/create-domain.md): Create a sending domain and return the DNS records OpenSend expects operators to publish.
+- [Dedicated IP lifecycle](https://opensend.namuh.co/docs/api-reference/domains/dedicated-ip-lifecycle.md): Dedicated IP APIs track manual lifecycle state for a tenant. They do not provision provider IP pools or run warmup flows in v1.
 - [Delete Domain](https://opensend.namuh.co/docs/api-reference/domains/delete-domain.md): Delete a domain from the authenticated tenant after any operator-side cleanup you require.
+- [Get domain deliverability readiness](https://opensend.namuh.co/docs/api-reference/domains/get-domain-deliverability.md): Returns readiness/status information for one tenant-owned domain.
 - [Get Domain](https://opensend.namuh.co/docs/api-reference/domains/get-domain.md): Retrieve one domain, including verification status and DNS record metadata.
 - [List Domains](https://opensend.namuh.co/docs/api-reference/domains/list-domains.md): List domains owned by the authenticated OpenSend tenant. Use this before creating senders or checking DNS verification state.
 - [Update Domain](https://opensend.namuh.co/docs/api-reference/domains/update-domain.md): Update mutable domain settings such as tracking or provider metadata.
@@ -173,6 +175,7 @@
 - [Receiving Attachments](https://opensend.namuh.co/docs/dashboard/receiving/attachments.md): Received email attachments are represented as metadata plus a private object key stored by your receiving worker.
 - [Forward Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/forward-emails.md): OpenSend can automatically forward stored inbound messages after MIME ingestion and receiving-route resolution succeeds.
 - [Reply To Received Emails](https://opensend.namuh.co/docs/dashboard/receiving/reply-to-emails.md): OpenSend now links inbound replies to outbound messages when the sending domain is also a verified receiving domain.
+- [Deliverability readiness](https://opensend.namuh.co/docs/dashboard/domains/deliverability-readiness.md): OpenSend tracks readiness/status signals for BIMI, Apple Branded Mail, and dedicated IP lifecycle work. This v1 surface is intentionally status-first: it does not provision BIMI records, submit Apple Branded Mail applications, allocate provider IPs, or run IP warmup automatically.
 - [Managing Webhooks](https://opensend.namuh.co/docs/webhooks/introduction.md): Use OpenSend webhooks to receive signed lifecycle events from your own OpenSend deployment.
 - [Event Types](https://opensend.namuh.co/docs/webhooks/event-types.md): OpenSend accepts the following webhook subscription event types.
 - [Verify Webhook Requests](https://opensend.namuh.co/docs/webhooks/verify-webhooks-requests.md): Verify every OpenSend webhook request before trusting the payload.

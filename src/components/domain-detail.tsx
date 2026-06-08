@@ -27,6 +27,24 @@ export interface DomainDetailData {
     priority?: number;
   }> | null;
   events: Array<{ type: string; timestamp: string }>;
+  deliverability?: {
+    bimi: {
+      status: string;
+      selector: string;
+      recordName: string;
+      logoUrl: string | null;
+      certificateUrl: string | null;
+      notes: string | null;
+      checks: Array<{
+        key: string;
+        label: string;
+        status: "pass" | "warning" | "fail" | "info";
+        message: string;
+      }>;
+    };
+    appleBrandedMail: { status: string; notes: string | null };
+    lastCheckedAt: string | null;
+  };
 }
 
 type DomainDnsRecord = NonNullable<DomainDetailData["records"]>[number];
@@ -34,6 +52,28 @@ type DomainDnsRecord = NonNullable<DomainDetailData["records"]>[number];
 interface DomainDetailProps {
   domain: DomainDetailData;
 }
+
+const DEFAULT_DELIVERABILITY: NonNullable<DomainDetailData["deliverability"]> =
+  {
+    bimi: {
+      status: "not_configured",
+      selector: "default",
+      recordName: "default._bimi",
+      logoUrl: null,
+      certificateUrl: null,
+      notes: null,
+      checks: [
+        {
+          key: "bimi_dns",
+          label: "BIMI TXT record",
+          status: "fail",
+          message: "No BIMI readiness check has been run for this domain yet.",
+        },
+      ],
+    },
+    appleBrandedMail: { status: "not_started", notes: null },
+    lastCheckedAt: null,
+  };
 
 async function apiRequest(
   input: string,
@@ -79,6 +119,45 @@ function getDomainStatusVariant(
       return "error";
     default:
       return "default";
+  }
+}
+
+function getCheckVariant(
+  status: "pass" | "warning" | "fail" | "info",
+): "success" | "error" | "warning" | "info" | "default" {
+  switch (status) {
+    case "pass":
+      return "success";
+    case "fail":
+      return "error";
+    case "warning":
+      return "warning";
+    case "info":
+      return "info";
+    default:
+      return "default";
+  }
+}
+
+function getReadinessVariant(
+  status: string,
+): "success" | "error" | "warning" | "info" | "default" {
+  switch (status) {
+    case "ready":
+    case "approved":
+    case "active":
+      return "success";
+    case "action_required":
+    case "rejected":
+      return "error";
+    case "manual_review":
+    case "requested":
+      return "warning";
+    case "not_configured":
+    case "not_started":
+      return "default";
+    default:
+      return "info";
   }
 }
 
@@ -187,6 +266,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
 
   const regionFriendly = REGION_DISPLAY[domain.region] || domain.region;
   const isVerified = domain.status === "verified";
+  const deliverability = domain.deliverability ?? DEFAULT_DELIVERABILITY;
 
   const handleVerify = useCallback(async () => {
     if (verifying) return;
@@ -441,6 +521,86 @@ export function DomainDetail({ domain }: DomainDetailProps) {
               </div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Deliverability readiness */}
+      <div className="mb-8 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-line bg-bg-2 p-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold tracking-wider text-fg-2">
+                BIMI READINESS
+              </p>
+              <p className="mt-1 text-[13px] text-fg-2">
+                Automated DNS/status check only. OpenSend does not provision
+                BIMI records, logos, VMCs, or CMCs in this v1 slice.
+              </p>
+            </div>
+            <StatusBadge
+              status={formatStatusLabel(deliverability.bimi.status)}
+              variant={getReadinessVariant(deliverability.bimi.status)}
+            />
+          </div>
+          <p className="mb-3 font-mono text-[12px] text-fg-2">
+            TXT {deliverability.bimi.recordName}
+          </p>
+          <div className="space-y-2">
+            {deliverability.bimi.checks.map((check) => (
+              <div
+                key={check.key}
+                className="rounded-md border border-line bg-bg-3 p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[13px] font-medium text-fg">
+                    {check.label}
+                  </p>
+                  <StatusBadge
+                    status={formatStatusLabel(check.status)}
+                    variant={getCheckVariant(check.status)}
+                  />
+                </div>
+                <p className="mt-1 text-[12px] text-fg-2">{check.message}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-line bg-bg-2 p-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold tracking-wider text-fg-2">
+                BRANDED MAIL & DEDICATED IP
+              </p>
+              <p className="mt-1 text-[13px] text-fg-2">
+                Apple Branded Mail is operator-notes only. Dedicated IPs are
+                tracked as manual lifecycle states; OpenSend v1 does not start
+                provider provisioning or warming flows automatically.
+              </p>
+            </div>
+            <StatusBadge
+              status={formatStatusLabel(deliverability.appleBrandedMail.status)}
+              variant={getReadinessVariant(
+                deliverability.appleBrandedMail.status,
+              )}
+            />
+          </div>
+          <div className="space-y-2 text-[13px] text-fg-2">
+            <p>Apple notes: {deliverability.appleBrandedMail.notes || "—"}</p>
+            <p>BIMI notes: {deliverability.bimi.notes || "—"}</p>
+            <p>
+              Last checked:{" "}
+              {deliverability.lastCheckedAt
+                ? formatRelativeTime(deliverability.lastCheckedAt)
+                : "Not checked yet"}
+            </p>
+            <Link
+              href="/settings/dedicated-ips"
+              className="inline-flex text-accent transition-colors hover:text-accent/80"
+            >
+              View dedicated IP lifecycle tracking
+            </Link>
+          </div>
         </div>
       </div>
 
