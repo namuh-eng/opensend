@@ -14,6 +14,7 @@ const mockServiceListAutomations = vi.hoisted(() => vi.fn());
 const mockServiceGetAutomation = vi.hoisted(() => vi.fn());
 const mockServiceUpdateAutomation = vi.hoisted(() => vi.fn());
 const mockServiceDeleteAutomation = vi.hoisted(() => vi.fn());
+const mockServiceStopAutomation = vi.hoisted(() => vi.fn());
 const mockServiceCreateCustomEvent = vi.hoisted(() => vi.fn());
 const mockServiceListCustomEvents = vi.hoisted(() => vi.fn());
 const mockServiceDeleteCustomEvent = vi.hoisted(() => vi.fn());
@@ -179,6 +180,7 @@ vi.mock("@opensend/core", () => ({
     getAutomation: mockServiceGetAutomation,
     updateAutomation: mockServiceUpdateAutomation,
     deleteAutomation: mockServiceDeleteAutomation,
+    stopAutomation: mockServiceStopAutomation,
   }),
   createAutomationRunService: () => ({
     listRuns: mockListRuns,
@@ -386,6 +388,25 @@ describe("automation API routes", () => {
         };
       },
     );
+    mockServiceStopAutomation.mockResolvedValue({
+      object: "automation",
+      id: "auto_1",
+      name: "Welcome",
+      status: "disabled",
+      trigger_event_name: "user.signed_up",
+      connections: [],
+      steps: [
+        {
+          id: "step_1",
+          key: "trigger",
+          type: "trigger",
+          config: { event_name: "user.signed_up" },
+          position: 0,
+        },
+      ],
+      created_at: now,
+      updated_at: now,
+    });
     mockServiceGetAutomation.mockImplementation(async (_userId, id) => {
       const found = await mockAutomationFindFirst({ id });
       if (!found) {
@@ -1012,6 +1033,200 @@ describe("automation API routes", () => {
     );
 
     expect(response.status).toBe(422);
+  });
+
+  it("serves root-compatible automation routes through API-key-only public adapters", async () => {
+    mockServiceCreateAutomation.mockResolvedValue({
+      object: "automation",
+      id: "auto_created",
+      status: "enabled",
+      steps: [],
+    });
+    mockServiceListAutomations.mockResolvedValue({
+      object: "list",
+      data: [{ object: "automation", id: "auto_1", status: "enabled" }],
+      has_more: false,
+    });
+    mockServiceGetAutomation.mockResolvedValue({
+      object: "automation",
+      id: "auto_1",
+      status: "enabled",
+      steps: [],
+    });
+    mockServiceUpdateAutomation.mockResolvedValue({
+      object: "automation",
+      id: "auto_1",
+      status: "disabled",
+      steps: [],
+    });
+    mockServiceDeleteAutomation.mockResolvedValue({
+      object: "automation",
+      id: "auto_1",
+      deleted: true,
+    });
+    mockListRuns.mockResolvedValue({
+      object: "list",
+      data: [{ object: "automation_run", id: "run_1", status: "queued" }],
+      has_more: false,
+    });
+    mockGetRun.mockResolvedValue({
+      object: "automation_run",
+      id: "run_1",
+      automation_id: "auto_1",
+      status: "queued",
+    });
+
+    const collectionRoute = await import("@/app/api/public/automations/route");
+    const detailRoute = await import("@/app/api/public/automations/[id]/route");
+    const runsRoute = await import(
+      "@/app/api/public/automations/[id]/runs/route"
+    );
+    const runDetailRoute = await import(
+      "@/app/api/public/automations/[id]/runs/[runId]/route"
+    );
+    const stopRoute = await import(
+      "@/app/api/public/automations/[id]/stop/route"
+    );
+
+    const created = await collectionRoute.POST(
+      jsonRequest("http://localhost/automations", {
+        name: "Welcome",
+        status: "enabled",
+        steps: [
+          {
+            key: "trigger",
+            type: "trigger",
+            config: { event_name: "user.signed_up" },
+          },
+        ],
+      }),
+    );
+    const list = await collectionRoute.GET(
+      new Request("http://localhost/automations?status=enabled", {
+        headers: { Authorization: "Bearer os_test" },
+      }),
+    );
+    const detail = await detailRoute.GET(
+      new Request("http://localhost/automations/auto_1", {
+        headers: { Authorization: "Bearer os_test" },
+      }),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+    const update = await detailRoute.PATCH(
+      jsonRequest(
+        "http://localhost/automations/auto_1",
+        { status: "disabled" },
+        "PATCH",
+      ),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+    const runs = await runsRoute.GET(
+      new Request("http://localhost/automations/auto_1/runs?limit=5", {
+        headers: { Authorization: "Bearer os_test" },
+      }),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+    const runDetail = await runDetailRoute.GET(
+      new Request("http://localhost/automations/auto_1/runs/run_1", {
+        headers: { Authorization: "Bearer os_test" },
+      }),
+      { params: Promise.resolve({ id: "auto_1", runId: "run_1" }) },
+    );
+    const stop = await stopRoute.POST(
+      new Request("http://localhost/automations/auto_1/stop", {
+        method: "POST",
+        headers: { Authorization: "Bearer os_test" },
+      }),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+    const deleted = await detailRoute.DELETE(
+      new Request("http://localhost/automations/auto_1", {
+        method: "DELETE",
+        headers: { Authorization: "Bearer os_test" },
+      }),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+
+    expect([
+      created.status,
+      list.status,
+      detail.status,
+      update.status,
+      runs.status,
+      runDetail.status,
+      stop.status,
+      deleted.status,
+    ]).toEqual([201, 200, 200, 200, 200, 200, 200, 200]);
+    expect(mockServiceCreateAutomation).toHaveBeenCalledWith({
+      userId: "user_1",
+      data: expect.objectContaining({ name: "Welcome", status: "enabled" }),
+    });
+    expect(mockServiceListAutomations).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "user_1", status: "enabled" }),
+    );
+    expect(mockServiceGetAutomation).toHaveBeenCalledWith("user_1", "auto_1");
+    expect(mockServiceUpdateAutomation).toHaveBeenCalledWith({
+      userId: "user_1",
+      id: "auto_1",
+      data: { status: "disabled" },
+    });
+    expect(mockListRuns).toHaveBeenCalledWith({
+      automationId: "auto_1",
+      userId: "user_1",
+      limit: 5,
+    });
+    expect(mockGetRun).toHaveBeenCalledWith({
+      automationId: "auto_1",
+      runId: "run_1",
+      userId: "user_1",
+    });
+    expect(mockServiceStopAutomation).toHaveBeenCalledWith("user_1", "auto_1");
+    expect(mockServiceDeleteAutomation).toHaveBeenCalledWith(
+      "user_1",
+      "auto_1",
+    );
+    await expect(stop.json()).resolves.toMatchObject({
+      object: "automation",
+      id: "auto_1",
+      status: "disabled",
+    });
+  });
+
+  it("does not authorize root automation routes with dashboard cookies", async () => {
+    mockValidateApiKey.mockResolvedValue(null);
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({ dashboard: true });
+    mockGetServerSession.mockResolvedValue({
+      session: { id: "session_1" },
+      user: { id: "user_1" },
+    });
+    const { GET } = await import("@/app/api/public/automations/route");
+
+    const response = await GET(new Request("http://localhost/automations"));
+
+    expect(response.status).toBe(401);
+    expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+    expect(mockServiceListAutomations).not.toHaveBeenCalled();
+  });
+
+  it("requires full-access API keys for root automation routes", async () => {
+    mockValidateApiKey.mockResolvedValue({
+      ...auth,
+      permission: "sending_access",
+    });
+    const { POST } = await import(
+      "@/app/api/public/automations/[id]/stop/route"
+    );
+
+    const response = await POST(
+      new Request("http://localhost/automations/auto_1/stop", {
+        method: "POST",
+        headers: { Authorization: "Bearer os_sending" },
+      }),
+      { params: Promise.resolve({ id: "auto_1" }) },
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockServiceStopAutomation).not.toHaveBeenCalled();
   });
 
   it("lists and retrieves automations", async () => {

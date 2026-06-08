@@ -406,6 +406,19 @@ export function createAutomationService({
       return formatAutomation(refreshed, await repository.listSteps(input.id));
     },
 
+    async stopAutomation(
+      userId: string | null,
+      id: string,
+    ): Promise<AutomationDetailResponse> {
+      const automation = await getExistingOrThrow(id, userId);
+      if (automation.status !== "disabled") {
+        await repository.update(automation.id, { status: "disabled" });
+      }
+
+      const refreshed = await getExistingOrThrow(id, userId);
+      return formatAutomation(refreshed, await repository.listSteps(id));
+    },
+
     async deleteAutomation(
       userId: string | null,
       id: string,

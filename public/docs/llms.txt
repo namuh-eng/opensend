@@ -42,6 +42,14 @@
 - [Create API Key](https://opensend.namuh.co/docs/api-reference/api-keys/create-api-key.md): Create a new API key. This page documents the OpenSend-owned API contract for POST /api-keys.
 - [Delete API Key](https://opensend.namuh.co/docs/api-reference/api-keys/delete-api-key.md): Delete an API key. This page documents the OpenSend-owned API contract for DELETE /api-keys/{id}.
 - [List API Keys](https://opensend.namuh.co/docs/api-reference/api-keys/list-api-keys.md): List API keys for the authenticated tenant. This page documents the OpenSend-owned API contract for GET /api-keys.
+- [Create Automation](https://opensend.namuh.co/docs/api-reference/automations/create-automation.md): Create an automation for the authenticated tenant.
+- [Delete Automation](https://opensend.namuh.co/docs/api-reference/automations/delete-automation.md): Delete a disabled automation.
+- [Get Automation Run](https://opensend.namuh.co/docs/api-reference/automations/get-automation-run.md): Retrieve one run for one automation.
+- [Get Automation](https://opensend.namuh.co/docs/api-reference/automations/get-automation.md): Retrieve one tenant-scoped automation.
+- [List Automation Runs](https://opensend.namuh.co/docs/api-reference/automations/list-automation-runs.md): List runs for one automation.
+- [List Automations](https://opensend.namuh.co/docs/api-reference/automations/list-automations.md): List automations for the authenticated tenant.
+- [Stop Automation](https://opensend.namuh.co/docs/api-reference/automations/stop-automation.md): Stop an automation by disabling it.
+- [Update Automation](https://opensend.namuh.co/docs/api-reference/automations/update-automation.md): Update automation metadata, status, steps, or connections.
 - [Create Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/create-broadcast.md): Create a broadcast draft. This page documents the OpenSend-owned API contract for POST /broadcasts.
 - [Delete Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/delete-broadcast.md): Delete a broadcast. This page documents the OpenSend-owned API contract for DELETE /broadcasts/{id}.
 - [Retrieve Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/get-broadcast.md): Retrieve a broadcast. This page documents the OpenSend-owned API contract for GET /broadcasts/{id}.
