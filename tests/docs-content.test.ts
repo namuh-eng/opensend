@@ -33,6 +33,8 @@ describe("docs content shell", () => {
     const page = await getDocPage("self-hosting.md");
     const startHereItems =
       nav.find((section) => section.id === "start-here")?.items ?? [];
+    const operationsItems =
+      nav.find((section) => section.id === "operations")?.items ?? [];
 
     expect(nav.map((section) => section.id)).toContain("api-reference");
     expect(nav.map((section) => section.id)).toContain("operations");
@@ -44,13 +46,16 @@ describe("docs content shell", () => {
       "send-with-nextjs.md",
       "send-with-express.md",
     ]);
+    expect(operationsItems.map((item) => item.relPath)).toEqual(
+      expect.arrayContaining(["self-hosting.md", "security.md", "privacy.md"]),
+    );
     expect(page?.title).toBe("Self Hosting");
     expect(page?.href).toBe("/docs/self-hosting");
     expect(
       page?.headings.some((heading) => heading.text === "Reference topology"),
     ).toBe(true);
     expect(page?.markdown).toContain(
-      "SES/SNS events should be delivered to the ingester service",
+      "Point SES SNS notifications at the ingester",
     );
   });
 

@@ -159,6 +159,7 @@ const DOC_ORDER = [
   "self-hosting.md",
   "ingester-deploy.md",
   "security.md",
+  "privacy.md",
   "observability.md",
   "webhooks/introduction.md",
   "webhooks/event-types.md",
@@ -174,6 +175,7 @@ function sectionIdForRelPath(relPath) {
     relPath === "self-hosting.md" ||
     relPath === "ingester-deploy.md" ||
     relPath === "observability.md" ||
+    relPath === "privacy.md" ||
     relPath === "security.md"
   ) {
     return "operations";
