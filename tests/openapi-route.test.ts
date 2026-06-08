@@ -25,6 +25,7 @@ const supportedRootAliasOperations = [
   "DELETE /contact-properties/{id}",
   "DELETE /contacts/{contact_id}",
   "DELETE /domains/{id}",
+  "DELETE /events/{identifier}",
   "DELETE /segments/{id}",
   "DELETE /templates/{id}",
   "DELETE /topics/{id}",
@@ -50,6 +51,8 @@ const supportedRootAliasOperations = [
   "GET /emails/{id}/attachments/{attachmentId}",
   "GET /emails/{id}/events",
   "GET /emails/{id}/trace",
+  "GET /events",
+  "GET /events/{identifier}",
   "GET /logs",
   "GET /logs/{id}",
   "GET /segments",
@@ -66,6 +69,7 @@ const supportedRootAliasOperations = [
   "PATCH /contacts/{contact_id}",
   "PATCH /domains/{id}",
   "PATCH /emails/{id}",
+  "PATCH /events/{identifier}",
   "PATCH /templates/{id}",
   "PATCH /topics/{id}",
   "PATCH /webhooks/{id}",
@@ -80,6 +84,8 @@ const supportedRootAliasOperations = [
   "POST /emails",
   "POST /emails/batch",
   "POST /emails/{email_id}/cancel",
+  "POST /events",
+  "POST /events/send",
   "POST /segments",
   "POST /templates",
   "POST /templates/{id}/duplicate",
@@ -96,8 +102,6 @@ const unsupportedRootAliasPaths = [
   "/contacts/{contact_id}/segments/{segment_id}",
   "/contacts/{contact_id}/topics",
   "/domains/{id}/auto-configure",
-  "/events",
-  "/events/send",
 ] as const;
 
 function rootOperationAllowlist() {

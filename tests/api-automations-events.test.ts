@@ -16,6 +16,8 @@ const mockServiceUpdateAutomation = vi.hoisted(() => vi.fn());
 const mockServiceDeleteAutomation = vi.hoisted(() => vi.fn());
 const mockServiceCreateCustomEvent = vi.hoisted(() => vi.fn());
 const mockServiceListCustomEvents = vi.hoisted(() => vi.fn());
+const mockServiceGetCustomEvent = vi.hoisted(() => vi.fn());
+const mockServiceUpdateCustomEvent = vi.hoisted(() => vi.fn());
 const mockServiceDeleteCustomEvent = vi.hoisted(() => vi.fn());
 const mockServiceSendCustomEvent = vi.hoisted(() => vi.fn());
 const mockAutomationValidate = vi.hoisted(() => vi.fn());
@@ -189,6 +191,8 @@ vi.mock("@opensend/core", () => ({
   createCustomEventService: () => ({
     createCustomEvent: mockServiceCreateCustomEvent,
     listCustomEvents: mockServiceListCustomEvents,
+    getCustomEvent: mockServiceGetCustomEvent,
+    updateCustomEvent: mockServiceUpdateCustomEvent,
     deleteCustomEvent: mockServiceDeleteCustomEvent,
     sendCustomEvent: mockServiceSendCustomEvent,
   }),
@@ -1291,6 +1295,11 @@ describe("events API routes", () => {
       ],
       has_more: false,
     });
+    mockServiceGetCustomEvent.mockResolvedValue(eventResponse);
+    mockServiceUpdateCustomEvent.mockResolvedValue({
+      ...eventResponse,
+      name: "user.activated",
+    });
     mockServiceDeleteCustomEvent.mockResolvedValue({
       object: "event",
       id: "evt_1",
@@ -1343,6 +1352,121 @@ describe("events API routes", () => {
       ],
       has_more: false,
     });
+  });
+
+  it("supports root detail, update, delete, and send routes by path identifier", async () => {
+    const collectionRoute = await import("@/app/events/route");
+    const detailRoute = await import("@/app/events/[identifier]/route");
+    const sendRoute = await import("@/app/events/send/route");
+
+    const listed = await collectionRoute.GET(
+      new Request("http://localhost/events?limit=10", {
+        headers: { Authorization: "Bearer os_test" },
+      }),
+    );
+    const created = await collectionRoute.POST(
+      jsonRequest("http://localhost/events", { name: "user.signed_up" }),
+    );
+    const retrieved = await detailRoute.GET(
+      new Request("http://localhost/events/user.signed_up", {
+        headers: { Authorization: "Bearer os_test" },
+      }),
+      { params: Promise.resolve({ identifier: "user.signed_up" }) },
+    );
+    const updated = await detailRoute.PATCH(
+      jsonRequest("http://localhost/events/user.signed_up", {
+        name: "user.activated",
+      }),
+      { params: Promise.resolve({ identifier: "user.signed_up" }) },
+    );
+    const deleted = await detailRoute.DELETE(
+      new Request("http://localhost/events/evt_1", {
+        method: "DELETE",
+        headers: { Authorization: "Bearer os_test" },
+      }),
+      { params: Promise.resolve({ identifier: "evt_1" }) },
+    );
+    const sent = await sendRoute.POST(
+      jsonRequest("http://localhost/events/send", {
+        event: "user.signed_up",
+        email: "USER@example.com",
+        payload: { plan: "pro" },
+      }),
+    );
+
+    expect(listed.status).toBe(200);
+    expect(created.status).toBe(201);
+    expect(retrieved.status).toBe(200);
+    expect(updated.status).toBe(200);
+    expect(deleted.status).toBe(200);
+    expect(sent.status).toBe(202);
+    expect(mockServiceGetCustomEvent).toHaveBeenCalledWith({
+      userId: "user_1",
+      identifier: "user.signed_up",
+    });
+    expect(mockServiceUpdateCustomEvent).toHaveBeenCalledWith({
+      userId: "user_1",
+      identifier: "user.signed_up",
+      data: { name: "user.activated" },
+    });
+    expect(mockServiceDeleteCustomEvent).toHaveBeenCalledWith({
+      userId: "user_1",
+      identifier: "evt_1",
+    });
+    await expect(updated.json()).resolves.toMatchObject({
+      object: "event",
+      name: "user.activated",
+    });
+  });
+
+  it("rejects root event lifecycle requests without a valid API key", async () => {
+    mockValidateApiKey.mockResolvedValueOnce(null);
+    const { GET } = await import("@/app/events/[identifier]/route");
+
+    const response = await GET(
+      new Request("http://localhost/events/user.signed_up"),
+      { params: Promise.resolve({ identifier: "user.signed_up" }) },
+    );
+
+    expect(response.status).toBe(401);
+    expect(mockServiceGetCustomEvent).not.toHaveBeenCalled();
+  });
+
+  it("maps missing root event detail/update/delete to 404", async () => {
+    mockServiceGetCustomEvent.mockRejectedValueOnce(
+      new TestCustomEventServiceError("not_found", "Event not found"),
+    );
+    mockServiceUpdateCustomEvent.mockRejectedValueOnce(
+      new TestCustomEventServiceError("not_found", "Event not found"),
+    );
+    mockServiceDeleteCustomEvent.mockRejectedValueOnce(
+      new TestCustomEventServiceError("not_found", "Event not found"),
+    );
+    const route = await import("@/app/events/[identifier]/route");
+
+    const getResponse = await route.GET(
+      new Request("http://localhost/events/missing", {
+        headers: { Authorization: "Bearer os_test" },
+      }),
+      { params: Promise.resolve({ identifier: "missing" }) },
+    );
+    const patchResponse = await route.PATCH(
+      jsonRequest("http://localhost/events/missing", {
+        name: "user.activated",
+      }),
+      { params: Promise.resolve({ identifier: "missing" }) },
+    );
+    const deleteResponse = await route.DELETE(
+      new Request("http://localhost/events/missing", {
+        method: "DELETE",
+        headers: { Authorization: "Bearer os_test" },
+      }),
+      { params: Promise.resolve({ identifier: "missing" }) },
+    );
+
+    expect(getResponse.status).toBe(404);
+    expect(patchResponse.status).toBe(404);
+    expect(deleteResponse.status).toBe(404);
   });
 
   it("deletes custom events through the service boundary", async () => {

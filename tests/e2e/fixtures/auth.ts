@@ -111,6 +111,13 @@ export async function cleanupE2ERun(
     [`${userPrefix}%`],
   );
   await client.query(
+    "delete from custom_event_deliveries where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query("delete from custom_events where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query(
     `delete from webhook_deliveries
      where webhook_id in (
        select id from webhooks

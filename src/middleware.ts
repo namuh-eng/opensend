@@ -294,6 +294,17 @@ function isLogsAlias(pathname: string, method: string): boolean {
   return parts[0] === "logs" && parts.length === 2 && method === "GET";
 }
 
+function isEventsAlias(pathname: string, method: string): boolean {
+  if (pathname === "/events") return ["GET", "POST"].includes(method);
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "events") return false;
+  if (parts.length === 2 && parts[1] === "send") return method === "POST";
+  if (parts.length === 2) return ["GET", "PATCH", "DELETE"].includes(method);
+
+  return false;
+}
+
 function isContactPropertiesAlias(pathname: string, method: string): boolean {
   if (pathname === "/contact-properties") {
     return ["GET", "POST"].includes(method);
@@ -341,6 +352,7 @@ function shouldHandleApiCompatibilityAlias(request: NextRequest): boolean {
     isWebhooksAlias(pathname, method) ||
     isTopicsAlias(pathname, method) ||
     isLogsAlias(pathname, method) ||
+    isEventsAlias(pathname, method) ||
     isContactPropertiesAlias(pathname, method) ||
     isEmailReadAlias(pathname, method);
 
@@ -377,6 +389,10 @@ function toApiCompatibilityPath(pathname: string): string {
   if (pathname === "/logs") return "/api/logs";
   if (pathname.startsWith("/logs/")) {
     return pathname.replace(/^\/logs/, "/api/logs");
+  }
+  if (pathname === "/events") return "/api/events";
+  if (pathname.startsWith("/events/")) {
+    return pathname.replace(/^\/events/, "/api/events");
   }
   if (pathname === "/contact-properties") return "/api/properties";
   if (pathname.startsWith("/contact-properties/")) {
@@ -439,6 +455,7 @@ function getRateLimitPathname(pathname: string, method: string): string {
     isWebhooksAlias(pathname, method) ||
     isTopicsAlias(pathname, method) ||
     isLogsAlias(pathname, method) ||
+    isEventsAlias(pathname, method) ||
     isContactPropertiesAlias(pathname, method) ||
     isEmailReadAlias(pathname, method)
   ) {
