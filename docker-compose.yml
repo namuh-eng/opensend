@@ -1,8 +1,13 @@
 # OpenSend self-host stack.
 #
 # Quick start:
-#   1. cp .env.example .env  (then fill in the required keys)
+#   1. cp .env.example .env
 #   2. docker compose up -d
+#
+# .env.example includes local-only placeholders for BETTER_AUTH_SECRET,
+# INGESTER_JOB_TOKEN, and WEBHOOK_SECRET_ENCRYPTION_KEY so the stack can boot
+# for evaluation. Replace all three with generated secrets before any shared,
+# staging, or production deploy.
 #
 # What this brings up:
 #   - postgres   : Postgres 16 with the OpenSend schema, persisted in the named volume `pgdata`.
@@ -18,9 +23,11 @@
 #   - INGESTER_PORT               : host port for the ingester (default 3016)
 #   - POSTGRES_PORT               : host port for Postgres (default 5432)
 #   - POSTGRES_PASSWORD           : Postgres password (REQUIRED; set in .env before `docker compose up`)
+#   - BETTER_AUTH_SECRET          : required Better Auth session secret for app/ingester.
 #   - AWS_*                       : SES + S3 credentials. If unset, email sending is disabled.
 #   - BACKGROUND_JOBS_*           : SQS/EventBridge wiring for async send pipeline.
 #   - INGESTER_JOB_TOKEN          : required bearer token protecting ingester /jobs/* scans.
+#   - WEBHOOK_SECRET_ENCRYPTION_KEY: required encryption key for webhook signing secrets.
 #   - INGESTER_SCHEDULER_INTERVAL_SECONDS: scheduler cadence (default 60; minimum 10).
 #   - CLOUDFLARE_API_TOKEN/ZONE_ID: enables auto-DKIM/SPF/DMARC when adding a domain.
 #   - S3_BUCKET_NAME              : S3 bucket for email attachments.
@@ -74,12 +81,16 @@ services:
       - "${PORT:-3015}:8080"
     environment:
       DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}@postgres:5432/opensend
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env (local placeholder ok only for dev; generate a real secret for production)}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3015}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3015}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       BACKGROUND_JOBS_QUEUE_URL: ${BACKGROUND_JOBS_QUEUE_URL:-}
       BACKGROUND_JOBS_EVENT_BUS_NAME: ${BACKGROUND_JOBS_EVENT_BUS_NAME:-}
       BACKGROUND_JOBS_REQUIRE_QUEUE: ${BACKGROUND_JOBS_REQUIRE_QUEUE:-false}
+      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?Set WEBHOOK_SECRET_ENCRYPTION_KEY in .env (local placeholder ok only for dev; generate a real secret for production)}
       INGESTER_HEALTH_URL: ${INGESTER_HEALTH_URL:-http://ingester:3016/health}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
@@ -123,6 +134,10 @@ services:
       BACKGROUND_JOBS_EVENT_BUS_NAME: ${BACKGROUND_JOBS_EVENT_BUS_NAME:-}
       BACKGROUND_JOBS_REQUIRE_QUEUE: ${BACKGROUND_JOBS_REQUIRE_QUEUE:-false}
       BACKGROUND_WORKER_POLL: ${BACKGROUND_WORKER_POLL:-false}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env (local placeholder ok only for dev; generate a real secret for production)}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3015}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3015}
+      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?Set WEBHOOK_SECRET_ENCRYPTION_KEY in .env (local placeholder ok only for dev; generate a real secret for production)}
       INGESTER_JOB_TOKEN: ${INGESTER_JOB_TOKEN:?Set INGESTER_JOB_TOKEN in .env (32+ chars)}
       INGESTER_INBOUND_TOKEN: ${INGESTER_INBOUND_TOKEN:-}
       # Stripe billing webhook cutover. STRIPE_SECRET_KEY is passed for hosted

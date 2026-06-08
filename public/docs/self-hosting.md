@@ -1,18 +1,20 @@
 # Self Hosting
 
-Run OpenSend on your own infrastructure with Docker Compose, PostgreSQL, AWS SES/S3, and the standalone ingester service.
+Run OpenSend on infrastructure you control with Docker Compose, PostgreSQL, AWS SES/S3, and the standalone ingester service.
+
+Self-hosted OpenSend uses your AWS SES quota, your database, your secrets, and your observability stack. The reference Compose stack is meant to be truthful for evaluation, while production deployments should split the app, ingester, scheduler, database, queue, cache, and secrets into managed runtime services.
 
 ## Reference topology
 
-Docker Compose is the reference deployment path for self-hosters:
+Docker Compose starts the same service boundaries used by production deployments:
 
-- `app` — Next.js dashboard and public API on port `3015`.
-- `postgres` — OpenSend application database.
-- `migrate` — one-shot Drizzle migration runner.
-- `ingester` — SES/SNS event receiver and scheduled worker on port `3016`.
-- `scheduler` — scheduled job trigger sidecar.
+- `app`: Next.js dashboard and public API on port `3015`.
+- `postgres`: OpenSend application database.
+- `migrate`: one-shot Drizzle migration runner.
+- `ingester`: SES/SNS event receiver and background worker on port `3016`.
+- `scheduler`: sidecar that triggers ingester `/jobs/*` scans.
 
-Production deployments can split these into separate services, but keep the same boundaries: app traffic goes to the Next.js service, and SES/SNS event webhooks go to the ingester.
+Production deployments can run these as separate services on ECS, Fly, Railway, Cloud Run, Kubernetes, or a single VM. Keep app traffic pointed at the Next.js service, and point SES/SNS event webhooks at the ingester.
 
 ## Quick start
 
@@ -20,75 +22,137 @@ Production deployments can split these into separate services, but keep the same
 git clone https://github.com/namuh-eng/opensend.git
 cd opensend
 cp .env.example .env
-# Edit .env for real Google OAuth, SES, S3, and Cloudflare DNS.
 docker compose up -d
 ```
 
 Open `http://localhost:3015`.
 
-## Required configuration
+`.env.example` includes local-only placeholders for `BETTER_AUTH_SECRET`, `INGESTER_JOB_TOKEN`, and `WEBHOOK_SECRET_ENCRYPTION_KEY` so the stack can boot for localhost evaluation. Replace them before any shared, staging, or production deployment:
 
-Minimum local development values:
-
-```env
-DATABASE_URL=postgres://...
-BETTER_AUTH_SECRET=...
-BETTER_AUTH_URL=http://localhost:3015
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-S3_BUCKET_NAME=...
+```bash
+openssl rand -hex 32
 ```
 
-For Google sign-in, add your Google OAuth client ID and secret. For automatic DNS setup, add Cloudflare credentials. Production deployments should inject secrets at runtime from a secrets manager instead of baking them into images.
+For real email delivery, add AWS SES credentials and verify a sending domain. For dashboard login, add Google OAuth credentials.
 
-## Migrations
+The app and ingester reject the checked-in `BETTER_AUTH_SECRET` placeholder when `BETTER_AUTH_URL` or `NEXT_PUBLIC_APP_URL` points somewhere other than localhost.
 
-Run database migrations before deploying app code that expects new tables or columns:
+## Configuration model
+
+All runtime configuration comes from environment variables. Local Compose reads `.env`; production should inject secrets at runtime from a secrets manager such as AWS Secrets Manager, Doppler, Vault, or the secret store for your platform.
+
+Minimum local evaluation values:
+
+```env
+DATABASE_URL=postgresql://opensend:opensend@localhost:5432/opensend
+POSTGRES_PASSWORD=opensend
+BETTER_AUTH_URL=http://localhost:3015
+NEXT_PUBLIC_APP_URL=http://localhost:3015
+BETTER_AUTH_SECRET=local-dev-better-auth-secret-replace-before-production
+INGESTER_JOB_TOKEN=local-dev-ingester-job-token-replace-before-production
+WEBHOOK_SECRET_ENCRYPTION_KEY=local-dev-webhook-secret-replace-before-production
+```
+
+Production values to plan before real traffic:
+
+| Category | Variables |
+| --- | --- |
+| Database | `DATABASE_URL`, `POSTGRES_PASSWORD` for Compose-only Postgres |
+| Auth | `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `BETTER_AUTH_TRUSTED_ORIGINS` |
+| Email | `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` or equivalent IAM role credentials |
+| Attachments | `S3_BUCKET_NAME` |
+| Domain DNS | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID` when using automatic DNS setup |
+| Background jobs | `BACKGROUND_JOBS_QUEUE_URL`, `BACKGROUND_JOBS_REQUIRE_QUEUE=true`, `BACKGROUND_WORKER_POLL=true` on the ingester |
+| Scheduler auth | `INGESTER_JOB_TOKEN`, `INGESTER_SCHEDULER_INTERVAL_SECONDS` |
+| Inbound auth | `INGESTER_INBOUND_TOKEN` when `/events/inbound` is exposed |
+| Rate limiting/cache | `RATE_LIMIT_BACKEND=redis`, `REDIS_URL` |
+| Secret encryption | `WEBHOOK_SECRET_ENCRYPTION_KEY`, optional DKIM encryption key variables |
+| Observability | Sentry, PostHog, CloudWatch, or OTel variables you explicitly configure |
+
+## Database and migrations
+
+Migrations are committed Drizzle SQL files. Run them before deploying app code that expects new tables or columns:
 
 ```bash
 bun run db:migrate
 ```
 
-For local schema sync during development, use:
+Docker Compose runs the `migrate` service before the app and ingester start. If your platform does not run the migrator automatically, make it a release step. A detail page that 404s while list pages still work is often a swallowed schema mismatch, not a missing route.
 
-```bash
-bun run db:push
-```
+## SES and event ingestion
 
-If list pages work but detail pages 404 or return empty data after a deploy, check for a swallowed schema mismatch before assuming a route is missing.
+OpenSend sends through AWS SES v2. The app accepts and queues email work; the ingester handles background delivery, SES/SNS feedback events, scheduled sends, webhook retries, and domain verification scans.
 
-## SES and ingester wiring
-
-OpenSend sends through AWS SES v2. SES/SNS events should be delivered to the ingester service, not the app service:
+Point SES SNS notifications at the ingester:
 
 ```txt
 https://YOUR_INGESTER_HOST/events/ses
 ```
 
-The ingester handles delivery, bounce, complaint, open, click, received-email, and scheduled-send processing. See [Ingester Deploy](/docs/ingester-deploy) for the dedicated deployment checklist.
+Do not point SES/SNS events at the Next.js app URL. Keep the ingester reachable from AWS, and keep its `/jobs/*` endpoints protected by `INGESTER_JOB_TOKEN`.
 
-## Domain verification
+## Background jobs
 
-Sending domains need DNS records for DKIM, SPF, DMARC, bounce handling, and optional tracking. You can copy records manually from the dashboard, or configure Cloudflare credentials for automatic setup where supported.
+For production sends, configure the queue-backed path:
 
-## Build and deploy notes
+1. Create an SQS queue and dead-letter queue.
+2. Set `BACKGROUND_JOBS_QUEUE_URL` on the app and ingester.
+3. Set `BACKGROUND_JOBS_REQUIRE_QUEUE=true` on the app so missing queue wiring fails loudly.
+4. Set `BACKGROUND_WORKER_POLL=true` on the ingester.
+5. Keep the scheduler, EventBridge, or an equivalent trusted caller posting to `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify` with `Authorization: Bearer ${INGESTER_JOB_TOKEN}`.
 
-- Build Linux production images for `linux/amd64` unless your runtime explicitly uses another platform.
-- Use `bun install --ignore-scripts` in Docker dependency stages if postinstall scripts are unavailable there.
-- Keep Next.js middleware on the Node runtime when importing node-only packages such as Redis clients.
-- Keep `/docs`, `/docs/llms.txt`, and `/openapi.json` publicly reachable.
+Local evaluation can run without SQS; rows are still persisted, but production delivery needs the worker path.
+
+## Rate limiting and cache
+
+Single-process local evaluation can use the default memory behavior. Shared or production deployments should use Redis:
+
+```env
+RATE_LIMIT_BACKEND=redis
+REDIS_URL=rediss://default:<password>@your-cache-endpoint:6379
+```
+
+Redis backs API rate limiting plus hot-path auth and domain metadata caches. Use a TLS endpoint and keep it private to your runtime network.
+
+## Privacy and telemetry
+
+Self-hosted OpenSend makes zero outbound calls to OpenSend-operated vendors unless you configure the related environment variables. See [Privacy](/docs/privacy) for the full promise and the hosted-cloud boundary.
 
 ## Validation checklist
 
-Before cutting over production traffic:
+Before sending real production traffic:
 
-1. `make check`
-2. `make test`
-3. `bun run build`
-4. `bun run db:migrate` against the target database
-5. `GET /api/health` returns healthy
-6. A real SES-backed send produces a non-null `sent_at`
-7. CloudWatch or service logs show SES send success, not a development stub
-8. SES/SNS events reach the ingester `/events/ses` endpoint
+1. Run migrations against the target database.
+2. Confirm `GET /api/health` returns healthy.
+3. Confirm the ingester `/health` endpoint returns healthy.
+4. Send a real SES-backed email and confirm provider success.
+5. Confirm SES/SNS events reach `/events/ses`.
+6. Confirm scheduled jobs run with the same `INGESTER_JOB_TOKEN` configured on the scheduler and ingester.
+7. Confirm rate limiting, queue, and secret-manager variables are set for shared deployments.
 
+Useful local checks:
+
+```bash
+docker compose --env-file .env.example config
+make check
+make test
+bun run build
+```
+
+## Troubleshooting
+
+### Compose fails before starting
+
+Run `docker compose --env-file .env.example config`. Missing interpolation errors usually mean a required env var was removed from `.env`.
+
+### Emails stay queued
+
+Check `BACKGROUND_JOBS_QUEUE_URL`, `BACKGROUND_WORKER_POLL`, SQS IAM permissions, and ingester logs. In local evaluation without a queue, persisted rows are expected; production delivery needs the worker path.
+
+### Domain verification does not update
+
+Check that the scheduler is posting to `/jobs/domain-verify`, that the scheduler and ingester share the same `INGESTER_JOB_TOKEN`, and that SES reports the domain identity as verified in the selected region.
+
+### Public docs or API docs look stale
+
+Run `bun run docs:generate` after changing `public/docs/**/*.md`, and keep `/docs`, `/docs/llms.txt`, and `/openapi.json` reachable from the deployment.

@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing to Opensend!
+Thanks for your interest in contributing to OpenSend!
 
 ## Setup
 
@@ -33,6 +33,12 @@ docker compose up -d
 # Ingester:   http://localhost:3016
 ```
 
+`.env.example` includes local-only placeholders for `BETTER_AUTH_SECRET`,
+`INGESTER_JOB_TOKEN`, and `WEBHOOK_SECRET_ENCRYPTION_KEY` so the full stack can
+boot for localhost evaluation. Replace them with `openssl rand -hex 32` values
+before any shared, staging, or production deploy. The app and ingester reject
+the local auth placeholder when the configured app URL is not localhost.
+
 Stop with `docker compose down` (add `-v` to wipe the database volume).
 
 ### Verify the install
@@ -50,7 +56,7 @@ curl -X POST http://localhost:3015/api/emails \
   -d '{
     "from": "hello@example.com",
     "to": ["test@example.com"],
-    "subject": "Hello from Opensend",
+    "subject": "Hello from OpenSend",
     "text": "It works!"
   }'
 ```
@@ -99,7 +105,7 @@ The hooks are versioned in `.githooks/`, so everyone on the repo gets the same g
 
 AWS credentials are **not required** for local development — without them, emails are logged to the console and the full API flow still works. When you're ready to actually send emails, configure `~/.aws/credentials` via `aws configure`.
 
-New AWS accounts start in SES **sandbox mode** — you can only send to verified addresses. This is an AWS limitation, not an Opensend bug. See [AWS SES docs](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html) to request production access.
+New AWS accounts start in SES **sandbox mode** - you can only send to verified addresses. This is an AWS limitation, not an OpenSend bug. See AWS SES production-access guidance before sending to unverified recipients.
 
 ## Code Style
 
