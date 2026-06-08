@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { promises as dns } from "node:dns";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type IntegrationFetch,
   type IntegrationRepository,
+  _resetUrlSafetyCacheForTests,
   createIntegrationService,
   decryptIntegrationSecret,
   encryptIntegrationSecret,
@@ -94,6 +96,7 @@ describe("integration connector service", () => {
   beforeEach(() => {
     process.env.INTEGRATION_SECRET_ENCRYPTION_KEY =
       "integration-secret-for-tests-32-bytes";
+    _resetUrlSafetyCacheForTests();
     vi.restoreAllMocks();
   });
 
@@ -180,5 +183,45 @@ describe("integration connector service", () => {
     });
     expect(result.connection.health).toBe("healthy");
     expect(result.connection.lastEventAt).toBeInstanceOf(Date);
+  });
+
+  it("uses pinned-safe outbound fetch by default for webhook test dispatch", async () => {
+    const repository = new MemoryIntegrationRepository();
+    const service = createIntegrationService({ repository });
+    const lookup = vi
+      .spyOn(dns, "lookup")
+      .mockImplementation((async () => [
+        { address: "10.0.0.5", family: 4 },
+      ]) as unknown as typeof dns.lookup);
+    const globalFetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response("unsafe global fetch should not run"));
+
+    const connection = await service.connectWebhook({
+      userId: "user-1",
+      name: "Zapier",
+      webhookUrl: "https://rebind.example.test/zapier/catch",
+      signingSecret: "receiver-secret",
+    });
+
+    await expect(
+      service.sendWebhookTestEvent({
+        id: connection.id,
+        userId: "user-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "dispatch_failed",
+      message: "Unsafe outbound URL: private_ip_resolved",
+    });
+
+    expect(lookup).toHaveBeenCalledWith("rebind.example.test", {
+      all: true,
+      verbatim: true,
+    });
+    expect(globalFetch).not.toHaveBeenCalled();
+    expect(repository.rows[0]?.healthStatus).toBe("unhealthy");
+    expect(repository.rows[0]?.lastError).toBe(
+      "Unsafe outbound URL: private_ip_resolved",
+    );
   });
 });

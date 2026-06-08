@@ -13,6 +13,7 @@ import {
 import {
   UnsafeOutboundUrlError,
   assertSafeOutboundUrl,
+  safeOutboundFetch,
 } from "../security/url-safety";
 
 type IntegrationConnectionRow = typeof integrationConnections.$inferSelect;
@@ -99,10 +100,11 @@ export type IntegrationRepository = {
 
 export type IntegrationFetch = (
   url: string,
-  init: {
+  init: RequestInit & {
     method: "POST";
     headers: Record<string, string>;
     body: string;
+    redirect: "error";
   },
 ) => Promise<Pick<Response, "ok" | "status" | "statusText">>;
 
@@ -278,7 +280,8 @@ function sanitizeDispatchError(error: unknown): string {
 
 export function createIntegrationService({
   repository = integrationConnectionRepo,
-  fetchImpl = fetch,
+  fetchImpl = (url, init) =>
+    safeOutboundFetch(url, init, { context: "dispatch" }),
 }: IntegrationServiceDependencies = {}) {
   return {
     async listCatalog(input: {
@@ -455,6 +458,7 @@ export function createIntegrationService({
           method: "POST",
           headers,
           body,
+          redirect: "error",
         });
         const updated = await repository.update(input.id, input.userId, {
           healthStatus: response.ok ? "healthy" : "unhealthy",
