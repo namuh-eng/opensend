@@ -231,9 +231,24 @@ describe("middleware rate limiting", () => {
         `https://example.com${apiPath}`,
       );
 
+      const overriddenAliasHeader = response.headers.get(
+        "x-middleware-request-x-opensend-root-api-alias",
+      );
+      const overriddenHeaders = response.headers.get(
+        "x-middleware-override-headers",
+      );
+      const overrideHeaderList = (overriddenHeaders ?? "")
+        .toLowerCase()
+        .split(",")
+        .map((header) => header.trim());
+
       if (aliasPath === "/topics" || aliasPath.startsWith("/topics/")) {
         expect(response.headers.get("x-opensend-root-api-alias")).toBe(
           "topics",
+        );
+        expect(overriddenAliasHeader).toBe("topics");
+        expect(overrideHeaderList.includes("x-opensend-root-api-alias")).toBe(
+          true,
         );
       } else if (
         aliasPath === "/contact-properties" ||
@@ -242,8 +257,21 @@ describe("middleware rate limiting", () => {
         expect(response.headers.get("x-opensend-root-api-alias")).toBe(
           "contact-properties",
         );
+        expect(overriddenAliasHeader).toBe("contact-properties");
+        expect(overrideHeaderList.includes("x-opensend-root-api-alias")).toBe(
+          true,
+        );
       } else {
         expect(response.headers.get("x-opensend-root-api-alias")).toBeNull();
+        expect(overriddenAliasHeader).toBeNull();
+        expect(
+          response.headers.get(
+            "x-middleware-request-x-opensend-root-api-alias",
+          ),
+        ).toBeNull();
+        expect(overrideHeaderList.includes("x-opensend-root-api-alias")).toBe(
+          false,
+        );
       }
     }
 
