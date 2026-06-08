@@ -184,6 +184,8 @@ describe("middleware rate limiting", () => {
       ["/webhooks/webhook_123", "/api/webhooks/webhook_123"],
       ["/topics", "/api/topics"],
       ["/contact-properties", "/api/properties"],
+      ["/topics/topic_123", "/api/topics/topic_123"],
+      ["/contact-properties/prop_123", "/api/properties/prop_123"],
       ["/logs", "/api/logs"],
       ["/logs/log_123", "/api/logs/log_123"],
       ["/emails", "/api/emails"],
@@ -229,11 +231,14 @@ describe("middleware rate limiting", () => {
         `https://example.com${apiPath}`,
       );
 
-      if (aliasPath === "/topics") {
+      if (aliasPath === "/topics" || aliasPath.startsWith("/topics/")) {
         expect(response.headers.get("x-opensend-root-api-alias")).toBe(
           "topics",
         );
-      } else if (aliasPath === "/contact-properties") {
+      } else if (
+        aliasPath === "/contact-properties" ||
+        aliasPath.startsWith("/contact-properties/")
+      ) {
         expect(response.headers.get("x-opensend-root-api-alias")).toBe(
           "contact-properties",
         );
@@ -308,6 +313,7 @@ describe("middleware rate limiting", () => {
       ["PATCH", "/topics/topic_123", "/api/topics/topic_123"],
       ["POST", "/contact-properties", "/api/properties"],
       ["DELETE", "/contact-properties/prop_123", "/api/properties/prop_123"],
+      ["PATCH", "/contact-properties/prop_123", "/api/properties/prop_123"],
       ["PATCH", "/emails/email_123", "/api/emails/email_123"],
       ["POST", "/automations", "/api/public/automations"],
       ["PATCH", "/automations/auto_123", "/api/public/automations/auto_123"],
@@ -334,13 +340,16 @@ describe("middleware rate limiting", () => {
         `https://example.com${apiPath}`,
       );
 
-      if (aliasPath === "/topics") {
+      if (aliasPath === "/topics" || aliasPath.startsWith("/topics/")) {
         expect(response.headers.get("x-opensend-root-api-alias")).toBe(
           "topics",
         );
       }
 
-      if (aliasPath === "/contact-properties") {
+      if (
+        aliasPath === "/contact-properties" ||
+        aliasPath.startsWith("/contact-properties/")
+      ) {
         expect(response.headers.get("x-opensend-root-api-alias")).toBe(
           "contact-properties",
         );

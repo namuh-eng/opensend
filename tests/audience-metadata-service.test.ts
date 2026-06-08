@@ -376,6 +376,82 @@ describe("audience metadata service", () => {
     });
   });
 
+  it("supports root-detail topic PATCH validation without requiring omitted enum fields", async () => {
+    const service = createAudienceMetadataService({
+      repository: makeRepository({
+        topics: [topic("topic-1", "News", "user-1")],
+      }),
+    });
+
+    await expect(
+      service.updateTopic({
+        userId: "user-1",
+        mode: "root",
+        id: "topic-1",
+        body: {
+          defaultSubscription: "opt_in",
+          visibility: "private",
+        },
+      }),
+    ).resolves.toMatchObject({
+      id: "topic-1",
+      defaultSubscription: "opt_in",
+      visibility: "private",
+    });
+
+    await expect(
+      service.updateTopic({
+        userId: "user-1",
+        mode: "root",
+        id: "topic-1",
+        body: {
+          default_subscription: "yes",
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "default_subscription must be one of: opt_in | opt_out",
+      status: 422,
+    });
+
+    await expect(
+      service.updateTopic({
+        userId: "user-1",
+        mode: "root",
+        id: "topic-1",
+        body: {
+          visibility: "open",
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "visibility must be one of: public | private",
+      status: 422,
+    });
+  });
+
+  it("preserves API-mode topic update fallback semantics", async () => {
+    const service = createAudienceMetadataService({
+      repository: makeRepository({
+        topics: [topic("topic-1", "News", "user-1")],
+      }),
+    });
+
+    await expect(
+      service.updateTopic({
+        userId: "user-1",
+        mode: "api",
+        id: "topic-1",
+        body: {
+          default_subscription: "definitely-not-valid",
+          visibility: "locked",
+        },
+      }),
+    ).resolves.toMatchObject({
+      id: "topic-1",
+      defaultSubscription: "opt_out",
+      visibility: "public",
+    });
+  });
+
   it("returns not found instead of crossing tenants for detail and mutation", async () => {
     const service = createAudienceMetadataService({
       repository: makeRepository({
@@ -522,6 +598,50 @@ describe("audience metadata service", () => {
     ).rejects.toMatchObject({
       message: "type must be one of: string | number | boolean | date",
       status: 422,
+    });
+  });
+
+  it("enforces strict root validation for property PATCH type", async () => {
+    const service = createAudienceMetadataService({
+      repository: makeRepository({
+        properties: [property("prop-1", "company", "user-1")],
+      }),
+    });
+
+    await expect(
+      service.updateProperty({
+        userId: "user-1",
+        mode: "root",
+        id: "prop-1",
+        body: {
+          type: "text",
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "type must be one of: string | number | boolean | date",
+      status: 422,
+    });
+  });
+
+  it("preserves API-mode property patch semantics", async () => {
+    const service = createAudienceMetadataService({
+      repository: makeRepository({
+        properties: [property("prop-1", "company", "user-1")],
+      }),
+    });
+
+    await expect(
+      service.updateProperty({
+        userId: "user-1",
+        mode: "api",
+        id: "prop-1",
+        body: {
+          type: 123,
+        },
+      }),
+    ).resolves.toMatchObject({
+      id: "prop-1",
+      type: "123",
     });
   });
 

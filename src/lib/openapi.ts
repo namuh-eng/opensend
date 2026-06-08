@@ -4196,6 +4196,25 @@ export const openApiDocument = {
           description: { type: "string", nullable: true },
         },
       },
+      UpdateTopicRequestStrict: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string", nullable: true },
+          default_subscription: {
+            type: "string",
+            enum: ["opt_in", "opt_out"],
+          },
+          defaultSubscription: {
+            type: "string",
+            enum: ["opt_in", "opt_out"],
+          },
+          visibility: {
+            type: "string",
+            enum: ["public", "private"],
+          },
+        },
+      },
       Property: {
         type: "object",
         properties: {
@@ -4267,6 +4286,24 @@ export const openApiDocument = {
         type: "object",
         properties: {
           name: { type: "string" },
+        },
+      },
+      UpdatePropertyRequestStrict: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          type: {
+            type: "string",
+            enum: ["string", "number", "boolean", "date"],
+          },
+          fallback_value: {
+            oneOf: [
+              { type: "string" },
+              { type: "number" },
+              { type: "boolean" },
+              { type: "null" },
+            ],
+          },
         },
       },
       Broadcast: {
@@ -5376,6 +5413,25 @@ if (canonicalTopicsPath?.post) {
   };
 }
 
+const canonicalTopicDetailPath = mutablePaths["/api/topics/{id}"];
+if (canonicalTopicDetailPath?.patch) {
+  mutablePaths["/topics/{id}"] = {
+    ...(mutablePaths["/topics/{id}"] as PathItemObject),
+    patch: withAliasDetails(canonicalTopicDetailPath.patch, {
+      summary: "Update a topic",
+      description:
+        "Root-compatible topic detail route. `default_subscription` (or `defaultSubscription`) and `visibility` can be supplied and must be one of the documented enum values. Both fields are optional for partial updates.",
+      requestBody: {
+        required: true,
+        content: jsonContent({
+          $ref: "#/components/schemas/UpdateTopicRequestStrict",
+        }),
+      },
+      operationId: "updateTopicRoot",
+    }),
+  };
+}
+
 const canonicalContactPropertiesPath = mutablePaths["/api/properties"];
 if (canonicalContactPropertiesPath?.post) {
   mutablePaths["/contact-properties"] = {
@@ -5391,6 +5447,25 @@ if (canonicalContactPropertiesPath?.post) {
         }),
       },
       operationId: "createContactPropertyRoot",
+    }),
+  };
+}
+
+const canonicalContactPropertyDetailPath = mutablePaths["/api/properties/{id}"];
+if (canonicalContactPropertyDetailPath?.patch) {
+  mutablePaths["/contact-properties/{id}"] = {
+    ...(mutablePaths["/contact-properties/{id}"] as PathItemObject),
+    patch: withAliasDetails(canonicalContactPropertyDetailPath.patch, {
+      summary: "Update a contact property",
+      description:
+        "Root-compatible contact-property detail route. If provided, `type` must be one of the documented enum values. `key` remains create-only/stable and is not patchable for compatibility with OpenSend clients.",
+      requestBody: {
+        required: true,
+        content: jsonContent({
+          $ref: "#/components/schemas/UpdatePropertyRequestStrict",
+        }),
+      },
+      operationId: "updateContactPropertyRoot",
     }),
   };
 }

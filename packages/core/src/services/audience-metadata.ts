@@ -38,6 +38,20 @@ type CreatePropertyInput = {
   mode?: ApiCompatibilityMode;
 };
 
+type UpdateTopicInput = {
+  userId: string;
+  id: string;
+  body: unknown;
+  mode?: ApiCompatibilityMode;
+};
+
+type UpdatePropertyInput = {
+  userId: string;
+  id: string;
+  body: unknown;
+  mode?: ApiCompatibilityMode;
+};
+
 type SegmentListRow = Pick<SegmentRow, "id" | "name" | "createdAt">;
 type SegmentContactListRow = Pick<
   ContactRow,
@@ -472,8 +486,9 @@ export function createAudienceMetadataService({
       return toTopicDetail(topic);
     },
 
-    async updateTopic(input: { userId: string; id: string; body: unknown }) {
+    async updateTopic(input: UpdateTopicInput) {
       const body = asRecord(input.body);
+      const mode = input.mode === "root" ? "root" : "api";
       const updateData: Partial<TopicInsert> = {};
 
       if (body.name !== undefined) {
@@ -485,13 +500,31 @@ export function createAudienceMetadataService({
           "description",
         );
       }
-      if (body.defaultSubscription !== undefined) {
+      const defaultSubscriptionInput =
+        body.default_subscription ?? body.defaultSubscription;
+      if (defaultSubscriptionInput !== undefined) {
         updateData.defaultSubscription =
-          body.defaultSubscription === "opt_in" ? "opt_in" : "opt_out";
+          mode === "root"
+            ? (assertStrictEnumValue(
+                defaultSubscriptionInput,
+                validTopicDefaultSubscriptions,
+                "default_subscription",
+              ) as TopicDefaultSubscription)
+            : defaultSubscriptionInput === "opt_in"
+              ? "opt_in"
+              : "opt_out";
       }
       if (body.visibility !== undefined) {
         updateData.visibility =
-          body.visibility === "private" ? "private" : "public";
+          mode === "root"
+            ? (assertStrictEnumValue(
+                body.visibility,
+                validTopicVisibilities,
+                "visibility",
+              ) as TopicVisibility)
+            : body.visibility === "private"
+              ? "private"
+              : "public";
       }
 
       if (Object.keys(updateData).length === 0) {
@@ -589,15 +622,23 @@ export function createAudienceMetadataService({
       return toPropertyPayload(property);
     },
 
-    async updateProperty(input: { userId: string; id: string; body: unknown }) {
+    async updateProperty(input: UpdatePropertyInput) {
       const body = asRecord(input.body);
+      const mode = input.mode === "root" ? "root" : "api";
       const updateData: Partial<PropertyInsert> = { updatedAt: now() };
 
       if (body.name !== undefined) {
         updateData.name = trimPresentString(body.name, "name");
       }
       if (body.type !== undefined) {
-        updateData.type = String(body.type);
+        updateData.type =
+          mode === "root"
+            ? (assertStrictEnumValue(
+                body.type,
+                validPropertyTypes,
+                "type",
+              ) as PropertyType)
+            : String(body.type);
       }
       if (body.fallback_value !== undefined) {
         updateData.fallbackValue =
