@@ -128,12 +128,27 @@ function isEmailCancelAlias(pathname: string, method: string): boolean {
   return parts[0] === "emails" && parts.length === 3 && parts[2] === "cancel";
 }
 
+function isContactRelationshipAlias(pathname: string, method: string): boolean {
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "contacts") return false;
+  if (parts.length === 3 && parts[2] === "segments") return method === "GET";
+  if (parts.length === 4 && parts[2] === "segments") {
+    return ["POST", "DELETE"].includes(method);
+  }
+  if (parts.length === 3 && parts[2] === "topics") {
+    return ["GET", "PATCH"].includes(method);
+  }
+
+  return false;
+}
+
 function isContactsAlias(pathname: string, method: string): boolean {
   if (pathname === "/contacts") return ["GET", "POST"].includes(method);
-  if (pathname.startsWith("/contacts/")) {
-    return ["GET", "PATCH", "DELETE"].includes(method);
-  }
-  return false;
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "contacts") return false;
+  if (parts.length === 2) return ["GET", "PATCH", "DELETE"].includes(method);
+  return isContactRelationshipAlias(pathname, method);
 }
 
 function isAudiencesAlias(pathname: string, method: string): boolean {
@@ -361,6 +376,12 @@ function toApiKeysPath(pathname: string): string {
     : pathname.replace(/^\/api-keys/, "/api/api-keys");
 }
 
+function toContactsApiPath(pathname: string): string {
+  return pathname === "/contacts"
+    ? "/api/contacts"
+    : pathname.replace(/^\/contacts/, "/api/contacts");
+}
+
 function toApiCompatibilityPath(pathname: string): string {
   if (pathname === "/domains") return "/api/domains";
   if (pathname.startsWith("/domains/")) {
@@ -586,6 +607,14 @@ export async function middleware(request: NextRequest) {
         { headers: responseHeaders },
       );
     }
+    if (isContactRelationshipAlias(pathname, request.method)) {
+      return NextResponse.rewrite(
+        new URL(toContactsApiPath(pathname), request.url),
+        {
+          headers: responseHeaders,
+        },
+      );
+    }
     if (isApiCompatibilityAlias) {
       return NextResponse.rewrite(
         new URL(toApiCompatibilityPath(pathname), request.url),
@@ -663,6 +692,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(
       new URL(toPublicTemplatesPath(pathname), request.url),
       { headers: responseHeaders },
+    );
+  }
+  if (isContactRelationshipAlias(pathname, request.method)) {
+    return NextResponse.rewrite(
+      new URL(toContactsApiPath(pathname), request.url),
+      {
+        headers: responseHeaders,
+      },
     );
   }
   if (isApiCompatibilityAlias) {

@@ -123,6 +123,14 @@ const contactIdPathParameter: ParameterObject = {
   schema: { type: "string" },
 };
 
+const contactSegmentIdPathParameter: ParameterObject = {
+  name: "segment_id",
+  in: "path",
+  required: true,
+  description: "Segment ID for the authenticated tenant.",
+  schema: { type: "string", format: "uuid" },
+};
+
 const audienceIdPathParameter: ParameterObject = {
   name: "audience_id",
   in: "path",
@@ -1356,7 +1364,7 @@ export const openApiDocument = {
           "200": {
             description: "Updated topic subscriptions.",
             content: jsonContent({
-              $ref: "#/components/schemas/ContactTopicList",
+              $ref: "#/components/schemas/ContactTopicsUpdateResponse",
             }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
@@ -3664,6 +3672,15 @@ export const openApiDocument = {
         },
         required: ["topics"],
       },
+      ContactTopicsUpdateResponse: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["contact_topics"] },
+          contact_id: { type: "string", format: "uuid" },
+          updated: { type: "boolean" },
+        },
+        required: ["object", "contact_id", "updated"],
+      },
       BulkContactRequest: {
         type: "object",
         description: "Bulk operation payload.",
@@ -4814,6 +4831,64 @@ if (
       description:
         "Root-compatible contact detail route implemented by src/app/contacts/[contact_id]/route.ts.",
       operationId: "deleteContactAlias",
+      parameters: [contactIdPathParameter],
+    }),
+  };
+}
+
+const canonicalContactSegmentsPath =
+  mutablePaths["/api/contacts/{id}/segments"];
+if (canonicalContactSegmentsPath?.get) {
+  mutablePaths["/contacts/{contact_id}/segments"] = {
+    get: withAliasDetails(canonicalContactSegmentsPath.get, {
+      summary: "List segments a contact belongs to",
+      description:
+        "Root-compatible contact segment relationship route implemented by src/app/contacts/[contact_id]/segments/route.ts.",
+      operationId: "listContactSegmentsAlias",
+      parameters: [contactIdPathParameter],
+    }),
+  };
+}
+
+const canonicalContactSegmentMutationPath =
+  mutablePaths["/api/contacts/{id}/segments/{segment_id}"];
+if (
+  canonicalContactSegmentMutationPath?.post &&
+  canonicalContactSegmentMutationPath.delete
+) {
+  mutablePaths["/contacts/{contact_id}/segments/{segment_id}"] = {
+    post: withAliasDetails(canonicalContactSegmentMutationPath.post, {
+      summary: "Add a contact to a segment",
+      description:
+        "Root-compatible contact segment relationship route implemented by src/app/contacts/[contact_id]/segments/[segment_id]/route.ts.",
+      operationId: "addContactToSegmentAlias",
+      parameters: [contactIdPathParameter, contactSegmentIdPathParameter],
+    }),
+    delete: withAliasDetails(canonicalContactSegmentMutationPath.delete, {
+      summary: "Remove a contact from a segment",
+      description:
+        "Root-compatible contact segment relationship route implemented by src/app/contacts/[contact_id]/segments/[segment_id]/route.ts.",
+      operationId: "removeContactFromSegmentAlias",
+      parameters: [contactIdPathParameter, contactSegmentIdPathParameter],
+    }),
+  };
+}
+
+const canonicalContactTopicsPath = mutablePaths["/api/contacts/{id}/topics"];
+if (canonicalContactTopicsPath?.get && canonicalContactTopicsPath.patch) {
+  mutablePaths["/contacts/{contact_id}/topics"] = {
+    get: withAliasDetails(canonicalContactTopicsPath.get, {
+      summary: "List topic subscriptions for a contact",
+      description:
+        "Root-compatible contact topic relationship route implemented by src/app/contacts/[contact_id]/topics/route.ts.",
+      operationId: "listContactTopicsAlias",
+      parameters: [contactIdPathParameter],
+    }),
+    patch: withAliasDetails(canonicalContactTopicsPath.patch, {
+      summary: "Update topic subscriptions for a contact",
+      description:
+        "Root-compatible contact topic relationship route implemented by src/app/contacts/[contact_id]/topics/route.ts.",
+      operationId: "updateContactTopicsAlias",
       parameters: [contactIdPathParameter],
     }),
   };

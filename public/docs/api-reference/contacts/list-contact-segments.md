@@ -1,8 +1,10 @@
 # List Contact Segments
 
-List segments assigned to a contact. This page documents the OpenSend-owned API contract for `GET /api/contacts/{id}/segments`.
+List segments assigned to a contact. This page documents the OpenSend-owned API contract for `GET /contacts/{contact_id}/segments`.
 
-`GET /api/contacts/{id}/segments`
+`GET /contacts/{contact_id}/segments`
+
+Compatibility note: `GET /api/contacts/{id}/segments` remains available for existing OpenSend integrations; new API clients should prefer the root compatibility path above.
 
 ## Authentication
 
@@ -18,7 +20,7 @@ Use this route to inspect the segment memberships for one tenant-scoped contact.
 
 ## Parameters
 
-- `id` — contact ID or email for the authenticated tenant.
+- `contact_id` — contact ID or email for the authenticated tenant.
 
 ## Response
 
