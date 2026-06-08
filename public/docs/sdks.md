@@ -1,6 +1,6 @@
 # Official SDKs
 
-OpenSend ships first-party SDKs for the languages most teams use to send mail from production services. All SDKs target OpenSend Cloud by default at `https://opensend.namuh.co` and can point at a self-hosted deployment by setting a base URL.
+OpenSend ships first-party SDKs for the languages most teams use to send mail from production services. All SDKs target OpenSend Cloud by default at `https://opensend.namuh.co` and can point at a self-hosted deployment by setting a base URL. The Java/Kotlin and PHP packages are intentionally partial today; their supported resources are listed below before any copyable examples.
 
 Use an OpenSend API key that starts with `os_`. Keep keys in server-side environment variables and never expose them to browser JavaScript, mobile apps, or public repositories.
 
@@ -16,6 +16,27 @@ Use an OpenSend API key that starts with `os_`. Keep keys in server-side environ
 | PHP | `packages/php-sdk` / future `opensend/opensend-php` Composer package | PHP services, Laravel/Symfony apps, workers | First-party send-email slice; install from the repo until Packagist publishing is enabled |
 | SMTP relay | `@opensend/smtp-relay` service | Apps that only speak SMTP | Self-hosted relay service |
 | Other languages | `/openapi.json` | Generated clients | Generate from the OpenAPI contract |
+
+## Partial SDK surfaces
+
+Each SDK has its own package-specific surface. The JVM and PHP packages are
+narrower than the full REST API and should be treated as explicit slices:
+
+- **Java / Kotlin (`packages/jvm-sdk`)**: blocking-only client for emails,
+  contacts, domains, and suppressions. It does not expose JVM methods for API
+  keys, broadcasts, audiences, segments, topics, templates, webhooks, logs,
+  contact properties, events, automations, receiving, dedicated IPs, or
+  unsubscribe-page settings yet.
+- **PHP (`packages/php-sdk`)**: send-only client for
+  `client->emails->send(...)`, idempotency options, typed send
+  payloads/responses, and typed OpenSend API errors. It does not expose PHP
+  resource clients for reads, batch sends, contacts, domains, suppressions, API
+  keys, broadcasts, audiences, segments, topics, templates, webhooks, logs,
+  contact properties, events, automations, receiving, dedicated IPs, or
+  unsubscribe-page settings yet.
+
+Use `/openapi.json` and the REST API docs for resources not listed in a package
+README. Do not assume every OpenAPI path has a handwritten JVM or PHP method.
 
 ## TypeScript and JavaScript
 
@@ -141,6 +162,11 @@ func main() {
 
 ## Java and Kotlin
 
+**Support level:** partial, blocking-only SDK. This package currently supports
+implemented email, contact, domain, and suppression routes only. Use the REST
+API and `/openapi.json` for other resources until matching JVM resource clients
+are added.
+
 Install from this repository until Maven publishing is complete:
 
 ```bash
@@ -173,7 +199,7 @@ EmailResponse email = client.emails().send(
 System.out.println(email.id());
 ```
 
-The JVM SDK is blocking-only in this first slice and supports implemented email, contact, domain, and suppression routes. It exposes `ApiException` for OpenSend error envelopes plus rate-limit headers. See [Send emails with Java and Kotlin](./send-with-java.md) for Kotlin and Spring Boot examples.
+The JVM SDK exposes `ApiException` for OpenSend error envelopes plus rate-limit headers. See [Send emails with Java and Kotlin](./send-with-java.md) for Kotlin and Spring Boot examples.
 
 ## Ruby
 
@@ -212,6 +238,12 @@ The Ruby package also exports `Resend` as a compatibility alias for migration-or
 
 
 ## PHP
+
+**Support level:** partial, send-only SDK. This package currently supports
+`client->emails->send(...)` for `POST /emails`, idempotency options, typed send
+payloads/responses, and typed OpenSend API errors only. Use the REST API and
+`/openapi.json` for other resources until matching PHP resource clients are
+added.
 
 Install from this repository until Packagist publishing is complete:
 

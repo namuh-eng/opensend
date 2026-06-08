@@ -1,6 +1,16 @@
 # Send emails with PHP
 
-Send email from PHP with the first-party OpenSend PHP SDK. This first SDK slice supports the core single-email send path, idempotency keys, typed request/response objects, and typed OpenSend API errors.
+Send email from PHP with the first-party OpenSend PHP SDK. This first SDK slice is send-only: it supports the single-email send method, idempotency keys, typed request/response objects, and typed OpenSend API errors, but not other OpenSend resources yet.
+
+## Support level
+
+This PHP package is intentionally narrower than the full OpenSend REST API. It currently wraps only `POST /emails` through `client->emails->send(...)`.
+
+It does not expose PHP clients for email reads, batch sends, contacts, domains,
+suppressions, API keys, broadcasts, audiences, segments, topics, templates,
+webhooks, logs, contact properties, events, automations, receiving, dedicated
+IPs, or unsubscribe-page settings yet. Use the REST API and `/openapi.json` for
+those resources until matching PHP resource clients are added.
 
 ## Install
 
