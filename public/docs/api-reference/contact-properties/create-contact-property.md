@@ -1,10 +1,25 @@
 # Create Contact Property
 
-Create a custom contact property definition.
+Create a custom contact property definition for audience management.
 
 `POST /contact-properties`
 
-Compatibility note: `POST /api/properties` remains available for existing OpenSend integrations; new API clients should prefer the root compatibility path above. Browser dashboard navigation is preserved for page routes that share these names.
+`POST /api/properties`
+
+## Compatibility behavior
+
+`/contact-properties` is the compatibility alias. In this mode the request body is validated strictly:
+
+- `name` is required and trimmed.
+- `key` is required and cannot be omitted.
+- `type` is required and must be one of `string`, `number`, `boolean`, or `date`.
+- `fallback_value` is optional.
+
+`/api/properties` retains OpenSend extension behavior:
+
+- `key` may be omitted and is derived from `name` when missing.
+- `type` defaults to `string` when omitted.
+- Existing `/api/properties` integration behavior is preserved.
 
 ## Authentication
 
@@ -18,7 +33,10 @@ Dashboard session cookies are not API credentials.
 
 ## Parameters
 
-Choose a stable key before using the property in imports or automations.
+- `name` (required)
+- `key` (optional; required for `/contact-properties`)
+- `type` (optional; required for `/contact-properties`)
+- `fallback_value` (optional)
 
 ## Response
 
@@ -26,4 +44,4 @@ Returns an OpenSend JSON response for the authenticated tenant. Error responses 
 
 ## Self-hosting notes
 
-Self-hosted deployments can use the same path on their own `OPENSEND_BASE_URL`. Ensure middleware is enabled so API-like requests are routed to `/api/properties` while dashboard page requests continue to render normally.
+Self-hosted deployments can use the same path on their own `OPENSEND_BASE_URL`. Ensure middleware is enabled so API-like requests are routed to `/api/properties` while dashboard page routes continue to render normally.

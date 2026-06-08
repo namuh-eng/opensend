@@ -1,5 +1,12 @@
 type JsonSchema = {
-  type?: "array" | "boolean" | "integer" | "number" | "object" | "string";
+  type?:
+    | "array"
+    | "boolean"
+    | "integer"
+    | "number"
+    | "null"
+    | "object"
+    | "string";
   format?: string;
   description?: string;
   pattern?: string;
@@ -1640,6 +1647,8 @@ export const openApiDocument = {
         summary: "Create a topic",
         operationId: "createTopic",
         security: bearerSecurity,
+        description:
+          "OpenSend-compatible endpoint. `default_subscription` and `visibility` are optional and default to `opt_out` and `public` when omitted.",
         requestBody: {
           required: true,
           content: jsonContent({
@@ -1739,6 +1748,8 @@ export const openApiDocument = {
         summary: "Create a contact property",
         operationId: "createProperty",
         security: bearerSecurity,
+        description:
+          "OpenSend-compatible endpoint. If `key` is omitted, it is derived from `name`. If `type` is omitted, it defaults to `string`.",
         requestBody: {
           required: true,
           content: jsonContent({
@@ -4151,8 +4162,32 @@ export const openApiDocument = {
         properties: {
           name: { type: "string" },
           description: { type: "string" },
+          default_subscription: {
+            type: "string",
+            enum: ["opt_in", "opt_out"],
+          },
+          visibility: {
+            type: "string",
+            enum: ["public", "private"],
+          },
         },
         required: ["name"],
+      },
+      CreateTopicRequestStrict: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          default_subscription: {
+            type: "string",
+            enum: ["opt_in", "opt_out"],
+          },
+          visibility: {
+            type: "string",
+            enum: ["public", "private"],
+          },
+        },
+        required: ["name", "default_subscription", "visibility"],
       },
       UpdateTopicRequest: {
         type: "object",
@@ -4196,6 +4231,34 @@ export const openApiDocument = {
           type: {
             type: "string",
             enum: ["string", "number", "boolean", "date"],
+          },
+          fallback_value: {
+            oneOf: [
+              { type: "string" },
+              { type: "number" },
+              { type: "boolean" },
+              { type: "null" },
+            ],
+          },
+        },
+        required: ["name"],
+      },
+      CreatePropertyRequestStrict: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          key: { type: "string" },
+          type: {
+            type: "string",
+            enum: ["string", "number", "boolean", "date"],
+          },
+          fallback_value: {
+            oneOf: [
+              { type: "string" },
+              { type: "number" },
+              { type: "boolean" },
+              { type: "null" },
+            ],
           },
         },
         required: ["name", "key", "type"],
@@ -5290,6 +5353,44 @@ if (canonicalEventsPath?.get && canonicalEventsPath.post) {
       description:
         "Root-compatible custom events create route. Requires an OpenSend API key and creates the event definition for the authenticated tenant.",
       operationId: "createEventRoot",
+    }),
+  };
+}
+
+const canonicalTopicsPath = mutablePaths["/api/topics"];
+if (canonicalTopicsPath?.post) {
+  mutablePaths["/topics"] = {
+    ...(mutablePaths["/topics"] as PathItemObject),
+    post: withAliasDetails(canonicalTopicsPath.post, {
+      summary: "Create a topic",
+      description:
+        "Root-compatible topics create route with strict schema requirements. `default_subscription` and `visibility` are required and must be explicit values. Existing `/api/topics` defaults are preserved for non-root callers.",
+      requestBody: {
+        required: true,
+        content: jsonContent({
+          $ref: "#/components/schemas/CreateTopicRequestStrict",
+        }),
+      },
+      operationId: "createTopicRoot",
+    }),
+  };
+}
+
+const canonicalContactPropertiesPath = mutablePaths["/api/properties"];
+if (canonicalContactPropertiesPath?.post) {
+  mutablePaths["/contact-properties"] = {
+    ...(mutablePaths["/contact-properties"] as PathItemObject),
+    post: withAliasDetails(canonicalContactPropertiesPath.post, {
+      summary: "Create a contact property",
+      description:
+        "Root-compatible contact-property create route with strict schema requirements. `key` and `type` are required for root requests; OpenSend `/api/properties` defaults remain unchanged.",
+      requestBody: {
+        required: true,
+        content: jsonContent({
+          $ref: "#/components/schemas/CreatePropertyRequestStrict",
+        }),
+      },
+      operationId: "createContactPropertyRoot",
     }),
   };
 }

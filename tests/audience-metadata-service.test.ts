@@ -310,6 +310,70 @@ describe("audience metadata service", () => {
       defaultSubscription: "opt_in",
       visibility: "private",
     });
+
+    await expect(
+      service.createTopic({
+        userId: "user-1",
+        body: {
+          name: "Product 2",
+        },
+      }),
+    ).resolves.toMatchObject({
+      object: "topic",
+      name: "Product 2",
+      defaultSubscription: "opt_out",
+      visibility: "public",
+    });
+  });
+
+  it("enforces strict root validation for topics", async () => {
+    const service = createAudienceMetadataService({
+      repository: makeRepository(),
+    });
+
+    await expect(
+      service.createTopic({
+        userId: "user-1",
+        mode: "root",
+        body: {
+          name: " Product ",
+          description: " updates ",
+          visibility: "private",
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "default_subscription is required",
+      status: 400,
+    });
+
+    await expect(
+      service.createTopic({
+        userId: "user-1",
+        mode: "root",
+        body: {
+          name: " Product ",
+          default_subscription: "opt_in",
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "visibility is required",
+      status: 400,
+    });
+
+    await expect(
+      service.createTopic({
+        userId: "user-1",
+        mode: "root",
+        body: {
+          name: " Product ",
+          default_subscription: "oops",
+          visibility: "private",
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "default_subscription must be one of: opt_in | opt_out",
+      status: 422,
+    });
   });
 
   it("returns not found instead of crossing tenants for detail and mutation", async () => {
@@ -410,6 +474,54 @@ describe("audience metadata service", () => {
       name: "Company Size",
       type: "number",
       fallback_value: null,
+    });
+
+    await expect(
+      service.createProperty({
+        userId: "user-1",
+        body: { name: "Company Type" },
+      }),
+    ).resolves.toMatchObject({
+      object: "contact_property",
+      key: "company_type",
+      type: "string",
+    });
+
+    await expect(
+      service.createProperty({
+        userId: "user-1",
+        mode: "root",
+        body: {
+          name: "Company Type",
+          type: "string",
+        },
+      }),
+    ).rejects.toMatchObject({ message: "key is required", status: 400 });
+
+    await expect(
+      service.createProperty({
+        userId: "user-1",
+        mode: "root",
+        body: {
+          name: "Company Type",
+          key: "company_type",
+        },
+      }),
+    ).rejects.toMatchObject({ message: "type is required", status: 400 });
+
+    await expect(
+      service.createProperty({
+        userId: "user-1",
+        mode: "root",
+        body: {
+          name: "Company Type",
+          key: "company_type",
+          type: "text",
+        },
+      }),
+    ).rejects.toMatchObject({
+      message: "type must be one of: string | number | boolean | date",
+      status: 422,
     });
   });
 

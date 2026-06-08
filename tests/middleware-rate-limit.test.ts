@@ -182,6 +182,8 @@ describe("middleware rate limiting", () => {
       ["/domains/domain_123", "/api/domains/domain_123"],
       ["/webhooks", "/api/webhooks"],
       ["/webhooks/webhook_123", "/api/webhooks/webhook_123"],
+      ["/topics", "/api/topics"],
+      ["/contact-properties", "/api/properties"],
       ["/logs", "/api/logs"],
       ["/logs/log_123", "/api/logs/log_123"],
       ["/emails", "/api/emails"],
@@ -226,6 +228,18 @@ describe("middleware rate limiting", () => {
       expect(response.headers.get("x-middleware-rewrite")).toBe(
         `https://example.com${apiPath}`,
       );
+
+      if (aliasPath === "/topics") {
+        expect(response.headers.get("x-opensend-root-api-alias")).toBe(
+          "topics",
+        );
+      } else if (aliasPath === "/contact-properties") {
+        expect(response.headers.get("x-opensend-root-api-alias")).toBe(
+          "contact-properties",
+        );
+      } else {
+        expect(response.headers.get("x-opensend-root-api-alias")).toBeNull();
+      }
     }
 
     expect(mockGetSessionCookie).not.toHaveBeenCalled();
@@ -237,6 +251,8 @@ describe("middleware rate limiting", () => {
     for (const aliasPath of [
       "/domains",
       "/webhooks",
+      "/topics",
+      "/contact-properties",
       "/logs",
       "/emails",
       "/automations",
@@ -317,6 +333,18 @@ describe("middleware rate limiting", () => {
       expect(response.headers.get("x-middleware-rewrite")).toBe(
         `https://example.com${apiPath}`,
       );
+
+      if (aliasPath === "/topics") {
+        expect(response.headers.get("x-opensend-root-api-alias")).toBe(
+          "topics",
+        );
+      }
+
+      if (aliasPath === "/contact-properties") {
+        expect(response.headers.get("x-opensend-root-api-alias")).toBe(
+          "contact-properties",
+        );
+      }
     }
 
     expect(mockGetSessionCookie).not.toHaveBeenCalled();

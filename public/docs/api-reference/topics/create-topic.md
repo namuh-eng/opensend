@@ -4,7 +4,22 @@ Create a subscription topic for audience preference management.
 
 `POST /topics`
 
-Compatibility note: `POST /api/topics` remains available for existing OpenSend integrations; new API clients should prefer the root compatibility path above. Browser dashboard navigation is preserved for page routes that share these names.
+`POST /api/topics`
+
+## Compatibility behavior
+
+`/topics` is the compatibility alias. In this mode the request body is validated strictly:
+
+- `name` is required and trimmed.
+- `default_subscription` is required and must be either `opt_in` or `opt_out`.
+- `visibility` is required and must be either `public` or `private`.
+- `description` is optional and still capped at 200 characters.
+
+`/api/topics` retains OpenSend extension behavior:
+
+- Missing `default_subscription` defaults to `opt_out`.
+- Missing `visibility` defaults to `public`.
+- Invalid values for those fields are still normalized to legacy defaults.
 
 ## Authentication
 
@@ -18,7 +33,12 @@ Dashboard session cookies are not API credentials.
 
 ## Parameters
 
-Body includes topic display fields accepted by OpenSend.
+Body includes topic display fields accepted by this API.
+
+- `name` (required)
+- `description` (optional)
+- `default_subscription` (optional; strict root mode requires it)
+- `visibility` (optional; strict root mode requires it)
 
 ## Response
 
