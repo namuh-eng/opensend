@@ -191,9 +191,10 @@
 - [How to handle API keys](https://opensend.namuh.co/docs/knowledge-base/how-to-handle-api-keys.md): API keys are bearer credentials. Anyone with a valid key can call the OpenSend API within that key's permissions and restrictions.
 - [What sending feature should I use?](https://opensend.namuh.co/docs/knowledge-base/what-sending-feature-to-use.md): OpenSend has several sending surfaces. Choose the one that matches the job instead of forcing every workflow through one endpoint.
 - [What attachment types are not supported?](https://opensend.namuh.co/docs/knowledge-base/what-attachment-types-are-not-supported.md): OpenSend accepts attachments through the email API and SMTP relay, but operators should restrict unsafe or oversized files according to their security policy and provider limits.
-- [Self Hosting](https://opensend.namuh.co/docs/self-hosting.md): Run OpenSend on your own infrastructure with Docker Compose, PostgreSQL, AWS SES/S3, and the standalone ingester service.
+- [Self Hosting](https://opensend.namuh.co/docs/self-hosting.md): Run OpenSend on infrastructure you control with Docker Compose, PostgreSQL, AWS SES/S3, and the standalone ingester service.
 - [Ingester Deployment](https://opensend.namuh.co/docs/ingester-deploy.md): Deploy the standalone ingester and queue worker. Provider callbacks should target the ingester service, not the Next.js app URL.
-- [Security](https://opensend.namuh.co/docs/security.md): Security model overview.
+- [Security](https://opensend.namuh.co/docs/security.md): OpenSend is an email platform, so the security model centers on tenant isolation, API-key protection, signed webhooks, secret encryption, rate limiting, and explicit operator-controlled integrations.
+- [Privacy](https://opensend.namuh.co/docs/privacy.md): Self-hosted OpenSend is built around an explicit zero-phone-home default.
 - [Observability](https://opensend.namuh.co/docs/observability.md): Operate OpenSend in production.
 
 ## OpenAPI Specs

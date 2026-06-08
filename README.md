@@ -1,8 +1,8 @@
 <p align="center">
-  <h1 align="center">Opensend</h1>
+  <h1 align="center">OpenSend</h1>
   <p align="center">
-    Open-source email infrastructure for developers.<br />
-    OpenSend APIs with familiar email primitives, a full dashboard, and self-hosted delivery on your AWS SES quota.
+    Source-available email infrastructure for developers who want to self-host.<br />
+    Run a familiar email API, admin dashboard, webhooks, and SES-backed delivery on your own AWS quota.
   </p>
   <p align="center">
     <a href="https://github.com/namuh-eng/opensend/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-ELv2-blue" alt="License" /></a>
@@ -13,7 +13,7 @@
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
-  <a href="#agent-setup">Agent setup</a> ·
+  <a href="#why-developers-self-host-opensend">Why self-host</a> ·
   <a href="#features">Features</a> ·
   <a href="#docs-and-llm-ready-reference">Docs</a> ·
   <a href="#api-quickstart">API</a> ·
@@ -22,35 +22,37 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/screenshot-dashboard.png" alt="Opensend Today dashboard showing delivery metrics and live activity" width="900" />
+  <img src="docs/assets/screenshot-dashboard.png" alt="OpenSend Today dashboard showing delivery metrics and live activity" width="900" />
 </p>
 
 ---
 
-## What is Opensend?
+## What is OpenSend?
 
-Opensend is a self-hostable email platform with REST APIs, SDKs, React email templates, domain verification, webhooks, broadcasts, automations, analytics, and an admin dashboard for teams that want an OpenSend-first Resend alternative.
+OpenSend is a self-hostable email platform with REST APIs, SDKs, React email templates, domain verification, webhooks, broadcasts, automations, analytics, and an admin dashboard.
 
-Use your OpenSend API key (`os_...`) with OpenSend's familiar email API surface and selected compatibility aliases for migration-oriented code.
+Self-hosted OpenSend runs on your infrastructure and your AWS SES account. The default self-hosted stack does not phone home to OpenSend, Namuh, Sentry, PostHog, or any license server unless you explicitly configure those integrations.
 
-Use Opensend when you want:
+OpenSend is source-available under the [Elastic License 2.0](./LICENSE): you can use, modify, and self-host it, but you cannot offer OpenSend itself as a competing hosted email service.
 
-- **Control** — run email infrastructure on your own cloud and AWS SES quota.
-- **Familiar API** — move common sends, audiences, and webhooks with minimal code changes where compatibility aliases are implemented.
-- **A real dashboard** — manage the Today overview, domains, API keys, broadcasts, automations, templates, audiences, logs, audit trails, billing, and metrics.
-- **First-party docs** — ship a local docs hub, OpenAPI schema, LLM index, SDK guides, and MCP guidance from this repo.
-- **Open deployment** — Docker Compose for local/self-hosted installs, with production guides for split app + ingester deployments.
+## Why developers self-host OpenSend
+
+- **Own the data boundary**: keep API traffic, recipient data, delivery events, and webhook secrets inside infrastructure you control.
+- **Use your SES quota**: send through AWS SES with OpenSend's dashboard, API keys, SDKs, webhooks, audiences, broadcasts, and templates on top.
+- **Inspect the whole path**: app, API routes, database schema, ingester, scheduler, webhook signing, docs, and generated OpenAPI all live in this repo.
+- **Start with Compose**: `cp .env.example .env && docker compose up -d` brings up Postgres, migrations, app, ingester, and scheduler.
+- **Stay telemetry-explicit**: self-hosted deployments make zero outbound calls to OpenSend-operated vendors unless you set the relevant env vars.
 
 ## Cloud or self-hosted
 
-|               | Opensend Cloud                         | Self-host                                     |
+|               | OpenSend Cloud                         | Self-host                                     |
 | ------------- | -------------------------------------- | --------------------------------------------- |
 | Where it runs | Managed at `opensend.namuh.co`         | Your infrastructure                           |
 | Fastest setup | Sign in with Google and add a domain   | `docker compose up -d`                        |
 | Cost model    | Free tier, paid plans for hosted usage | Free software; you pay AWS SES/infrastructure |
 | Best for      | Teams that want zero ops               | Teams that want full control                  |
 
-> Opensend Cloud is in early access. The Free tier needs no card; paid tiers are wired through Stripe.
+> OpenSend Cloud is in early access. The Free tier needs no card; paid tiers are wired through Stripe.
 
 ## Quick start
 
@@ -60,19 +62,22 @@ The fastest local path is Docker Compose:
 git clone https://github.com/namuh-eng/opensend.git
 cd opensend
 cp .env.example .env
-# Edit .env when you want Google login or real email sending.
 docker compose up -d
 ```
 
 Open **http://localhost:3015**.
 
+The checked-in `BETTER_AUTH_SECRET`, `INGESTER_JOB_TOKEN`, and `WEBHOOK_SECRET_ENCRYPTION_KEY` values in `.env.example` are local-only placeholders so the stack can boot for localhost evaluation. Replace them with `openssl rand -hex 32` values before any shared, staging, or production deploy; the app and ingester refuse the local auth placeholder when the configured app URL is not localhost.
+
 Compose starts:
 
-- `app` — Next.js dashboard and public API on `:3015`
-- `postgres` — local database
-- `migrate` — one-shot schema migration runner
-- `ingester` — SES/SNS ingestion and workers on `:3016`
-- `scheduler` — scheduled job trigger sidecar
+- `app`: Next.js dashboard and public API on `:3015`
+- `postgres`: local database
+- `migrate`: one-shot schema migration runner
+- `ingester`: SES/SNS ingestion and workers on `:3016`
+- `scheduler`: scheduled job trigger sidecar
+
+For real email delivery, add AWS SES credentials and verify a sending domain. For dashboard login, add Google OAuth credentials.
 
 For local development without the full app container:
 
@@ -82,111 +87,23 @@ make setup    # starts Postgres, installs deps, pushes schema, seeds data
 make dev      # http://localhost:3015
 ```
 
-## Agent setup
-
-This repo is designed to be understandable to coding agents. Give the agent this checklist instead of making it infer the setup from random scripts:
-
-### 1. Read the local instructions first
-
-```bash
-cat AGENTS.md
-```
-
-Important defaults from `AGENTS.md`:
-
-- TypeScript is strict; do not introduce `any`.
-- Do not replace the existing Next.js, Playwright, Biome, Drizzle, or Docker setup.
-- Run `make check && make test` before committing code changes.
-- README images live in `docs/assets/`; keep the landing copy in sync if an image is also used under `public/landing/`.
-
-### 2. Use the expected branch and base
-
-```bash
-git fetch origin --prune
-git checkout staging
-git pull --ff-only origin staging
-git checkout -b <type>/<short-description>
-```
-
-Open feature/fix/docs PRs against **`staging`** unless a maintainer explicitly asks for `main`.
-
-### 3. Install and run locally
-
-```bash
-bun install
-cp .env.example .env
-make setup
-make dev
-```
-
-Local ports:
-
-| Service                    |   Port | Command                               |
-| -------------------------- | -----: | ------------------------------------- |
-| Next.js app + API          | `3015` | `make dev` or `bun run dev`           |
-| Bun/Hono ingester          | `3016` | `bun run start:ingester` or Compose   |
-| Control-plane API skeleton | `3026` | `bun run dev:api`                     |
-
-### 4. Environment variables that matter first
-
-Start from `.env.example`. For local UI work, Postgres plus auth URLs are enough. For real sends/domain flows, add AWS SES/S3, Cloudflare, and Google OAuth.
-
-Minimum local values to check:
-
-```env
-DATABASE_URL=postgresql://opensend:opensend@localhost:5432/opensend
-BETTER_AUTH_URL=http://localhost:3015
-NEXT_PUBLIC_APP_URL=http://localhost:3015
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-```
-
-Google OAuth callback for local development:
-
-```text
-http://localhost:3015/api/auth/callback/google
-```
-
-### 5. Validate before pushing
-
-Use the narrowest useful check while iterating, then run the full bar before the PR:
-
-```bash
-bun run check          # changed-file guardrail used by pre-push
-make check             # full typecheck + Biome
-make test              # Vitest
-make test-e2e          # Playwright; requires the dev server on :3015
-```
-
-If you touch SDKs or service skeletons, also run their package-specific tests:
-
-```bash
-cd packages/go-sdk && go test ./...
-ruby -I packages/ruby-sdk/lib packages/ruby-sdk/test/opensend_test.rb
-bun run --cwd services/api test  # if tests exist for the touched API slice
-```
-
-### 6. Keep secrets out
-
-Never commit `.env`, API keys, bearer tokens, database URLs with real passwords, OAuth secrets, Stripe secrets, Cloudflare tokens, or AWS credentials. Use placeholders in docs and screenshots.
-
 ## Features
 
-- **REST API** — send single or batch emails with API-key auth and idempotency keys.
-- **OpenSend-first familiar API** — transactional sends, audiences/contacts, suppressions, and webhook semantics shaped for teams choosing a Resend alternative.
-- **SDKs** — first-party TypeScript, Python, Go, and Ruby packages.
-- **React email templates** — pass React components via the TypeScript SDK, or use registry-controlled dashboard starters with shared-renderer previews (see [docs/react-email-templates.md](docs/react-email-templates.md)).
-- **Domain verification** — DKIM, SPF, DMARC, click tracking, and custom return paths, with Cloudflare automation.
-- **Broadcasts** — block editor, slash commands, audience targeting, and review flow.
-- **Automations** — multi-step workflows triggered by contact updates and custom events, executed by the ingester worker.
-- **Audience** — contacts, segments, topics, custom properties, CSV import, and API routes.
-- **Suppressions** — tenant-scoped bounce/complaint suppression handling.
-- **Inbound email** — receive replies through `/api/emails/receiving`.
-- **Webhooks** — HMAC-signed, Svix-compatible delivery for accepted/sent/delivered/opened/clicked/bounced/complained/delayed/failed events.
-- **Hosted usage and billing** — plan-aware quotas, usage summaries, Stripe Checkout, and customer portal routes for Opensend Cloud.
-- **Dashboard** — dark-mode admin UI with the `/today` overview, live activity, domains, API keys, broadcasts, automations, templates, audience, metrics, logs, audit log, webhooks, billing, and settings.
-- **Public status** — expose component health through `/status` and `/api/status`.
-- **Health checks** — `/api/health`, ingester `/health`, and service readiness endpoints.
+- **REST API**: send single or batch emails with API-key auth and idempotency keys.
+- **OpenSend-first familiar API**: transactional sends, audiences/contacts, suppressions, webhooks, and migration-oriented compatibility aliases where implemented.
+- **SDKs**: first-party TypeScript, Python, Go, and Ruby packages.
+- **React email templates**: pass React components via the TypeScript SDK, or use registry-controlled dashboard starters with shared-renderer previews (see [docs/react-email-templates.md](docs/react-email-templates.md)).
+- **Domain verification**: DKIM, SPF, DMARC, click tracking, and custom return paths, with Cloudflare automation.
+- **Broadcasts**: block editor, slash commands, audience targeting, and review flow.
+- **Automations**: multi-step workflows triggered by contact updates and custom events, executed by the ingester worker.
+- **Audience**: contacts, segments, topics, custom properties, CSV import, and API routes.
+- **Suppressions**: tenant-scoped bounce/complaint suppression handling.
+- **Inbound email**: receive replies through `/api/emails/receiving`.
+- **Webhooks**: HMAC-signed, Svix-compatible delivery for accepted/sent/delivered/opened/clicked/bounced/complained/delayed/failed events.
+- **Hosted usage and billing**: plan-aware quotas, usage summaries, Stripe Checkout, and customer portal routes for OpenSend Cloud.
+- **Dashboard**: dark-mode admin UI with the `/today` overview, live activity, domains, API keys, broadcasts, automations, templates, audience, metrics, logs, audit log, webhooks, billing, and settings.
+- **Public status**: expose component health through `/status` and `/api/status`.
+- **Health checks**: `/api/health`, ingester `/health`, and service readiness endpoints.
 
 ## Docs and LLM-ready reference
 
@@ -196,6 +113,14 @@ Open **http://localhost:3015/docs** for the first-party docs hub. The generated 
 - `/openapi.json` — route and schema source of truth for API integrations.
 - `public/docs/**/*.md` — public markdown pages indexed by `bun run docs:generate`.
 - [`public/docs/mcp-server.md`](public/docs/mcp-server.md) — MCP guidance for AI clients.
+
+High-signal starting points:
+
+- [`/docs/self-hosting`](https://opensend.namuh.co/docs/self-hosting) for local and production deployment.
+- [`/docs/security`](https://opensend.namuh.co/docs/security) for API keys, tenant scoping, webhook signing, and vulnerability reporting.
+- [`/docs/privacy`](https://opensend.namuh.co/docs/privacy) for the zero-phone-home self-hosting promise.
+- [`/openapi.json`](https://opensend.namuh.co/openapi.json) for exact API schemas.
+- [`packages/sdk/README.md`](./packages/sdk/README.md) for the TypeScript SDK.
 
 When adding public API, SDK, dashboard, webhook, automation, or operations docs, update the matching `public/docs/**/*.md` page and run `bun run docs:generate`.
 
@@ -210,7 +135,7 @@ curl -X POST http://localhost:3015/api/emails \
   -d '{
     "from": "hello@yourdomain.com",
     "to": ["recipient@example.com"],
-    "subject": "Hello from Opensend",
+    "subject": "Hello from OpenSend",
     "html": "<h1>It works!</h1>"
   }'
 ```
@@ -233,7 +158,7 @@ const client = new Opensend(process.env.OPENSEND_API_KEY!, {
 const { data } = await client.emails.send({
   from: "hello@yourdomain.com",
   to: "recipient@example.com",
-  subject: "Hello from Opensend",
+  subject: "Hello from OpenSend",
   html: "<h1>It works!</h1>",
 });
 
@@ -258,7 +183,7 @@ opensend.base_url = os.environ.get("OPENSEND_BASE_URL", opensend.DEFAULT_BASE_UR
 email = opensend.Emails.send({
     "from": "hello@yourdomain.com",
     "to": "recipient@example.com",
-    "subject": "Hello from Opensend",
+    "subject": "Hello from OpenSend",
     "html": "<h1>It works!</h1>",
 })
 
@@ -294,7 +219,7 @@ func main() {
 	email, err := client.Send(context.Background(), opensend.SendRequest{
 		From:    "hello@yourdomain.com",
 		To:      []string{"recipient@example.com"},
-		Subject: "Hello from Opensend",
+		Subject: "Hello from OpenSend",
 		HTML:    "<h1>It works!</h1>",
 	})
 	if err != nil {
@@ -325,7 +250,7 @@ OpenSend.api_key ENV.fetch("OPENSEND_API_KEY")
 email = OpenSend::Emails.send(
   from: "hello@yourdomain.com",
   to: "recipient@example.com",
-  subject: "Hello from Opensend",
+  subject: "Hello from OpenSend",
   html: "<h1>It works!</h1>"
 )
 
@@ -375,7 +300,7 @@ Production gotchas worth not learning the hard way:
 
 ## Architecture
 
-Opensend is a Bun workspace monorepo. The Next.js app and production Hono ingester share a typed core package. Experimental service skeletons live alongside the current production path so migrations can happen incrementally.
+OpenSend is a Bun workspace monorepo. The Next.js app and production Hono ingester share a typed core package. Experimental service skeletons live alongside the current production path so migrations can happen incrementally.
 
 ```text
 src/                 # Next.js app and public API routes
@@ -445,6 +370,10 @@ cd packages/go-sdk && go test ./...
 ruby -I packages/ruby-sdk/lib packages/ruby-sdk/test/opensend_test.rb
 ```
 
+## Agent setup
+
+This repo is designed to be understandable to coding agents, but agent setup is contributor workflow, not the product quickstart. Start with [`AGENTS.md`](./AGENTS.md) and [`CONTRIBUTING.md`](./CONTRIBUTING.md), branch from `staging`, use the existing Next.js/Playwright/Biome/Drizzle/Docker setup, and run the narrowest useful check while iterating before the full validation bar.
+
 ## Roadmap
 
 - [x] Webhook signature verification with Svix-compatible HMAC headers
@@ -461,7 +390,7 @@ Contributions are welcome. Read [`CONTRIBUTING.md`](./CONTRIBUTING.md), branch f
 
 ## License
 
-[Elastic License 2.0](./LICENSE) — free to use, modify, and self-host. The restriction: you cannot offer Opensend itself as a hosted email service to third parties.
+[Elastic License 2.0](./LICENSE) - free to use, modify, and self-host. The restriction: you cannot offer OpenSend itself as a hosted email service to third parties.
 
 ---
 
