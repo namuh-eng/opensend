@@ -113,7 +113,7 @@ export type ApiKeyServiceDependencies = {
 };
 
 function defaultGenerateRawKey(): string {
-  return `re_${randomUUID().replace(/-/g, "")}`;
+  return `os_${randomUUID().replace(/-/g, "")}`;
 }
 
 function hashApiKey(rawKey: string): string {

@@ -53,6 +53,19 @@ function createRepository(overrides: Partial<ApiKeyRepository> = {}) {
 }
 
 describe("api key service", () => {
+  it("generates OpenSend-prefixed API keys by default", async () => {
+    const service = createApiKeyService({
+      repository: createRepository(),
+    });
+
+    const result = await service.createApiKey({
+      name: "Default prefix",
+      userId: "user-1",
+    });
+
+    expect(result.token).toMatch(/^os_[a-f0-9]{32}$/);
+  });
+
   it("creates an API key with trimmed name, hashed token, preview, and cache invalidation", async () => {
     let inserted: ApiKeyInsert | null = null;
     const invalidateAuthCache = vi.fn<(_: string) => Promise<void>>();
