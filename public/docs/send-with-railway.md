@@ -16,14 +16,14 @@ If you self-host OpenSend on Railway, set `OPENSEND_BASE_URL` to your OpenSend a
 ## Node.js service example
 
 ```ts
-import { Resend } from "opensend";
+import { Opensend } from "opensend";
 
-const resend = new Resend(process.env.OPENSEND_API_KEY, {
+const opensend = new Opensend(process.env.OPENSEND_API_KEY, {
   baseUrl: process.env.OPENSEND_BASE_URL,
 });
 
 export async function sendWelcome(email: string) {
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await opensend.emails.send({
     from: "OpenSend <onboarding@updates.example.com>",
     to: email,
     subject: "Welcome",

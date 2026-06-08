@@ -1,8 +1,8 @@
 # Add Contact to Segment
 
-Add a contact to a segment. This page documents the OpenSend-owned API contract for `POST /api/contacts/{id}/segments`.
+Add an existing contact to an existing segment. This page documents the OpenSend-owned API contract for `POST /api/contacts/{id}/segments/{segment_id}`.
 
-`POST /api/contacts/{id}/segments`
+`POST /api/contacts/{id}/segments/{segment_id}`
 
 ## Authentication
 
@@ -14,31 +14,32 @@ Authorization: Bearer os_YOUR_API_KEY
 
 ## When to use it
 
-Contact routes manage audience records for the authenticated tenant. Segment and topic relationship endpoints only affect the target contact and never expose another tenant's audience data. Attach the related resource to the target contact after validating both records belong to the caller.
+Use this route to attach one tenant-scoped contact to one tenant-scoped segment after both records already exist. The contact path parameter can be a contact ID or email where the contact route supports that lookup. The segment ID is always supplied in the path.
 
 ## Parameters
 
-Path parameters identify the tenant-scoped resource. JSON body fields are validated by the route before any database write.
+- `id` — contact ID or email for the authenticated tenant.
+- `segment_id` — segment ID for the authenticated tenant.
 
 ## Request example
 
-```json
-{
-  "email": "ada@example.com",
-  "firstName": "Ada",
-  "lastName": "Lovelace"
-}
+No JSON body is required.
+
+```http
+POST /api/contacts/520784e2-887d-4c25-b53c-4ad46ad38100/segments/78261eea-8f8b-4381-83c6-79fa7120f1cf
+Authorization: Bearer os_YOUR_API_KEY
 ```
 
 ## Response
 
-Successful responses return JSON scoped to the authenticated tenant. A representative response shape is:
+Successful responses confirm the relationship mutation:
 
 ```json
 {
-  "id": "contact_123",
-  "email": "ada@example.com",
-  "subscribed": true
+  "object": "contact_segment",
+  "contact_id": "520784e2-887d-4c25-b53c-4ad46ad38100",
+  "segment_id": "78261eea-8f8b-4381-83c6-79fa7120f1cf",
+  "added": true
 }
 ```
 

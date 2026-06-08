@@ -177,6 +177,62 @@ describe("docs content shell", () => {
     expect(sdks).not.toMatch(/Java SDK|\\.NET SDK|Rust SDK/);
   });
 
+  it("keeps public SDK examples OpenSend-owned", () => {
+    const checkedRoots = [
+      path.join(process.cwd(), "public/docs"),
+      path.join(process.cwd(), "src/components"),
+    ];
+
+    for (const root of checkedRoots) {
+      for (const file of listTextFiles(root)) {
+        const content = readFileSync(file, "utf8");
+        expect(content, file).not.toMatch(/from ["']resend["']/i);
+        expect(content, file).not.toMatch(/require\(["']resend["']\)/i);
+        expect(content, file).not.toMatch(/import\(["']resend["']\)/i);
+        expect(content, file).not.toMatch(
+          /import \{\s*Resend\s*\} from ["']opensend["']/i,
+        );
+        expect(content, file).not.toMatch(/new Resend\(/);
+        expect(content, file).not.toContain("https://api.example.com");
+      }
+    }
+  });
+
+  it("keeps custom event and contact relationship examples route-specific", () => {
+    const docsRoot = path.join(process.cwd(), "public/docs");
+    const eventSend = readFileSync(
+      path.join(docsRoot, "api-reference/events/send.md"),
+      "utf8",
+    );
+    expect(eventSend).toContain('"payload": { "plan": "pro" }');
+    expect(eventSend).not.toContain('"properties": { "plan": "pro" }');
+    expect(eventSend).toContain('"object": "event_delivery"');
+
+    const addSegment = readFileSync(
+      path.join(docsRoot, "api-reference/contacts/add-contact-to-segment.md"),
+      "utf8",
+    );
+    expect(addSegment).toContain("No JSON body is required.");
+    expect(addSegment).toContain('"object": "contact_segment"');
+    expect(addSegment).toContain('"added": true');
+    expect(addSegment).not.toContain('"firstName": "Ada"');
+
+    const deleteSegment = readFileSync(
+      path.join(docsRoot, "api-reference/contacts/delete-contact-segment.md"),
+      "utf8",
+    );
+    expect(deleteSegment).toContain('"deleted": true');
+    expect(deleteSegment).not.toContain('"firstName": "Ada"');
+
+    const updateTopics = readFileSync(
+      path.join(docsRoot, "api-reference/contacts/update-contact-topics.md"),
+      "utf8",
+    );
+    expect(updateTopics).toContain('"topics": [');
+    expect(updateTopics).toContain('"object": "contact_topics"');
+    expect(updateTopics).not.toContain('"email": "ada@example.com"');
+  });
+
   it("documents implemented dashboard product areas with caveats", () => {
     const docsRoot = path.join(process.cwd(), "public/docs");
     const requiredDashboardDocs = [

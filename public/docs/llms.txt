@@ -53,13 +53,13 @@
 - [Get Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/get-contact-property.md): Retrieve one custom contact property definition.
 - [List Contact Properties](https://opensend.namuh.co/docs/api-reference/contact-properties/list-contact-properties.md): List custom contact properties available for segmentation and personalization.
 - [Update Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/update-contact-property.md): Update display metadata for a custom contact property.
-- [Add Contact to Segment](https://opensend.namuh.co/docs/api-reference/contacts/add-contact-to-segment.md): Add a contact to a segment. This page documents the OpenSend-owned API contract for POST /api/contacts/{id}/segments.
+- [Add Contact to Segment](https://opensend.namuh.co/docs/api-reference/contacts/add-contact-to-segment.md): Add an existing contact to an existing segment. This page documents the OpenSend-owned API contract for POST /api/contacts/{id}/segments/{segmentid}.
 - [Create Contact](https://opensend.namuh.co/docs/api-reference/contacts/create-contact.md): Create an audience contact. This page documents the OpenSend-owned API contract for POST /contacts.
-- [Delete Contact Segment](https://opensend.namuh.co/docs/api-reference/contacts/delete-contact-segment.md): Remove a contact from a segment. This page documents the OpenSend-owned API contract for DELETE /api/contacts/{id}/segments/{segmentid}.
+- [Delete Contact Segment](https://opensend.namuh.co/docs/api-reference/contacts/delete-contact-segment.md): Remove an existing contact from an existing segment. This page documents the OpenSend-owned API contract for DELETE /api/contacts/{id}/segments/{segmentid}.
 - [Delete Contact](https://opensend.namuh.co/docs/api-reference/contacts/delete-contact.md): Delete a contact. This page documents the OpenSend-owned API contract for DELETE /contacts/{contactid}.
 - [Retrieve Contact Topics](https://opensend.namuh.co/docs/api-reference/contacts/get-contact-topics.md): Get topic subscriptions for a contact. This page documents the OpenSend-owned API contract for GET /api/contacts/{id}/topics.
 - [Retrieve Contact](https://opensend.namuh.co/docs/api-reference/contacts/get-contact.md): Retrieve a contact by id or email where supported. This page documents the OpenSend-owned API contract for GET /contacts/{contactid}.
-- [List Contact Segments](https://opensend.namuh.co/docs/api-reference/contacts/list-contact-segments.md): List segments for a contact. This page documents the OpenSend-owned API contract for GET /api/contacts/{id}/segments.
+- [List Contact Segments](https://opensend.namuh.co/docs/api-reference/contacts/list-contact-segments.md): List segments assigned to a contact. This page documents the OpenSend-owned API contract for GET /api/contacts/{id}/segments.
 - [List Contacts](https://opensend.namuh.co/docs/api-reference/contacts/list-contacts.md): List contacts. This page documents the OpenSend-owned API contract for GET /contacts.
 - [Update Contact Topics](https://opensend.namuh.co/docs/api-reference/contacts/update-contact-topics.md): Update topic subscriptions for a contact. This page documents the OpenSend-owned API contract for PATCH /api/contacts/{id}/topics.
 - [Update Contact](https://opensend.namuh.co/docs/api-reference/contacts/update-contact.md): Update contact fields. This page documents the OpenSend-owned API contract for PATCH /contacts/{contactid}.
@@ -83,7 +83,7 @@
 - [Send Batch Emails](https://opensend.namuh.co/docs/api-reference/emails/send-batch-emails.md): Queue up to 100 emails in one request.
 - [Send Email](https://opensend.namuh.co/docs/api-reference/emails/send-email.md): Send one email through OpenSend.
 - [Update Scheduled Email](https://opensend.namuh.co/docs/api-reference/emails/update-email.md): Update a scheduled email before OpenSend sends it.
-- [List Events](https://opensend.namuh.co/docs/api-reference/events/list-events.md): List custom events. This page documents the OpenSend-owned API contract for GET /api/events.
+- [List Events](https://opensend.namuh.co/docs/api-reference/events/list-events.md): List custom events configured for automations. This page documents the OpenSend-owned API contract for GET /api/events.
 - [Send Custom Event](https://opensend.namuh.co/docs/api-reference/events/send.md): Send a custom event into OpenSend. This page documents the OpenSend-owned API contract for POST /api/events/send.
 - [List Logs](https://opensend.namuh.co/docs/api-reference/logs/list-logs.md): List API request logs for debugging delivery, auth, and integration behavior.
 - [Retrieve Log](https://opensend.namuh.co/docs/api-reference/logs/retrieve-log.md): Retrieve one API request log entry with request and response metadata.

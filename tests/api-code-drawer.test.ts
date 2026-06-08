@@ -83,7 +83,9 @@ describe("API Code Drawer", () => {
         (s: ApiCodeSection) => s.title === "Send Email",
       );
       expect(sendEmail).toBeDefined();
-      expect(sendEmail?.code.nodejs).toContain("Resend");
+      expect(sendEmail?.code.nodejs).toContain("Opensend");
+      expect(sendEmail?.code.nodejs).toContain("from 'opensend'");
+      expect(sendEmail?.code.nodejs).not.toContain("from 'resend'");
     });
 
     it("cURL code uses proper HTTP methods", () => {
@@ -94,6 +96,8 @@ describe("API Code Drawer", () => {
       expect(sendEmail).toBeDefined();
       expect(sendEmail?.code.curl).toContain("curl");
       expect(sendEmail?.code.curl).toContain("/emails");
+      expect(sendEmail?.code.curl).toContain("https://opensend.namuh.co");
+      expect(sendEmail?.code.curl).not.toContain("https://api.example.com");
     });
   });
 

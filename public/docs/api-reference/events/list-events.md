@@ -1,6 +1,6 @@
 # List Events
 
-List custom events. This page documents the OpenSend-owned API contract for `GET /api/events`.
+List custom events configured for automations. This page documents the OpenSend-owned API contract for `GET /api/events`.
 
 `GET /api/events`
 
@@ -14,28 +14,40 @@ Authorization: Bearer os_YOUR_API_KEY
 
 ## When to use it
 
-Event routes expose OpenSend automation events. Use them to inspect or send custom events that can trigger automations when your workspace has matching triggers configured. Return a tenant-scoped collection. Use pagination parameters when available instead of assuming a fixed result size.
+Use this route to inspect the custom event names and optional payload schemas that can trigger OpenSend automations for the authenticated tenant.
 
 ## Parameters
 
-`limit` and `after` may be used on collection routes when the route supports cursor pagination.
+`limit` and `after` may be used for cursor pagination.
 
 ## Response
 
-Successful responses return JSON scoped to the authenticated tenant. A representative response shape is:
+Successful responses return a tenant-scoped list of custom event definitions:
 
 ```json
 {
+  "object": "list",
   "data": [
-    { "id": "event_123", "type": "user.signed_up" }
+    {
+      "object": "event",
+      "id": "41f2a3a9-6cb2-4c94-9ec6-f9be3f0ee4e8",
+      "name": "user.signed_up",
+      "schema": {
+        "properties": {
+          "plan": { "type": "string" }
+        }
+      },
+      "created_at": "2026-06-08T00:00:00.000Z",
+      "updated_at": "2026-06-08T00:00:00.000Z"
+    }
   ],
-  "hasMore": false
+  "has_more": false
 }
 ```
 
 ## Errors
 
-OpenSend returns structured errors for missing authentication, validation failures, not-found resources, quota/rate-limit conditions, and unexpected server failures. Treat `404` as either missing or not owned by the caller.
+OpenSend returns structured errors for missing authentication, validation failures, not-found resources, quota/rate-limit conditions, and unexpected server failures.
 
 ## Self-hosting notes
 

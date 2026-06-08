@@ -14,9 +14,9 @@ Set `OPENSEND_BASE_URL` to your self-hosted app URL if you are not using OpenSen
 ## TypeScript handler
 
 ```ts
-import { Resend } from "opensend";
+import { Opensend } from "opensend";
 
-const resend = new Resend(process.env.OPENSEND_API_KEY, {
+const opensend = new Opensend(process.env.OPENSEND_API_KEY, {
   baseUrl: process.env.OPENSEND_BASE_URL,
 });
 
@@ -29,7 +29,7 @@ export async function handler(event: Event) {
     return { statusCode: 400, body: JSON.stringify({ error: "email is required" }) };
   }
 
-  const { data, error } = await resend.emails.send(
+  const { data, error } = await opensend.emails.send(
     {
       from: "OpenSend <onboarding@updates.example.com>",
       to: event.email,

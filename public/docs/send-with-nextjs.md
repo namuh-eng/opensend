@@ -23,9 +23,9 @@ Do not use `NEXT_PUBLIC_OPENSEND_API_KEY`.
 Create `app/api/send/route.ts`:
 
 ```ts
-import { Resend } from "opensend";
+import { Opensend } from "opensend";
 
-const resend = new Resend(process.env.OPENSEND_API_KEY, {
+const opensend = new Opensend(process.env.OPENSEND_API_KEY, {
   baseUrl: process.env.OPENSEND_BASE_URL,
 });
 
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "email is required" }, { status: 400 });
   }
 
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await opensend.emails.send({
     from: "OpenSend <onboarding@updates.example.com>",
     to: body.email,
     subject: "Welcome",
@@ -63,9 +63,9 @@ export async function POST(request: Request) {
 ```ts
 "use server";
 
-import { Resend } from "opensend";
+import { Opensend } from "opensend";
 
-const resend = new Resend(process.env.OPENSEND_API_KEY, {
+const opensend = new Opensend(process.env.OPENSEND_API_KEY, {
   baseUrl: process.env.OPENSEND_BASE_URL,
 });
 
@@ -73,7 +73,7 @@ export async function sendInvite(formData: FormData) {
   const email = String(formData.get("email") ?? "");
   if (!email) return { ok: false, error: "email is required" };
 
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await opensend.emails.send({
     from: "OpenSend <onboarding@updates.example.com>",
     to: email,
     subject: "You are invited",
@@ -95,7 +95,7 @@ npm install react react-dom @react-email/components
 
 ```tsx
 import { Html, Text } from "@react-email/components";
-import { Resend } from "opensend";
+import { Opensend } from "opensend";
 
 function InviteEmail({ workspace }: { workspace: string }) {
   return (
@@ -105,9 +105,9 @@ function InviteEmail({ workspace }: { workspace: string }) {
   );
 }
 
-const resend = new Resend(process.env.OPENSEND_API_KEY);
+const opensend = new Opensend(process.env.OPENSEND_API_KEY);
 
-await resend.emails.send({
+await opensend.emails.send({
   from: "OpenSend <onboarding@updates.example.com>",
   to: "user@example.com",
   subject: "Workspace invite",
