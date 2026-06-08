@@ -493,6 +493,9 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isPublicUnsubscribeRoute = pathname.startsWith("/unsubscribe/");
+  const isDevReceivingPreviewRoute =
+    process.env.NODE_ENV !== "production" &&
+    pathname === "/dev/receiving-preview";
 
   // Protect non-API page routes with session check. Resend-compatible send
   // aliases must bypass dashboard session redirects and use public API auth.
@@ -536,6 +539,7 @@ export async function middleware(request: NextRequest) {
       pathname === "/pricing" ||
       pathname.startsWith("/pricing/") ||
       pathname === "/status" ||
+      isDevReceivingPreviewRoute ||
       pathname.startsWith("/_next/") ||
       pathname.startsWith("/favicon")
     ) {

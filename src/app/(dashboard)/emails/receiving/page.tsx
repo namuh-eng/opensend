@@ -2,7 +2,7 @@ import { EmailsHeader } from "@/components/emails-header";
 import { ReceivingList } from "@/components/receiving-list";
 import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
-import { domains, receivingRoutes } from "@/lib/db/schema";
+import { domains, receivedEmails, receivingRoutes } from "@/lib/db/schema";
 import { createForwardingRuleService } from "@opensend/core";
 import { desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
@@ -26,6 +26,27 @@ export default async function EmailsReceivingPage() {
     .from(receivingRoutes)
     .where(eq(receivingRoutes.userId, session.user.id))
     .orderBy(desc(receivingRoutes.createdAt));
+
+  const allReceivedEmails = await db
+    .select({
+      id: receivedEmails.id,
+      from: receivedEmails.from,
+      to: receivedEmails.to,
+      subject: receivedEmails.subject,
+      status: receivedEmails.status,
+      text: receivedEmails.text,
+      routeDecisions: receivedEmails.routeDecisions,
+      replyMatchStatus: receivedEmails.replyMatchStatus,
+      threadId: receivedEmails.threadId,
+      replyToEmailId: receivedEmails.replyToEmailId,
+      contactId: receivedEmails.contactId,
+      attachments: receivedEmails.attachments,
+      createdAt: receivedEmails.createdAt,
+    })
+    .from(receivedEmails)
+    .where(eq(receivedEmails.userId, session.user.id))
+    .orderBy(desc(receivedEmails.createdAt))
+    .limit(50);
 
   const data = allDomains.map((d) => ({
     id: d.id,
@@ -81,6 +102,21 @@ export default async function EmailsReceivingPage() {
         }
       : null,
   }));
+  const receivedEmailData = allReceivedEmails.map((email) => ({
+    id: email.id,
+    from: email.from,
+    to: email.to,
+    subject: email.subject,
+    status: email.status,
+    preview: email.text,
+    route_decisions: email.routeDecisions ?? [],
+    reply_match_status: email.replyMatchStatus,
+    thread_id: email.threadId,
+    reply_to_email_id: email.replyToEmailId,
+    contact_id: email.contactId,
+    attachment_count: email.attachments?.length ?? 0,
+    created_at: email.createdAt.toISOString(),
+  }));
 
   return (
     <div>
@@ -89,6 +125,8 @@ export default async function EmailsReceivingPage() {
         domains={data}
         routes={routeData}
         forwardingRules={forwardingRuleData}
+        receivedEmails={receivedEmailData}
+        useDemoData={process.env.NODE_ENV !== "production"}
       />
     </div>
   );
