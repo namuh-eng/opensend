@@ -498,6 +498,25 @@ describe("broadcast tenant isolation", () => {
     });
 
     mockBroadcastService.sendBroadcast.mockRejectedValueOnce(
+      new MockBroadcastServiceError(
+        "invalid_input",
+        "scheduled_at must be a future ISO 8601 date-time",
+      ),
+    );
+
+    const invalidResponse = await POST(
+      jsonRequest("http://localhost:3015/api/broadcasts/broadcast-1/send", {
+        scheduled_at: "tomorrow",
+      }),
+      { params: Promise.resolve({ id: "broadcast-1" }) },
+    );
+
+    expect(invalidResponse.status).toBe(422);
+    await expect(invalidResponse.json()).resolves.toEqual({
+      error: "scheduled_at must be a future ISO 8601 date-time",
+    });
+
+    mockBroadcastService.sendBroadcast.mockRejectedValueOnce(
       new MockBroadcastServiceError("not_found", "Broadcast not found"),
     );
 

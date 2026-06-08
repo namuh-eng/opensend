@@ -1,4 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
+import {
+  normalizeScheduledAt,
+  scheduledAtValidationMessage,
+} from "../contracts/send";
 import { db } from "../db/client";
 import { broadcastRepo } from "../db/repositories/broadcastRepo";
 import { broadcasts, emails } from "../db/schema";
@@ -272,7 +276,25 @@ const defaultBroadcastRepository: BroadcastRepository = {
 
 function readScheduledAt(body: unknown): Date | null {
   const record = asRecord(body);
-  return record.scheduled_at ? new Date(String(record.scheduled_at)) : null;
+  if (!("scheduled_at" in record) || record.scheduled_at === undefined) {
+    return null;
+  }
+
+  if (typeof record.scheduled_at !== "string") {
+    throw new BroadcastServiceError(
+      "invalid_input",
+      scheduledAtValidationMessage,
+    );
+  }
+
+  try {
+    return normalizeScheduledAt(record.scheduled_at);
+  } catch {
+    throw new BroadcastServiceError(
+      "invalid_input",
+      scheduledAtValidationMessage,
+    );
+  }
 }
 
 function buildMetricsPayload(
@@ -374,9 +396,7 @@ export function createBroadcastService({
         );
       }
 
-      const scheduledAt = body.scheduled_at
-        ? new Date(String(body.scheduled_at))
-        : null;
+      const scheduledAt = readScheduledAt(body);
       const shouldSend = body.send === true;
       const [broadcast] = await repository.create({
         name,
