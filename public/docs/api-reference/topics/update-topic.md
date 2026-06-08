@@ -4,7 +4,16 @@ Update mutable subscription topic fields.
 
 `PATCH /topics/{id}`
 
-Compatibility note: `PATCH /api/topics/{id}` remains available for existing OpenSend integrations; new API clients should prefer the root compatibility path above. Browser dashboard navigation is preserved for page routes that share these names.
+Compatibility behavior:
+
+- `/topics/{id}` is the compatibility alias handled by middleware rewrite to `/api/topics/{id}`.
+- In compatibility mode, provided enum fields are validated strictly:
+  - `default_subscription` (or `defaultSubscription`): `opt_in` | `opt_out`
+  - `visibility`: `public` | `private`
+- `name` and `description` remain optional for partial updates.
+- `PATCH /api/topics/{id}` remains legacy compatible for existing OpenSend integrations.
+
+Note: compatibility updates are partial and strict on provided enum fields only.
 
 ## Authentication
 

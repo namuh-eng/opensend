@@ -56,7 +56,7 @@
 - [List Broadcasts](https://opensend.namuh.co/docs/api-reference/broadcasts/list-broadcasts.md): List broadcasts. This page documents the OpenSend-owned API contract for GET /broadcasts.
 - [Send Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/send-broadcast.md): Send or schedule a broadcast. This page documents the OpenSend-owned API contract for POST /broadcasts/{id}/send.
 - [Update Broadcast](https://opensend.namuh.co/docs/api-reference/broadcasts/update-broadcast.md): Update a broadcast. This page documents the OpenSend-owned API contract for PATCH /broadcasts/{id}.
-- [Create Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/create-contact-property.md): Create a custom contact property definition.
+- [Create Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/create-contact-property.md): Create a custom contact property definition for audience management.
 - [Delete Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/delete-contact-property.md): Delete a custom contact property definition.
 - [Get Contact Property](https://opensend.namuh.co/docs/api-reference/contact-properties/get-contact-property.md): Retrieve one custom contact property definition.
 - [List Contact Properties](https://opensend.namuh.co/docs/api-reference/contact-properties/list-contact-properties.md): List custom contact properties available for segmentation and personalization.

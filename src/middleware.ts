@@ -1,3 +1,7 @@
+import {
+  type RootApiAlias,
+  rootApiAliasHeaderName,
+} from "@/lib/root-api-compatibility";
 import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -466,6 +470,21 @@ function toApiCompatibilityPath(pathname: string): string {
   return pathname;
 }
 
+function rootApiAliasForPath(pathname: string): RootApiAlias | null {
+  if (pathname === "/topics" || pathname.startsWith("/topics/")) {
+    return "topics";
+  }
+
+  if (
+    pathname === "/contact-properties" ||
+    pathname.startsWith("/contact-properties/")
+  ) {
+    return "contact-properties";
+  }
+
+  return null;
+}
+
 function isSendApiPost(pathname: string, method: string): boolean {
   return (
     method === "POST" &&
@@ -644,54 +663,70 @@ export async function middleware(request: NextRequest) {
   const backend = getRateLimitBackend();
   const responseHeaders = new Headers({ "X-RateLimit-Backend": backend });
 
+  const rewriteHeaders = (path: string) => {
+    const headers = new Headers(responseHeaders);
+    const requestHeaders = new Headers(request.headers);
+    const aliasHeader = rootApiAliasForPath(path);
+    if (aliasHeader) {
+      headers.set(rootApiAliasHeaderName, aliasHeader);
+      requestHeaders.set(rootApiAliasHeaderName, aliasHeader);
+    }
+
+    return {
+      headers,
+      request: {
+        headers: requestHeaders,
+      },
+    };
+  };
+
   if (backend === "disabled") {
     if (isSingleSendPostAlias(pathname, request.method)) {
-      return NextResponse.rewrite(new URL("/api/emails", request.url), {
-        headers: responseHeaders,
-      });
+      return NextResponse.rewrite(
+        new URL("/api/emails", request.url),
+        rewriteHeaders(pathname),
+      );
     }
     if (isBatchSendPostAlias(pathname, request.method)) {
-      return NextResponse.rewrite(new URL("/api/emails/batch", request.url), {
-        headers: responseHeaders,
-      });
+      return NextResponse.rewrite(
+        new URL("/api/emails/batch", request.url),
+        rewriteHeaders(pathname),
+      );
     }
     if (isBroadcastsCollectionAlias(pathname, request.method)) {
-      return NextResponse.rewrite(new URL("/api/broadcasts", request.url), {
-        headers: responseHeaders,
-      });
+      return NextResponse.rewrite(
+        new URL("/api/broadcasts", request.url),
+        rewriteHeaders(pathname),
+      );
     }
     if (isApiKeyAlias) {
       return NextResponse.rewrite(
         new URL(toApiKeysPath(pathname), request.url),
-        {
-          headers: responseHeaders,
-        },
+        rewriteHeaders(pathname),
       );
     }
     if (isTemplateAlias) {
       return NextResponse.rewrite(
         new URL(toPublicTemplatesPath(pathname), request.url),
-        { headers: responseHeaders },
+        rewriteHeaders(pathname),
       );
     }
     if (isContactRelationshipAlias(pathname, request.method)) {
       return NextResponse.rewrite(
         new URL(toContactsApiPath(pathname), request.url),
-        {
-          headers: responseHeaders,
-        },
+        rewriteHeaders(pathname),
       );
     }
     if (isAutomationAlias) {
       return NextResponse.rewrite(
         new URL(toPublicAutomationsPath(pathname), request.url),
-        { headers: responseHeaders },
+        rewriteHeaders(pathname),
       );
     }
     if (isApiCompatibilityAlias) {
       return NextResponse.rewrite(
         new URL(toApiCompatibilityPath(pathname), request.url),
-        { headers: responseHeaders },
+        rewriteHeaders(pathname),
       );
     }
 
@@ -742,49 +777,51 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isSingleSendPostAlias(pathname, request.method)) {
-    return NextResponse.rewrite(new URL("/api/emails", request.url), {
-      headers: responseHeaders,
-    });
+    return NextResponse.rewrite(
+      new URL("/api/emails", request.url),
+      rewriteHeaders(pathname),
+    );
   }
   if (isBatchSendPostAlias(pathname, request.method)) {
-    return NextResponse.rewrite(new URL("/api/emails/batch", request.url), {
-      headers: responseHeaders,
-    });
+    return NextResponse.rewrite(
+      new URL("/api/emails/batch", request.url),
+      rewriteHeaders(pathname),
+    );
   }
   if (isBroadcastsCollectionAlias(pathname, request.method)) {
-    return NextResponse.rewrite(new URL("/api/broadcasts", request.url), {
-      headers: responseHeaders,
-    });
+    return NextResponse.rewrite(
+      new URL("/api/broadcasts", request.url),
+      rewriteHeaders(pathname),
+    );
   }
   if (isApiKeyAlias) {
-    return NextResponse.rewrite(new URL(toApiKeysPath(pathname), request.url), {
-      headers: responseHeaders,
-    });
+    return NextResponse.rewrite(
+      new URL(toApiKeysPath(pathname), request.url),
+      rewriteHeaders(pathname),
+    );
   }
   if (isTemplateAlias) {
     return NextResponse.rewrite(
       new URL(toPublicTemplatesPath(pathname), request.url),
-      { headers: responseHeaders },
+      rewriteHeaders(pathname),
     );
   }
   if (isContactRelationshipAlias(pathname, request.method)) {
     return NextResponse.rewrite(
       new URL(toContactsApiPath(pathname), request.url),
-      {
-        headers: responseHeaders,
-      },
+      rewriteHeaders(pathname),
     );
   }
   if (isAutomationAlias) {
     return NextResponse.rewrite(
       new URL(toPublicAutomationsPath(pathname), request.url),
-      { headers: responseHeaders },
+      rewriteHeaders(pathname),
     );
   }
   if (isApiCompatibilityAlias) {
     return NextResponse.rewrite(
       new URL(toApiCompatibilityPath(pathname), request.url),
-      { headers: responseHeaders },
+      rewriteHeaders(pathname),
     );
   }
 
