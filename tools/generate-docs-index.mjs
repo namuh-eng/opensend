@@ -58,6 +58,7 @@ function extractTitleAndSummary(markdown, relPath) {
 const SECTION_ORDER = [
   "start-here",
   "api-reference",
+  "guides",
   "dashboard",
   "webhooks",
   "knowledge-base",
@@ -98,6 +99,13 @@ const DOC_ORDER = [
   "mcp-server.md",
   "ai-onboarding.md",
   "agent-email-inbox-skill.md",
+  "guides/batch-sending.md",
+  "guides/inline-images-cid.md",
+  "guides/send-test-emails.md",
+  "guides/transactional-unsubscribe.md",
+  "guides/deliverability-insights.md",
+  "guides/webhook-storage.md",
+  "guides/settings-team-unsubscribe-operator-guide.md",
   "dashboard/api-keys/introduction.md",
   "dashboard/emails/introduction.md",
   "dashboard/emails/attachments.md",
@@ -167,6 +175,7 @@ const DOC_ORDER = [
 
 function sectionIdForRelPath(relPath) {
   if (relPath.startsWith("api-reference/")) return "api-reference";
+  if (relPath.startsWith("guides/")) return "guides";
   if (relPath.startsWith("dashboard/")) return "dashboard";
   if (relPath.startsWith("webhooks/")) return "webhooks";
   if (relPath.startsWith("knowledge-base/")) return "knowledge-base";
