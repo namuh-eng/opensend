@@ -103,6 +103,10 @@ export async function cleanupE2ERun(
     [`${userPrefix}%`],
   );
   await client.query(
+    "delete from integration_connections where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query(
     `delete from webhook_deliveries
      where event_id in (
        select id from email_events

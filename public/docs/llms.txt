@@ -23,7 +23,7 @@
 - [Send emails with Rails](https://opensend.namuh.co/docs/send-with-rails.md): Use the Ruby SDK from Rails controllers, jobs, mailer adapters, or service objects.
 - [Send emails with Sinatra](https://opensend.namuh.co/docs/send-with-sinatra.md): Use the Ruby SDK from Sinatra routes or background jobs.
 - [Send email with SMTP](https://opensend.namuh.co/docs/send-with-smtp.md): Send email over SMTP through the built-in OpenSend relay using an API key as the password.
-- [Integrations](https://opensend.namuh.co/docs/integrations.md): Integration guidance.
+- [Integrations](https://opensend.namuh.co/docs/integrations.md): OpenSend currently ships one app connector: the webhook / Zapier-style outbound
 - [OpenSend CLI](https://opensend.namuh.co/docs/cli.md): Command-line workflows for OpenSend.
 - [MCP Server](https://opensend.namuh.co/docs/mcp-server.md): Use OpenSend from MCP-compatible AI clients.
 - [AI Onboarding](https://opensend.namuh.co/docs/ai-onboarding.md): Onboard coding agents to OpenSend.

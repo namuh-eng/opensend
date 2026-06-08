@@ -66,7 +66,7 @@ Production values to plan before real traffic:
 | Scheduler auth | `INGESTER_JOB_TOKEN`, `INGESTER_SCHEDULER_INTERVAL_SECONDS` |
 | Inbound auth | `INGESTER_INBOUND_TOKEN` when `/events/inbound` is exposed |
 | Rate limiting/cache | `RATE_LIMIT_BACKEND=redis`, `REDIS_URL` |
-| Secret encryption | `WEBHOOK_SECRET_ENCRYPTION_KEY`, optional DKIM encryption key variables |
+| Secret encryption | `WEBHOOK_SECRET_ENCRYPTION_KEY`, optional `INTEGRATION_SECRET_ENCRYPTION_KEY`, optional DKIM encryption key variables |
 | Observability | Sentry, PostHog, CloudWatch, or OTel variables you explicitly configure |
 
 ## Database and migrations
@@ -128,7 +128,7 @@ Before sending real production traffic:
 4. Send a real SES-backed email and confirm provider success.
 5. Confirm SES/SNS events reach `/events/ses`.
 6. Confirm scheduled jobs run with the same `INGESTER_JOB_TOKEN` configured on the scheduler and ingester.
-7. Confirm rate limiting, queue, and secret-manager variables are set for shared deployments.
+7. Confirm rate limiting, queue, integration encryption, and secret-manager variables are set for shared deployments.
 
 Useful local checks:
 
