@@ -1,9 +1,9 @@
-// ABOUTME: E2E tests for Settings Team/Documents tabs — verifies honest disabled actions and OpenSend document copy
+// ABOUTME: E2E tests for Settings Team/Documents tabs — verifies live team actions and OpenSend document copy
 
 import { expect, test } from "./fixtures/auth";
 
 test.describe("Settings Team and Documents Page", () => {
-  test("team tab disables unavailable member management actions", async ({
+  test("team tab exposes live member management controls", async ({
     authenticatedPage: page,
   }) => {
     await page.goto("/settings");
@@ -11,18 +11,14 @@ test.describe("Settings Team and Documents Page", () => {
     await page.getByRole("button", { name: "Team" }).click();
 
     await expect(
-      page.getByText(/Team invitations and role editing are not available/),
+      page.getByText(/Invitation email delivery is not automatic/),
     ).toBeVisible();
 
     await expect(
       page.getByRole("button", { name: "Invite member" }),
     ).toBeDisabled();
-
-    const editButtons = page.getByRole("button", {
-      name: /Edit .* unavailable/,
-    });
-    await expect(editButtons.first()).toBeDisabled();
-    await expect(editButtons).toHaveCount(2);
+    await expect(page.getByLabel("Invite email")).toBeVisible();
+    await expect(page.getByLabel("Invitation token")).toBeVisible();
   });
 
   test("documents tab avoids Resend branding and marks unavailable docs", async ({

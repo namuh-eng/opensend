@@ -63,7 +63,8 @@ export function mapWorkspaceServiceError(error: unknown): Response {
       error.code === "forbidden"
         ? 403
         : error.code === "workspace_not_found" ||
-            error.code === "invite_not_found"
+            error.code === "invite_not_found" ||
+            error.code === "member_not_found"
           ? 404
           : 422;
     return Response.json({ error: error.message }, { status });

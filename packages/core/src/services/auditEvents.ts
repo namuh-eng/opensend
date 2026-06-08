@@ -28,7 +28,12 @@ export type AuditAction =
   | "webhook.updated"
   | "webhook.deleted"
   | "settings.updated"
-  | "team.updated";
+  | "team.updated"
+  | "team.invitation.created"
+  | "team.invitation.revoked"
+  | "team.invitation.accepted"
+  | "team.member.role_changed"
+  | "team.member.removed";
 
 export type AuditTargetType =
   | "api_key"

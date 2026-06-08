@@ -81,6 +81,18 @@ describe("workspace permission matrix", () => {
         async listMembers() {
           return [];
         },
+        async findMembershipById() {
+          return undefined;
+        },
+        async countMembershipsByRole() {
+          return 1;
+        },
+        async updateMembershipRole() {
+          return undefined;
+        },
+        async deleteMembership() {
+          return undefined;
+        },
         async createInvitation() {
           throw new Error("unexpected createInvitation");
         },
