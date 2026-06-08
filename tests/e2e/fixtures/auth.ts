@@ -158,6 +158,34 @@ export async function cleanupE2ERun(
     "delete from logs where user_id like $1 or document->>'test_run_id' = $2",
     [`${userPrefix}%`, runId],
   );
+  await client.query(
+    `delete from automation_runs
+     where user_id like $1
+        or automation_id in (
+          select id from automations
+          where user_id like $1 or document->>'test_run_id' = $2
+        )`,
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
+    `delete from automation_steps
+     where automation_id in (
+       select id from automations
+       where user_id like $1 or document->>'test_run_id' = $2
+     )`,
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
+    "delete from automations where user_id like $1 or document->>'test_run_id' = $2",
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
+    "delete from custom_event_deliveries where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query("delete from custom_events where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query("delete from templates where user_id like $1", [
     `${userPrefix}%`,
   ]);

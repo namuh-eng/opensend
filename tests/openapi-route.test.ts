@@ -21,6 +21,7 @@ const httpMethods = ["delete", "get", "patch", "post", "put"] as const;
 const supportedRootAliasOperations = [
   "DELETE /api-keys/{id}",
   "DELETE /audiences/{audience_id}",
+  "DELETE /automations/{automation_id}",
   "DELETE /broadcasts/{id}",
   "DELETE /contact-properties/{id}",
   "DELETE /contacts/{contact_id}",
@@ -34,6 +35,10 @@ const supportedRootAliasOperations = [
   "GET /api-keys",
   "GET /audiences",
   "GET /audiences/{audience_id}",
+  "GET /automations",
+  "GET /automations/{automation_id}",
+  "GET /automations/{automation_id}/runs",
+  "GET /automations/{automation_id}/runs/{run_id}",
   "GET /broadcasts",
   "GET /broadcasts/{id}",
   "GET /contact-properties",
@@ -67,6 +72,7 @@ const supportedRootAliasOperations = [
   "GET /topics/{id}",
   "GET /webhooks",
   "GET /webhooks/{id}",
+  "PATCH /automations/{automation_id}",
   "PATCH /broadcasts/{id}",
   "PATCH /contact-properties/{id}",
   "PATCH /contacts/{contact_id}",
@@ -79,6 +85,8 @@ const supportedRootAliasOperations = [
   "PATCH /webhooks/{id}",
   "POST /api-keys",
   "POST /audiences",
+  "POST /automations",
+  "POST /automations/{automation_id}/stop",
   "POST /broadcasts",
   "POST /broadcasts/{id}/send",
   "POST /contact-properties",
@@ -100,8 +108,6 @@ const supportedRootAliasOperations = [
 ] as const;
 
 const unsupportedRootAliasPaths = [
-  "/automations",
-  "/automations/{id}",
   "/broadcasts/{id}/metrics",
   "/domains/{id}/auto-configure",
 ] as const;

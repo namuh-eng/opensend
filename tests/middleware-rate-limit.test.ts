@@ -203,6 +203,13 @@ describe("middleware rate limiting", () => {
         "/emails/receiving/email_123/attachments/attachment_123",
         "/api/emails/receiving/email_123/attachments/attachment_123",
       ],
+      ["/automations", "/api/public/automations"],
+      ["/automations/auto_123", "/api/public/automations/auto_123"],
+      ["/automations/auto_123/runs", "/api/public/automations/auto_123/runs"],
+      [
+        "/automations/auto_123/runs/run_123",
+        "/api/public/automations/auto_123/runs/run_123",
+      ],
     ] as const;
 
     for (const [aliasPath, apiPath] of cases) {
@@ -227,11 +234,40 @@ describe("middleware rate limiting", () => {
   it("preserves browser dashboard GETs instead of rewriting compatibility aliases", async () => {
     const { middleware } = await import("@/middleware");
 
-    for (const aliasPath of ["/domains", "/webhooks", "/logs", "/emails"]) {
+    for (const aliasPath of [
+      "/domains",
+      "/webhooks",
+      "/logs",
+      "/emails",
+      "/automations",
+    ]) {
       const response = await middleware(
         makeRequest(`https://example.com${aliasPath}`, {
           method: "GET",
           headers: { accept: "text/html" },
+        }),
+      );
+
+      expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+      expect(response.headers.get("x-middleware-next")).toBe("1");
+    }
+
+    expect(mockGetSessionCookie).toHaveBeenCalled();
+  });
+
+  it("preserves browser/RSC dashboard automations routes instead of rewriting root API aliases", async () => {
+    const { middleware } = await import("@/middleware");
+
+    for (const aliasPath of ["/automations", "/automations/auto_123"]) {
+      const response = await middleware(
+        makeRequest(`https://example.com${aliasPath}`, {
+          method: "GET",
+          headers: {
+            accept: "*/*",
+            rsc: "1",
+            "next-router-state-tree": encodeURIComponent("[]"),
+            "next-url": aliasPath,
+          },
         }),
       );
 
@@ -257,6 +293,14 @@ describe("middleware rate limiting", () => {
       ["POST", "/contact-properties", "/api/properties"],
       ["DELETE", "/contact-properties/prop_123", "/api/properties/prop_123"],
       ["PATCH", "/emails/email_123", "/api/emails/email_123"],
+      ["POST", "/automations", "/api/public/automations"],
+      ["PATCH", "/automations/auto_123", "/api/public/automations/auto_123"],
+      ["DELETE", "/automations/auto_123", "/api/public/automations/auto_123"],
+      [
+        "POST",
+        "/automations/auto_123/stop",
+        "/api/public/automations/auto_123/stop",
+      ],
     ] as const;
 
     for (const [method, aliasPath, apiPath] of cases) {

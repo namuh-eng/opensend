@@ -190,6 +190,30 @@ function isApiKeysAlias(pathname: string, method: string): boolean {
   return parts[0] === "api-keys" && parts.length === 2 && method === "DELETE";
 }
 
+function isAutomationsAlias(pathname: string, method: string): boolean {
+  if (pathname === "/automations") return ["GET", "POST"].includes(method);
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "automations") return false;
+  if (parts.length === 2) return ["GET", "PATCH", "DELETE"].includes(method);
+  if (parts.length === 3 && parts[2] === "runs") return method === "GET";
+  if (parts.length === 3 && parts[2] === "stop") return method === "POST";
+  if (parts.length === 4 && parts[2] === "runs") return method === "GET";
+
+  return false;
+}
+
+function isAutomationGetAlias(pathname: string, method: string): boolean {
+  if (method !== "GET") return false;
+  if (pathname === "/automations") return true;
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "automations") return false;
+  if (parts.length === 2) return true;
+  if (parts.length === 3 && parts[2] === "runs") return true;
+  return parts.length === 4 && parts[2] === "runs";
+}
+
 function isTemplatesAlias(pathname: string, method: string): boolean {
   if (pathname === "/templates") return ["GET", "POST"].includes(method);
 
@@ -264,6 +288,15 @@ function shouldHandleTemplatesAlias(request: NextRequest): boolean {
   const { pathname } = request.nextUrl;
   if (!isTemplatesAlias(pathname, request.method)) return false;
   if (isTemplateGetAlias(pathname, request.method)) {
+    return isApiLikeRequest(request);
+  }
+  return true;
+}
+
+function shouldHandleAutomationsAlias(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl;
+  if (!isAutomationsAlias(pathname, request.method)) return false;
+  if (isAutomationGetAlias(pathname, request.method)) {
     return isApiLikeRequest(request);
   }
   return true;
@@ -382,6 +415,12 @@ function toPublicTemplatesPath(pathname: string): string {
     : pathname.replace(/^\/templates/, "/api/public/templates");
 }
 
+function toPublicAutomationsPath(pathname: string): string {
+  return pathname === "/automations"
+    ? "/api/public/automations"
+    : pathname.replace(/^\/automations/, "/api/public/automations");
+}
+
 function toApiKeysPath(pathname: string): string {
   return pathname === "/api-keys"
     ? "/api/api-keys"
@@ -471,6 +510,11 @@ function getRateLimitPathname(pathname: string, method: string): string {
       ? "/api/templates"
       : pathname.replace(/^\/templates/, "/api/templates");
   }
+  if (isAutomationsAlias(pathname, method)) {
+    return pathname === "/automations"
+      ? "/api/automations"
+      : pathname.replace(/^\/automations/, "/api/automations");
+  }
   if (
     isDomainsAlias(pathname, method) ||
     isWebhooksAlias(pathname, method) ||
@@ -545,6 +589,7 @@ export async function middleware(request: NextRequest) {
   const isBroadcastAlias = shouldHandleBroadcastsAlias(request);
   const isApiKeyAlias = shouldHandleApiKeysAlias(request);
   const isTemplateAlias = shouldHandleTemplatesAlias(request);
+  const isAutomationAlias = shouldHandleAutomationsAlias(request);
   const isApiCompatibilityAlias = shouldHandleApiCompatibilityAlias(request);
   if (
     !pathname.startsWith("/api/") &&
@@ -556,6 +601,7 @@ export async function middleware(request: NextRequest) {
     !isBroadcastAlias &&
     !isApiKeyAlias &&
     !isTemplateAlias &&
+    !isAutomationAlias &&
     !isApiCompatibilityAlias
   ) {
     // Logged-in users should never see the sign-in page — bounce them to the
@@ -634,6 +680,12 @@ export async function middleware(request: NextRequest) {
         {
           headers: responseHeaders,
         },
+      );
+    }
+    if (isAutomationAlias) {
+      return NextResponse.rewrite(
+        new URL(toPublicAutomationsPath(pathname), request.url),
+        { headers: responseHeaders },
       );
     }
     if (isApiCompatibilityAlias) {
@@ -721,6 +773,12 @@ export async function middleware(request: NextRequest) {
       {
         headers: responseHeaders,
       },
+    );
+  }
+  if (isAutomationAlias) {
+    return NextResponse.rewrite(
+      new URL(toPublicAutomationsPath(pathname), request.url),
+      { headers: responseHeaders },
     );
   }
   if (isApiCompatibilityAlias) {

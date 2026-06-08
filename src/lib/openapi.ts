@@ -107,6 +107,22 @@ const idPathParameter: ParameterObject = {
   schema: { type: "string", format: "uuid" },
 };
 
+const automationIdPathParameter: ParameterObject = {
+  name: "automation_id",
+  in: "path",
+  required: true,
+  description: "Automation ID.",
+  schema: { type: "string", format: "uuid" },
+};
+
+const automationRunIdPathParameter: ParameterObject = {
+  name: "run_id",
+  in: "path",
+  required: true,
+  description: "Automation run ID.",
+  schema: { type: "string", format: "uuid" },
+};
+
 const emailIdPathParameter: ParameterObject = {
   name: "email_id",
   in: "path",
@@ -1898,6 +1914,204 @@ export const openApiDocument = {
             content: jsonContent({
               $ref: "#/components/schemas/BroadcastMetrics",
             }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/automations": {
+      get: {
+        tags: ["Automations"],
+        summary: "List automations",
+        description:
+          "Root-compatible public API route. Requires a full-access API key; dashboard session cookies do not authorize this path.",
+        operationId: "listRootAutomations",
+        security: bearerSecurity,
+        parameters: [
+          ...paginationParameters,
+          {
+            name: "status",
+            in: "query",
+            description:
+              "Filter by automation status (draft, enabled, disabled).",
+            schema: {
+              type: "string",
+              enum: ["draft", "enabled", "disabled"],
+            },
+          },
+          {
+            name: "search",
+            in: "query",
+            description: "Full-text search filter.",
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Paginated automation list.",
+            content: jsonContent({
+              $ref: "#/components/schemas/AutomationList",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+      post: {
+        tags: ["Automations"],
+        summary: "Create an automation",
+        description:
+          "Root-compatible public API route. Requires a full-access API key; dashboard session cookies do not authorize this path.",
+        operationId: "createRootAutomation",
+        security: bearerSecurity,
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/CreateAutomationRequest",
+          }),
+        },
+        responses: {
+          "201": {
+            description: "Created automation.",
+            content: jsonContent({ $ref: "#/components/schemas/Automation" }),
+          },
+          ...errorResponses,
+        },
+      },
+    },
+    "/automations/{automation_id}": {
+      get: {
+        tags: ["Automations"],
+        summary: "Retrieve an automation",
+        description:
+          "Root-compatible public API route. Requires a full-access API key and returns only tenant-scoped records.",
+        operationId: "getRootAutomation",
+        security: bearerSecurity,
+        parameters: [automationIdPathParameter],
+        responses: {
+          "200": {
+            description: "Automation detail.",
+            content: jsonContent({ $ref: "#/components/schemas/Automation" }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Automations"],
+        summary: "Update an automation",
+        description:
+          "Root-compatible public API route. Requires a full-access API key and preserves OpenSend automation validation semantics.",
+        operationId: "updateRootAutomation",
+        security: bearerSecurity,
+        parameters: [automationIdPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateAutomationRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Updated automation.",
+            content: jsonContent({ $ref: "#/components/schemas/Automation" }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Automations"],
+        summary: "Delete an automation",
+        description:
+          "Deletes a disabled automation for the API-key tenant. Enabled automations must be stopped or disabled first.",
+        operationId: "deleteRootAutomation",
+        security: bearerSecurity,
+        parameters: [automationIdPathParameter],
+        responses: {
+          "200": {
+            description: "Automation deleted.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DeleteAutomationResponse",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          "409": {
+            description: "Cannot delete an enabled automation.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ErrorEnvelope",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+    },
+    "/automations/{automation_id}/runs": {
+      get: {
+        tags: ["Automations"],
+        summary: "List runs for an automation",
+        description:
+          "Root-compatible public API route. Requires a full-access API key and lists runs for a tenant-scoped automation.",
+        operationId: "listRootAutomationRuns",
+        security: bearerSecurity,
+        parameters: [
+          automationIdPathParameter,
+          ...paginationParameters,
+          {
+            name: "status",
+            in: "query",
+            description:
+              "Filter by run status. Multiple statuses may be comma-separated.",
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Paginated automation run list.",
+            content: jsonContent({
+              $ref: "#/components/schemas/AutomationRunList",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/automations/{automation_id}/runs/{run_id}": {
+      get: {
+        tags: ["Automations"],
+        summary: "Retrieve an automation run",
+        description:
+          "Root-compatible public API route. Requires a full-access API key and returns only runs belonging to the requested tenant-scoped automation.",
+        operationId: "getRootAutomationRun",
+        security: bearerSecurity,
+        parameters: [automationIdPathParameter, automationRunIdPathParameter],
+        responses: {
+          "200": {
+            description: "Automation run detail.",
+            content: jsonContent({
+              $ref: "#/components/schemas/AutomationRun",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/automations/{automation_id}/stop": {
+      post: {
+        tags: ["Automations"],
+        summary: "Stop an automation",
+        description:
+          "Idempotently sets the tenant-scoped automation status to disabled. Existing queued, waiting, or running automation runs are not cancelled by this route; use run cancellation for individual runs.",
+        operationId: "stopRootAutomation",
+        security: bearerSecurity,
+        parameters: [automationIdPathParameter],
+        responses: {
+          "200": {
+            description:
+              "Automation stopped and returned with status disabled.",
+            content: jsonContent({ $ref: "#/components/schemas/Automation" }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
           ...errorResponses,
