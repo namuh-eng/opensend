@@ -35,6 +35,7 @@ describe("docs content shell", () => {
       nav.find((section) => section.id === "start-here")?.items ?? [];
 
     expect(nav.map((section) => section.id)).toContain("api-reference");
+    expect(nav.map((section) => section.id)).toContain("guides");
     expect(nav.map((section) => section.id)).toContain("operations");
     expect(startHereItems.slice(0, 6).map((item) => item.relPath)).toEqual([
       "sdks.md",
@@ -52,6 +53,49 @@ describe("docs content shell", () => {
     expect(page?.markdown).toContain(
       "SES/SNS events should be delivered to the ingester service",
     );
+  });
+
+  it("indexes the priority send and operator guide pack", async () => {
+    const docsRoot = path.join(process.cwd(), "public/docs");
+    const guidePaths = [
+      "guides/batch-sending.md",
+      "guides/inline-images-cid.md",
+      "guides/send-test-emails.md",
+      "guides/transactional-unsubscribe.md",
+      "guides/deliverability-insights.md",
+      "guides/webhook-storage.md",
+      "guides/settings-team-unsubscribe-operator-guide.md",
+    ];
+    const nav = await getDocsNav();
+    const guideItems =
+      nav.find((section) => section.id === "guides")?.items ?? [];
+    const llms = readFileSync(
+      path.join(process.cwd(), "public/docs/llms.txt"),
+      "utf8",
+    );
+
+    expect(guideItems.map((item) => item.relPath)).toEqual(guidePaths);
+
+    for (const relPath of guidePaths) {
+      const markdown = readFileSync(path.join(docsRoot, relPath), "utf8");
+      expect(markdown.split(/\s+/).length).toBeGreaterThan(120);
+      expect(markdown).not.toContain("resend.com/docs");
+      expect(llms).toContain(`/docs/${relPath}`);
+    }
+
+    const transactional = readFileSync(
+      path.join(docsRoot, "guides/transactional-unsubscribe.md"),
+      "utf8",
+    );
+    expect(transactional).toContain("exactly one `to` recipient");
+    expect(transactional).toContain("UNSUBSCRIBE_SECRET");
+
+    const operator = readFileSync(
+      path.join(docsRoot, "guides/settings-team-unsubscribe-operator-guide.md"),
+      "utf8",
+    );
+    expect(operator).toContain("Team invitations and role editing are not");
+    expect(operator).toContain("preview-only");
   });
 
   it("keeps generated llms.txt on the OpenSend-owned hosted domain and docs order", () => {
