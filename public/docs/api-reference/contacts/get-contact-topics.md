@@ -1,8 +1,10 @@
 # Retrieve Contact Topics
 
-Get topic subscriptions for a contact. This page documents the OpenSend-owned API contract for `GET /api/contacts/{id}/topics`.
+Get topic subscriptions for a contact. This page documents the OpenSend-owned API contract for `GET /contacts/{contact_id}/topics`.
 
-`GET /api/contacts/{id}/topics`
+`GET /contacts/{contact_id}/topics`
+
+Compatibility note: `GET /api/contacts/{id}/topics` remains available for existing OpenSend integrations; new API clients should prefer the root compatibility path above.
 
 ## Authentication
 
@@ -18,7 +20,7 @@ Use this route to inspect one contact's topic preference state. It returns topic
 
 ## Parameters
 
-- `id` — contact ID or email for the authenticated tenant.
+- `contact_id` — contact ID or email for the authenticated tenant.
 
 ## Response
 

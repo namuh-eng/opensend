@@ -661,6 +661,50 @@ describe("middleware rate limiting", () => {
     expect(response.headers.get("x-ratelimit-backend")).toBe("redis");
   });
 
+  it("allows root contact relationship aliases and shares /api/contacts buckets", async () => {
+    process.env.RATE_LIMIT_BACKEND = "redis";
+    mockGetSessionCookie.mockReturnValue(null);
+    mockIncrCache.mockResolvedValue(1);
+
+    const { middleware } = await import("@/middleware");
+    const addSegment = await middleware(
+      makeRequest("https://example.com/contacts/contact_123/segments/seg_123", {
+        method: "POST",
+        headers: {
+          "x-forwarded-for": "203.0.113.10",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+    const updateTopics = await middleware(
+      makeRequest("https://example.com/contacts/contact_123/topics", {
+        method: "PATCH",
+        headers: {
+          "x-forwarded-for": "203.0.113.10",
+          authorization: "Bearer test-api-key",
+        },
+      }),
+    );
+
+    expect(mockGetSessionCookie).not.toHaveBeenCalled();
+    expect(mockIncrCache).toHaveBeenCalledWith(
+      "ratelimit:203.0.113.10:Bearer test-api-key:/api/contacts/contact_123/segments/seg_123",
+      60,
+    );
+    expect(mockIncrCache).toHaveBeenCalledWith(
+      "ratelimit:203.0.113.10:Bearer test-api-key:/api/contacts/contact_123/topics",
+      60,
+    );
+    expect(addSegment.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/contacts/contact_123/segments/seg_123",
+    );
+    expect(updateTopics.headers.get("x-middleware-rewrite")).toBe(
+      "https://example.com/api/contacts/contact_123/topics",
+    );
+    expect(addSegment.headers.get("x-ratelimit-backend")).toBe("redis");
+    expect(updateTopics.headers.get("x-ratelimit-backend")).toBe("redis");
+  });
+
   it("shares rate-limit buckets between root audiences aliases and /api/segments", async () => {
     process.env.RATE_LIMIT_BACKEND = "redis";
     mockGetSessionCookie.mockReturnValue(null);

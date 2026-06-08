@@ -1,8 +1,10 @@
 # Add Contact to Segment
 
-Add an existing contact to an existing segment. This page documents the OpenSend-owned API contract for `POST /api/contacts/{id}/segments/{segment_id}`.
+Add an existing contact to an existing segment. This page documents the OpenSend-owned API contract for `POST /contacts/{contact_id}/segments/{segment_id}`.
 
-`POST /api/contacts/{id}/segments/{segment_id}`
+`POST /contacts/{contact_id}/segments/{segment_id}`
+
+Compatibility note: `POST /api/contacts/{id}/segments/{segment_id}` remains available for existing OpenSend integrations; new API clients should prefer the root compatibility path above.
 
 ## Authentication
 
@@ -18,7 +20,7 @@ Use this route to attach one tenant-scoped contact to one tenant-scoped segment 
 
 ## Parameters
 
-- `id` — contact ID or email for the authenticated tenant.
+- `contact_id` — contact ID or email for the authenticated tenant.
 - `segment_id` — segment ID for the authenticated tenant.
 
 ## Request example
@@ -26,7 +28,7 @@ Use this route to attach one tenant-scoped contact to one tenant-scoped segment 
 No JSON body is required.
 
 ```http
-POST /api/contacts/520784e2-887d-4c25-b53c-4ad46ad38100/segments/78261eea-8f8b-4381-83c6-79fa7120f1cf
+POST /contacts/520784e2-887d-4c25-b53c-4ad46ad38100/segments/78261eea-8f8b-4381-83c6-79fa7120f1cf
 Authorization: Bearer os_YOUR_API_KEY
 ```
 
