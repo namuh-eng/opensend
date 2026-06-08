@@ -2,6 +2,23 @@
 
 First-party PHP SDK for OpenSend. This initial v1 slice focuses on the core send-email path and shared HTTP/error plumbing that future resource clients can reuse.
 
+## Support level
+
+This is a **partial, send-only PHP SDK**. Before copying examples, note that
+this package currently exposes only:
+
+- `client->emails->send(...)` for `POST /emails`
+- request options for idempotency keys
+- typed send request/response objects
+- typed OpenSend API error envelopes
+
+It does **not** yet expose PHP clients for email reads, batch sends, contacts,
+domains, suppressions, API keys, broadcasts, audiences, segments, topics,
+templates, webhooks, logs, contact properties, events, automations, receiving,
+dedicated IPs, or unsubscribe-page settings. Use the REST API and
+`/openapi.json` for those resources until matching PHP resource clients are
+added.
+
 ## Install
 
 Install from this repository until Packagist publishing is enabled:

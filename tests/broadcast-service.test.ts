@@ -3,8 +3,9 @@ import {
   type BroadcastRepository,
   BroadcastServiceError,
   createBroadcastService,
+  scheduledAtValidationMessage,
 } from "@opensend/core";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 type BroadcastRow = NonNullable<
   Awaited<ReturnType<BroadcastRepository["findByIdForUser"]>>
@@ -92,6 +93,10 @@ function makeRepository(
 }
 
 describe("broadcast service boundary", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("normalizes list filters and requires caller tenant scope", async () => {
     let capturedOptions: BroadcastListOptions | undefined;
     const service = createBroadcastService({
@@ -123,6 +128,9 @@ describe("broadcast service boundary", () => {
   });
 
   it("validates create input and stamps new broadcasts with the caller", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-02-01T00:00:00.000Z"));
+
     let capturedData: BroadcastInsert | undefined;
     const createdAt = new Date("2026-02-01T00:00:00Z");
     const service = createBroadcastService({
@@ -160,6 +168,7 @@ describe("broadcast service boundary", () => {
       subject: "Hello",
       audienceId: "segment-2",
       status: "scheduled",
+      scheduledAt: new Date("2026-03-01T00:00:00.000Z"),
       userId: "user-2",
     });
     expect(result).toEqual({
@@ -178,6 +187,80 @@ describe("broadcast service boundary", () => {
       code: "invalid_input",
       message: "from, subject, and segment_id are required",
     });
+  });
+
+  it("normalizes supported natural-language scheduled_at values on create", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
+
+    let capturedData: BroadcastInsert | undefined;
+    const service = createBroadcastService({
+      repository: makeRepository({
+        async create(data) {
+          capturedData = data;
+          return [makeBroadcast(data)];
+        },
+      }),
+    });
+
+    await expect(
+      service.createBroadcast({
+        userId: "user-2",
+        body: {
+          from: "team@example.com",
+          subject: "Hello",
+          segment_id: "segment-2",
+          send: true,
+          scheduled_at: "in 2 hours",
+        },
+      }),
+    ).resolves.toMatchObject({ status: "scheduled" });
+
+    expect(capturedData).toMatchObject({
+      status: "scheduled",
+      scheduledAt: new Date("2026-05-07T02:00:00.000Z"),
+    });
+  });
+
+  it("rejects invalid scheduled_at values on create before writing", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
+
+    let createCalled = false;
+    const service = createBroadcastService({
+      repository: makeRepository({
+        async create(data) {
+          createCalled = true;
+          return [makeBroadcast(data)];
+        },
+      }),
+    });
+
+    for (const scheduled_at of [
+      "tomorrow",
+      "2026-05-06T23:59:00.000Z",
+      "in 31 days",
+      123,
+      null,
+    ]) {
+      await expect(
+        service.createBroadcast({
+          userId: "user-2",
+          body: {
+            from: "team@example.com",
+            subject: "Hello",
+            segment_id: "segment-2",
+            send: true,
+            scheduled_at,
+          },
+        }),
+      ).rejects.toMatchObject({
+        code: "invalid_input",
+        message: scheduledAtValidationMessage,
+      });
+    }
+
+    expect(createCalled).toBe(false);
   });
 
   it("maps update aliases and scopes mutations by id plus user id", async () => {
@@ -224,6 +307,9 @@ describe("broadcast service boundary", () => {
   });
 
   it("queues or schedules draft broadcasts through tenant-scoped send methods", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
+
     let candidateLookup: { id: string; userId: string } | undefined;
     let updateInput: BroadcastSendInput | undefined;
     const service = createBroadcastService({
@@ -264,6 +350,30 @@ describe("broadcast service boundary", () => {
       scheduledAt: new Date("2026-06-01T00:00:00.000Z"),
     });
 
+    const naturalResult = await service.sendBroadcast({
+      id: "broadcast-4",
+      userId: "user-4",
+      body: { scheduled_at: "in 2 hours" },
+    });
+
+    expect(naturalResult).toEqual({
+      id: "broadcast-4",
+      status: "scheduled",
+      scheduledAt: new Date("2026-05-07T02:00:00.000Z"),
+    });
+
+    const immediateResult = await service.sendBroadcast({
+      id: "broadcast-4",
+      userId: "user-4",
+      body: {},
+    });
+
+    expect(immediateResult).toEqual({
+      id: "broadcast-4",
+      status: "queued",
+      scheduledAt: null,
+    });
+
     const sentService = createBroadcastService({
       repository: makeRepository({
         async findSendCandidateForUser() {
@@ -282,6 +392,48 @@ describe("broadcast service boundary", () => {
       code: "send_forbidden",
       message: "Cannot send a broadcast in queued status",
     });
+  });
+
+  it("rejects invalid scheduled_at values on send before status update", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-07T00:00:00.000Z"));
+
+    let updateCalled = false;
+    const service = createBroadcastService({
+      repository: makeRepository({
+        async updateSendStatusForUser(input) {
+          updateCalled = true;
+          return [
+            {
+              id: input.id,
+              status: input.status,
+              scheduledAt: input.scheduledAt,
+            },
+          ];
+        },
+      }),
+    });
+
+    for (const scheduled_at of [
+      "tomorrow",
+      "2026-05-06T23:59:00.000Z",
+      "in 31 days",
+      123,
+      null,
+    ]) {
+      await expect(
+        service.sendBroadcast({
+          id: "broadcast-4",
+          userId: "user-4",
+          body: { scheduled_at },
+        }),
+      ).rejects.toMatchObject({
+        code: "invalid_input",
+        message: scheduledAtValidationMessage,
+      });
+    }
+
+    expect(updateCalled).toBe(false);
   });
 
   it("computes broadcast metrics with cache key behavior and tenant-scoped aggregation", async () => {

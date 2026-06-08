@@ -1,8 +1,10 @@
 # Send Custom Event
 
-Send a custom event into OpenSend. This page documents the OpenSend-owned API contract for `POST /api/events/send`.
+Send a custom event into OpenSend. This page documents the OpenSend-owned API contract for `POST /events/send`.
 
-`POST /api/events/send`
+`POST /events/send`
+
+Legacy OpenSend callers may continue to use `POST /api/events/send` with the same request and response shape.
 
 ## Authentication
 
@@ -24,6 +26,8 @@ JSON body fields are validated before any database write. The route accepts:
 - `contact_id` or `contactId` — contact ID to associate with the event.
 - `email` — contact email to resolve instead of a contact ID.
 - `payload` — optional object passed to automations and schema validation.
+
+`properties` is not accepted for event delivery data; use `payload`.
 
 ## Request example
 

@@ -5,6 +5,10 @@ import com.opensend.models.EmailResponse;
 import com.opensend.models.SendEmailRequest;
 import java.util.List;
 
+// Support level: the JVM SDK is currently a partial, blocking client for
+// emails, contacts, domains, and suppressions. Use the REST API and
+// /openapi.json for other OpenSend resources until JVM resource clients are
+// added.
 final class PlainJvmExample {
   private PlainJvmExample() {}
 

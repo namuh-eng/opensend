@@ -33,8 +33,11 @@ describe("docs content shell", () => {
     const page = await getDocPage("self-hosting.md");
     const startHereItems =
       nav.find((section) => section.id === "start-here")?.items ?? [];
+    const operationsItems =
+      nav.find((section) => section.id === "operations")?.items ?? [];
 
     expect(nav.map((section) => section.id)).toContain("api-reference");
+    expect(nav.map((section) => section.id)).toContain("guides");
     expect(nav.map((section) => section.id)).toContain("operations");
     expect(startHereItems.slice(0, 6).map((item) => item.relPath)).toEqual([
       "sdks.md",
@@ -44,14 +47,60 @@ describe("docs content shell", () => {
       "send-with-nextjs.md",
       "send-with-express.md",
     ]);
+    expect(operationsItems.map((item) => item.relPath)).toEqual(
+      expect.arrayContaining(["self-hosting.md", "security.md", "privacy.md"]),
+    );
     expect(page?.title).toBe("Self Hosting");
     expect(page?.href).toBe("/docs/self-hosting");
     expect(
       page?.headings.some((heading) => heading.text === "Reference topology"),
     ).toBe(true);
     expect(page?.markdown).toContain(
-      "SES/SNS events should be delivered to the ingester service",
+      "Point SES SNS notifications at the ingester",
     );
+  });
+
+  it("indexes the priority send and operator guide pack", async () => {
+    const docsRoot = path.join(process.cwd(), "public/docs");
+    const guidePaths = [
+      "guides/batch-sending.md",
+      "guides/inline-images-cid.md",
+      "guides/send-test-emails.md",
+      "guides/transactional-unsubscribe.md",
+      "guides/deliverability-insights.md",
+      "guides/webhook-storage.md",
+      "guides/settings-team-unsubscribe-operator-guide.md",
+    ];
+    const nav = await getDocsNav();
+    const guideItems =
+      nav.find((section) => section.id === "guides")?.items ?? [];
+    const llms = readFileSync(
+      path.join(process.cwd(), "public/docs/llms.txt"),
+      "utf8",
+    );
+
+    expect(guideItems.map((item) => item.relPath)).toEqual(guidePaths);
+
+    for (const relPath of guidePaths) {
+      const markdown = readFileSync(path.join(docsRoot, relPath), "utf8");
+      expect(markdown.split(/\s+/).length).toBeGreaterThan(120);
+      expect(markdown).not.toContain("resend.com/docs");
+      expect(llms).toContain(`/docs/${relPath}`);
+    }
+
+    const transactional = readFileSync(
+      path.join(docsRoot, "guides/transactional-unsubscribe.md"),
+      "utf8",
+    );
+    expect(transactional).toContain("exactly one `to` recipient");
+    expect(transactional).toContain("UNSUBSCRIBE_SECRET");
+
+    const operator = readFileSync(
+      path.join(docsRoot, "guides/settings-team-unsubscribe-operator-guide.md"),
+      "utf8",
+    );
+    expect(operator).toContain("Team invitations and role editing are not");
+    expect(operator).toContain("preview-only");
   });
 
   it("keeps generated llms.txt on the OpenSend-owned hosted domain and docs order", () => {
@@ -204,9 +253,35 @@ describe("docs content shell", () => {
       path.join(docsRoot, "api-reference/events/send.md"),
       "utf8",
     );
+    expect(eventSend).toContain("POST /events/send");
     expect(eventSend).toContain('"payload": { "plan": "pro" }');
     expect(eventSend).not.toContain('"properties": { "plan": "pro" }');
+    expect(eventSend).toContain("`properties` is not accepted");
     expect(eventSend).toContain('"object": "event_delivery"');
+
+    const eventList = readFileSync(
+      path.join(docsRoot, "api-reference/events/list-events.md"),
+      "utf8",
+    );
+    const eventGet = readFileSync(
+      path.join(docsRoot, "api-reference/events/get-event.md"),
+      "utf8",
+    );
+    const eventUpdate = readFileSync(
+      path.join(docsRoot, "api-reference/events/update-event.md"),
+      "utf8",
+    );
+    const eventDelete = readFileSync(
+      path.join(docsRoot, "api-reference/events/delete-event.md"),
+      "utf8",
+    );
+    expect(eventList).toContain("GET /events");
+    expect(eventGet).toContain("GET /events/{identifier}");
+    expect(eventUpdate).toContain("PATCH /events/{identifier}");
+    expect(eventDelete).toContain("DELETE /events/{identifier}");
+    for (const content of [eventGet, eventUpdate, eventDelete]) {
+      expect(content).toContain("id` or the exact event `name`");
+    }
 
     const addSegment = readFileSync(
       path.join(docsRoot, "api-reference/contacts/add-contact-to-segment.md"),

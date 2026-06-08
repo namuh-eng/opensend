@@ -128,12 +128,27 @@ function isEmailCancelAlias(pathname: string, method: string): boolean {
   return parts[0] === "emails" && parts.length === 3 && parts[2] === "cancel";
 }
 
+function isContactRelationshipAlias(pathname: string, method: string): boolean {
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "contacts") return false;
+  if (parts.length === 3 && parts[2] === "segments") return method === "GET";
+  if (parts.length === 4 && parts[2] === "segments") {
+    return ["POST", "DELETE"].includes(method);
+  }
+  if (parts.length === 3 && parts[2] === "topics") {
+    return ["GET", "PATCH"].includes(method);
+  }
+
+  return false;
+}
+
 function isContactsAlias(pathname: string, method: string): boolean {
   if (pathname === "/contacts") return ["GET", "POST"].includes(method);
-  if (pathname.startsWith("/contacts/")) {
-    return ["GET", "PATCH", "DELETE"].includes(method);
-  }
-  return false;
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "contacts") return false;
+  if (parts.length === 2) return ["GET", "PATCH", "DELETE"].includes(method);
+  return isContactRelationshipAlias(pathname, method);
 }
 
 function isAudiencesAlias(pathname: string, method: string): boolean {
@@ -327,6 +342,17 @@ function isLogsAlias(pathname: string, method: string): boolean {
   return parts[0] === "logs" && parts.length === 2 && method === "GET";
 }
 
+function isEventsAlias(pathname: string, method: string): boolean {
+  if (pathname === "/events") return ["GET", "POST"].includes(method);
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "events") return false;
+  if (parts.length === 2 && parts[1] === "send") return method === "POST";
+  if (parts.length === 2) return ["GET", "PATCH", "DELETE"].includes(method);
+
+  return false;
+}
+
 function isContactPropertiesAlias(pathname: string, method: string): boolean {
   if (pathname === "/contact-properties") {
     return ["GET", "POST"].includes(method);
@@ -374,6 +400,7 @@ function shouldHandleApiCompatibilityAlias(request: NextRequest): boolean {
     isWebhooksAlias(pathname, method) ||
     isTopicsAlias(pathname, method) ||
     isLogsAlias(pathname, method) ||
+    isEventsAlias(pathname, method) ||
     isContactPropertiesAlias(pathname, method) ||
     isEmailReadAlias(pathname, method);
 
@@ -400,6 +427,12 @@ function toApiKeysPath(pathname: string): string {
     : pathname.replace(/^\/api-keys/, "/api/api-keys");
 }
 
+function toContactsApiPath(pathname: string): string {
+  return pathname === "/contacts"
+    ? "/api/contacts"
+    : pathname.replace(/^\/contacts/, "/api/contacts");
+}
+
 function toApiCompatibilityPath(pathname: string): string {
   if (pathname === "/domains") return "/api/domains";
   if (pathname.startsWith("/domains/")) {
@@ -416,6 +449,10 @@ function toApiCompatibilityPath(pathname: string): string {
   if (pathname === "/logs") return "/api/logs";
   if (pathname.startsWith("/logs/")) {
     return pathname.replace(/^\/logs/, "/api/logs");
+  }
+  if (pathname === "/events") return "/api/events";
+  if (pathname.startsWith("/events/")) {
+    return pathname.replace(/^\/events/, "/api/events");
   }
   if (pathname === "/contact-properties") return "/api/properties";
   if (pathname.startsWith("/contact-properties/")) {
@@ -483,6 +520,7 @@ function getRateLimitPathname(pathname: string, method: string): string {
     isWebhooksAlias(pathname, method) ||
     isTopicsAlias(pathname, method) ||
     isLogsAlias(pathname, method) ||
+    isEventsAlias(pathname, method) ||
     isContactPropertiesAlias(pathname, method) ||
     isEmailReadAlias(pathname, method)
   ) {
@@ -537,6 +575,9 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isPublicUnsubscribeRoute = pathname.startsWith("/unsubscribe/");
+  const isDevReceivingPreviewRoute =
+    process.env.NODE_ENV !== "production" &&
+    pathname === "/dev/receiving-preview";
 
   // Protect non-API page routes with session check. Resend-compatible send
   // aliases must bypass dashboard session redirects and use public API auth.
@@ -582,6 +623,7 @@ export async function middleware(request: NextRequest) {
       pathname === "/pricing" ||
       pathname.startsWith("/pricing/") ||
       pathname === "/status" ||
+      isDevReceivingPreviewRoute ||
       pathname.startsWith("/_next/") ||
       pathname.startsWith("/favicon")
     ) {
@@ -630,6 +672,14 @@ export async function middleware(request: NextRequest) {
       return NextResponse.rewrite(
         new URL(toPublicTemplatesPath(pathname), request.url),
         { headers: responseHeaders },
+      );
+    }
+    if (isContactRelationshipAlias(pathname, request.method)) {
+      return NextResponse.rewrite(
+        new URL(toContactsApiPath(pathname), request.url),
+        {
+          headers: responseHeaders,
+        },
       );
     }
     if (isAutomationAlias) {
@@ -715,6 +765,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(
       new URL(toPublicTemplatesPath(pathname), request.url),
       { headers: responseHeaders },
+    );
+  }
+  if (isContactRelationshipAlias(pathname, request.method)) {
+    return NextResponse.rewrite(
+      new URL(toContactsApiPath(pathname), request.url),
+      {
+        headers: responseHeaders,
+      },
     );
   }
   if (isAutomationAlias) {

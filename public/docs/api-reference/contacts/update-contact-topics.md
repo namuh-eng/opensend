@@ -1,8 +1,10 @@
 # Update Contact Topics
 
-Update topic subscriptions for a contact. This page documents the OpenSend-owned API contract for `PATCH /api/contacts/{id}/topics`.
+Update topic subscriptions for a contact. This page documents the OpenSend-owned API contract for `PATCH /contacts/{contact_id}/topics`.
 
-`PATCH /api/contacts/{id}/topics`
+`PATCH /contacts/{contact_id}/topics`
+
+Compatibility note: `PATCH /api/contacts/{id}/topics` remains available for existing OpenSend integrations; new API clients should prefer the root compatibility path above.
 
 ## Authentication
 
@@ -18,7 +20,7 @@ Use this route to replace one contact's topic subscription preferences. It only 
 
 ## Parameters
 
-- `id` — contact ID or email for the authenticated tenant.
+- `contact_id` — contact ID or email for the authenticated tenant.
 
 ## Request example
 

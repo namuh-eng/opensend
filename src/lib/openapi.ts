@@ -139,6 +139,14 @@ const contactIdPathParameter: ParameterObject = {
   schema: { type: "string" },
 };
 
+const contactSegmentIdPathParameter: ParameterObject = {
+  name: "segment_id",
+  in: "path",
+  required: true,
+  description: "Segment ID for the authenticated tenant.",
+  schema: { type: "string", format: "uuid" },
+};
+
 const audienceIdPathParameter: ParameterObject = {
   name: "audience_id",
   in: "path",
@@ -1372,7 +1380,7 @@ export const openApiDocument = {
           "200": {
             description: "Updated topic subscriptions.",
             content: jsonContent({
-              $ref: "#/components/schemas/ContactTopicList",
+              $ref: "#/components/schemas/ContactTopicsUpdateResponse",
             }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
@@ -2822,6 +2830,97 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/events/{identifier}": {
+      get: {
+        tags: ["Events"],
+        summary: "Retrieve a custom event definition",
+        description:
+          "Identifier may be the custom event definition ID or the exact event name. UUID-looking identifiers are resolved as IDs first, then by name within the authenticated tenant.",
+        operationId: "getEvent",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "identifier",
+            in: "path",
+            required: true,
+            description: "Custom event definition ID or exact event name.",
+            schema: { type: "string", minLength: 1, maxLength: 255 },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Custom event definition detail.",
+            content: jsonContent({ $ref: "#/components/schemas/CustomEvent" }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Events"],
+        summary: "Update a custom event definition",
+        description:
+          "Identifier may be the custom event definition ID or the exact event name. UUID-looking identifiers are resolved as IDs first, then by name within the authenticated tenant.",
+        operationId: "updateEvent",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "identifier",
+            in: "path",
+            required: true,
+            description: "Custom event definition ID or exact event name.",
+            schema: { type: "string", minLength: 1, maxLength: 255 },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateCustomEventRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Updated custom event definition.",
+            content: jsonContent({ $ref: "#/components/schemas/CustomEvent" }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          "409": {
+            description: "An event with this name already exists.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ErrorEnvelope",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Events"],
+        summary: "Delete a custom event definition by identifier",
+        description:
+          "Identifier may be the custom event definition ID or the exact event name. UUID-looking identifiers are resolved as IDs first, then by name within the authenticated tenant. The legacy `DELETE /api/events?id=...` collection form remains supported for existing callers.",
+        operationId: "deleteEventByIdentifier",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "identifier",
+            in: "path",
+            required: true,
+            description: "Custom event definition ID or exact event name.",
+            schema: { type: "string", minLength: 1, maxLength: 255 },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Event definition deleted.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DeleteCustomEventResponse",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
     "/api/events/send": {
       post: {
         tags: ["Events"],
@@ -3878,6 +3977,15 @@ export const openApiDocument = {
         },
         required: ["topics"],
       },
+      ContactTopicsUpdateResponse: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["contact_topics"] },
+          contact_id: { type: "string", format: "uuid" },
+          updated: { type: "boolean" },
+        },
+        required: ["object", "contact_id", "updated"],
+      },
       BulkContactRequest: {
         type: "object",
         description: "Bulk operation payload.",
@@ -4588,6 +4696,7 @@ export const openApiDocument = {
       CustomEvent: {
         type: "object",
         properties: {
+          object: { type: "string", enum: ["event"] },
           id: { type: "string", format: "uuid" },
           name: { type: "string" },
           schema: {
@@ -4597,8 +4706,16 @@ export const openApiDocument = {
             description: "JSON Schema definition for event payload validation.",
           },
           created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
         },
-        required: ["id", "name"],
+        required: [
+          "object",
+          "id",
+          "name",
+          "schema",
+          "created_at",
+          "updated_at",
+        ],
       },
       CustomEventList: {
         type: "object",
@@ -4629,13 +4746,32 @@ export const openApiDocument = {
         },
         required: ["name"],
       },
+      UpdateCustomEventRequest: {
+        type: "object",
+        description: "Provide at least one field to update.",
+        properties: {
+          name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 255,
+          },
+          schema: {
+            type: "object",
+            additionalProperties: true,
+            nullable: true,
+            description:
+              "Optional JSON Schema definition for payload validation. Pass null to clear it.",
+          },
+        },
+      },
       DeleteCustomEventResponse: {
         type: "object",
         properties: {
+          object: { type: "string", enum: ["event"] },
           id: { type: "string", format: "uuid" },
           deleted: { type: "boolean" },
         },
-        required: ["id", "deleted"],
+        required: ["object", "id", "deleted"],
       },
       SendCustomEventRequest: {
         type: "object",
@@ -4953,6 +5089,64 @@ function withAliasDetails(
   return { ...operation, ...overrides };
 }
 
+const canonicalEventsPath = mutablePaths["/api/events"];
+if (canonicalEventsPath?.get && canonicalEventsPath.post) {
+  mutablePaths["/events"] = {
+    get: withAliasDetails(canonicalEventsPath.get, {
+      summary: "List custom event definitions",
+      description:
+        "Root-compatible custom events collection route. Requires an OpenSend API key and returns event definitions scoped to the authenticated tenant.",
+      operationId: "listEventsRoot",
+    }),
+    post: withAliasDetails(canonicalEventsPath.post, {
+      summary: "Create a custom event definition",
+      description:
+        "Root-compatible custom events create route. Requires an OpenSend API key and creates the event definition for the authenticated tenant.",
+      operationId: "createEventRoot",
+    }),
+  };
+}
+
+const canonicalEventDetailPath = mutablePaths["/api/events/{identifier}"];
+if (
+  canonicalEventDetailPath?.get &&
+  canonicalEventDetailPath.patch &&
+  canonicalEventDetailPath.delete
+) {
+  mutablePaths["/events/{identifier}"] = {
+    get: withAliasDetails(canonicalEventDetailPath.get, {
+      summary: "Retrieve a custom event definition",
+      description:
+        "Root-compatible custom event detail route. The path identifier may be the event definition ID or exact event name, resolved within the authenticated tenant.",
+      operationId: "getEventRoot",
+    }),
+    patch: withAliasDetails(canonicalEventDetailPath.patch, {
+      summary: "Update a custom event definition",
+      description:
+        "Root-compatible custom event update route. The path identifier may be the event definition ID or exact event name, resolved within the authenticated tenant.",
+      operationId: "updateEventRoot",
+    }),
+    delete: withAliasDetails(canonicalEventDetailPath.delete, {
+      summary: "Delete a custom event definition",
+      description:
+        "Root-compatible custom event delete route. The path identifier may be the event definition ID or exact event name, resolved within the authenticated tenant. Existing DELETE /api/events?id=... callers remain supported.",
+      operationId: "deleteEventRoot",
+    }),
+  };
+}
+
+const canonicalEventSendPath = mutablePaths["/api/events/send"];
+if (canonicalEventSendPath?.post) {
+  mutablePaths["/events/send"] = {
+    post: withAliasDetails(canonicalEventSendPath.post, {
+      summary: "Send (fire) a custom event for a contact",
+      description:
+        "Root-compatible custom event delivery route. The request body uses payload for automation variables and schema validation; properties is not accepted.",
+      operationId: "sendEventRoot",
+    }),
+  };
+}
+
 const canonicalApiKeysPath = mutablePaths["/api/api-keys"];
 if (canonicalApiKeysPath?.get && canonicalApiKeysPath.post) {
   mutablePaths["/api-keys"] = {
@@ -5028,6 +5222,64 @@ if (
       description:
         "Root-compatible contact detail route implemented by src/app/contacts/[contact_id]/route.ts.",
       operationId: "deleteContactAlias",
+      parameters: [contactIdPathParameter],
+    }),
+  };
+}
+
+const canonicalContactSegmentsPath =
+  mutablePaths["/api/contacts/{id}/segments"];
+if (canonicalContactSegmentsPath?.get) {
+  mutablePaths["/contacts/{contact_id}/segments"] = {
+    get: withAliasDetails(canonicalContactSegmentsPath.get, {
+      summary: "List segments a contact belongs to",
+      description:
+        "Root-compatible contact segment relationship route implemented by src/app/contacts/[contact_id]/segments/route.ts.",
+      operationId: "listContactSegmentsAlias",
+      parameters: [contactIdPathParameter],
+    }),
+  };
+}
+
+const canonicalContactSegmentMutationPath =
+  mutablePaths["/api/contacts/{id}/segments/{segment_id}"];
+if (
+  canonicalContactSegmentMutationPath?.post &&
+  canonicalContactSegmentMutationPath.delete
+) {
+  mutablePaths["/contacts/{contact_id}/segments/{segment_id}"] = {
+    post: withAliasDetails(canonicalContactSegmentMutationPath.post, {
+      summary: "Add a contact to a segment",
+      description:
+        "Root-compatible contact segment relationship route implemented by src/app/contacts/[contact_id]/segments/[segment_id]/route.ts.",
+      operationId: "addContactToSegmentAlias",
+      parameters: [contactIdPathParameter, contactSegmentIdPathParameter],
+    }),
+    delete: withAliasDetails(canonicalContactSegmentMutationPath.delete, {
+      summary: "Remove a contact from a segment",
+      description:
+        "Root-compatible contact segment relationship route implemented by src/app/contacts/[contact_id]/segments/[segment_id]/route.ts.",
+      operationId: "removeContactFromSegmentAlias",
+      parameters: [contactIdPathParameter, contactSegmentIdPathParameter],
+    }),
+  };
+}
+
+const canonicalContactTopicsPath = mutablePaths["/api/contacts/{id}/topics"];
+if (canonicalContactTopicsPath?.get && canonicalContactTopicsPath.patch) {
+  mutablePaths["/contacts/{contact_id}/topics"] = {
+    get: withAliasDetails(canonicalContactTopicsPath.get, {
+      summary: "List topic subscriptions for a contact",
+      description:
+        "Root-compatible contact topic relationship route implemented by src/app/contacts/[contact_id]/topics/route.ts.",
+      operationId: "listContactTopicsAlias",
+      parameters: [contactIdPathParameter],
+    }),
+    patch: withAliasDetails(canonicalContactTopicsPath.patch, {
+      summary: "Update topic subscriptions for a contact",
+      description:
+        "Root-compatible contact topic relationship route implemented by src/app/contacts/[contact_id]/topics/route.ts.",
+      operationId: "updateContactTopicsAlias",
       parameters: [contactIdPathParameter],
     }),
   };

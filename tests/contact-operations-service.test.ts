@@ -86,8 +86,8 @@ function createRepository(
     async findSegmentByIdForUser() {
       return segmentRow();
     },
-    async findTopicByIdForUser() {
-      return topicRow();
+    async findTopicByIdForUser(topicId: string) {
+      return topicRow({ id: topicId });
     },
     ...overrides,
   };
@@ -340,6 +340,40 @@ describe("contact operations service", () => {
       contact_id: "contact-1",
       updated: true,
     });
+  });
+
+  it("rejects topic updates for missing or cross-tenant topics", async () => {
+    const updateContactForUser = vi
+      .fn<ContactOperationsRepository["updateContactForUser"]>()
+      .mockResolvedValue(undefined);
+    const service = createContactOperationsService({
+      repository: createRepository({
+        updateContactForUser,
+        async findTopicByIdForUser(topicId) {
+          return topicId === "topic-owned"
+            ? topicRow({ id: topicId })
+            : undefined;
+        },
+      }),
+    });
+
+    await expect(
+      service.updateContactTopics({
+        userId: "user-1",
+        idOrEmail: "contact-1",
+        body: {
+          topics: [
+            { id: "topic-owned", subscription: "opt_in" },
+            { id: "topic-other", subscription: "opt_in" },
+          ],
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "not_found",
+      message: "Topic not found",
+      status: 404,
+    } satisfies Partial<ContactOperationsServiceError>);
+    expect(updateContactForUser).not.toHaveBeenCalled();
   });
 
   it("does not parse update topics body when the contact is not found", async () => {
