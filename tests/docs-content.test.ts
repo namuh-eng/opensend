@@ -248,9 +248,35 @@ describe("docs content shell", () => {
       path.join(docsRoot, "api-reference/events/send.md"),
       "utf8",
     );
+    expect(eventSend).toContain("POST /events/send");
     expect(eventSend).toContain('"payload": { "plan": "pro" }');
     expect(eventSend).not.toContain('"properties": { "plan": "pro" }');
+    expect(eventSend).toContain("`properties` is not accepted");
     expect(eventSend).toContain('"object": "event_delivery"');
+
+    const eventList = readFileSync(
+      path.join(docsRoot, "api-reference/events/list-events.md"),
+      "utf8",
+    );
+    const eventGet = readFileSync(
+      path.join(docsRoot, "api-reference/events/get-event.md"),
+      "utf8",
+    );
+    const eventUpdate = readFileSync(
+      path.join(docsRoot, "api-reference/events/update-event.md"),
+      "utf8",
+    );
+    const eventDelete = readFileSync(
+      path.join(docsRoot, "api-reference/events/delete-event.md"),
+      "utf8",
+    );
+    expect(eventList).toContain("GET /events");
+    expect(eventGet).toContain("GET /events/{identifier}");
+    expect(eventUpdate).toContain("PATCH /events/{identifier}");
+    expect(eventDelete).toContain("DELETE /events/{identifier}");
+    for (const content of [eventGet, eventUpdate, eventDelete]) {
+      expect(content).toContain("id` or the exact event `name`");
+    }
 
     const addSegment = readFileSync(
       path.join(docsRoot, "api-reference/contacts/add-contact-to-segment.md"),

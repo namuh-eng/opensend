@@ -83,8 +83,11 @@
 - [Send Batch Emails](https://opensend.namuh.co/docs/api-reference/emails/send-batch-emails.md): Queue up to 100 emails in one request.
 - [Send Email](https://opensend.namuh.co/docs/api-reference/emails/send-email.md): Send one email through OpenSend.
 - [Update Scheduled Email](https://opensend.namuh.co/docs/api-reference/emails/update-email.md): Update a scheduled email before OpenSend sends it.
-- [List Events](https://opensend.namuh.co/docs/api-reference/events/list-events.md): List custom events configured for automations. This page documents the OpenSend-owned API contract for GET /api/events.
-- [Send Custom Event](https://opensend.namuh.co/docs/api-reference/events/send.md): Send a custom event into OpenSend. This page documents the OpenSend-owned API contract for POST /api/events/send.
+- [Delete Event](https://opensend.namuh.co/docs/api-reference/events/delete-event.md): Delete a custom event definition. This page documents the OpenSend-owned API contract for DELETE /events/{identifier}.
+- [Get Event](https://opensend.namuh.co/docs/api-reference/events/get-event.md): Retrieve one custom event definition. This page documents the OpenSend-owned API contract for GET /events/{identifier}.
+- [List Events](https://opensend.namuh.co/docs/api-reference/events/list-events.md): List custom event definitions configured for automations. This page documents the OpenSend-owned API contract for GET /events.
+- [Send Custom Event](https://opensend.namuh.co/docs/api-reference/events/send.md): Send a custom event into OpenSend. This page documents the OpenSend-owned API contract for POST /events/send.
+- [Update Event](https://opensend.namuh.co/docs/api-reference/events/update-event.md): Update a custom event definition. This page documents the OpenSend-owned API contract for PATCH /events/{identifier}.
 - [List Logs](https://opensend.namuh.co/docs/api-reference/logs/list-logs.md): List API request logs for debugging delivery, auth, and integration behavior.
 - [Retrieve Log](https://opensend.namuh.co/docs/api-reference/logs/retrieve-log.md): Retrieve one API request log entry with request and response metadata.
 - [Create Segment](https://opensend.namuh.co/docs/api-reference/segments/create-segment.md): Create a segment. This page documents the OpenSend-owned API contract for POST /segments.

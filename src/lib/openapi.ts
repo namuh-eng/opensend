@@ -2616,6 +2616,97 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/events/{identifier}": {
+      get: {
+        tags: ["Events"],
+        summary: "Retrieve a custom event definition",
+        description:
+          "Identifier may be the custom event definition ID or the exact event name. UUID-looking identifiers are resolved as IDs first, then by name within the authenticated tenant.",
+        operationId: "getEvent",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "identifier",
+            in: "path",
+            required: true,
+            description: "Custom event definition ID or exact event name.",
+            schema: { type: "string", minLength: 1, maxLength: 255 },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Custom event definition detail.",
+            content: jsonContent({ $ref: "#/components/schemas/CustomEvent" }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Events"],
+        summary: "Update a custom event definition",
+        description:
+          "Identifier may be the custom event definition ID or the exact event name. UUID-looking identifiers are resolved as IDs first, then by name within the authenticated tenant.",
+        operationId: "updateEvent",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "identifier",
+            in: "path",
+            required: true,
+            description: "Custom event definition ID or exact event name.",
+            schema: { type: "string", minLength: 1, maxLength: 255 },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateCustomEventRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Updated custom event definition.",
+            content: jsonContent({ $ref: "#/components/schemas/CustomEvent" }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          "409": {
+            description: "An event with this name already exists.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ErrorEnvelope",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Events"],
+        summary: "Delete a custom event definition by identifier",
+        description:
+          "Identifier may be the custom event definition ID or the exact event name. UUID-looking identifiers are resolved as IDs first, then by name within the authenticated tenant. The legacy `DELETE /api/events?id=...` collection form remains supported for existing callers.",
+        operationId: "deleteEventByIdentifier",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "identifier",
+            in: "path",
+            required: true,
+            description: "Custom event definition ID or exact event name.",
+            schema: { type: "string", minLength: 1, maxLength: 255 },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Event definition deleted.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DeleteCustomEventResponse",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
     "/api/events/send": {
       post: {
         tags: ["Events"],
@@ -4391,6 +4482,7 @@ export const openApiDocument = {
       CustomEvent: {
         type: "object",
         properties: {
+          object: { type: "string", enum: ["event"] },
           id: { type: "string", format: "uuid" },
           name: { type: "string" },
           schema: {
@@ -4400,8 +4492,16 @@ export const openApiDocument = {
             description: "JSON Schema definition for event payload validation.",
           },
           created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
         },
-        required: ["id", "name"],
+        required: [
+          "object",
+          "id",
+          "name",
+          "schema",
+          "created_at",
+          "updated_at",
+        ],
       },
       CustomEventList: {
         type: "object",
@@ -4432,13 +4532,32 @@ export const openApiDocument = {
         },
         required: ["name"],
       },
+      UpdateCustomEventRequest: {
+        type: "object",
+        description: "Provide at least one field to update.",
+        properties: {
+          name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 255,
+          },
+          schema: {
+            type: "object",
+            additionalProperties: true,
+            nullable: true,
+            description:
+              "Optional JSON Schema definition for payload validation. Pass null to clear it.",
+          },
+        },
+      },
       DeleteCustomEventResponse: {
         type: "object",
         properties: {
+          object: { type: "string", enum: ["event"] },
           id: { type: "string", format: "uuid" },
           deleted: { type: "boolean" },
         },
-        required: ["id", "deleted"],
+        required: ["object", "id", "deleted"],
       },
       SendCustomEventRequest: {
         type: "object",
@@ -4754,6 +4873,64 @@ function withAliasDetails(
   overrides: Partial<OperationObject>,
 ): OperationObject {
   return { ...operation, ...overrides };
+}
+
+const canonicalEventsPath = mutablePaths["/api/events"];
+if (canonicalEventsPath?.get && canonicalEventsPath.post) {
+  mutablePaths["/events"] = {
+    get: withAliasDetails(canonicalEventsPath.get, {
+      summary: "List custom event definitions",
+      description:
+        "Root-compatible custom events collection route. Requires an OpenSend API key and returns event definitions scoped to the authenticated tenant.",
+      operationId: "listEventsRoot",
+    }),
+    post: withAliasDetails(canonicalEventsPath.post, {
+      summary: "Create a custom event definition",
+      description:
+        "Root-compatible custom events create route. Requires an OpenSend API key and creates the event definition for the authenticated tenant.",
+      operationId: "createEventRoot",
+    }),
+  };
+}
+
+const canonicalEventDetailPath = mutablePaths["/api/events/{identifier}"];
+if (
+  canonicalEventDetailPath?.get &&
+  canonicalEventDetailPath.patch &&
+  canonicalEventDetailPath.delete
+) {
+  mutablePaths["/events/{identifier}"] = {
+    get: withAliasDetails(canonicalEventDetailPath.get, {
+      summary: "Retrieve a custom event definition",
+      description:
+        "Root-compatible custom event detail route. The path identifier may be the event definition ID or exact event name, resolved within the authenticated tenant.",
+      operationId: "getEventRoot",
+    }),
+    patch: withAliasDetails(canonicalEventDetailPath.patch, {
+      summary: "Update a custom event definition",
+      description:
+        "Root-compatible custom event update route. The path identifier may be the event definition ID or exact event name, resolved within the authenticated tenant.",
+      operationId: "updateEventRoot",
+    }),
+    delete: withAliasDetails(canonicalEventDetailPath.delete, {
+      summary: "Delete a custom event definition",
+      description:
+        "Root-compatible custom event delete route. The path identifier may be the event definition ID or exact event name, resolved within the authenticated tenant. Existing DELETE /api/events?id=... callers remain supported.",
+      operationId: "deleteEventRoot",
+    }),
+  };
+}
+
+const canonicalEventSendPath = mutablePaths["/api/events/send"];
+if (canonicalEventSendPath?.post) {
+  mutablePaths["/events/send"] = {
+    post: withAliasDetails(canonicalEventSendPath.post, {
+      summary: "Send (fire) a custom event for a contact",
+      description:
+        "Root-compatible custom event delivery route. The request body uses payload for automation variables and schema validation; properties is not accepted.",
+      operationId: "sendEventRoot",
+    }),
+  };
 }
 
 const canonicalApiKeysPath = mutablePaths["/api/api-keys"];

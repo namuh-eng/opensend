@@ -1,8 +1,10 @@
 # List Events
 
-List custom events configured for automations. This page documents the OpenSend-owned API contract for `GET /api/events`.
+List custom event definitions configured for automations. This page documents the OpenSend-owned API contract for `GET /events`.
 
-`GET /api/events`
+`GET /events`
+
+Legacy OpenSend callers may continue to use `GET /api/events` with the same request and response shape.
 
 ## Authentication
 
@@ -47,7 +49,7 @@ Successful responses return a tenant-scoped list of custom event definitions:
 
 ## Errors
 
-OpenSend returns structured errors for missing authentication, validation failures, not-found resources, quota/rate-limit conditions, and unexpected server failures.
+OpenSend returns structured errors for missing authentication, validation failures, quota/rate-limit conditions, and unexpected server failures.
 
 ## Self-hosting notes
 

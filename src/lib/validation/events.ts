@@ -28,6 +28,17 @@ export const createCustomEventSchema = z.object({
   schema: eventSchemaDefinitionSchema.optional(),
 });
 
+export const updateCustomEventSchema = z
+  .object({
+    name: eventNameSchema.optional(),
+    schema: eventSchemaDefinitionSchema.nullable().optional(),
+  })
+  .refine((data) => data.name !== undefined || data.schema !== undefined, {
+    message: "Provide at least one field to update",
+  });
+
+export const eventIdentifierSchema = z.string().min(1).max(255);
+
 export const listEventsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
   after: z.string().min(1).optional(),
@@ -70,6 +81,7 @@ export const sendEventSchema = z
   });
 
 export type CreateCustomEventRequest = z.infer<typeof createCustomEventSchema>;
+export type UpdateCustomEventRequest = z.infer<typeof updateCustomEventSchema>;
 export type SendEventRequest = z.infer<typeof sendEventSchema>;
 export {
   isRecord,
