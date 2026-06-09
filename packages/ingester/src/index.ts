@@ -116,10 +116,32 @@ function getExpectedSesEventsTopicArn(): string | null {
   return raw;
 }
 
+function getExpectedInboundSesS3TopicArn(): string | null {
+  const raw = [
+    process.env.INBOUND_SES_S3_SNS_TOPIC_ARN,
+    process.env.SES_INBOUND_S3_SNS_TOPIC_ARN,
+    process.env.SES_EVENTS_SNS_TOPIC_ARN,
+  ]
+    .map((value) => value?.trim())
+    .find((value) => value);
+  if (!raw || raw === "undefined" || raw === "null") return null;
+  return raw;
+}
+
 function assertAllowedSesEventsTopicArn(topicArn: string): void {
   const expectedTopicArn = getExpectedSesEventsTopicArn();
   if (!expectedTopicArn || topicArn !== expectedTopicArn) {
     throw new SnsValidationError("SES SNS topic is not allowed", 403);
+  }
+}
+
+function assertAllowedInboundSesS3TopicArn(topicArn: string): void {
+  const expectedTopicArn = getExpectedInboundSesS3TopicArn();
+  if (!expectedTopicArn || topicArn !== expectedTopicArn) {
+    throw new SnsValidationError(
+      "Inbound SES S3 SNS topic is not allowed",
+      403,
+    );
   }
 }
 
@@ -534,6 +556,7 @@ app.post("/events/inbound/ses-s3", async (c) => {
     const snsMessage = parseSnsEnvelope(body, snsType);
 
     await verifySnsSignature(snsMessage);
+    assertAllowedInboundSesS3TopicArn(snsMessage.TopicArn);
 
     if (snsMessage.Type === "SubscriptionConfirmation") {
       logTelemetry(

@@ -21,12 +21,12 @@ export OPENSEND_BASE_URL="http://localhost:3015"
 
 ```ts
 import express from "express";
-import { Resend } from "opensend";
+import { Opensend } from "opensend";
 
 const app = express();
 app.use(express.json());
 
-const resend = new Resend(process.env.OPENSEND_API_KEY, {
+const opensend = new Opensend(process.env.OPENSEND_API_KEY, {
   baseUrl: process.env.OPENSEND_BASE_URL,
 });
 
@@ -41,7 +41,7 @@ app.post("/send", async (req, res) => {
     return;
   }
 
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await opensend.emails.send({
     from: "OpenSend <onboarding@updates.example.com>",
     to: email,
     subject: "Hello from Express",
@@ -98,7 +98,7 @@ See [Verify webhook requests](./webhooks/verify-webhooks-requests.md) for the si
 When Express receives a duplicate upstream request, use idempotency keys:
 
 ```ts
-await resend.emails.send(payload, {
+await opensend.emails.send(payload, {
   idempotencyKey: `signup-${userId}`,
 });
 ```

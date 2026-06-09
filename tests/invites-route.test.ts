@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockGetSession = vi.hoisted(() => vi.fn());
 const mockHeaders = vi.hoisted(() => vi.fn());
-const mockCreateInvitesService = vi.hoisted(() => vi.fn());
-const mockListMembers = vi.hoisted(() => vi.fn());
+const mockListWorkspaceMembers = vi.hoisted(() => vi.fn());
+const mockCreateInvitation = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/auth", () => ({
   auth: {
@@ -18,13 +18,29 @@ vi.mock("next/headers", () => ({
 }));
 
 vi.mock("@opensend/core", () => ({
-  createInvitesService: mockCreateInvitesService,
+  WorkspaceServiceError: class WorkspaceServiceError extends Error {
+    constructor(
+      readonly code: string,
+      message: string,
+    ) {
+      super(message);
+      this.name = "WorkspaceServiceError";
+    }
+  },
+  workspaceService: {
+    listWorkspaceMembers: mockListWorkspaceMembers,
+    createInvitation: mockCreateInvitation,
+  },
 }));
 
 const createdAt = new Date("2026-05-10T12:00:00.000Z");
 
 async function importRoute() {
   return import("@/app/api/invites/route");
+}
+
+function request(path = "/api/invites") {
+  return new Request(`http://localhost${path}`);
 }
 
 describe("invites route adapter", () => {
@@ -34,14 +50,12 @@ describe("invites route adapter", () => {
     mockHeaders.mockResolvedValue(new Headers({ cookie: "session=test" }));
     mockGetSession.mockResolvedValue({
       session: { id: "session-1" },
-      user: { id: "user-1" },
+      user: { id: "user-1", name: "Ada Lovelace" },
     });
-    mockListMembers.mockResolvedValue({
+    mockListWorkspaceMembers.mockResolvedValue({
       object: "list",
       data: [],
-    });
-    mockCreateInvitesService.mockReturnValue({
-      listMembers: mockListMembers,
+      invitations: [],
     });
   });
 
@@ -50,40 +64,57 @@ describe("invites route adapter", () => {
   });
 
   it("keeps dashboard session auth in the adapter and returns the service envelope", async () => {
-    mockListMembers.mockResolvedValue({
+    mockListWorkspaceMembers.mockResolvedValue({
       object: "list",
+      workspace: {
+        id: "workspace-1",
+        name: "Ada's Workspace",
+        owner_user_id: "user-1",
+        role: "owner",
+      },
       data: [
         {
           id: "user-1",
           name: "Ada Lovelace",
           email: "ada@example.com",
-          role: "admin",
+          role: "owner",
           created_at: createdAt,
         },
       ],
+      invitations: [],
     });
 
     const route = await importRoute();
-    const response = await route.GET();
+    const response = await route.GET(request());
 
     expect(response.status).toBe(200);
     expect(mockHeaders).toHaveBeenCalledOnce();
     expect(mockGetSession).toHaveBeenCalledWith({
       headers: expect.any(Headers),
     });
-    expect(mockCreateInvitesService).toHaveBeenCalledOnce();
-    expect(mockListMembers).toHaveBeenCalledOnce();
+    expect(mockListWorkspaceMembers).toHaveBeenCalledWith({
+      actorUserId: "user-1",
+      actorName: "Ada Lovelace",
+      workspaceId: null,
+    });
     await expect(response.json()).resolves.toEqual({
       object: "list",
+      workspace: {
+        id: "workspace-1",
+        name: "Ada's Workspace",
+        owner_user_id: "user-1",
+        role: "owner",
+      },
       data: [
         {
           id: "user-1",
           name: "Ada Lovelace",
           email: "ada@example.com",
-          role: "admin",
+          role: "owner",
           created_at: "2026-05-10T12:00:00.000Z",
         },
       ],
+      invitations: [],
     });
   });
 
@@ -91,29 +122,31 @@ describe("invites route adapter", () => {
     mockGetSession.mockResolvedValue(null);
 
     const route = await importRoute();
-    const response = await route.GET();
+    const response = await route.GET(request());
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
-    expect(mockListMembers).not.toHaveBeenCalled();
+    expect(mockListWorkspaceMembers).not.toHaveBeenCalled();
   });
 
-  it("keeps service failure logging and HTTP 500 mapping in the adapter", async () => {
+  it("maps service failures through the workspace error adapter", async () => {
     const error = new Error("db down");
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
-    mockListMembers.mockRejectedValue(error);
+    mockListWorkspaceMembers.mockRejectedValue(error);
 
     const route = await importRoute();
-    const response = await route.GET();
+    const response = await route.GET(
+      request("/api/invites?workspace_id=workspace-1"),
+    );
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({
       error: "Internal server error",
     });
     expect(consoleError).toHaveBeenCalledWith(
-      "Failed to fetch members:",
+      "Workspace service error:",
       error,
     );
   });

@@ -5,6 +5,7 @@ import { automationRunRepo } from "../db/repositories/automationRunRepo";
 import {
   type CreateCustomEventInput,
   type RecordCustomEventDeliveryInput,
+  type UpdateCustomEventInput,
   customEventDeliveryRepo,
   customEventRepo,
 } from "../db/repositories/customEventRepo";
@@ -42,9 +43,21 @@ export type ListCustomEventsServiceInput = {
   after?: string;
 };
 
+export type GetCustomEventServiceInput = {
+  userId: string | null;
+  identifier: string;
+};
+
+export type UpdateCustomEventServiceInput = {
+  userId: string | null;
+  identifier: string;
+  data: UpdateCustomEventInput;
+};
+
 export type DeleteCustomEventServiceInput = {
   userId: string | null;
-  id: string;
+  identifier?: string;
+  id?: string;
 };
 
 export type SendCustomEventServiceInput = {
@@ -112,6 +125,15 @@ export type CustomEventBoundaryRepository = {
     name: string,
     userId?: string | null,
   ): Promise<CustomEventRow | undefined>;
+  findByIdentifierForUser(
+    identifier: string,
+    userId?: string | null,
+  ): Promise<CustomEventRow | undefined>;
+  updateForUser(
+    id: string,
+    userId: string | null | undefined,
+    input: UpdateCustomEventInput,
+  ): Promise<CustomEventRow | undefined>;
   deleteForUser(
     id: string,
     userId?: string | null,
@@ -149,6 +171,10 @@ function defaultRepository(): CustomEventBoundaryRepository {
     create: (input) => customEventRepo.create(input),
     list: (input) => customEventRepo.list(input),
     findByName: (name, userId) => customEventRepo.findByName(name, userId),
+    findByIdentifierForUser: (identifier, userId) =>
+      customEventRepo.findByIdentifierForUser(identifier, userId),
+    updateForUser: (id, userId, input) =>
+      customEventRepo.updateForUser(id, userId, input),
     deleteForUser: (id, userId) => customEventRepo.deleteForUser(id, userId),
     resolveContactId: async (input) => {
       if (!input.userId) return null;
@@ -301,10 +327,66 @@ export function createCustomEventService({
       };
     },
 
+    async getCustomEvent(
+      input: GetCustomEventServiceInput,
+    ): Promise<CustomEventResponse> {
+      const event = await repository.findByIdentifierForUser(
+        input.identifier,
+        input.userId,
+      );
+      if (!event) {
+        throw new CustomEventServiceError("not_found", "Event not found");
+      }
+      return toCustomEventResponse(event);
+    },
+
+    async updateCustomEvent(
+      input: UpdateCustomEventServiceInput,
+    ): Promise<CustomEventResponse> {
+      const event = await repository.findByIdentifierForUser(
+        input.identifier,
+        input.userId,
+      );
+      if (!event) {
+        throw new CustomEventServiceError("not_found", "Event not found");
+      }
+
+      const updated = await repository.updateForUser(
+        event.id,
+        input.userId,
+        input.data,
+      );
+      if (!updated) {
+        throw new CustomEventServiceError("not_found", "Event not found");
+      }
+      return toCustomEventResponse(updated);
+    },
+
     async deleteCustomEvent(
       input: DeleteCustomEventServiceInput,
     ): Promise<CustomEventDeleteResponse> {
-      const deleted = await repository.deleteForUser(input.id, input.userId);
+      const id = input.id;
+      if (id !== undefined) {
+        const deleted = await repository.deleteForUser(id, input.userId);
+        if (deleted.length === 0) {
+          throw new CustomEventServiceError("not_found", "Event not found");
+        }
+        return { object: "event", id: deleted[0].id, deleted: true };
+      }
+
+      const identifier = input.identifier;
+      if (!identifier) {
+        throw new CustomEventServiceError("not_found", "Event not found");
+      }
+      const event = await repository.findByIdentifierForUser(
+        identifier,
+        input.userId,
+      );
+      if (!event) {
+        throw new CustomEventServiceError("not_found", "Event not found");
+      }
+
+      const deleted = await repository.deleteForUser(event.id, input.userId);
       if (deleted.length === 0) {
         throw new CustomEventServiceError("not_found", "Event not found");
       }

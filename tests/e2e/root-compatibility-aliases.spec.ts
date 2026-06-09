@@ -16,6 +16,7 @@ test("root compatibility aliases route API-like requests while preserving dashbo
     "/contact-properties",
     "/logs",
     "/emails",
+    "/events",
   ]) {
     const response = await request.get(apiPath, {
       headers: { accept: "application/json" },

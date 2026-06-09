@@ -1,8 +1,10 @@
 # Retrieve Contact Topics
 
-Get topic subscriptions for a contact. This page documents the OpenSend-owned API contract for `GET /api/contacts/{id}/topics`.
+Get topic subscriptions for a contact. This page documents the OpenSend-owned API contract for `GET /contacts/{contact_id}/topics`.
 
-`GET /api/contacts/{id}/topics`
+`GET /contacts/{contact_id}/topics`
+
+Compatibility note: `GET /api/contacts/{id}/topics` remains available for existing OpenSend integrations; new API clients should prefer the root compatibility path above.
 
 ## Authentication
 
@@ -14,21 +16,26 @@ Authorization: Bearer os_YOUR_API_KEY
 
 ## When to use it
 
-Contact routes manage audience records for the authenticated tenant. Segment and topic relationship endpoints only affect the target contact and never expose another tenant's audience data. Retrieve one tenant-scoped record by ID. A missing or cross-tenant ID returns not found instead of leaking ownership details.
+Use this route to inspect one contact's topic preference state. It returns topic subscription rows for the target contact and does not modify contact fields.
 
 ## Parameters
 
-`limit` and `after` may be used on collection routes when the route supports cursor pagination.
+- `contact_id` — contact ID or email for the authenticated tenant.
 
 ## Response
 
-Successful responses return JSON scoped to the authenticated tenant. A representative response shape is:
+Successful responses return topic preferences for the contact:
 
 ```json
 {
-  "id": "contact_123",
-  "email": "ada@example.com",
-  "subscribed": true
+  "object": "list",
+  "data": [
+    {
+      "id": "7a93a5b0-4f2d-4f8e-8e50-9f043c2fd710",
+      "name": "Product Updates",
+      "subscription": "opt_in"
+    }
+  ]
 }
 ```
 

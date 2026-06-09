@@ -21,13 +21,13 @@ export OPENSEND_BASE_URL="http://localhost:3015"
 Create `send.ts`:
 
 ```ts
-import { Resend } from "opensend";
+import { Opensend } from "opensend";
 
-const resend = new Resend(Bun.env.OPENSEND_API_KEY, {
+const opensend = new Opensend(Bun.env.OPENSEND_API_KEY, {
   baseUrl: Bun.env.OPENSEND_BASE_URL,
 });
 
-const { data, error } = await resend.emails.send({
+const { data, error } = await opensend.emails.send({
   from: "OpenSend <onboarding@updates.example.com>",
   to: "user@example.com",
   subject: "Hello from Bun",
@@ -51,9 +51,9 @@ bun run send.ts
 ## Bun HTTP server
 
 ```ts
-import { Resend } from "opensend";
+import { Opensend } from "opensend";
 
-const resend = new Resend(Bun.env.OPENSEND_API_KEY, {
+const opensend = new Opensend(Bun.env.OPENSEND_API_KEY, {
   baseUrl: Bun.env.OPENSEND_BASE_URL,
 });
 
@@ -69,7 +69,7 @@ Bun.serve({
       return Response.json({ error: "email is required" }, { status: 400 });
     }
 
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await opensend.emails.send({
       from: "OpenSend <onboarding@updates.example.com>",
       to: email,
       subject: "Welcome",

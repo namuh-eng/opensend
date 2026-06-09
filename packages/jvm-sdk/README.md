@@ -2,6 +2,22 @@
 
 First-party Java/Kotlin-compatible SDK for OpenSend. This v1 staging slice is intentionally narrow and handwritten so it stays reviewable while OpenSend's OpenAPI/client-generation story matures.
 
+## Support level
+
+This is a **partial, blocking-only JVM SDK**. Before copying examples, note
+that this package currently wraps only:
+
+- `emails`: send, batch send, list, retrieve, cancel
+- `contacts`: create, list, retrieve, update, delete
+- `domains`: create, list, retrieve, update, verify, delete
+- `suppressions`: create, list, retrieve, delete
+
+Other public OpenSend resources, including API keys, broadcasts, segments,
+topics, templates, webhooks, logs, contact properties, events, automations,
+receiving, dedicated IPs, and unsubscribe-page settings, are available through
+the REST API and `/openapi.json`, but they are **not** exposed by this JVM
+package yet.
+
 ## Install from this repository
 
 ```bash
@@ -28,14 +44,17 @@ The SDK is **blocking-only** in this first slice. It uses Java's `java.net.http.
 
 ## Supported API surface
 
-This package only exposes routes implemented in this repository:
+This package only exposes routes implemented in this repository and listed above:
 
 - `emails`: send, batch send, list, retrieve, cancel
 - `contacts`: create, list, retrieve, update, delete
 - `domains`: create, list, retrieve, update, verify, delete
 - `suppressions`: create, list, retrieve, delete
 
-Use the REST API or another first-party SDK for resources not listed here.
+Use the REST API or another first-party SDK for resources not listed here. Do
+not assume a route in `/openapi.json` has a corresponding JVM method until it
+appears in this README and in
+`packages/jvm-sdk/src/main/java/com/opensend/resources`.
 
 ## Java
 

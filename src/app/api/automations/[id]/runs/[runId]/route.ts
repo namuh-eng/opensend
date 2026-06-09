@@ -1,8 +1,5 @@
-import {
-  authorizeAutomationRunRoute,
-  automationRunService,
-  mapAutomationRunServiceError,
-} from "../route-helpers";
+import { handleGetAutomationRun } from "../../../handlers";
+import { authorizeAutomationRunRoute } from "../route-helpers";
 
 export async function GET(
   request: Request,
@@ -12,17 +9,5 @@ export async function GET(
   if ("response" in auth) return auth.response;
 
   const { id, runId } = await params;
-  try {
-    const run = await automationRunService.getRun({
-      automationId: id,
-      runId,
-      userId: auth.userId,
-    });
-    return Response.json(run);
-  } catch (err) {
-    return mapAutomationRunServiceError(
-      err,
-      "Failed to retrieve automation run",
-    );
-  }
+  return handleGetAutomationRun(auth, id, runId);
 }

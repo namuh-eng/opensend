@@ -1,4 +1,4 @@
-import { type SQL, and, eq, gte, lte, sql } from "drizzle-orm";
+import { type SQL, and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import {
   contacts,
@@ -82,7 +82,7 @@ function emailEventExists(eventTypes: string[]): SQL<unknown> {
     select 1
     from ${emailEvents}
     where ${emailEvents.emailId} = ${emails.id}
-      and ${emailEvents.type} in ${eventTypes}
+      and ${inArray(emailEvents.type, eventTypes)}
   )`;
 }
 

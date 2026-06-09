@@ -63,6 +63,133 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp("updated_at"),
 });
 
+// ── Workspace / Team Tables ────────────────────────────────────────
+
+export type WorkspaceRole = "owner" | "admin" | "member";
+export type WorkspaceInvitationStatus =
+  | "pending"
+  | "accepted"
+  | "revoked"
+  | "expired";
+export type WorkspaceEntitlementSource = "self_hosted" | "hosted" | "manual";
+
+export const workspaces = pgTable(
+  "workspaces",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    ownerUserId: text("owner_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspaces_owner_user_id_idx").on(t.ownerUserId),
+    index("workspaces_created_at_idx").on(t.createdAt),
+  ],
+);
+
+export const workspaceMemberships = pgTable(
+  "workspace_memberships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: varchar("role", { length: 20 }).$type<WorkspaceRole>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspace_memberships_workspace_user_idx").on(
+      t.workspaceId,
+      t.userId,
+    ),
+    index("workspace_memberships_user_id_idx").on(t.userId),
+    index("workspace_memberships_workspace_role_idx").on(t.workspaceId, t.role),
+  ],
+);
+
+export const workspaceInvitations = pgTable(
+  "workspace_invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    email: varchar("email", { length: 320 }).notNull(),
+    role: varchar("role", { length: 20 }).$type<WorkspaceRole>().notNull(),
+    tokenHash: text("token_hash").notNull(),
+    invitedByUserId: text("invited_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 20 })
+      .$type<WorkspaceInvitationStatus>()
+      .notNull()
+      .default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspace_invitations_token_hash_idx").on(t.tokenHash),
+    index("workspace_invitations_workspace_status_idx").on(
+      t.workspaceId,
+      t.status,
+    ),
+    index("workspace_invitations_email_status_idx").on(t.email, t.status),
+  ],
+);
+
+export const workspaceEntitlements = pgTable(
+  "workspace_entitlements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    key: varchar("key", { length: 100 }).notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    limit: integer("limit"),
+    source: varchar("source", { length: 20 })
+      .$type<WorkspaceEntitlementSource>()
+      .notNull()
+      .default("self_hosted"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspace_entitlements_workspace_key_idx").on(
+      t.workspaceId,
+      t.key,
+    ),
+    index("workspace_entitlements_key_idx").on(t.key),
+  ],
+);
+
 // ── Application Tables ──────────────────────────────────────────────
 
 export const dedicatedIpPools = pgTable(
@@ -75,7 +202,12 @@ export const dedicatedIpPools = pgTable(
     scalingMode: varchar("scaling_mode", { length: 20 })
       .notNull()
       .default("MANAGED"),
-    status: varchar("status", { length: 50 }).notNull().default("pending"),
+    status: varchar("status", { length: 50 }).notNull().default("requested"),
+    provider: varchar("provider", { length: 50 }).notNull().default("manual"),
+    operatorNotes: text("operator_notes"),
+    provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
+    warmingStartedAt: timestamp("warming_started_at", { withTimezone: true }),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -169,6 +301,45 @@ export const domains = pgTable("domains", {
     length: 255,
   }),
 });
+
+export const domainDeliverabilityStatuses = pgTable(
+  "domain_deliverability_statuses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    domainId: uuid("domain_id").notNull(),
+    bimiSelector: varchar("bimi_selector", { length: 63 })
+      .notNull()
+      .default("default"),
+    bimiStatus: varchar("bimi_status", { length: 32 })
+      .notNull()
+      .default("not_configured"),
+    bimiLogoUrl: varchar("bimi_logo_url", { length: 2048 }),
+    bimiCertificateUrl: varchar("bimi_certificate_url", { length: 2048 }),
+    bimiNotes: text("bimi_notes"),
+    appleBrandedMailStatus: varchar("apple_branded_mail_status", {
+      length: 32,
+    })
+      .notNull()
+      .default("not_started"),
+    appleBrandedMailNotes: text("apple_branded_mail_notes"),
+    lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("domain_deliverability_statuses_domain_id_idx").on(t.domainId),
+    index("domain_deliverability_statuses_user_id_idx").on(t.userId),
+    index("domain_deliverability_statuses_user_domain_idx").on(
+      t.userId,
+      t.domainId,
+    ),
+  ],
+);
 
 export const apiKeys = pgTable(
   "api_keys",
@@ -392,6 +563,67 @@ export const webhooks = pgTable("webhooks", {
   document: jsonb("document"),
   userId: text("user_id"),
 });
+
+export type IntegrationProvider = "webhook";
+export type IntegrationConnectionStatus = "connected" | "disconnected";
+export type IntegrationHealthStatus = "unknown" | "healthy" | "unhealthy";
+
+export type IntegrationConnectionConfig = {
+  webhook?: {
+    endpointHost?: string;
+    endpointPreview?: string;
+    hasSigningSecret?: boolean;
+  };
+};
+
+export const integrationConnections = pgTable(
+  "integration_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    provider: varchar("provider", { length: 64 })
+      .$type<IntegrationProvider>()
+      .notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    status: varchar("status", { length: 32 })
+      .$type<IntegrationConnectionStatus>()
+      .notNull()
+      .default("connected"),
+    scopes: jsonb("scopes").notNull().$type<string[]>(),
+    config: jsonb("config").notNull().$type<IntegrationConnectionConfig>(),
+    credentialsEnc: text("credentials_enc").notNull(),
+    healthStatus: varchar("health_status", { length: 32 })
+      .$type<IntegrationHealthStatus>()
+      .notNull()
+      .default("unknown"),
+    lastHealthCheckAt: timestamp("last_health_check_at", {
+      withTimezone: true,
+    }),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("integration_connections_user_provider_idx").on(
+      table.userId,
+      table.provider,
+    ),
+    index("integration_connections_user_status_idx").on(
+      table.userId,
+      table.status,
+    ),
+  ],
+);
+
+export type IntegrationConnection = typeof integrationConnections.$inferSelect;
+export type IntegrationConnectionInsert =
+  typeof integrationConnections.$inferInsert;
 
 export const templates = pgTable("templates", {
   id: uuid("id").primaryKey().defaultRandom(),

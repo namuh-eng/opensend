@@ -48,6 +48,52 @@ vi.mock("@/lib/billing/quota", () => ({
 vi.mock("@/lib/ses", () => ({
   createDomainIdentity: mockCreateDomainIdentity,
 }));
+
+vi.mock("@/lib/workspace-route-auth", () => ({
+  resolveWorkspaceRouteContext: async (input: {
+    auth: { userId?: string | null; apiKeyId?: string } | { dashboard: true };
+    session?: {
+      user?: { id?: string | null; email?: string | null } | null;
+    } | null;
+  }) => {
+    if ("apiKeyId" in input.auth && !input.auth.userId) {
+      return {
+        response: Response.json(
+          { error: "Missing or invalid API key" },
+          { status: 401 },
+        ),
+      };
+    }
+    const tenantUserId =
+      "apiKeyId" in input.auth
+        ? input.auth.userId
+        : (input.session?.user?.id ?? "dashboard-user");
+    const apiKeyId = "apiKeyId" in input.auth ? input.auth.apiKeyId : null;
+    return {
+      tenantUserId,
+      actorUserId: tenantUserId,
+      workspace: {
+        workspaceId: "workspace-1",
+        workspaceName: "Test Workspace",
+        actorUserId: tenantUserId,
+        tenantUserId,
+        role: "owner",
+      },
+      auditContext: {
+        userId: tenantUserId,
+        actor: apiKeyId
+          ? { type: "api_key", id: apiKeyId }
+          : {
+              type: "user",
+              id: tenantUserId,
+              email: input.session?.user?.email ?? null,
+            },
+        source: apiKeyId ? "api_key" : "dashboard",
+        sourceApiKeyId: apiKeyId,
+      },
+    };
+  },
+}));
 vi.mock("@/lib/domain-cache", () => ({
   invalidateDomainCaches: vi.fn(),
 }));

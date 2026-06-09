@@ -54,9 +54,19 @@ const ACTION_OPTIONS = [
   "webhook.created",
   "webhook.updated",
   "webhook.deleted",
+  "integration.connected",
+  "integration.updated",
+  "integration.disconnected",
 ];
 
-const TARGET_OPTIONS = ["api_key", "domain", "webhook", "settings", "team"];
+const TARGET_OPTIONS = [
+  "api_key",
+  "domain",
+  "webhook",
+  "integration",
+  "settings",
+  "team",
+];
 const SOURCE_OPTIONS = ["dashboard", "api_key", "system"];
 
 export function AuditLogListPage({ events }: { events: AuditLogRow[] }) {

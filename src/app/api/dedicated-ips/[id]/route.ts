@@ -4,8 +4,27 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
-import { configurationSetService, dedicatedIpPoolRepo } from "@opensend/core";
+import { dedicatedIpPoolRepo } from "@opensend/core";
 import { NextResponse } from "next/server";
+import { z } from "zod";
+
+const lifecycleStatuses = [
+  "requested",
+  "provisioned",
+  "warming",
+  "active",
+  "suspended",
+  "retired",
+] as const;
+
+const updatePoolSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  status: z.enum(lifecycleStatuses).optional(),
+  provider_pool_name: z.string().min(1).max(255).nullable().optional(),
+  ses_pool_name: z.string().min(1).max(255).nullable().optional(),
+  scaling_mode: z.enum(["STANDARD", "MANAGED"]).optional(),
+  operator_notes: z.string().max(4000).nullable().optional(),
+});
 
 async function resolveUserId(req: Request): Promise<string | Response> {
   const auth = await authorizeDashboardOrApiKey(
@@ -29,6 +48,39 @@ async function resolveUserId(req: Request): Promise<string | Response> {
   return unauthorizedResponse();
 }
 
+function lifecycleTimestamps(status: (typeof lifecycleStatuses)[number]) {
+  const now = new Date();
+  if (status === "provisioned") return { provisionedAt: now };
+  if (status === "warming") return { warmingStartedAt: now };
+  if (status === "retired") return { retiredAt: now };
+  return {};
+}
+
+function toDedicatedIpPoolResponse(
+  pool: NonNullable<
+    Awaited<ReturnType<typeof dedicatedIpPoolRepo.findByIdForUser>>
+  >,
+) {
+  return {
+    object: "dedicated_ip_pool",
+    id: pool.id,
+    name: pool.name,
+    provider: pool.provider,
+    provider_pool_name: pool.sesPoolName.startsWith("manual-")
+      ? null
+      : pool.sesPoolName,
+    ses_pool_name: pool.sesPoolName,
+    scaling_mode: pool.scalingMode,
+    status: pool.status,
+    operator_notes: pool.operatorNotes,
+    provisioned_at: pool.provisionedAt,
+    warming_started_at: pool.warmingStartedAt,
+    retired_at: pool.retiredAt,
+    created_at: pool.createdAt,
+    updated_at: pool.updatedAt,
+  };
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -44,15 +96,51 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json({
-    object: "dedicated_ip_pool",
-    id: pool.id,
-    name: pool.name,
-    ses_pool_name: pool.sesPoolName,
-    scaling_mode: pool.scalingMode,
-    status: pool.status,
-    created_at: pool.createdAt,
+  return NextResponse.json(toDedicatedIpPoolResponse(pool));
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const userIdOrResponse = await resolveUserId(req);
+  if (userIdOrResponse instanceof Response) return userIdOrResponse;
+  const userId = userIdOrResponse;
+
+  const { id } = await params;
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const parsed = updatePoolSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Validation failed", details: parsed.error.flatten() },
+      { status: 422 },
+    );
+  }
+
+  const providerPoolName =
+    parsed.data.provider_pool_name ?? parsed.data.ses_pool_name ?? undefined;
+  const status = parsed.data.status;
+  const updated = await dedicatedIpPoolRepo.updateForUser(id, userId, {
+    name: parsed.data.name,
+    sesPoolName: providerPoolName === null ? undefined : providerPoolName,
+    scalingMode: parsed.data.scaling_mode,
+    status,
+    operatorNotes: parsed.data.operator_notes,
+    ...(status ? lifecycleTimestamps(status) : {}),
   });
+
+  if (!updated) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(toDedicatedIpPoolResponse(updated));
 }
 
 export async function DELETE(
@@ -65,24 +153,18 @@ export async function DELETE(
 
   const { id } = await params;
 
-  const pool = await dedicatedIpPoolRepo.findByIdForUser(id, userId);
+  const pool = await dedicatedIpPoolRepo.updateForUser(id, userId, {
+    status: "retired",
+    retiredAt: new Date(),
+  });
   if (!pool) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // Delete from SES first (best-effort)
-  try {
-    await configurationSetService.deleteDedicatedIpPool({
-      poolName: pool.sesPoolName,
-    });
-  } catch (err) {
-    console.warn(
-      `Failed to delete SES pool ${pool.sesPoolName} — continuing with DB delete:`,
-      err,
-    );
-  }
-
-  await dedicatedIpPoolRepo.deleteForUser(id, userId);
-
-  return NextResponse.json({ object: "dedicated_ip_pool", id, deleted: true });
+  return NextResponse.json({
+    object: "dedicated_ip_pool",
+    id,
+    retired: true,
+    status: pool.status,
+  });
 }

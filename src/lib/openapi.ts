@@ -1,5 +1,12 @@
 type JsonSchema = {
-  type?: "array" | "boolean" | "integer" | "number" | "object" | "string";
+  type?:
+    | "array"
+    | "boolean"
+    | "integer"
+    | "number"
+    | "null"
+    | "object"
+    | "string";
   format?: string;
   description?: string;
   pattern?: string;
@@ -107,12 +114,60 @@ const idPathParameter: ParameterObject = {
   schema: { type: "string", format: "uuid" },
 };
 
+const automationIdPathParameter: ParameterObject = {
+  name: "automation_id",
+  in: "path",
+  required: true,
+  description: "Automation ID.",
+  schema: { type: "string", format: "uuid" },
+};
+
+const automationRunIdPathParameter: ParameterObject = {
+  name: "run_id",
+  in: "path",
+  required: true,
+  description: "Automation run ID.",
+  schema: { type: "string", format: "uuid" },
+};
+
 const emailIdPathParameter: ParameterObject = {
   name: "email_id",
   in: "path",
   required: true,
   description: "Scheduled email ID to cancel.",
   schema: { type: "string", format: "uuid" },
+};
+
+const contactIdPathParameter: ParameterObject = {
+  name: "contact_id",
+  in: "path",
+  required: true,
+  description: "Contact ID or email address.",
+  schema: { type: "string" },
+};
+
+const contactSegmentIdPathParameter: ParameterObject = {
+  name: "segment_id",
+  in: "path",
+  required: true,
+  description: "Segment ID for the authenticated tenant.",
+  schema: { type: "string", format: "uuid" },
+};
+
+const audienceIdPathParameter: ParameterObject = {
+  name: "audience_id",
+  in: "path",
+  required: true,
+  description: "Audience ID.",
+  schema: { type: "string" },
+};
+
+const apiKeyIdPathParameter: ParameterObject = {
+  name: "id",
+  in: "path",
+  required: true,
+  description: "API key ID.",
+  schema: { type: "string" },
 };
 
 const templateIdOrAliasPathParameter: ParameterObject = {
@@ -1007,6 +1062,52 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/domains/{id}/deliverability": {
+      get: {
+        tags: ["Domains"],
+        summary: "Get domain deliverability readiness",
+        description:
+          "Returns BIMI DNS/readiness checks and manual Apple Branded Mail status for a tenant-owned domain. This endpoint reports readiness/status only and does not provision provider resources.",
+        operationId: "getDomainDeliverabilityReadiness",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Domain deliverability readiness.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DomainDeliverabilityStatus",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Domains"],
+        summary: "Update domain deliverability operator metadata",
+        description:
+          "Stores BIMI metadata hints and Apple Branded Mail operator notes. It does not submit provider applications or alter DNS.",
+        operationId: "updateDomainDeliverabilityReadiness",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateDomainDeliverabilityRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Updated domain deliverability metadata.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DomainDeliverabilityStatus",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
     "/api/domains/{id}/verify": {
       post: {
         tags: ["Domains"],
@@ -1332,7 +1433,7 @@ export const openApiDocument = {
           "200": {
             description: "Updated topic subscriptions.",
             content: jsonContent({
-              $ref: "#/components/schemas/ContactTopicList",
+              $ref: "#/components/schemas/ContactTopicsUpdateResponse",
             }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
@@ -1546,6 +1647,8 @@ export const openApiDocument = {
         summary: "Create a topic",
         operationId: "createTopic",
         security: bearerSecurity,
+        description:
+          "OpenSend-compatible endpoint. `default_subscription` and `visibility` are optional and default to `opt_out` and `public` when omitted.",
         requestBody: {
           required: true,
           content: jsonContent({
@@ -1645,6 +1748,8 @@ export const openApiDocument = {
         summary: "Create a contact property",
         operationId: "createProperty",
         security: bearerSecurity,
+        description:
+          "OpenSend-compatible endpoint. If `key` is omitted, it is derived from `name`. If `type` is omitted, it defaults to `string`.",
         requestBody: {
           required: true,
           content: jsonContent({
@@ -1866,6 +1971,204 @@ export const openApiDocument = {
             content: jsonContent({
               $ref: "#/components/schemas/BroadcastMetrics",
             }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/automations": {
+      get: {
+        tags: ["Automations"],
+        summary: "List automations",
+        description:
+          "Root-compatible public API route. Requires a full-access API key; dashboard session cookies do not authorize this path.",
+        operationId: "listRootAutomations",
+        security: bearerSecurity,
+        parameters: [
+          ...paginationParameters,
+          {
+            name: "status",
+            in: "query",
+            description:
+              "Filter by automation status (draft, enabled, disabled).",
+            schema: {
+              type: "string",
+              enum: ["draft", "enabled", "disabled"],
+            },
+          },
+          {
+            name: "search",
+            in: "query",
+            description: "Full-text search filter.",
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Paginated automation list.",
+            content: jsonContent({
+              $ref: "#/components/schemas/AutomationList",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+      post: {
+        tags: ["Automations"],
+        summary: "Create an automation",
+        description:
+          "Root-compatible public API route. Requires a full-access API key; dashboard session cookies do not authorize this path.",
+        operationId: "createRootAutomation",
+        security: bearerSecurity,
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/CreateAutomationRequest",
+          }),
+        },
+        responses: {
+          "201": {
+            description: "Created automation.",
+            content: jsonContent({ $ref: "#/components/schemas/Automation" }),
+          },
+          ...errorResponses,
+        },
+      },
+    },
+    "/automations/{automation_id}": {
+      get: {
+        tags: ["Automations"],
+        summary: "Retrieve an automation",
+        description:
+          "Root-compatible public API route. Requires a full-access API key and returns only tenant-scoped records.",
+        operationId: "getRootAutomation",
+        security: bearerSecurity,
+        parameters: [automationIdPathParameter],
+        responses: {
+          "200": {
+            description: "Automation detail.",
+            content: jsonContent({ $ref: "#/components/schemas/Automation" }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Automations"],
+        summary: "Update an automation",
+        description:
+          "Root-compatible public API route. Requires a full-access API key and preserves OpenSend automation validation semantics.",
+        operationId: "updateRootAutomation",
+        security: bearerSecurity,
+        parameters: [automationIdPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateAutomationRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Updated automation.",
+            content: jsonContent({ $ref: "#/components/schemas/Automation" }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Automations"],
+        summary: "Delete an automation",
+        description:
+          "Deletes a disabled automation for the API-key tenant. Enabled automations must be stopped or disabled first.",
+        operationId: "deleteRootAutomation",
+        security: bearerSecurity,
+        parameters: [automationIdPathParameter],
+        responses: {
+          "200": {
+            description: "Automation deleted.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DeleteAutomationResponse",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          "409": {
+            description: "Cannot delete an enabled automation.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ErrorEnvelope",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+    },
+    "/automations/{automation_id}/runs": {
+      get: {
+        tags: ["Automations"],
+        summary: "List runs for an automation",
+        description:
+          "Root-compatible public API route. Requires a full-access API key and lists runs for a tenant-scoped automation.",
+        operationId: "listRootAutomationRuns",
+        security: bearerSecurity,
+        parameters: [
+          automationIdPathParameter,
+          ...paginationParameters,
+          {
+            name: "status",
+            in: "query",
+            description:
+              "Filter by run status. Multiple statuses may be comma-separated.",
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Paginated automation run list.",
+            content: jsonContent({
+              $ref: "#/components/schemas/AutomationRunList",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/automations/{automation_id}/runs/{run_id}": {
+      get: {
+        tags: ["Automations"],
+        summary: "Retrieve an automation run",
+        description:
+          "Root-compatible public API route. Requires a full-access API key and returns only runs belonging to the requested tenant-scoped automation.",
+        operationId: "getRootAutomationRun",
+        security: bearerSecurity,
+        parameters: [automationIdPathParameter, automationRunIdPathParameter],
+        responses: {
+          "200": {
+            description: "Automation run detail.",
+            content: jsonContent({
+              $ref: "#/components/schemas/AutomationRun",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/automations/{automation_id}/stop": {
+      post: {
+        tags: ["Automations"],
+        summary: "Stop an automation",
+        description:
+          "Idempotently sets the tenant-scoped automation status to disabled. Existing queued, waiting, or running automation runs are not cancelled by this route; use run cancellation for individual runs.",
+        operationId: "stopRootAutomation",
+        security: bearerSecurity,
+        parameters: [automationIdPathParameter],
+        responses: {
+          "200": {
+            description:
+              "Automation stopped and returned with status disabled.",
+            content: jsonContent({ $ref: "#/components/schemas/Automation" }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
           ...errorResponses,
@@ -2120,12 +2423,12 @@ export const openApiDocument = {
     "/api/dedicated-ips": {
       get: {
         tags: ["Dedicated IPs"],
-        summary: "List dedicated IP pools",
+        summary: "List dedicated IP lifecycle records",
         operationId: "listDedicatedIpPools",
         security: bearerSecurity,
         responses: {
           "200": {
-            description: "List of dedicated IP pools.",
+            description: "List of dedicated IP lifecycle records.",
             content: jsonContent({
               $ref: "#/components/schemas/DedicatedIpPoolList",
             }),
@@ -2135,9 +2438,9 @@ export const openApiDocument = {
       },
       post: {
         tags: ["Dedicated IPs"],
-        summary: "Create a dedicated IP pool",
+        summary: "Create a dedicated IP lifecycle request",
         description:
-          "Creates a new dedicated IP pool in the email provider and records it in the database. Requires the caller's plan to have `dedicated_ips_enabled`.",
+          "Creates a manual dedicated IP lifecycle record with status `requested`. This v1 endpoint does not provision provider IPs or start warmup flows. Requires the caller's plan to have `dedicated_ips_enabled`.",
         operationId: "createDedicatedIpPool",
         security: bearerSecurity,
         requestBody: {
@@ -2162,7 +2465,7 @@ export const openApiDocument = {
     "/api/dedicated-ips/{id}": {
       get: {
         tags: ["Dedicated IPs"],
-        summary: "Retrieve a dedicated IP pool",
+        summary: "Retrieve a dedicated IP lifecycle record",
         operationId: "getDedicatedIpPool",
         security: bearerSecurity,
         parameters: [idPathParameter],
@@ -2177,17 +2480,183 @@ export const openApiDocument = {
           ...errorResponses,
         },
       },
+      patch: {
+        tags: ["Dedicated IPs"],
+        summary: "Update a dedicated IP lifecycle record",
+        operationId: "updateDedicatedIpPool",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateDedicatedIpPoolRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Dedicated IP pool updated.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DedicatedIpPool",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
       delete: {
         tags: ["Dedicated IPs"],
-        summary: "Delete a dedicated IP pool",
+        summary: "Retire a dedicated IP lifecycle record",
         operationId: "deleteDedicatedIpPool",
         security: bearerSecurity,
         parameters: [idPathParameter],
         responses: {
           "200": {
-            description: "Pool deleted.",
+            description: "Pool retired.",
             content: jsonContent({
               $ref: "#/components/schemas/DedicatedIpPoolDeleted",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/integrations": {
+      get: {
+        tags: ["Integrations"],
+        summary: "List integration catalog entries",
+        description:
+          "Returns the shipped integration catalog. Add `connections=true` to list saved connections instead.",
+        operationId: "listIntegrations",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "connections",
+            in: "query",
+            description: "When true, list saved integration connections.",
+            schema: { type: "boolean" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Integration catalog or connection list.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationCatalogResponse",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/integrations/webhook": {
+      get: {
+        tags: ["Integrations"],
+        summary: "Get webhook integration connection",
+        operationId: "getWebhookIntegration",
+        security: bearerSecurity,
+        responses: {
+          "200": {
+            description: "Webhook connection detail.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationConnectionEnvelope",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+      post: {
+        tags: ["Integrations"],
+        summary: "Connect webhook integration",
+        operationId: "connectWebhookIntegration",
+        security: bearerSecurity,
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/ConnectWebhookIntegrationRequest",
+          }),
+        },
+        responses: {
+          "201": {
+            description: "Webhook connection created.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationConnectionEnvelope",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/integrations/connections/{id}": {
+      get: {
+        tags: ["Integrations"],
+        summary: "Retrieve an integration connection",
+        operationId: "getIntegrationConnection",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Integration connection detail.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationConnectionEnvelope",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Integrations"],
+        summary: "Update a webhook integration connection",
+        operationId: "updateIntegrationConnection",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateWebhookIntegrationRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Integration connection updated.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationConnectionEnvelope",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Integrations"],
+        summary: "Disconnect an integration connection",
+        operationId: "disconnectIntegrationConnection",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Integration connection disconnected.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationConnectionEnvelope",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/integrations/connections/{id}/test": {
+      post: {
+        tags: ["Integrations"],
+        summary: "Send a webhook integration test event",
+        operationId: "sendIntegrationTestEvent",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Test event delivery result.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationTestEvent",
             }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
@@ -2584,6 +3053,97 @@ export const openApiDocument = {
         },
       },
     },
+    "/api/events/{identifier}": {
+      get: {
+        tags: ["Events"],
+        summary: "Retrieve a custom event definition",
+        description:
+          "Identifier may be the custom event definition ID or the exact event name. UUID-looking identifiers are resolved as IDs first, then by name within the authenticated tenant.",
+        operationId: "getEvent",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "identifier",
+            in: "path",
+            required: true,
+            description: "Custom event definition ID or exact event name.",
+            schema: { type: "string", minLength: 1, maxLength: 255 },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Custom event definition detail.",
+            content: jsonContent({ $ref: "#/components/schemas/CustomEvent" }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Events"],
+        summary: "Update a custom event definition",
+        description:
+          "Identifier may be the custom event definition ID or the exact event name. UUID-looking identifiers are resolved as IDs first, then by name within the authenticated tenant.",
+        operationId: "updateEvent",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "identifier",
+            in: "path",
+            required: true,
+            description: "Custom event definition ID or exact event name.",
+            schema: { type: "string", minLength: 1, maxLength: 255 },
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateCustomEventRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Updated custom event definition.",
+            content: jsonContent({ $ref: "#/components/schemas/CustomEvent" }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          "409": {
+            description: "An event with this name already exists.",
+            content: jsonContent({
+              $ref: "#/components/schemas/ErrorEnvelope",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Events"],
+        summary: "Delete a custom event definition by identifier",
+        description:
+          "Identifier may be the custom event definition ID or the exact event name. UUID-looking identifiers are resolved as IDs first, then by name within the authenticated tenant. The legacy `DELETE /api/events?id=...` collection form remains supported for existing callers.",
+        operationId: "deleteEventByIdentifier",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "identifier",
+            in: "path",
+            required: true,
+            description: "Custom event definition ID or exact event name.",
+            schema: { type: "string", minLength: 1, maxLength: 255 },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Event definition deleted.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DeleteCustomEventResponse",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
     "/api/events/send": {
       post: {
         tags: ["Events"],
@@ -2781,9 +3341,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["template"] },
           id: { type: "string" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       TemplateReference: {
         type: "object",
@@ -3216,9 +3777,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["receiving_route"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       ForwardingAttempt: {
         type: "object",
@@ -3339,9 +3901,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["forwarding_rule"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       ReceivedEmailListItem: {
         type: "object",
@@ -3577,9 +4140,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["contact"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       ContactSegmentList: {
         type: "object",
@@ -3607,16 +4171,17 @@ export const openApiDocument = {
       ContactTopicList: {
         type: "object",
         properties: {
-          object: { type: "string" },
+          object: { type: "string", enum: ["list"] },
           data: {
             type: "array",
             items: {
               type: "object",
               properties: {
-                topic_id: { type: "string", format: "uuid" },
-                subscribed: { type: "boolean" },
+                id: { type: "string", format: "uuid" },
+                name: { type: "string" },
+                subscription: { type: "string", enum: ["opt_in", "opt_out"] },
               },
-              required: ["topic_id", "subscribed"],
+              required: ["id", "name", "subscription"],
             },
           },
         },
@@ -3625,19 +4190,28 @@ export const openApiDocument = {
       UpdateContactTopicsRequest: {
         type: "object",
         properties: {
-          subscriptions: {
+          topics: {
             type: "array",
             items: {
               type: "object",
               properties: {
-                topic_id: { type: "string", format: "uuid" },
-                subscribed: { type: "boolean" },
+                id: { type: "string", format: "uuid" },
+                subscription: { type: "string", enum: ["opt_in", "opt_out"] },
               },
-              required: ["topic_id", "subscribed"],
+              required: ["id", "subscription"],
             },
           },
         },
-        required: ["subscriptions"],
+        required: ["topics"],
+      },
+      ContactTopicsUpdateResponse: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["contact_topics"] },
+          contact_id: { type: "string", format: "uuid" },
+          updated: { type: "boolean" },
+        },
+        required: ["object", "contact_id", "updated"],
       },
       BulkContactRequest: {
         type: "object",
@@ -3754,14 +4328,57 @@ export const openApiDocument = {
         properties: {
           name: { type: "string" },
           description: { type: "string" },
+          default_subscription: {
+            type: "string",
+            enum: ["opt_in", "opt_out"],
+          },
+          visibility: {
+            type: "string",
+            enum: ["public", "private"],
+          },
         },
         required: ["name"],
+      },
+      CreateTopicRequestStrict: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string" },
+          default_subscription: {
+            type: "string",
+            enum: ["opt_in", "opt_out"],
+          },
+          visibility: {
+            type: "string",
+            enum: ["public", "private"],
+          },
+        },
+        required: ["name", "default_subscription", "visibility"],
       },
       UpdateTopicRequest: {
         type: "object",
         properties: {
           name: { type: "string" },
           description: { type: "string", nullable: true },
+        },
+      },
+      UpdateTopicRequestStrict: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          description: { type: "string", nullable: true },
+          default_subscription: {
+            type: "string",
+            enum: ["opt_in", "opt_out"],
+          },
+          defaultSubscription: {
+            type: "string",
+            enum: ["opt_in", "opt_out"],
+          },
+          visibility: {
+            type: "string",
+            enum: ["public", "private"],
+          },
         },
       },
       Property: {
@@ -3800,6 +4417,34 @@ export const openApiDocument = {
             type: "string",
             enum: ["string", "number", "boolean", "date"],
           },
+          fallback_value: {
+            oneOf: [
+              { type: "string" },
+              { type: "number" },
+              { type: "boolean" },
+              { type: "null" },
+            ],
+          },
+        },
+        required: ["name"],
+      },
+      CreatePropertyRequestStrict: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          key: { type: "string" },
+          type: {
+            type: "string",
+            enum: ["string", "number", "boolean", "date"],
+          },
+          fallback_value: {
+            oneOf: [
+              { type: "string" },
+              { type: "number" },
+              { type: "boolean" },
+              { type: "null" },
+            ],
+          },
         },
         required: ["name", "key", "type"],
       },
@@ -3807,6 +4452,24 @@ export const openApiDocument = {
         type: "object",
         properties: {
           name: { type: "string" },
+        },
+      },
+      UpdatePropertyRequestStrict: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          type: {
+            type: "string",
+            enum: ["string", "number", "boolean", "date"],
+          },
+          fallback_value: {
+            oneOf: [
+              { type: "string" },
+              { type: "number" },
+              { type: "boolean" },
+              { type: "null" },
+            ],
+          },
         },
       },
       Broadcast: {
@@ -3921,9 +4584,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["broadcast"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       BroadcastMetrics: {
         type: "object",
@@ -4265,9 +4929,10 @@ export const openApiDocument = {
         properties: {
           object: { type: "string", enum: ["webhook"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
       },
       WebhookDeliveryReplayResponse: {
         type: "object",
@@ -4349,6 +5014,7 @@ export const openApiDocument = {
       CustomEvent: {
         type: "object",
         properties: {
+          object: { type: "string", enum: ["event"] },
           id: { type: "string", format: "uuid" },
           name: { type: "string" },
           schema: {
@@ -4358,8 +5024,16 @@ export const openApiDocument = {
             description: "JSON Schema definition for event payload validation.",
           },
           created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
         },
-        required: ["id", "name"],
+        required: [
+          "object",
+          "id",
+          "name",
+          "schema",
+          "created_at",
+          "updated_at",
+        ],
       },
       CustomEventList: {
         type: "object",
@@ -4390,13 +5064,32 @@ export const openApiDocument = {
         },
         required: ["name"],
       },
+      UpdateCustomEventRequest: {
+        type: "object",
+        description: "Provide at least one field to update.",
+        properties: {
+          name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 255,
+          },
+          schema: {
+            type: "object",
+            additionalProperties: true,
+            nullable: true,
+            description:
+              "Optional JSON Schema definition for payload validation. Pass null to clear it.",
+          },
+        },
+      },
       DeleteCustomEventResponse: {
         type: "object",
         properties: {
+          object: { type: "string", enum: ["event"] },
           id: { type: "string", format: "uuid" },
           deleted: { type: "boolean" },
         },
-        required: ["id", "deleted"],
+        required: ["object", "id", "deleted"],
       },
       SendCustomEventRequest: {
         type: "object",
@@ -4431,9 +5124,42 @@ export const openApiDocument = {
       SendCustomEventResponse: {
         type: "object",
         properties: {
-          accepted: { type: "boolean" },
-          runs_resumed: { type: "integer" },
+          object: { type: "string", enum: ["event_delivery"] },
+          delivery: { $ref: "#/components/schemas/CustomEventDelivery" },
+          resumed_runs: {
+            type: "array",
+            items: { $ref: "#/components/schemas/AutomationRun" },
+          },
+          automation_runs: {
+            type: "array",
+            items: { $ref: "#/components/schemas/AutomationRun" },
+          },
         },
+        required: ["object", "delivery", "resumed_runs", "automation_runs"],
+      },
+      CustomEventDelivery: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["event_delivery"] },
+          id: { type: "string", format: "uuid" },
+          event: { type: "string" },
+          contact_id: { type: "string", format: "uuid", nullable: true },
+          email: { type: "string", format: "email", nullable: true },
+          payload: {
+            type: "object",
+            additionalProperties: true,
+          },
+          received_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "object",
+          "id",
+          "event",
+          "contact_id",
+          "email",
+          "payload",
+          "received_at",
+        ],
       },
       ErrorEnvelope: {
         type: "object",
@@ -4504,6 +5230,109 @@ export const openApiDocument = {
           },
         },
       },
+      // ── Domain deliverability readiness ─────────────────────────
+      DomainDeliverabilityStatus: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["domain_deliverability_status"] },
+          id: { type: "string", format: "uuid" },
+          domain_id: { type: "string", format: "uuid" },
+          bimi: {
+            type: "object",
+            properties: {
+              status: {
+                type: "string",
+                enum: [
+                  "not_configured",
+                  "action_required",
+                  "manual_review",
+                  "ready",
+                ],
+              },
+              selector: { type: "string" },
+              record_name: { type: "string" },
+              logo_url: { type: "string", nullable: true },
+              certificate_url: { type: "string", nullable: true },
+              notes: { type: "string", nullable: true },
+              checks: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    key: { type: "string" },
+                    label: { type: "string" },
+                    status: {
+                      type: "string",
+                      enum: ["pass", "warning", "fail", "info"],
+                    },
+                    message: { type: "string" },
+                  },
+                  required: ["key", "label", "status", "message"],
+                },
+              },
+            },
+            required: ["status", "selector", "record_name", "checks"],
+          },
+          apple_branded_mail: {
+            type: "object",
+            properties: {
+              status: {
+                type: "string",
+                enum: [
+                  "not_started",
+                  "requested",
+                  "approved",
+                  "rejected",
+                  "manual_review",
+                ],
+              },
+              notes: { type: "string", nullable: true },
+              mode: { type: "string", enum: ["operator_notes_only"] },
+            },
+            required: ["status", "mode"],
+          },
+          last_checked_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "object",
+          "id",
+          "domain_id",
+          "bimi",
+          "apple_branded_mail",
+          "created_at",
+          "updated_at",
+        ],
+      },
+      UpdateDomainDeliverabilityRequest: {
+        type: "object",
+        properties: {
+          bimi_selector: { type: "string", maxLength: 63 },
+          bimi_logo_url: { type: "string", nullable: true },
+          bimi_certificate_url: { type: "string", nullable: true },
+          bimi_notes: { type: "string", nullable: true, maxLength: 4000 },
+          apple_branded_mail_status: {
+            type: "string",
+            enum: [
+              "not_started",
+              "requested",
+              "approved",
+              "rejected",
+              "manual_review",
+            ],
+          },
+          apple_branded_mail_notes: {
+            type: "string",
+            nullable: true,
+            maxLength: 4000,
+          },
+        },
+      },
       // ── Dedicated IPs ─────────────────────────────────────────────
       DedicatedIpPool: {
         type: "object",
@@ -4511,22 +5340,46 @@ export const openApiDocument = {
           object: { type: "string", enum: ["dedicated_ip_pool"] },
           id: { type: "string", format: "uuid" },
           name: { type: "string" },
+          provider: { type: "string", enum: ["manual"] },
+          provider_pool_name: { type: "string", nullable: true },
           ses_pool_name: { type: "string" },
           scaling_mode: { type: "string", enum: ["STANDARD", "MANAGED"] },
           status: {
             type: "string",
-            enum: ["pending", "active", "failed"],
+            enum: [
+              "requested",
+              "provisioned",
+              "warming",
+              "active",
+              "suspended",
+              "retired",
+            ],
           },
+          operator_notes: { type: "string", nullable: true },
+          provisioned_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          warming_started_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          retired_at: { type: "string", format: "date-time", nullable: true },
           created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
         },
         required: [
           "object",
           "id",
           "name",
+          "provider",
           "ses_pool_name",
           "scaling_mode",
           "status",
           "created_at",
+          "updated_at",
         ],
       },
       DedicatedIpPoolList: {
@@ -4549,11 +5402,18 @@ export const openApiDocument = {
             maxLength: 255,
             description: "User-facing label for the pool.",
           },
+          provider_pool_name: {
+            type: "string",
+            minLength: 1,
+            maxLength: 255,
+            description:
+              "Optional operator/provider reference. No provider provisioning is triggered.",
+          },
           ses_pool_name: {
             type: "string",
             minLength: 1,
             maxLength: 255,
-            description: "The AWS SES dedicated IP pool name.",
+            description: "Deprecated alias for provider_pool_name.",
           },
           scaling_mode: {
             type: "string",
@@ -4561,16 +5421,162 @@ export const openApiDocument = {
             description: "SES scaling mode. Defaults to MANAGED.",
           },
         },
-        required: ["name", "ses_pool_name"],
+        required: ["name"],
+      },
+      UpdateDedicatedIpPoolRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 255 },
+          status: {
+            type: "string",
+            enum: [
+              "requested",
+              "provisioned",
+              "warming",
+              "active",
+              "suspended",
+              "retired",
+            ],
+          },
+          provider_pool_name: {
+            type: "string",
+            nullable: true,
+            minLength: 1,
+            maxLength: 255,
+          },
+          ses_pool_name: {
+            type: "string",
+            nullable: true,
+            minLength: 1,
+            maxLength: 255,
+          },
+          scaling_mode: { type: "string", enum: ["STANDARD", "MANAGED"] },
+          operator_notes: {
+            type: "string",
+            nullable: true,
+            maxLength: 4000,
+          },
+        },
       },
       DedicatedIpPoolDeleted: {
         type: "object",
         properties: {
           object: { type: "string", enum: ["dedicated_ip_pool"] },
           id: { type: "string", format: "uuid" },
-          deleted: { type: "boolean" },
+          retired: { type: "boolean" },
+          status: { type: "string", enum: ["retired"] },
         },
-        required: ["object", "id", "deleted"],
+        required: ["object", "id", "retired", "status"],
+      },
+      // ── Integrations ─────────────────────────────────────────────
+      IntegrationConnection: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          provider: { type: "string", enum: ["webhook"] },
+          name: { type: "string" },
+          status: { type: "string", enum: ["connected", "disconnected"] },
+          scopes: { type: "array", items: { type: "string" } },
+          config: { type: "object", additionalProperties: true },
+          health: { type: "string", enum: ["unknown", "healthy", "unhealthy"] },
+          last_health_check_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          last_sync_at: { type: "string", format: "date-time", nullable: true },
+          last_event_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          last_error: { type: "string", nullable: true },
+          created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "id",
+          "provider",
+          "name",
+          "status",
+          "scopes",
+          "config",
+          "health",
+          "created_at",
+          "updated_at",
+        ],
+      },
+      IntegrationConnectionEnvelope: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["integration_connection"] },
+          data: {
+            oneOf: [
+              { $ref: "#/components/schemas/IntegrationConnection" },
+              { type: "null" },
+            ],
+          },
+        },
+        required: ["object", "data"],
+      },
+      IntegrationCatalogItem: {
+        type: "object",
+        properties: {
+          provider: { type: "string", enum: ["webhook"] },
+          name: { type: "string" },
+          description: { type: "string" },
+          status: { type: "string", enum: ["installed", "uninstalled"] },
+          connection: {
+            oneOf: [
+              { $ref: "#/components/schemas/IntegrationConnection" },
+              { type: "null" },
+            ],
+          },
+        },
+        required: ["provider", "name", "description", "status", "connection"],
+      },
+      IntegrationCatalogResponse: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["integration_catalog", "list"] },
+          data: {
+            type: "array",
+            items: {
+              oneOf: [
+                { $ref: "#/components/schemas/IntegrationCatalogItem" },
+                { $ref: "#/components/schemas/IntegrationConnection" },
+              ],
+            },
+          },
+          has_more: { type: "boolean" },
+        },
+        required: ["object", "data"],
+      },
+      ConnectWebhookIntegrationRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 255 },
+          webhook_url: { type: "string", format: "uri", maxLength: 2048 },
+          signing_secret: { type: "string", nullable: true, maxLength: 512 },
+        },
+        required: ["webhook_url"],
+      },
+      UpdateWebhookIntegrationRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 255 },
+          webhook_url: { type: "string", format: "uri", maxLength: 2048 },
+          signing_secret: { type: "string", nullable: true, maxLength: 512 },
+        },
+      },
+      IntegrationTestEvent: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["integration_test_event"] },
+          connection: { $ref: "#/components/schemas/IntegrationConnection" },
+          delivery: { type: "object", additionalProperties: true },
+        },
+        required: ["object", "connection", "delivery"],
       },
     },
     responses: {
@@ -4637,6 +5643,12 @@ export const openApiDocument = {
 } as const satisfies OpenApiDocument;
 
 const compatibilityAliases: Record<string, string> = {
+  "/segments": "/api/segments",
+  "/segments/{id}": "/api/segments/{id}",
+  "/segments/{id}/contacts": "/api/segments/{id}/contacts",
+  "/broadcasts": "/api/broadcasts",
+  "/broadcasts/{id}": "/api/broadcasts/{id}",
+  "/broadcasts/{id}/send": "/api/broadcasts/{id}/send",
   "/domains": "/api/domains",
   "/domains/{id}": "/api/domains/{id}",
   "/domains/{id}/verify": "/api/domains/{id}/verify",
@@ -4649,6 +5661,8 @@ const compatibilityAliases: Record<string, string> = {
   "/logs": "/api/logs",
   "/logs/{id}": "/api/logs/{id}",
   "/emails/{id}": "/api/emails/{id}",
+  "/emails/{id}/events": "/api/emails/{id}/events",
+  "/emails/{id}/trace": "/api/emails/{id}/trace",
   "/emails/{id}/attachments": "/api/emails/{id}/attachments",
   "/emails/{id}/attachments/{attachmentId}":
     "/api/emails/{id}/attachments/{attachmentId}",
@@ -4665,6 +5679,414 @@ for (const [aliasPath, canonicalPath] of Object.entries(compatibilityAliases)) {
   const canonicalPathItem = mutablePaths[canonicalPath];
   if (canonicalPathItem) mutablePaths[aliasPath] = canonicalPathItem;
 }
+
+function withAliasDetails(
+  operation: OperationObject,
+  overrides: Partial<OperationObject>,
+): OperationObject {
+  return { ...operation, ...overrides };
+}
+
+const canonicalEventsPath = mutablePaths["/api/events"];
+if (canonicalEventsPath?.get && canonicalEventsPath.post) {
+  mutablePaths["/events"] = {
+    get: withAliasDetails(canonicalEventsPath.get, {
+      summary: "List custom event definitions",
+      description:
+        "Root-compatible custom events collection route. Requires an OpenSend API key and returns event definitions scoped to the authenticated tenant.",
+      operationId: "listEventsRoot",
+    }),
+    post: withAliasDetails(canonicalEventsPath.post, {
+      summary: "Create a custom event definition",
+      description:
+        "Root-compatible custom events create route. Requires an OpenSend API key and creates the event definition for the authenticated tenant.",
+      operationId: "createEventRoot",
+    }),
+  };
+}
+
+const canonicalTopicsPath = mutablePaths["/api/topics"];
+if (canonicalTopicsPath?.post) {
+  mutablePaths["/topics"] = {
+    ...(mutablePaths["/topics"] as PathItemObject),
+    post: withAliasDetails(canonicalTopicsPath.post, {
+      summary: "Create a topic",
+      description:
+        "Root-compatible topics create route with strict schema requirements. `default_subscription` and `visibility` are required and must be explicit values. Existing `/api/topics` defaults are preserved for non-root callers.",
+      requestBody: {
+        required: true,
+        content: jsonContent({
+          $ref: "#/components/schemas/CreateTopicRequestStrict",
+        }),
+      },
+      operationId: "createTopicRoot",
+    }),
+  };
+}
+
+const canonicalTopicDetailPath = mutablePaths["/api/topics/{id}"];
+if (canonicalTopicDetailPath?.patch) {
+  mutablePaths["/topics/{id}"] = {
+    ...(mutablePaths["/topics/{id}"] as PathItemObject),
+    patch: withAliasDetails(canonicalTopicDetailPath.patch, {
+      summary: "Update a topic",
+      description:
+        "Root-compatible topic detail route. `default_subscription` (or `defaultSubscription`) and `visibility` can be supplied and must be one of the documented enum values. Both fields are optional for partial updates.",
+      requestBody: {
+        required: true,
+        content: jsonContent({
+          $ref: "#/components/schemas/UpdateTopicRequestStrict",
+        }),
+      },
+      operationId: "updateTopicRoot",
+    }),
+  };
+}
+
+const canonicalContactPropertiesPath = mutablePaths["/api/properties"];
+if (canonicalContactPropertiesPath?.post) {
+  mutablePaths["/contact-properties"] = {
+    ...(mutablePaths["/contact-properties"] as PathItemObject),
+    post: withAliasDetails(canonicalContactPropertiesPath.post, {
+      summary: "Create a contact property",
+      description:
+        "Root-compatible contact-property create route with strict schema requirements. `key` and `type` are required for root requests; OpenSend `/api/properties` defaults remain unchanged.",
+      requestBody: {
+        required: true,
+        content: jsonContent({
+          $ref: "#/components/schemas/CreatePropertyRequestStrict",
+        }),
+      },
+      operationId: "createContactPropertyRoot",
+    }),
+  };
+}
+
+const canonicalContactPropertyDetailPath = mutablePaths["/api/properties/{id}"];
+if (canonicalContactPropertyDetailPath?.patch) {
+  mutablePaths["/contact-properties/{id}"] = {
+    ...(mutablePaths["/contact-properties/{id}"] as PathItemObject),
+    patch: withAliasDetails(canonicalContactPropertyDetailPath.patch, {
+      summary: "Update a contact property",
+      description:
+        "Root-compatible contact-property detail route. If provided, `type` must be one of the documented enum values. `key` remains create-only/stable and is not patchable for compatibility with OpenSend clients.",
+      requestBody: {
+        required: true,
+        content: jsonContent({
+          $ref: "#/components/schemas/UpdatePropertyRequestStrict",
+        }),
+      },
+      operationId: "updateContactPropertyRoot",
+    }),
+  };
+}
+
+const canonicalEventDetailPath = mutablePaths["/api/events/{identifier}"];
+if (
+  canonicalEventDetailPath?.get &&
+  canonicalEventDetailPath.patch &&
+  canonicalEventDetailPath.delete
+) {
+  mutablePaths["/events/{identifier}"] = {
+    get: withAliasDetails(canonicalEventDetailPath.get, {
+      summary: "Retrieve a custom event definition",
+      description:
+        "Root-compatible custom event detail route. The path identifier may be the event definition ID or exact event name, resolved within the authenticated tenant.",
+      operationId: "getEventRoot",
+    }),
+    patch: withAliasDetails(canonicalEventDetailPath.patch, {
+      summary: "Update a custom event definition",
+      description:
+        "Root-compatible custom event update route. The path identifier may be the event definition ID or exact event name, resolved within the authenticated tenant.",
+      operationId: "updateEventRoot",
+    }),
+    delete: withAliasDetails(canonicalEventDetailPath.delete, {
+      summary: "Delete a custom event definition",
+      description:
+        "Root-compatible custom event delete route. The path identifier may be the event definition ID or exact event name, resolved within the authenticated tenant. Existing DELETE /api/events?id=... callers remain supported.",
+      operationId: "deleteEventRoot",
+    }),
+  };
+}
+
+const canonicalEventSendPath = mutablePaths["/api/events/send"];
+if (canonicalEventSendPath?.post) {
+  mutablePaths["/events/send"] = {
+    post: withAliasDetails(canonicalEventSendPath.post, {
+      summary: "Send (fire) a custom event for a contact",
+      description:
+        "Root-compatible custom event delivery route. The request body uses payload for automation variables and schema validation; properties is not accepted.",
+      operationId: "sendEventRoot",
+    }),
+  };
+}
+
+const canonicalApiKeysPath = mutablePaths["/api/api-keys"];
+if (canonicalApiKeysPath?.get && canonicalApiKeysPath.post) {
+  mutablePaths["/api-keys"] = {
+    get: withAliasDetails(canonicalApiKeysPath.get, {
+      summary: "List API keys",
+      description:
+        "Root-compatible API-key collection alias. Browser dashboard GET /api-keys remains a signed-in dashboard page; API-like requests are rewritten to /api/api-keys by OpenSend middleware.",
+      operationId: "listApiKeysAlias",
+    }),
+    post: withAliasDetails(canonicalApiKeysPath.post, {
+      summary: "Create an API key",
+      description:
+        "Root-compatible API-key collection alias rewritten to POST /api/api-keys by OpenSend middleware.",
+      operationId: "createApiKeyAlias",
+    }),
+  };
+}
+
+const canonicalApiKeyDetailPath = mutablePaths["/api/api-keys/{id}"];
+if (canonicalApiKeyDetailPath?.delete) {
+  mutablePaths["/api-keys/{id}"] = {
+    delete: withAliasDetails(canonicalApiKeyDetailPath.delete, {
+      summary: "Delete an API key",
+      description:
+        "Root-compatible API-key delete alias rewritten to DELETE /api/api-keys/{id} by OpenSend middleware. Root GET/PATCH detail aliases are not implemented.",
+      operationId: "deleteApiKeyAlias",
+      parameters: [apiKeyIdPathParameter],
+    }),
+  };
+}
+
+const canonicalContactsPath = mutablePaths["/api/contacts"];
+if (canonicalContactsPath?.get && canonicalContactsPath.post) {
+  mutablePaths["/contacts"] = {
+    get: withAliasDetails(canonicalContactsPath.get, {
+      summary: "List contacts",
+      description:
+        "Root-compatible contacts collection route implemented by src/app/contacts/route.ts.",
+      operationId: "listContactsAlias",
+    }),
+    post: withAliasDetails(canonicalContactsPath.post, {
+      summary: "Create a contact",
+      description:
+        "Root-compatible contacts collection route implemented by src/app/contacts/route.ts.",
+      operationId: "createContactAlias",
+    }),
+  };
+}
+
+const canonicalContactDetailPath = mutablePaths["/api/contacts/{id}"];
+if (
+  canonicalContactDetailPath?.get &&
+  canonicalContactDetailPath.patch &&
+  canonicalContactDetailPath.delete
+) {
+  mutablePaths["/contacts/{contact_id}"] = {
+    get: withAliasDetails(canonicalContactDetailPath.get, {
+      summary: "Retrieve a contact",
+      description:
+        "Root-compatible contact detail route implemented by src/app/contacts/[contact_id]/route.ts.",
+      operationId: "getContactAlias",
+      parameters: [contactIdPathParameter],
+    }),
+    patch: withAliasDetails(canonicalContactDetailPath.patch, {
+      summary: "Update a contact",
+      description:
+        "Root-compatible contact detail route implemented by src/app/contacts/[contact_id]/route.ts.",
+      operationId: "updateContactAlias",
+      parameters: [contactIdPathParameter],
+    }),
+    delete: withAliasDetails(canonicalContactDetailPath.delete, {
+      summary: "Delete a contact",
+      description:
+        "Root-compatible contact detail route implemented by src/app/contacts/[contact_id]/route.ts.",
+      operationId: "deleteContactAlias",
+      parameters: [contactIdPathParameter],
+    }),
+  };
+}
+
+const canonicalContactSegmentsPath =
+  mutablePaths["/api/contacts/{id}/segments"];
+if (canonicalContactSegmentsPath?.get) {
+  mutablePaths["/contacts/{contact_id}/segments"] = {
+    get: withAliasDetails(canonicalContactSegmentsPath.get, {
+      summary: "List segments a contact belongs to",
+      description:
+        "Root-compatible contact segment relationship route implemented by src/app/contacts/[contact_id]/segments/route.ts.",
+      operationId: "listContactSegmentsAlias",
+      parameters: [contactIdPathParameter],
+    }),
+  };
+}
+
+const canonicalContactSegmentMutationPath =
+  mutablePaths["/api/contacts/{id}/segments/{segment_id}"];
+if (
+  canonicalContactSegmentMutationPath?.post &&
+  canonicalContactSegmentMutationPath.delete
+) {
+  mutablePaths["/contacts/{contact_id}/segments/{segment_id}"] = {
+    post: withAliasDetails(canonicalContactSegmentMutationPath.post, {
+      summary: "Add a contact to a segment",
+      description:
+        "Root-compatible contact segment relationship route implemented by src/app/contacts/[contact_id]/segments/[segment_id]/route.ts.",
+      operationId: "addContactToSegmentAlias",
+      parameters: [contactIdPathParameter, contactSegmentIdPathParameter],
+    }),
+    delete: withAliasDetails(canonicalContactSegmentMutationPath.delete, {
+      summary: "Remove a contact from a segment",
+      description:
+        "Root-compatible contact segment relationship route implemented by src/app/contacts/[contact_id]/segments/[segment_id]/route.ts.",
+      operationId: "removeContactFromSegmentAlias",
+      parameters: [contactIdPathParameter, contactSegmentIdPathParameter],
+    }),
+  };
+}
+
+const canonicalContactTopicsPath = mutablePaths["/api/contacts/{id}/topics"];
+if (canonicalContactTopicsPath?.get && canonicalContactTopicsPath.patch) {
+  mutablePaths["/contacts/{contact_id}/topics"] = {
+    get: withAliasDetails(canonicalContactTopicsPath.get, {
+      summary: "List topic subscriptions for a contact",
+      description:
+        "Root-compatible contact topic relationship route implemented by src/app/contacts/[contact_id]/topics/route.ts.",
+      operationId: "listContactTopicsAlias",
+      parameters: [contactIdPathParameter],
+    }),
+    patch: withAliasDetails(canonicalContactTopicsPath.patch, {
+      summary: "Update topic subscriptions for a contact",
+      description:
+        "Root-compatible contact topic relationship route implemented by src/app/contacts/[contact_id]/topics/route.ts.",
+      operationId: "updateContactTopicsAlias",
+      parameters: [contactIdPathParameter],
+    }),
+  };
+}
+
+const audienceSchema = {
+  type: "object",
+  properties: {
+    object: { type: "string" },
+    id: { type: "string" },
+    name: { type: "string" },
+    created_at: { type: "string", format: "date-time" },
+  },
+  required: ["object", "id", "name"],
+} satisfies JsonSchema;
+
+const audienceListItemSchema = {
+  type: "object",
+  properties: {
+    id: { type: "string" },
+    name: { type: "string" },
+    created_at: { type: "string", format: "date-time" },
+  },
+  required: ["id", "name"],
+} satisfies JsonSchema;
+
+const audienceListSchema = {
+  type: "object",
+  properties: {
+    object: { type: "string" },
+    data: {
+      type: "array",
+      items: audienceListItemSchema,
+    },
+    has_more: { type: "boolean" },
+  },
+  required: ["object", "data", "has_more"],
+} satisfies JsonSchema;
+
+const deleteAudienceResponseSchema = {
+  type: "object",
+  properties: {
+    object: { type: "string" },
+    id: { type: "string" },
+    deleted: { type: "boolean" },
+  },
+  required: ["object", "id", "deleted"],
+} satisfies JsonSchema;
+
+mutablePaths["/audiences"] = {
+  get: {
+    tags: ["Segments"],
+    summary: "List audiences",
+    description:
+      "Resend-compatible audience alias implemented by src/app/audiences/route.ts using OpenSend segment storage.",
+    operationId: "listAudiencesAlias",
+    security: bearerSecurity,
+    parameters: [
+      ...paginationParameters,
+      {
+        name: "search",
+        in: "query",
+        description: "Full-text search filter.",
+        schema: { type: "string" },
+      },
+    ],
+    responses: {
+      "200": {
+        description: "Audience list.",
+        content: jsonContent(audienceListSchema),
+      },
+      ...errorResponses,
+    },
+  },
+  post: {
+    tags: ["Segments"],
+    summary: "Create an audience",
+    description:
+      "Resend-compatible audience alias implemented by src/app/audiences/route.ts using OpenSend segment storage.",
+    operationId: "createAudienceAlias",
+    security: bearerSecurity,
+    requestBody: {
+      required: true,
+      content: jsonContent({
+        $ref: "#/components/schemas/CreateSegmentRequest",
+      }),
+    },
+    responses: {
+      "201": {
+        description: "Created audience.",
+        content: jsonContent(audienceSchema),
+      },
+      ...errorResponses,
+    },
+  },
+};
+
+mutablePaths["/audiences/{audience_id}"] = {
+  get: {
+    tags: ["Segments"],
+    summary: "Retrieve an audience",
+    description:
+      "Resend-compatible audience detail alias implemented by src/app/audiences/[audience_id]/route.ts using OpenSend segment storage.",
+    operationId: "getAudienceAlias",
+    security: bearerSecurity,
+    parameters: [audienceIdPathParameter],
+    responses: {
+      "200": {
+        description: "Audience detail.",
+        content: jsonContent(audienceSchema),
+      },
+      "404": { $ref: "#/components/responses/NotFound" },
+      ...errorResponses,
+    },
+  },
+  delete: {
+    tags: ["Segments"],
+    summary: "Delete an audience",
+    description:
+      "Resend-compatible audience detail alias implemented by src/app/audiences/[audience_id]/route.ts using OpenSend segment storage.",
+    operationId: "deleteAudienceAlias",
+    security: bearerSecurity,
+    parameters: [audienceIdPathParameter],
+    responses: {
+      "200": {
+        description: "Audience deleted.",
+        content: jsonContent(deleteAudienceResponseSchema),
+      },
+      "404": { $ref: "#/components/responses/NotFound" },
+      ...errorResponses,
+    },
+  },
+};
 
 const canonicalEmailsPath = mutablePaths["/api/emails"];
 const existingEmailsAliasPath = mutablePaths["/emails"];

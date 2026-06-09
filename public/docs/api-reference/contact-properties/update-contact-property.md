@@ -4,7 +4,14 @@ Update display metadata for a custom contact property.
 
 `PATCH /contact-properties/{id}`
 
-Compatibility note: `PATCH /api/properties/{id}` remains available for existing OpenSend integrations; new API clients should prefer the root compatibility path above. Browser dashboard navigation is preserved for page routes that share these names.
+Compatibility behavior:
+
+- `/contact-properties/{id}` is the compatibility alias handled by middleware rewrite to `/api/properties/{id}`.
+- In compatibility mode, if `type` is provided it must be one of: `string` | `number` | `boolean` | `date`.
+- `name` and `fallback_value` remain editable for legacy-compatible updates.
+- `key` is create-only/stable and is not patch-updated by this route.
+- `PATCH /api/properties/{id}` remains legacy compatible for existing OpenSend integrations.
+
 
 ## Authentication
 

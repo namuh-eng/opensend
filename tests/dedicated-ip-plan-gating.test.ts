@@ -11,7 +11,6 @@ const mockRequireFullAccessForApiKeyCaller = vi.hoisted(() => vi.fn());
 const mockListForUser = vi.hoisted(() => vi.fn());
 const mockCountForUser = vi.hoisted(() => vi.fn());
 const mockCreate = vi.hoisted(() => vi.fn());
-const mockCreateDedicatedIpPool = vi.hoisted(() => vi.fn());
 const mockFindBySubscription = vi.hoisted(() => vi.fn());
 const mockFindByPlanId = vi.hoisted(() => vi.fn());
 
@@ -48,10 +47,6 @@ vi.mock("@opensend/core", () => ({
     listForUser: mockListForUser,
     countForUser: mockCountForUser,
     create: mockCreate,
-  },
-  configurationSetService: {
-    createDedicatedIpPool: mockCreateDedicatedIpPool,
-    deleteDedicatedIpPool: vi.fn(),
   },
 }));
 
@@ -106,7 +101,7 @@ describe("POST /api/dedicated-ips — plan gating", () => {
     expect(res.status).toBe(401);
   });
 
-  it("rejects sending-only API keys before provisioning provider resources", async () => {
+  it("rejects sending-only API keys before creating lifecycle records", async () => {
     mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({
       apiKeyId: "key-send",
       permission: "sending_access",
@@ -129,7 +124,7 @@ describe("POST /api/dedicated-ips — plan gating", () => {
     });
     const res = await POST(req);
     expect(res.status).toBe(403);
-    expect(mockCreateDedicatedIpPool).not.toHaveBeenCalled();
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 
   it("returns 403 when plan has dedicatedIpsEnabled=false", async () => {
@@ -183,15 +178,20 @@ describe("POST /api/dedicated-ips — plan gating", () => {
       maxDedicatedIps: 5,
     });
     mockCountForUser.mockResolvedValueOnce(0);
-    mockCreateDedicatedIpPool.mockResolvedValueOnce(undefined);
     mockCreate.mockResolvedValueOnce({
       id: "pool-1",
       userId: "user-1",
       name: "Pool",
       sesPoolName: "ses-pool",
       scalingMode: "MANAGED",
-      status: "active",
+      status: "requested",
+      provider: "manual",
+      operatorNotes: null,
+      provisionedAt: null,
+      warmingStartedAt: null,
+      retiredAt: null,
       createdAt: new Date(),
+      updatedAt: new Date(),
     });
 
     const req = new Request("http://localhost/api/dedicated-ips", {
@@ -202,6 +202,7 @@ describe("POST /api/dedicated-ips — plan gating", () => {
     expect(res.status).toBe(201);
     const body = await res.json();
     expect(body.object).toBe("dedicated_ip_pool");
-    expect(body.ses_pool_name).toBe("ses-pool");
+    expect(body.status).toBe("requested");
+    expect(body.provider_pool_name).toBe("ses-pool");
   });
 });

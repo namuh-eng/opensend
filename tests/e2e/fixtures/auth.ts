@@ -103,6 +103,10 @@ export async function cleanupE2ERun(
     [`${userPrefix}%`],
   );
   await client.query(
+    "delete from integration_connections where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query(
     `delete from webhook_deliveries
      where event_id in (
        select id from email_events
@@ -110,6 +114,13 @@ export async function cleanupE2ERun(
      )`,
     [`${userPrefix}%`],
   );
+  await client.query(
+    "delete from custom_event_deliveries where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query("delete from custom_events where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query(
     `delete from webhook_deliveries
      where webhook_id in (
@@ -151,6 +162,34 @@ export async function cleanupE2ERun(
     "delete from logs where user_id like $1 or document->>'test_run_id' = $2",
     [`${userPrefix}%`, runId],
   );
+  await client.query(
+    `delete from automation_runs
+     where user_id like $1
+        or automation_id in (
+          select id from automations
+          where user_id like $1 or document->>'test_run_id' = $2
+        )`,
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
+    `delete from automation_steps
+     where automation_id in (
+       select id from automations
+       where user_id like $1 or document->>'test_run_id' = $2
+     )`,
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
+    "delete from automations where user_id like $1 or document->>'test_run_id' = $2",
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
+    "delete from custom_event_deliveries where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query("delete from custom_events where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query("delete from templates where user_id like $1", [
     `${userPrefix}%`,
   ]);
@@ -174,7 +213,14 @@ export async function cleanupE2ERun(
     "delete from segments where user_id like $1 or document->>'test_run_id' = $2",
     [`${userPrefix}%`, runId],
   );
+  await client.query(
+    "delete from domain_deliverability_statuses where user_id like $1",
+    [`${userPrefix}%`],
+  );
   await client.query("delete from domains where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query("delete from dedicated_ip_pools where user_id like $1", [
     `${userPrefix}%`,
   ]);
   await client.query(
@@ -182,6 +228,32 @@ export async function cleanupE2ERun(
     [`${userPrefix}%`, `${apiKeyPrefix}%`, runId],
   );
   await client.query('delete from "session" where user_id like $1', [
+    `${userPrefix}%`,
+  ]);
+  await client.query(
+    `delete from workspace_entitlements
+     where workspace_id in (
+       select id from workspaces where owner_user_id like $1
+       union
+       select workspace_id from workspace_memberships where user_id like $1
+     )`,
+    [`${userPrefix}%`],
+  );
+  await client.query(
+    `delete from workspace_invitations
+     where workspace_id in (
+       select id from workspaces where owner_user_id like $1
+       union
+       select workspace_id from workspace_memberships where user_id like $1
+     )
+     or email like $2`,
+    [`${userPrefix}%`, emailPattern],
+  );
+  await client.query(
+    "delete from workspace_memberships where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query("delete from workspaces where owner_user_id like $1", [
     `${userPrefix}%`,
   ]);
   await client.query('delete from "account" where user_id like $1', [

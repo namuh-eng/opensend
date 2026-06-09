@@ -478,10 +478,24 @@ export function createContactOperationsService({
 
       const body = await resolveRequestBody(input.body);
       const newTopics = parseTopicsBody(body);
-      const updatedSubscriptions = newTopics.map((topic) => ({
-        topicId: topic.id as string,
-        subscribed: mapPublicToInternalSubscription(topic.subscription),
-      }));
+      const updatedSubscriptions = await Promise.all(
+        newTopics.map(async (topic) => {
+          if (typeof topic.id !== "string") {
+            throw invalidInput("topic id is required");
+          }
+
+          const foundTopic = await repository.findTopicByIdForUser(
+            topic.id,
+            input.userId,
+          );
+          if (!foundTopic) throw notFound("Topic not found");
+
+          return {
+            topicId: foundTopic.id,
+            subscribed: mapPublicToInternalSubscription(topic.subscription),
+          };
+        }),
+      );
 
       await repository.updateContactForUser(contact.id, input.userId, {
         topicSubscriptions: updatedSubscriptions,

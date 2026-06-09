@@ -43,17 +43,17 @@ const EMAIL_SECTIONS: ApiCodeSection[] = [
   {
     title: "Send Email",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.emails.send({
+const { data, error } = await opensend.emails.send({
   from: 'you@example.com',
   to: ['user@gmail.com'],
   subject: 'Hello World',
   html: '<p>Congrats on sending your <strong>first email</strong>!</p>',
 }, { idempotencyKey: 'welcome-user-123' });`,
-      curl: `curl -X POST https://api.example.com/emails \\
+      curl: `curl -X POST https://opensend.namuh.co/emails \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: welcome-user-123" \\
@@ -68,11 +68,11 @@ const { data, error } = await resend.emails.send({
   {
     title: "Send Batch Emails",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.batch.send([
+const { data, error } = await opensend.batch.send([
   {
     from: 'you@example.com',
     to: ['user1@gmail.com'],
@@ -86,7 +86,7 @@ const { data, error } = await resend.batch.send([
     html: '<p>Hello User 2</p>',
   },
 ], { idempotencyKey: 'batch-campaign-123' });`,
-      curl: `curl -X POST https://api.example.com/emails/batch \\
+      curl: `curl -X POST https://opensend.namuh.co/emails/batch \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -H "Idempotency-Key: batch-campaign-123" \\
@@ -109,29 +109,29 @@ const { data, error } = await resend.batch.send([
   {
     title: "Retrieve Email",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.emails.get(
+const { data, error } = await opensend.emails.get(
   '49a3999c-0ce1-4ea6-ab68-afcd6dc2e794'
 );`,
-      curl: `curl -X GET https://api.example.com/emails/49a3999c-0ce1-4ea6-ab68-afcd6dc2e794 \\
+      curl: `curl -X GET https://opensend.namuh.co/emails/49a3999c-0ce1-4ea6-ab68-afcd6dc2e794 \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
     title: "Update Email",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.emails.update({
+const { data, error } = await opensend.emails.update({
   id: '49a3999c-0ce1-4ea6-ab68-afcd6dc2e794',
   scheduledAt: '2024-08-05T11:52:01.858Z',
 });`,
-      curl: `curl -X PATCH https://api.example.com/emails/49a3999c-0ce1-4ea6-ab68-afcd6dc2e794 \\
+      curl: `curl -X PATCH https://opensend.namuh.co/emails/49a3999c-0ce1-4ea6-ab68-afcd6dc2e794 \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -145,14 +145,14 @@ const DOMAIN_SECTIONS: ApiCodeSection[] = [
   {
     title: "Add Domain",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.domains.create({
+const { data, error } = await opensend.domains.create({
   name: 'example.com',
 });`,
-      curl: `curl -X POST https://api.example.com/domains \\
+      curl: `curl -X POST https://opensend.namuh.co/domains \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{"name": "example.com"}'`,
@@ -161,44 +161,44 @@ const { data, error } = await resend.domains.create({
   {
     title: "Retrieve Domain",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.domains.get(
+const { data, error } = await opensend.domains.get(
   'd91cd9bd-1176-453e-8fc1-35364d380206'
 );`,
-      curl: `curl -X GET https://api.example.com/domains/d91cd9bd-1176-453e-8fc1-35364d380206 \\
+      curl: `curl -X GET https://opensend.namuh.co/domains/d91cd9bd-1176-453e-8fc1-35364d380206 \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
     title: "Verify Domain",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.domains.verify(
+const { data, error } = await opensend.domains.verify(
   'd91cd9bd-1176-453e-8fc1-35364d380206'
 );`,
-      curl: `curl -X POST https://api.example.com/domains/d91cd9bd-1176-453e-8fc1-35364d380206/verify \\
+      curl: `curl -X POST https://opensend.namuh.co/domains/d91cd9bd-1176-453e-8fc1-35364d380206/verify \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
     title: "Update Domain",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.domains.update({
+const { data, error } = await opensend.domains.update({
   id: 'd91cd9bd-1176-453e-8fc1-35364d380206',
   openTracking: true,
   clickTracking: true,
 });`,
-      curl: `curl -X PATCH https://api.example.com/domains/d91cd9bd-1176-453e-8fc1-35364d380206 \\
+      curl: `curl -X PATCH https://opensend.namuh.co/domains/d91cd9bd-1176-453e-8fc1-35364d380206 \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -210,26 +210,26 @@ const { data, error } = await resend.domains.update({
   {
     title: "List Domains",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.domains.list();`,
-      curl: `curl -X GET https://api.example.com/domains \\
+const { data, error } = await opensend.domains.list();`,
+      curl: `curl -X GET https://opensend.namuh.co/domains \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
     title: "Delete Domain",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.domains.remove(
+const { data, error } = await opensend.domains.remove(
   'd91cd9bd-1176-453e-8fc1-35364d380206'
 );`,
-      curl: `curl -X DELETE https://api.example.com/domains/d91cd9bd-1176-453e-8fc1-35364d380206 \\
+      curl: `curl -X DELETE https://opensend.namuh.co/domains/d91cd9bd-1176-453e-8fc1-35364d380206 \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
@@ -239,15 +239,15 @@ const WEBHOOK_SECTIONS: ApiCodeSection[] = [
   {
     title: "Create Webhook",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.webhooks.create({
+const { data, error } = await opensend.webhooks.create({
   endpoint: 'https://example.com/webhooks',
   events: ['email.sent', 'email.delivered', 'email.bounced'],
 });`,
-      curl: `curl -X POST https://api.example.com/webhooks \\
+      curl: `curl -X POST https://opensend.namuh.co/webhooks \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -259,26 +259,26 @@ const { data, error } = await resend.webhooks.create({
   {
     title: "List Webhooks",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.webhooks.list();`,
-      curl: `curl -X GET https://api.example.com/webhooks \\
+const { data, error } = await opensend.webhooks.list();`,
+      curl: `curl -X GET https://opensend.namuh.co/webhooks \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
     title: "Remove Webhook",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.webhooks.remove(
+const { data, error } = await opensend.webhooks.remove(
   'wh_123456789'
 );`,
-      curl: `curl -X DELETE https://api.example.com/webhooks/wh_123456789 \\
+      curl: `curl -X DELETE https://opensend.namuh.co/webhooks/wh_123456789 \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
@@ -288,15 +288,15 @@ const API_KEY_SECTIONS: ApiCodeSection[] = [
   {
     title: "Create API Key",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.apiKeys.create({
+const { data, error } = await opensend.apiKeys.create({
   name: 'Production',
   permission: 'full_access',
 });`,
-      curl: `curl -X POST https://api.example.com/api-keys \\
+      curl: `curl -X POST https://opensend.namuh.co/api-keys \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -308,26 +308,26 @@ const { data, error } = await resend.apiKeys.create({
   {
     title: "List API Keys",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.apiKeys.list();`,
-      curl: `curl -X GET https://api.example.com/api-keys \\
+const { data, error } = await opensend.apiKeys.list();`,
+      curl: `curl -X GET https://opensend.namuh.co/api-keys \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
     title: "Remove API Key",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.apiKeys.remove(
+const { data, error } = await opensend.apiKeys.remove(
   'key_123456789'
 );`,
-      curl: `curl -X DELETE https://api.example.com/api-keys/key_123456789 \\
+      curl: `curl -X DELETE https://opensend.namuh.co/api-keys/key_123456789 \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
@@ -337,18 +337,18 @@ const CONTACT_SECTIONS: ApiCodeSection[] = [
   {
     title: "Create Contact",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.contacts.create({
+const { data, error } = await opensend.contacts.create({
   email: 'user@example.com',
   firstName: 'John',
   lastName: 'Doe',
   unsubscribed: false,
   segmentId: '78261eea-8f8b-4381-83c6-79fa7120f1cf',
 });`,
-      curl: `curl -X POST https://api.example.com/contacts \\
+      curl: `curl -X POST https://opensend.namuh.co/contacts \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -363,29 +363,29 @@ const { data, error } = await resend.contacts.create({
   {
     title: "List Contacts",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.contacts.list({
+const { data, error } = await opensend.contacts.list({
   segmentId: '78261eea-8f8b-4381-83c6-79fa7120f1cf',
 });`,
-      curl: `curl -X GET "https://api.example.com/contacts?segmentId=78261eea-8f8b-4381-83c6-79fa7120f1cf" \\
+      curl: `curl -X GET "https://opensend.namuh.co/contacts?segmentId=78261eea-8f8b-4381-83c6-79fa7120f1cf" \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
     title: "Remove Contact",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.contacts.remove({
+const { data, error } = await opensend.contacts.remove({
   id: '520784e2-887d-4c25-b53c-4ad46ad38100',
   segmentId: '78261eea-8f8b-4381-83c6-79fa7120f1cf',
 });`,
-      curl: `curl -X DELETE "https://api.example.com/contacts/520784e2-887d-4c25-b53c-4ad46ad38100?segmentId=78261eea-8f8b-4381-83c6-79fa7120f1cf" \\
+      curl: `curl -X DELETE "https://opensend.namuh.co/contacts/520784e2-887d-4c25-b53c-4ad46ad38100?segmentId=78261eea-8f8b-4381-83c6-79fa7120f1cf" \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
@@ -395,17 +395,17 @@ const BROADCAST_SECTIONS: ApiCodeSection[] = [
   {
     title: "Create Broadcast",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.broadcasts.create({
+const { data, error } = await opensend.broadcasts.create({
   segmentId: '78261eea-8f8b-4381-83c6-79fa7120f1cf',
   from: 'you@example.com',
   subject: 'Hello World',
   html: '<p>Hello subscribers!</p>',
 });`,
-      curl: `curl -X POST https://api.example.com/broadcasts \\
+      curl: `curl -X POST https://opensend.namuh.co/broadcasts \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -419,26 +419,26 @@ const { data, error } = await resend.broadcasts.create({
   {
     title: "Send Broadcast",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.broadcasts.send(
+const { data, error } = await opensend.broadcasts.send(
   '49a3999c-0ce1-4ea6-ab68-afcd6dc2e794'
 );`,
-      curl: `curl -X POST https://api.example.com/broadcasts/49a3999c-0ce1-4ea6-ab68-afcd6dc2e794/send \\
+      curl: `curl -X POST https://opensend.namuh.co/broadcasts/49a3999c-0ce1-4ea6-ab68-afcd6dc2e794/send \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
     title: "List Broadcasts",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.broadcasts.list();`,
-      curl: `curl -X GET https://api.example.com/broadcasts \\
+const { data, error } = await opensend.broadcasts.list();`,
+      curl: `curl -X GET https://opensend.namuh.co/broadcasts \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
@@ -448,15 +448,15 @@ const TEMPLATE_SECTIONS: ApiCodeSection[] = [
   {
     title: "Create Template",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.templates.create({
+const { data, error } = await opensend.templates.create({
   name: 'Welcome Email',
   html: '<p>Welcome {{name}}!</p>',
 });`,
-      curl: `curl -X POST https://api.example.com/templates \\
+      curl: `curl -X POST https://opensend.namuh.co/templates \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -468,26 +468,26 @@ const { data, error } = await resend.templates.create({
   {
     title: "List Templates",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.templates.list();`,
-      curl: `curl -X GET https://api.example.com/templates \\
+const { data, error } = await opensend.templates.list();`,
+      curl: `curl -X GET https://opensend.namuh.co/templates \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
     title: "Remove Template",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.templates.remove(
+const { data, error } = await opensend.templates.remove(
   'tmpl_123456789'
 );`,
-      curl: `curl -X DELETE https://api.example.com/templates/tmpl_123456789 \\
+      curl: `curl -X DELETE https://opensend.namuh.co/templates/tmpl_123456789 \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
@@ -497,14 +497,14 @@ const SEGMENT_SECTIONS: ApiCodeSection[] = [
   {
     title: "Create Segment",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.segments.create({
+const { data, error } = await opensend.segments.create({
   name: 'Newsletter Subscribers',
 });`,
-      curl: `curl -X POST https://api.example.com/segments \\
+      curl: `curl -X POST https://opensend.namuh.co/segments \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{"name": "Newsletter Subscribers"}'`,
@@ -513,26 +513,26 @@ const { data, error } = await resend.segments.create({
   {
     title: "List Segments",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.segments.list();`,
-      curl: `curl -X GET https://api.example.com/segments \\
+const { data, error } = await opensend.segments.list();`,
+      curl: `curl -X GET https://opensend.namuh.co/segments \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
     title: "Remove Segment",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.segments.remove(
+const { data, error } = await opensend.segments.remove(
   '78261eea-8f8b-4381-83c6-79fa7120f1cf'
 );`,
-      curl: `curl -X DELETE https://api.example.com/segments/78261eea-8f8b-4381-83c6-79fa7120f1cf \\
+      curl: `curl -X DELETE https://opensend.namuh.co/segments/78261eea-8f8b-4381-83c6-79fa7120f1cf \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
@@ -542,14 +542,14 @@ const TOPIC_SECTIONS: ApiCodeSection[] = [
   {
     title: "Create Topic",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.topics.create({
+const { data, error } = await opensend.topics.create({
   name: 'Product Updates',
 });`,
-      curl: `curl -X POST https://api.example.com/topics \\
+      curl: `curl -X POST https://opensend.namuh.co/topics \\
   -H "Authorization: Bearer os_123456789" \\
   -H "Content-Type: application/json" \\
   -d '{"name": "Product Updates"}'`,
@@ -558,26 +558,26 @@ const { data, error } = await resend.topics.create({
   {
     title: "List Topics",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.topics.list();`,
-      curl: `curl -X GET https://api.example.com/topics \\
+const { data, error } = await opensend.topics.list();`,
+      curl: `curl -X GET https://opensend.namuh.co/topics \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },
   {
     title: "Remove Topic",
     code: {
-      nodejs: `import { Resend } from 'resend';
+      nodejs: `import { Opensend } from 'opensend';
 
-const resend = new Resend('os_123456789');
+const opensend = new Opensend('os_123456789');
 
-const { data, error } = await resend.topics.remove(
+const { data, error } = await opensend.topics.remove(
   'topic_123456789'
 );`,
-      curl: `curl -X DELETE https://api.example.com/topics/topic_123456789 \\
+      curl: `curl -X DELETE https://opensend.namuh.co/topics/topic_123456789 \\
   -H "Authorization: Bearer os_123456789"`,
     },
   },

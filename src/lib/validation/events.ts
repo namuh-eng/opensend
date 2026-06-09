@@ -7,6 +7,10 @@ import {
 import { z } from "zod";
 
 const eventNameSchema = z.string().min(1).max(255);
+const customEventNameSchema = eventNameSchema.refine(
+  (name) => name.trim().toLowerCase() !== "send",
+  { message: '"send" is reserved for the event delivery endpoint' },
+);
 const uuidSchema = z.string().uuid();
 const emailSchema = z.string().email().min(3).max(512);
 const jsonObjectSchema = z.record(z.string(), z.unknown());
@@ -24,9 +28,20 @@ const eventSchemaDefinitionSchema = jsonObjectSchema.superRefine(
 );
 
 export const createCustomEventSchema = z.object({
-  name: eventNameSchema,
+  name: customEventNameSchema,
   schema: eventSchemaDefinitionSchema.optional(),
 });
+
+export const updateCustomEventSchema = z
+  .object({
+    name: customEventNameSchema.optional(),
+    schema: eventSchemaDefinitionSchema.nullable().optional(),
+  })
+  .refine((data) => data.name !== undefined || data.schema !== undefined, {
+    message: "Provide at least one field to update",
+  });
+
+export const eventIdentifierSchema = z.string().min(1).max(255);
 
 export const listEventsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
@@ -70,6 +85,7 @@ export const sendEventSchema = z
   });
 
 export type CreateCustomEventRequest = z.infer<typeof createCustomEventSchema>;
+export type UpdateCustomEventRequest = z.infer<typeof updateCustomEventSchema>;
 export type SendEventRequest = z.infer<typeof sendEventSchema>;
 export {
   isRecord,

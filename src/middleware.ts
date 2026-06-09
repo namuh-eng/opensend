@@ -1,3 +1,7 @@
+import {
+  type RootApiAlias,
+  rootApiAliasHeaderName,
+} from "@/lib/root-api-compatibility";
 import { getSessionCookie } from "better-auth/cookies";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -128,12 +132,27 @@ function isEmailCancelAlias(pathname: string, method: string): boolean {
   return parts[0] === "emails" && parts.length === 3 && parts[2] === "cancel";
 }
 
+function isContactRelationshipAlias(pathname: string, method: string): boolean {
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "contacts") return false;
+  if (parts.length === 3 && parts[2] === "segments") return method === "GET";
+  if (parts.length === 4 && parts[2] === "segments") {
+    return ["POST", "DELETE"].includes(method);
+  }
+  if (parts.length === 3 && parts[2] === "topics") {
+    return ["GET", "PATCH"].includes(method);
+  }
+
+  return false;
+}
+
 function isContactsAlias(pathname: string, method: string): boolean {
   if (pathname === "/contacts") return ["GET", "POST"].includes(method);
-  if (pathname.startsWith("/contacts/")) {
-    return ["GET", "PATCH", "DELETE"].includes(method);
-  }
-  return false;
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "contacts") return false;
+  if (parts.length === 2) return ["GET", "PATCH", "DELETE"].includes(method);
+  return isContactRelationshipAlias(pathname, method);
 }
 
 function isAudiencesAlias(pathname: string, method: string): boolean {
@@ -173,6 +192,30 @@ function isApiKeysAlias(pathname: string, method: string): boolean {
 
   const parts = pathname.split("/").filter(Boolean);
   return parts[0] === "api-keys" && parts.length === 2 && method === "DELETE";
+}
+
+function isAutomationsAlias(pathname: string, method: string): boolean {
+  if (pathname === "/automations") return ["GET", "POST"].includes(method);
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "automations") return false;
+  if (parts.length === 2) return ["GET", "PATCH", "DELETE"].includes(method);
+  if (parts.length === 3 && parts[2] === "runs") return method === "GET";
+  if (parts.length === 3 && parts[2] === "stop") return method === "POST";
+  if (parts.length === 4 && parts[2] === "runs") return method === "GET";
+
+  return false;
+}
+
+function isAutomationGetAlias(pathname: string, method: string): boolean {
+  if (method !== "GET") return false;
+  if (pathname === "/automations") return true;
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "automations") return false;
+  if (parts.length === 2) return true;
+  if (parts.length === 3 && parts[2] === "runs") return true;
+  return parts.length === 4 && parts[2] === "runs";
 }
 
 function isTemplatesAlias(pathname: string, method: string): boolean {
@@ -254,6 +297,15 @@ function shouldHandleTemplatesAlias(request: NextRequest): boolean {
   return true;
 }
 
+function shouldHandleAutomationsAlias(request: NextRequest): boolean {
+  const { pathname } = request.nextUrl;
+  if (!isAutomationsAlias(pathname, request.method)) return false;
+  if (isAutomationGetAlias(pathname, request.method)) {
+    return isApiLikeRequest(request);
+  }
+  return true;
+}
+
 function isDomainsAlias(pathname: string, method: string): boolean {
   if (pathname === "/domains") return ["GET", "POST"].includes(method);
 
@@ -292,6 +344,17 @@ function isLogsAlias(pathname: string, method: string): boolean {
 
   const parts = pathname.split("/").filter(Boolean);
   return parts[0] === "logs" && parts.length === 2 && method === "GET";
+}
+
+function isEventsAlias(pathname: string, method: string): boolean {
+  if (pathname === "/events") return ["GET", "POST"].includes(method);
+
+  const parts = pathname.split("/").filter(Boolean);
+  if (parts[0] !== "events") return false;
+  if (parts.length === 2 && parts[1] === "send") return method === "POST";
+  if (parts.length === 2) return ["GET", "PATCH", "DELETE"].includes(method);
+
+  return false;
 }
 
 function isContactPropertiesAlias(pathname: string, method: string): boolean {
@@ -341,10 +404,12 @@ function shouldHandleApiCompatibilityAlias(request: NextRequest): boolean {
     isWebhooksAlias(pathname, method) ||
     isTopicsAlias(pathname, method) ||
     isLogsAlias(pathname, method) ||
+    isEventsAlias(pathname, method) ||
     isContactPropertiesAlias(pathname, method) ||
     isEmailReadAlias(pathname, method);
 
   if (!isAlias) return false;
+  if (isEventsAlias(pathname, method)) return true;
   if (method === "GET") return isApiLikeRequest(request);
   return true;
 }
@@ -355,10 +420,22 @@ function toPublicTemplatesPath(pathname: string): string {
     : pathname.replace(/^\/templates/, "/api/public/templates");
 }
 
+function toPublicAutomationsPath(pathname: string): string {
+  return pathname === "/automations"
+    ? "/api/public/automations"
+    : pathname.replace(/^\/automations/, "/api/public/automations");
+}
+
 function toApiKeysPath(pathname: string): string {
   return pathname === "/api-keys"
     ? "/api/api-keys"
     : pathname.replace(/^\/api-keys/, "/api/api-keys");
+}
+
+function toContactsApiPath(pathname: string): string {
+  return pathname === "/contacts"
+    ? "/api/contacts"
+    : pathname.replace(/^\/contacts/, "/api/contacts");
 }
 
 function toApiCompatibilityPath(pathname: string): string {
@@ -378,6 +455,10 @@ function toApiCompatibilityPath(pathname: string): string {
   if (pathname.startsWith("/logs/")) {
     return pathname.replace(/^\/logs/, "/api/logs");
   }
+  if (pathname === "/events") return "/api/events";
+  if (pathname.startsWith("/events/")) {
+    return pathname.replace(/^\/events/, "/api/events");
+  }
   if (pathname === "/contact-properties") return "/api/properties";
   if (pathname.startsWith("/contact-properties/")) {
     return pathname.replace(/^\/contact-properties/, "/api/properties");
@@ -388,6 +469,21 @@ function toApiCompatibilityPath(pathname: string): string {
   }
 
   return pathname;
+}
+
+function rootApiAliasForPath(pathname: string): RootApiAlias | null {
+  if (pathname === "/topics" || pathname.startsWith("/topics/")) {
+    return "topics";
+  }
+
+  if (
+    pathname === "/contact-properties" ||
+    pathname.startsWith("/contact-properties/")
+  ) {
+    return "contact-properties";
+  }
+
+  return null;
 }
 
 function isSendApiPost(pathname: string, method: string): boolean {
@@ -434,11 +530,17 @@ function getRateLimitPathname(pathname: string, method: string): string {
       ? "/api/templates"
       : pathname.replace(/^\/templates/, "/api/templates");
   }
+  if (isAutomationsAlias(pathname, method)) {
+    return pathname === "/automations"
+      ? "/api/automations"
+      : pathname.replace(/^\/automations/, "/api/automations");
+  }
   if (
     isDomainsAlias(pathname, method) ||
     isWebhooksAlias(pathname, method) ||
     isTopicsAlias(pathname, method) ||
     isLogsAlias(pathname, method) ||
+    isEventsAlias(pathname, method) ||
     isContactPropertiesAlias(pathname, method) ||
     isEmailReadAlias(pathname, method)
   ) {
@@ -507,6 +609,7 @@ export async function middleware(request: NextRequest) {
   const isBroadcastAlias = shouldHandleBroadcastsAlias(request);
   const isApiKeyAlias = shouldHandleApiKeysAlias(request);
   const isTemplateAlias = shouldHandleTemplatesAlias(request);
+  const isAutomationAlias = shouldHandleAutomationsAlias(request);
   const isApiCompatibilityAlias = shouldHandleApiCompatibilityAlias(request);
   if (
     !pathname.startsWith("/api/") &&
@@ -518,6 +621,7 @@ export async function middleware(request: NextRequest) {
     !isBroadcastAlias &&
     !isApiKeyAlias &&
     !isTemplateAlias &&
+    !isAutomationAlias &&
     !isApiCompatibilityAlias
   ) {
     // Logged-in users should never see the sign-in page — bounce them to the
@@ -560,40 +664,70 @@ export async function middleware(request: NextRequest) {
   const backend = getRateLimitBackend();
   const responseHeaders = new Headers({ "X-RateLimit-Backend": backend });
 
+  const rewriteHeaders = (path: string) => {
+    const headers = new Headers(responseHeaders);
+    const requestHeaders = new Headers(request.headers);
+    const aliasHeader = rootApiAliasForPath(path);
+    if (aliasHeader) {
+      headers.set(rootApiAliasHeaderName, aliasHeader);
+      requestHeaders.set(rootApiAliasHeaderName, aliasHeader);
+    }
+
+    return {
+      headers,
+      request: {
+        headers: requestHeaders,
+      },
+    };
+  };
+
   if (backend === "disabled") {
     if (isSingleSendPostAlias(pathname, request.method)) {
-      return NextResponse.rewrite(new URL("/api/emails", request.url), {
-        headers: responseHeaders,
-      });
+      return NextResponse.rewrite(
+        new URL("/api/emails", request.url),
+        rewriteHeaders(pathname),
+      );
     }
     if (isBatchSendPostAlias(pathname, request.method)) {
-      return NextResponse.rewrite(new URL("/api/emails/batch", request.url), {
-        headers: responseHeaders,
-      });
+      return NextResponse.rewrite(
+        new URL("/api/emails/batch", request.url),
+        rewriteHeaders(pathname),
+      );
     }
     if (isBroadcastsCollectionAlias(pathname, request.method)) {
-      return NextResponse.rewrite(new URL("/api/broadcasts", request.url), {
-        headers: responseHeaders,
-      });
+      return NextResponse.rewrite(
+        new URL("/api/broadcasts", request.url),
+        rewriteHeaders(pathname),
+      );
     }
     if (isApiKeyAlias) {
       return NextResponse.rewrite(
         new URL(toApiKeysPath(pathname), request.url),
-        {
-          headers: responseHeaders,
-        },
+        rewriteHeaders(pathname),
       );
     }
     if (isTemplateAlias) {
       return NextResponse.rewrite(
         new URL(toPublicTemplatesPath(pathname), request.url),
-        { headers: responseHeaders },
+        rewriteHeaders(pathname),
+      );
+    }
+    if (isContactRelationshipAlias(pathname, request.method)) {
+      return NextResponse.rewrite(
+        new URL(toContactsApiPath(pathname), request.url),
+        rewriteHeaders(pathname),
+      );
+    }
+    if (isAutomationAlias) {
+      return NextResponse.rewrite(
+        new URL(toPublicAutomationsPath(pathname), request.url),
+        rewriteHeaders(pathname),
       );
     }
     if (isApiCompatibilityAlias) {
       return NextResponse.rewrite(
         new URL(toApiCompatibilityPath(pathname), request.url),
-        { headers: responseHeaders },
+        rewriteHeaders(pathname),
       );
     }
 
@@ -644,35 +778,51 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isSingleSendPostAlias(pathname, request.method)) {
-    return NextResponse.rewrite(new URL("/api/emails", request.url), {
-      headers: responseHeaders,
-    });
+    return NextResponse.rewrite(
+      new URL("/api/emails", request.url),
+      rewriteHeaders(pathname),
+    );
   }
   if (isBatchSendPostAlias(pathname, request.method)) {
-    return NextResponse.rewrite(new URL("/api/emails/batch", request.url), {
-      headers: responseHeaders,
-    });
+    return NextResponse.rewrite(
+      new URL("/api/emails/batch", request.url),
+      rewriteHeaders(pathname),
+    );
   }
   if (isBroadcastsCollectionAlias(pathname, request.method)) {
-    return NextResponse.rewrite(new URL("/api/broadcasts", request.url), {
-      headers: responseHeaders,
-    });
+    return NextResponse.rewrite(
+      new URL("/api/broadcasts", request.url),
+      rewriteHeaders(pathname),
+    );
   }
   if (isApiKeyAlias) {
-    return NextResponse.rewrite(new URL(toApiKeysPath(pathname), request.url), {
-      headers: responseHeaders,
-    });
+    return NextResponse.rewrite(
+      new URL(toApiKeysPath(pathname), request.url),
+      rewriteHeaders(pathname),
+    );
   }
   if (isTemplateAlias) {
     return NextResponse.rewrite(
       new URL(toPublicTemplatesPath(pathname), request.url),
-      { headers: responseHeaders },
+      rewriteHeaders(pathname),
+    );
+  }
+  if (isContactRelationshipAlias(pathname, request.method)) {
+    return NextResponse.rewrite(
+      new URL(toContactsApiPath(pathname), request.url),
+      rewriteHeaders(pathname),
+    );
+  }
+  if (isAutomationAlias) {
+    return NextResponse.rewrite(
+      new URL(toPublicAutomationsPath(pathname), request.url),
+      rewriteHeaders(pathname),
     );
   }
   if (isApiCompatibilityAlias) {
     return NextResponse.rewrite(
       new URL(toApiCompatibilityPath(pathname), request.url),
-      { headers: responseHeaders },
+      rewriteHeaders(pathname),
     );
   }
 

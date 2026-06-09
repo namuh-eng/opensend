@@ -12,12 +12,23 @@ export interface CreateCustomEventInput {
   userId?: string | null;
 }
 
+export interface UpdateCustomEventInput {
+  name?: string;
+  schema?: Record<string, unknown> | null;
+}
+
 export interface RecordCustomEventDeliveryInput {
   eventName: string;
   payload: Record<string, unknown>;
   contactId?: string | null;
   email?: string | null;
   userId?: string | null;
+}
+
+function looksLikeUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 export const customEventRepo = {
@@ -74,6 +85,34 @@ export const customEventRepo = {
     const hasMore = results.length > limit;
     const data = hasMore ? results.slice(0, limit) : results;
     return { data, hasMore };
+  },
+
+  async findByIdentifierForUser(identifier: string, userId?: string | null) {
+    if (looksLikeUuid(identifier)) {
+      const eventById = await customEventRepo.findByIdForUser(
+        identifier,
+        userId,
+      );
+      if (eventById) return eventById;
+    }
+    return await customEventRepo.findByName(identifier, userId);
+  },
+
+  async updateForUser(
+    id: string,
+    userId: string | null | undefined,
+    input: UpdateCustomEventInput,
+  ) {
+    if (input.name !== undefined) assertEventNameAllowed(input.name);
+    const conditions = [eq(customEvents.id, id)];
+    if (userId) conditions.push(eq(customEvents.userId, userId));
+
+    const [row] = await db
+      .update(customEvents)
+      .set({ ...input, updatedAt: new Date() })
+      .where(and(...conditions))
+      .returning();
+    return row;
   },
 
   async delete(id: string) {
