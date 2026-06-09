@@ -6,8 +6,6 @@ The production ingester is the Bun/Hono service in `packages/ingester`. It is a 
 2. Background job execution (queued email sends, scheduled-email scans,
    webhook dispatch, webhook retry scans, and domain verification reconciliation)
 
-A separate Go skeleton now exists at `services/ingester-go` for the planned issue #71 data-plane migration. It is experimental and shadow-only: it exposes static `GET /health` and `GET /readyz` endpoints on local port `3027` by default, but it does **not** process SES/SNS events, jobs, Stripe webhooks, or webhook fan-out. Keep production traffic on `packages/ingester` until future parity and cutover slices explicitly change this.
-
 In Docker Compose it runs side-by-side with the app. In production we strongly
 recommend running it as a **separate service** so webhook bursts and worker
 stalls don't contend with dashboard requests.
@@ -28,19 +26,10 @@ Endpoints:
 - Ingester health: `http://localhost:${INGESTER_PORT:-3016}/health`
 - SES SNS webhook target: `http://localhost:${INGESTER_PORT:-3016}/events/ses`
 - Stripe billing webhook target: `http://localhost:${INGESTER_PORT:-3016}/webhooks/stripe`
-- Experimental Go ingester health, when run separately: `http://localhost:3027/health`
 
 ```bash
 docker compose ps ingester
 docker compose logs -f ingester
-```
-
-The Go ingester skeleton is not wired into Compose on purpose. Run it separately for shadow validation:
-
-```bash
-cd services/ingester-go
-go test ./...
-go run .
 ```
 
 ## Production shape
@@ -52,7 +41,6 @@ and SQS:
 | --- | --- | --- | --- |
 | App | `Dockerfile` (default target) | `app.yourdomain.com` and `api.app.yourdomain.com` | `8080` |
 | Ingester | `packages/ingester/Dockerfile` | `events.app.yourdomain.com` | `3016` |
-| Go ingester skeleton | `services/ingester-go/Dockerfile` | none; shadow-only | `3027` |
 
 If your platform has host-based routing (AWS ALB, GCP Load Balancer, Cloudflare
 Spectrum), point each hostname at its target service. The events host has to
@@ -67,14 +55,6 @@ docker buildx build --platform linux/amd64 \
 docker buildx build --platform linux/amd64 \
   -f packages/ingester/Dockerfile \
   -t yourorg/opensend-ingester:latest --push .
-```
-
-Optional shadow-only Go ingester image build:
-
-```bash
-docker buildx build --platform linux/amd64 \
-  -f services/ingester-go/Dockerfile \
-  -t yourorg/opensend-ingester-go:shadow --push .
 ```
 
 Run a one-shot migrator container against the production `DATABASE_URL`
@@ -108,7 +88,11 @@ Set these on the ingester service:
 
 ```bash
 BACKGROUND_WORKER_POLL=true
-INGESTER_JOB_TOKEN=<random-bearer-token>
+INGESTER_JOB_TOKEN=<32+-char-random-bearer-token>
+# Required only when using /events/inbound in production.
+INGESTER_INBOUND_TOKEN=<32+-char-random-bearer-token>
+# Optional allowlist for SES receipt-rule S3 ingestion. Defaults to S3_BUCKET_NAME.
+SES_INBOUND_BUCKET_NAME=<private-raw-mail-bucket>
 ```
 
 For hosted Stripe billing cutover, also set these on the ingester service from
@@ -127,12 +111,59 @@ The Stripe webhook endpoint is:
 https://events.yourdomain.com/webhooks/stripe
 ```
 
+## Inbound receiving through SES receipt rules
+
+For hosted receiving, route AWS SES receipt-rule notifications to the ingester instead of building a separate mailbox service. The supported production path is:
+
+1. SES receipt rule accepts mail for the receiving domain.
+2. The rule stores the raw MIME object in a private S3 bucket.
+3. The rule publishes an SNS notification for the S3 action.
+4. SNS delivers the signed notification to:
+
+```text
+https://events.yourdomain.com/events/inbound/ses-s3
+```
+
+The ingester verifies the SNS signature, checks the receipt notification's S3 bucket against `SES_INBOUND_BUCKET_NAME` or `S3_BUCKET_NAME`, reads the raw MIME object, then calls the same inbound MIME ingestion service as `POST /events/inbound`. That means receiving routes, quota accounting, attachment storage, forwarding, reply threading, and `email.received` webhook queueing all use one code path.
+
+Minimum AWS wiring:
+
+```bash
+aws sns create-topic --name opensend-inbound-mail
+aws sns subscribe \
+  --topic-arn <topic-arn> \
+  --protocol https \
+  --notification-endpoint https://events.yourdomain.com/events/inbound/ses-s3
+
+aws ses create-receipt-rule-set --rule-set-name opensend-inbound
+aws ses set-active-receipt-rule-set --rule-set-name opensend-inbound
+aws ses create-receipt-rule \
+  --rule-set-name opensend-inbound \
+  --rule '{
+    "Name": "opensend-example-com",
+    "Enabled": true,
+    "Recipients": ["example.com"],
+    "Actions": [
+      {
+        "S3Action": {
+          "BucketName": "<private-raw-mail-bucket>",
+          "ObjectKeyPrefix": "ses-inbound/example.com/",
+          "TopicArn": "<topic-arn>"
+        }
+      }
+    ],
+    "ScanEnabled": true
+  }'
+```
+
+Also grant SES permission to write to the bucket and SNS permission to publish from SES in your account/region. Keep the bucket private; OpenSend stores parsed attachment bodies through its normal storage boundary after ingestion.
+
 Run `bun run billing:preflight -- --service ingester` in the release
 environment before sending Stripe traffic to the endpoint. See
 [`hosted-stripe-cutover.md`](hosted-stripe-cutover.md) for the full validation
 checklist.
 
-Set the same `INGESTER_JOB_TOKEN` on any scheduler that calls `/jobs/*`. Compose also accepts an optional scheduler cadence override:
+Set the same 32+ character `INGESTER_JOB_TOKEN` on any scheduler that calls `/jobs/*`; production ingesters reject missing job tokens. Compose also accepts an optional scheduler cadence override:
 
 ```bash
 INGESTER_SCHEDULER_INTERVAL_SECONDS=60
@@ -194,6 +225,52 @@ Don't leave SES pointing at the app/API host once the split is active —
 events would be processed by the dashboard's request loop instead of the
 worker.
 
+## Deliverability feedback preflight and repair
+
+Delivery, bounce, complaint, and delivery-delay dashboard metrics require each
+sending domain's SES configuration set to publish provider events to the
+ingester SNS topic. Configure both the app and ingester runtime with:
+
+```bash
+SES_EVENTS_SNS_TOPIC_ARN=arn:aws:sns:<region>:<account>:<topic-name>
+```
+
+Run the read-only preflight before redeploying or repairing production:
+
+```bash
+bun run deliverability:preflight -- --domain example.com --json --strict
+```
+
+The report lists verified domains, the previous
+`domains.ses_configuration_set_name` value, the resulting value, whether the
+database write-back exists, and the SES event-destination state. It does not
+print secrets.
+
+After IAM, SNS topic subscription, and app/ingester runtime env are in place, repair a
+single domain first:
+
+```bash
+bun run deliverability:preflight -- --repair --domain example.com --json --strict
+```
+
+Then repair the verified-domain batch:
+
+```bash
+bun run deliverability:preflight -- --repair --limit 500 --json --strict
+```
+
+Live validation for a production incident should prove all of these boundaries:
+
+- IAM on the app task role allows SES configuration-set and event-destination
+  read/create/update actions.
+- `SES_EVENTS_SNS_TOPIC_ARN` is present on the app and ingester task definitions.
+- SES shows the `opensend-sns-events` destination enabled on the repaired
+  configuration set and pointing at the SNS topic.
+- The repaired domain row has `ses_configuration_set_name` populated.
+- A new validation send carries `X-Entity-ID`/SES message tag correlation,
+  creates an `email_events` row with `user_id`, and appears in the Today or
+  Metrics dashboard without showing the provider-feedback **Not wired** state.
+
 ## Observability
 
 The app and ingester emit structured JSON logs, W3C/OpenTelemetry-compatible
@@ -244,7 +321,7 @@ Before pointing production SES SNS at a freshly stood-up ingester, verify:
   `https://events.<your-domain>/webhooks/stripe` and the ingester has
   `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`.
 - The SQS queue exists with a redrive policy + DLQ.
-- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when the token is configured.
+- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}`.
 - Domain verification runbook passed: create/use a pending domain, confirm SES is verified, do not click **Verify DNS Records**, wait for the scheduler, and confirm the OpenSend DB/dashboard flips to `verified`.
 - Migrations ran successfully against the production database before the new
   image started.

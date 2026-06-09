@@ -39,6 +39,9 @@ function makeEmail(overrides: Partial<EmailRow> = {}): EmailRow {
     userId: "user-1",
     topicId: null,
     idempotencyKey: null,
+    threadId: null,
+    replyAddress: null,
+    replyToken: null,
     ...overrides,
   };
 }
@@ -65,6 +68,8 @@ function makeDomain(overrides: Partial<DomainRow> = {}): DomainRow {
     dkimPublicKey: null,
     dkimPrivateKeyCt: null,
     dkimPrivateKeyIv: null,
+    dedicatedIpPoolId: null,
+    sesConfigurationSetName: null,
     ...overrides,
   };
 }

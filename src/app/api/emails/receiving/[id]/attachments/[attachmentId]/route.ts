@@ -12,13 +12,17 @@ export async function GET(
   { params }: { params: Promise<{ id: string; attachmentId: string }> },
 ): Promise<Response> {
   const auth = await validateApiKey(request.headers.get("authorization"));
-  if (!auth) return unauthorizedResponse();
+  if (!auth || !auth.userId) return unauthorizedResponse();
   const permissionError = requireFullAccessApiKey(auth);
   if (permissionError) return permissionError;
 
   try {
     const { id, attachmentId } = await params;
-    const result = await receivedEmailService.getAttachment(id, attachmentId);
+    const result = await receivedEmailService.getAttachment(
+      id,
+      attachmentId,
+      auth.userId,
+    );
     return Response.json(result);
   } catch (error) {
     if (error instanceof ReceivedEmailServiceError) {

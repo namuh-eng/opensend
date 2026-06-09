@@ -1,24 +1,22 @@
+import { UnsubscribePageEditor } from "@/components/unsubscribe-page-editor";
 import Link from "next/link";
 
-export default function TopicsUnsubscribePageEditorUnavailablePage() {
+export default function TopicsUnsubscribePageEditorPage() {
   return (
-    <div className="max-w-2xl space-y-4">
+    <div className="space-y-6">
       <div className="space-y-2">
         <h2 className="text-xl font-semibold text-fg">
-          Unsubscribe page editor unavailable
+          Unsubscribe page customization
         </h2>
         <p className="text-[14px] text-fg-2">
-          Opensend still serves the default unsubscribe page for public topics,
-          but dashboard customization is not available yet.
+          Customize the confirmation page your contacts see after clicking an
+          unsubscribe link. Changes take effect immediately for all new
+          unsubscribe requests.
         </p>
       </div>
 
-      <div className="rounded-lg border border-line bg-bg-2 p-4">
-        <p className="text-[13px] text-fg-2">
-          Contacts can continue to manage their subscription preferences from
-          unsubscribe links in sent emails. Return to Topics to manage the
-          public topics that appear on that default page.
-        </p>
+      <div className="rounded-lg border border-line bg-bg-2 p-6">
+        <UnsubscribePageEditor />
       </div>
 
       <Link

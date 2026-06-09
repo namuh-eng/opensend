@@ -3,8 +3,13 @@ import { db } from "../client";
 import { receivedEmails } from "../schema";
 
 export const receivedEmailRepo = {
-  async listForApi(options: { limit: number; after?: string; to?: string }) {
-    const conditions: SQL[] = [];
+  async listForApi(options: {
+    userId: string;
+    limit: number;
+    after?: string;
+    to?: string;
+  }) {
+    const conditions: SQL[] = [eq(receivedEmails.userId, options.userId)];
 
     if (options.after) {
       conditions.push(lt(receivedEmails.id, options.after));
@@ -19,6 +24,11 @@ export const receivedEmailRepo = {
         from: receivedEmails.from,
         to: receivedEmails.to,
         subject: receivedEmails.subject,
+        routeDecisions: receivedEmails.routeDecisions,
+        replyMatchStatus: receivedEmails.replyMatchStatus,
+        threadId: receivedEmails.threadId,
+        replyToEmailId: receivedEmails.replyToEmailId,
+        contactId: receivedEmails.contactId,
         createdAt: receivedEmails.createdAt,
       })
       .from(receivedEmails)
@@ -32,21 +42,21 @@ export const receivedEmailRepo = {
     return { data, hasMore };
   },
 
-  async findById(id: string) {
+  async findById(id: string, userId: string) {
     const [email] = await db
       .select()
       .from(receivedEmails)
-      .where(eq(receivedEmails.id, id))
+      .where(and(eq(receivedEmails.id, id), eq(receivedEmails.userId, userId)))
       .limit(1);
 
     return email;
   },
 
-  async findAttachmentsByEmailId(id: string) {
+  async findAttachmentsByEmailId(id: string, userId: string) {
     const [email] = await db
       .select({ attachments: receivedEmails.attachments })
       .from(receivedEmails)
-      .where(eq(receivedEmails.id, id))
+      .where(and(eq(receivedEmails.id, id), eq(receivedEmails.userId, userId)))
       .limit(1);
 
     return email;

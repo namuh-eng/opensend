@@ -107,6 +107,7 @@ external credentials or optional provider state must either:
 | `domains-page.spec.ts` | Real browser E2E | Uses `authenticatedPage`; mostly page rendering/navigation over current DB state. |
 | `landing-page.spec.ts` | Real browser E2E | Public landing page plus signed-in redirect through real auth fixture. |
 | `logs-search.spec.ts` | Real browser/API-backed E2E | Requires `DATABASE_URL`; seeds dashboard log data. |
+| `export-center.spec.ts` | Real browser/API-backed E2E | Requires `DATABASE_URL`; seeds a sent email, creates a dashboard export job, downloads CSV, and verifies persisted download metadata. |
 | `unsubscribe.spec.ts` | Real public route E2E | Uses real Postgres contact row for success path; invalid-token path is public-route smoke. |
 | `emails-alias.spec.ts`, `openapi.spec.ts` | Real API smoke | Calls real app routes, but negative/static assertions only; not a full domain workflow proof. |
 | `billing-checkout.spec.ts`, `billing-page.spec.ts` | Mixed smoke/mocked integration | Negative API assertions are real route smoke; checkout UI uses route mocks for Stripe-dependent flow. |

@@ -9,6 +9,11 @@ import {
   SendEmailCommand,
 } from "@aws-sdk/client-sesv2";
 import {
+  safeMimeBoundary,
+  sanitizeHeaderName,
+  sanitizeHeaderValue,
+} from "../security";
+import {
   type EncryptedBlob,
   decryptSecret,
   generateDkimKeypair,
@@ -48,10 +53,10 @@ const hasAwsCredentials =
   !!process.env.AWS_PROFILE ||
   existsSync(join(process.env.HOME ?? "", ".aws", "credentials"));
 
-const useDomainDevStub =
-  process.env.NODE_ENV === "development" && !hasAwsCredentials;
+const useDevStub = process.env.NODE_ENV === "development" && !hasAwsCredentials;
 
 const DEFAULT_SES_REGION = "us-east-1";
+const OPENSEND_ENTITY_ID_HEADER = "X-Entity-ID";
 
 function normalizeSesRegion(region: string | null | undefined): string {
   const trimmed = region?.trim();
@@ -83,7 +88,13 @@ export class EmailProviderService {
     headers?: Record<string, string>;
     attachments?: EmailAttachment[];
     region?: string;
+    configurationSetName?: string | null;
+    emailId?: string | null;
   }) {
+    const headers = withOpenSendEntityIdHeader(params.headers, params.emailId);
+    const emailTags = params.emailId
+      ? [{ Name: OPENSEND_ENTITY_ID_HEADER, Value: params.emailId }]
+      : undefined;
     const command =
       params.attachments && params.attachments.length > 0
         ? new SendEmailCommand({
@@ -95,9 +106,15 @@ export class EmailProviderService {
             },
             Content: {
               Raw: {
-                Data: new TextEncoder().encode(buildMimeMessage(params)),
+                Data: new TextEncoder().encode(
+                  buildMimeMessage({ ...params, headers }),
+                ),
               },
             },
+            ...(emailTags ? { EmailTags: emailTags } : {}),
+            ...(params.configurationSetName
+              ? { ConfigurationSetName: params.configurationSetName }
+              : {}),
           })
         : new SendEmailCommand({
             FromEmailAddress: params.from,
@@ -113,12 +130,25 @@ export class EmailProviderService {
                   Html: params.html ? { Data: params.html } : undefined,
                   Text: params.text ? { Data: params.text } : undefined,
                 },
+                Headers: headers
+                  ? Object.entries(headers).map(([name, value]) => {
+                      const safeName = sanitizeHeaderName(name);
+                      return {
+                        Name: safeName,
+                        Value: sanitizeHeaderValue(safeName, value),
+                      };
+                    })
+                  : undefined,
               },
             },
             ReplyToAddresses: params.replyTo,
+            ...(emailTags ? { EmailTags: emailTags } : {}),
+            ...(params.configurationSetName
+              ? { ConfigurationSetName: params.configurationSetName }
+              : {}),
           });
 
-    if (!process.env.AWS_ACCESS_KEY_ID) {
+    if (useDevStub) {
       console.log(
         `[DEV] SES send skipped in ${normalizeSesRegion(params.region)}: ${params.subject} to ${params.to.join(", ")}`,
       );
@@ -135,7 +165,7 @@ export class EmailProviderService {
   ): Promise<EmailProviderGetDomainIdentityResult> {
     if (!domain) throw new Error("domain is required");
 
-    if (useDomainDevStub) {
+    if (useDevStub) {
       return { verified: false, dkimStatus: "NOT_STARTED", dkimTokens: [] };
     }
 
@@ -156,7 +186,7 @@ export class EmailProviderService {
   ): Promise<void> {
     if (!domain) throw new Error("domain is required");
 
-    if (useDomainDevStub) {
+    if (useDevStub) {
       console.log(
         `[DEV] Would delete SES identity for domain: ${domain} in ${normalizeSesRegion(options.region)}`,
       );
@@ -192,7 +222,7 @@ export class EmailProviderService {
   ): Promise<EmailProviderCreateDomainIdentityResult> {
     const keypair = generateDkimKeypair(userId);
 
-    if (useDomainDevStub) {
+    if (useDevStub) {
       console.log(
         `[DEV] Would create SES EXTERNAL identity for ${domain} in ${normalizeSesRegion(region)} (selector ${keypair.selector})`,
       );
@@ -249,7 +279,7 @@ export class EmailProviderService {
     domain: string,
     region?: string,
   ): Promise<EmailProviderCreateDomainIdentityResult> {
-    if (useDomainDevStub) {
+    if (useDevStub) {
       console.log(
         `[DEV] Would create SES identity for domain: ${domain} in ${normalizeSesRegion(region)}`,
       );
@@ -302,6 +332,24 @@ function isAlreadyExistsError(error: unknown): boolean {
 
 export const emailProvider = new EmailProviderService();
 
+function withOpenSendEntityIdHeader(
+  headers: Record<string, string> | undefined,
+  emailId: string | null | undefined,
+): Record<string, string> | undefined {
+  const nextHeaders = Object.fromEntries(
+    Object.entries(headers ?? {}).filter(
+      ([name]) =>
+        name.toLowerCase() !== OPENSEND_ENTITY_ID_HEADER.toLowerCase(),
+    ),
+  );
+
+  if (emailId) {
+    nextHeaders[OPENSEND_ENTITY_ID_HEADER] = emailId;
+  }
+
+  return Object.keys(nextHeaders).length > 0 ? nextHeaders : undefined;
+}
+
 function buildMimeMessage(params: {
   from: string;
   to: string[];
@@ -314,19 +362,24 @@ function buildMimeMessage(params: {
   headers?: Record<string, string>;
   attachments?: EmailAttachment[];
 }): string {
-  const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const boundary = safeMimeBoundary("----=_Part");
   const lines: string[] = [];
 
-  lines.push(`From: ${params.from}`);
-  lines.push(`To: ${params.to.join(", ")}`);
-  if (params.cc?.length) lines.push(`Cc: ${params.cc.join(", ")}`);
-  if (params.bcc?.length) lines.push(`Bcc: ${params.bcc.join(", ")}`);
-  lines.push(`Subject: ${params.subject}`);
+  lines.push(`From: ${sanitizeHeaderValue("From", params.from)}`);
+  lines.push(`To: ${sanitizeHeaderValue("To", params.to.join(", "))}`);
+  if (params.cc?.length)
+    lines.push(`Cc: ${sanitizeHeaderValue("Cc", params.cc.join(", "))}`);
+  if (params.bcc?.length)
+    lines.push(`Bcc: ${sanitizeHeaderValue("Bcc", params.bcc.join(", "))}`);
+  lines.push(`Subject: ${sanitizeHeaderValue("Subject", params.subject)}`);
   if (params.replyTo?.length)
-    lines.push(`Reply-To: ${params.replyTo.join(", ")}`);
+    lines.push(
+      `Reply-To: ${sanitizeHeaderValue("Reply-To", params.replyTo.join(", "))}`,
+    );
   if (params.headers) {
     for (const [key, value] of Object.entries(params.headers)) {
-      lines.push(`${key}: ${value}`);
+      const safeName = sanitizeHeaderName(key);
+      lines.push(`${safeName}: ${sanitizeHeaderValue(safeName, value)}`);
     }
   }
   lines.push("MIME-Version: 1.0");
@@ -347,20 +400,25 @@ function buildMimeMessage(params: {
   }
 
   for (const attachment of params.attachments ?? []) {
-    const contentType =
+    const safeFilename = sanitizeAttachmentFilename(attachment.filename);
+    const contentType = sanitizeHeaderValue(
+      "Content-Type",
       attachment.contentType ??
-      attachment.content_type ??
-      inferContentType(attachment.filename);
+        attachment.content_type ??
+        inferContentType(attachment.filename),
+    );
     const contentId = attachment.contentId ?? attachment.content_id;
 
     lines.push(`--${boundary}`);
-    lines.push(`Content-Type: ${contentType}; name="${attachment.filename}"`);
+    lines.push(`Content-Type: ${contentType}; name="${safeFilename}"`);
     lines.push("Content-Transfer-Encoding: base64");
     if (contentId) {
-      lines.push(`Content-ID: ${formatContentId(contentId)}`);
+      lines.push(
+        `Content-ID: ${sanitizeHeaderValue("Content-ID", formatContentId(contentId))}`,
+      );
     }
     lines.push(
-      `Content-Disposition: ${contentId ? "inline" : "attachment"}; filename="${attachment.filename}"`,
+      `Content-Disposition: ${contentId ? "inline" : "attachment"}; filename="${safeFilename}"`,
     );
     lines.push("");
     lines.push(attachment.content);
@@ -368,6 +426,13 @@ function buildMimeMessage(params: {
 
   lines.push(`--${boundary}--`);
   return lines.join("\r\n");
+}
+
+function sanitizeAttachmentFilename(name: string): string {
+  return sanitizeHeaderValue("attachment.filename", name).replace(
+    /["\\]/g,
+    "_",
+  );
 }
 
 function inferContentType(filename: string): string {

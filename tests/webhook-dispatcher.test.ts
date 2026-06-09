@@ -13,7 +13,7 @@ vi.mock("@opensend/core", () => ({
     findById: mockFindEventById,
   },
   signWebhookPayload: mockSignWebhookPayload,
-  assertSafeOutboundUrl: vi.fn(async () => {}),
+  safeOutboundFetch: vi.fn(async () => new Response("ok")),
   UnsafeOutboundUrlError: class extends Error {},
   resolveWebhookSigningSecret: (row: { signingSecretEnc: string | null }) =>
     row.signingSecretEnc ?? "",
@@ -27,6 +27,9 @@ vi.mock("@opensend/core", () => ({
       "email.bounced",
       "email.complained",
       "email.delivery_delayed",
+      "email.scheduled",
+      "email.delayed",
+      "email.suppressed",
       "email.opened",
       "email.clicked",
       "email.failed",
@@ -137,22 +140,26 @@ describe("WebhookDispatcher", () => {
         data: { smtpResponse: "250 ok" },
       }),
     );
-    expect(fetchMock).toHaveBeenCalledWith("https://example.com/webhook", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "svix-id": "whd_delivery-1_1",
-        "svix-timestamp": "1777334400",
-        "svix-signature": "v1,test-signature",
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example.com/webhook",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "svix-id": "whd_delivery-1_1",
+          "svix-timestamp": "1777334400",
+          "svix-signature": "v1,test-signature",
+        },
+        body: JSON.stringify({
+          id: "whd_delivery-1_1",
+          type: "email.delivered",
+          created_at: "2026-04-28T00:00:00.000Z",
+          data: { smtpResponse: "250 ok" },
+        }),
+        signal: expect.any(AbortSignal),
       },
-      body: JSON.stringify({
-        id: "whd_delivery-1_1",
-        type: "email.delivered",
-        created_at: "2026-04-28T00:00:00.000Z",
-        data: { smtpResponse: "250 ok" },
-      }),
-      signal: expect.any(AbortSignal),
-    });
+      { context: "dispatch" },
+    );
     expect(mockUpdate).toHaveBeenCalledWith(
       "delivery-1",
       expect.objectContaining({

@@ -1,5 +1,6 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
+import { getRootApiAlias } from "@/lib/root-api-compatibility";
 import {
   AudienceMetadataServiceError,
   createAudienceMetadataService,
@@ -20,6 +21,11 @@ function mapServiceError(error: unknown, fallback: string) {
 
   console.error(`${fallback}:`, error);
   return NextResponse.json({ error: fallback }, { status: 500 });
+}
+
+function inputMode(request: NextRequest) {
+  const alias = getRootApiAlias(request.headers);
+  return alias === "contact-properties" ? "root" : "api";
 }
 
 export async function GET(
@@ -62,6 +68,7 @@ export async function PATCH(
       userId: auth.userId,
       id,
       body,
+      mode: inputMode(request),
     });
 
     return NextResponse.json(result);

@@ -1,6 +1,6 @@
-# Self-hosting Opensend
+# Self-hosting OpenSend
 
-Opensend is built to run on your own infrastructure. This guide walks through
+OpenSend is built to run on your own infrastructure. This guide walks through
 the practical deployment paths from a single-machine Docker Compose setup to a
 production-ready, multi-process deployment with managed Postgres, SES, Redis,
 and SQS-backed background workers.
@@ -66,7 +66,7 @@ to the console and the rest of the API still works.
 git clone https://github.com/namuh-eng/opensend.git
 cd opensend
 cp .env.example .env
-# Edit .env — see "Environment variables" below
+# Edit .env for production secrets, Google OAuth, SES, S3, and DNS.
 docker compose up -d
 ```
 
@@ -76,9 +76,19 @@ This launches:
 - `migrate` — runs Drizzle migrations once and exits
 - `app` (3015 → 8080 in container) — dashboard + REST API
 - `ingester` (3016) — SES/SNS event handler and background worker
+- `scheduler` — durable sidecar that triggers ingester `/jobs/*` scans
 
 Open `http://localhost:3015`. The first sign-in creates an organization and
 makes you the owner.
+
+`.env.example` includes local-only placeholders for `BETTER_AUTH_SECRET`,
+`INGESTER_JOB_TOKEN`, and `WEBHOOK_SECRET_ENCRYPTION_KEY` so the Compose stack
+can boot immediately for localhost evaluation. Replace them before any shared,
+staging, or production deployment:
+
+```bash
+openssl rand -hex 32
+```
 
 To wipe the database volume and start clean: `docker compose down -v`.
 
@@ -92,8 +102,8 @@ contributor-facing set; the table below adds the production-only entries.
 | Variable | Purpose |
 | --- | --- |
 | `DATABASE_URL` | Postgres connection string. In Docker Compose the app/migrator containers override this to use the internal `postgres` host. |
-| `BETTER_AUTH_SECRET` | Random 32-byte hex string for session signing. Generate with `openssl rand -hex 32`. |
-| `WEBHOOK_SECRET_ENCRYPTION_KEY` | Random secret, at least 16 characters, used to encrypt webhook signing secrets at rest. Production app startup fails when this is missing or too short. |
+| `BETTER_AUTH_SECRET` | Random 32-byte hex string for session signing. Generate with `openssl rand -hex 32`. The checked-in local placeholder is allowed only for localhost evaluation; app and ingester startup checks reject it when the configured app URL is not localhost. |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY` | Random secret, at least 16 characters, used to encrypt webhook signing secrets at rest. Docker Compose passes this into both the app and ingester. The checked-in value is local-only; production app and ingester startup fail when this is missing or too short. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Better Auth Google OAuth credentials. Set the redirect URI to `https://<your-host>/api/auth/callback/google`. |
 
 ### Required for sending email
@@ -122,11 +132,12 @@ contributor-facing set; the table below adds the production-only entries.
 | `BACKGROUND_JOBS_REQUIRE_QUEUE=true` | Fail API publish when the queue URL is missing instead of silently skipping. Required in production. |
 | `BACKGROUND_JOBS_EVENT_BUS_NAME` | Optional EventBridge bus for job lifecycle events. |
 | `BACKGROUND_WORKER_POLL=true` | Set on the **ingester** service only. Enables long-poll SQS consumer. |
-| `INGESTER_JOB_TOKEN` | Bearer token required for `/jobs/*` endpoints when the scheduler/EventBridge invokes them over HTTP. |
+| `INGESTER_JOB_TOKEN` | Required 32+ character bearer token for `/jobs/*` endpoints when the scheduler/EventBridge invokes them over HTTP. Docker Compose refuses to start the ingester/scheduler without it. |
+| `INGESTER_INBOUND_TOKEN` | Optional for local development. In production, `/events/inbound` rejects requests unless this bearer token is configured and sent by the inbound provider. |
 | `INGESTER_SCHEDULER_INTERVAL_SECONDS` | Compose scheduler cadence for `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify`. Default `60`; minimum `10`. |
 | `RATE_LIMIT_BACKEND` | `disabled` (single-process dev), or `redis` (production). |
 | `REDIS_URL` | TLS Redis endpoint, e.g. `rediss://default:<password>@<endpoint>:6379`. Used for rate limiting AND auth/domain metadata cache. |
-| `CLOUDWATCH_METRICS_NAMESPACE` | Override the default `Opensend` EMF metrics namespace. |
+| `CLOUDWATCH_METRICS_NAMESPACE` | Override the default `OpenSend` EMF metrics namespace. |
 
 ### AWS ECS deploy secret wiring
 
@@ -238,7 +249,7 @@ request production access from the SES console in every sending region:
 
 ### IAM minimum
 
-The IAM principal Opensend uses needs:
+The IAM principal OpenSend uses needs:
 
 - `ses:SendEmail`, `ses:SendRawEmail`
 - `ses:GetAccount`, `ses:GetIdentity*`, `ses:VerifyDomainIdentity`,
@@ -366,7 +377,7 @@ Three periodic scans need to run every minute:
 - **Domain verification**: reconcile SES-verified domains and flip OpenSend
   domain/record status to `verified` without clicking **Verify DNS Records**.
 
-Docker Compose runs the durable `scheduler` sidecar by default. It posts to all three ingester job endpoints every `INGESTER_SCHEDULER_INTERVAL_SECONDS` seconds and includes `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when the token is configured.
+Docker Compose runs the durable `scheduler` sidecar by default. It posts to all three ingester job endpoints every `INGESTER_SCHEDULER_INTERVAL_SECONDS` seconds and includes `Authorization: Bearer ${INGESTER_JOB_TOKEN}`. `.env.example` includes a local-only placeholder; replace it with a generated 32+ character value before any shared, staging, or production deploy.
 
 Two other production patterns can drive the same endpoints:
 
@@ -396,7 +407,7 @@ To verify the automatic domain reconciler in a deployment:
 3. Do **not** click **Verify DNS Records** in OpenSend.
 4. Wait one scheduler interval plus SES/API latency (normally 1-2 minutes with the default 60-second cadence).
 5. Confirm the OpenSend dashboard or database now shows the domain status and DNS record badges as `verified`.
-6. If it does not flip, inspect the scheduler and ingester logs for `/jobs/domain-verify` responses and verify the scheduler is sending `Authorization: Bearer ${INGESTER_JOB_TOKEN}` when `INGESTER_JOB_TOKEN` is set on the ingester.
+6. If it does not flip, inspect the scheduler and ingester logs for `/jobs/domain-verify` responses and verify the scheduler and ingester share the same `INGESTER_JOB_TOKEN`.
 
 ### Local dev fallback
 

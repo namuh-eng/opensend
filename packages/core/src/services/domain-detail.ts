@@ -1,8 +1,14 @@
 import { and, eq } from "drizzle-orm";
 import { db } from "../db/client";
+import { dedicatedIpPoolRepo } from "../db/repositories/dedicatedIpPoolRepo";
 import { domainRepo } from "../db/repositories/domainRepo";
 import { domains } from "../db/schema";
-import { getEffectiveReturnPathLabel, syncTrackingCnameRecord } from "./domain";
+import { configurationSetService } from "./configurationSet";
+import {
+  getEffectiveReturnPathLabel,
+  getSesEventsSnsTopicArn,
+  syncTrackingCnameRecord,
+} from "./domain";
 import {
   cloudflareDnsCleanupProvider,
   domainIdentityProvider,
@@ -22,6 +28,8 @@ type DomainDetailUpdateData = Partial<
     | "capabilities"
     | "tls"
     | "records"
+    | "dedicatedIpPoolId"
+    | "sesConfigurationSetName"
   >
 >;
 
@@ -50,6 +58,7 @@ export type UpdateDomainDetailInput = {
   sending_enabled?: boolean;
   receiving_enabled?: boolean;
   tls?: string;
+  dedicated_ip_pool_id?: string | null;
 };
 
 export type DomainDetailMutationResponse = {
@@ -247,6 +256,10 @@ function toUpdateData(
     updates.tls = input.tls;
   }
 
+  if (input.dedicated_ip_pool_id !== undefined) {
+    updates.dedicatedIpPoolId = input.dedicated_ip_pool_id ?? undefined;
+  }
+
   return updates;
 }
 
@@ -255,6 +268,7 @@ function currentValueForField(domain: DomainRow, field: string): unknown {
   if (field === "click_tracking") return domain.trackClicks;
   if (field === "tracking_subdomain") return domain.trackingSubdomain;
   if (field === "capabilities") return domain.capabilities;
+  if (field === "dedicated_ip_pool_id") return domain.dedicatedIpPoolId;
   return domain.tls;
 }
 
@@ -268,6 +282,7 @@ function getChangedFields(
     tracking_subdomain: updates.trackingSubdomain,
     capabilities: updates.capabilities,
     tls: updates.tls,
+    dedicated_ip_pool_id: updates.dedicatedIpPoolId,
   })
     .filter(([, value]) => value !== undefined)
     .filter(
@@ -339,7 +354,7 @@ export function createDomainDetailService({
         };
       }
 
-      const updated = await updateDomainForUser({
+      let updated = await updateDomainForUser({
         id: input.id,
         userId: input.userId,
         updates,
@@ -352,6 +367,47 @@ export function createDomainDetailService({
           region: existingDomain.region,
         });
         throw new DomainDetailServiceError("not_found", "Not found");
+      }
+
+      // Sync SES config set when tls or dedicated_ip_pool_id changed
+      if (
+        changedFields.includes("tls") ||
+        changedFields.includes("dedicated_ip_pool_id")
+      ) {
+        try {
+          // Resolve the SES pool name for the new pool (if any)
+          let dedicatedIpPoolSesName: string | null = null;
+          if (updated.dedicatedIpPoolId) {
+            const pool = await dedicatedIpPoolRepo.findById(
+              updated.dedicatedIpPoolId,
+            );
+            dedicatedIpPoolSesName = pool?.sesPoolName ?? null;
+          }
+          const configSetName =
+            await configurationSetService.syncDomainConfigurationSet({
+              domainId: updated.id,
+              tls: updated.tls,
+              dedicatedIpPoolSesName,
+              existingConfigSetName: updated.sesConfigurationSetName ?? null,
+              eventDestinationTopicArn: getSesEventsSnsTopicArn(),
+              region: updated.region,
+            });
+          if (updated.sesConfigurationSetName !== configSetName) {
+            const updatedWithConfigSet = await updateDomainForUser({
+              id: input.id,
+              userId: input.userId,
+              updates: { sesConfigurationSetName: configSetName },
+            });
+            if (updatedWithConfigSet) {
+              updated = updatedWithConfigSet;
+            }
+          }
+        } catch (configErr) {
+          console.warn(
+            `Failed to sync SES config set for domain ${updated.id}:`,
+            configErr,
+          );
+        }
       }
 
       await invalidateDomainCaches({
@@ -387,6 +443,20 @@ export function createDomainDetailService({
           `Failed to delete SES identity for ${domain.name}:`,
           sesErr,
         );
+      }
+
+      if (domain.sesConfigurationSetName) {
+        try {
+          await configurationSetService.deleteConfigurationSet({
+            configurationSetName: domain.sesConfigurationSetName,
+            region: domain.region,
+          });
+        } catch (cfgErr) {
+          logger.warn(
+            `Failed to delete SES config set for ${domain.name}:`,
+            cfgErr,
+          );
+        }
       }
 
       try {

@@ -1,5 +1,7 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
+import { publicApiError } from "@/lib/api-errors";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
+import { parseTagQueryParams } from "@/lib/tag-query-params";
 import { createLogReadService } from "@opensend/core";
 
 const logReadService = createLogReadService();
@@ -11,6 +13,18 @@ export async function GET(request: Request): Promise<Response> {
   if (permissionError) return permissionError;
 
   const url = new URL(request.url);
+  const parsedTags = parseTagQueryParams(url.searchParams);
+  if (!parsedTags.ok) {
+    return Response.json(
+      publicApiError(
+        "validation_error",
+        "Validation failed.",
+        422,
+        parsedTags.details,
+      ),
+      { status: 422 },
+    );
+  }
 
   try {
     const result = await logReadService.listLogs({
@@ -31,6 +45,8 @@ export async function GET(request: Request): Promise<Response> {
       userAgent:
         url.searchParams.get("user_agent") || url.searchParams.get("userAgent"),
       search: url.searchParams.get("q") || url.searchParams.get("search"),
+      tagName: parsedTags.value.tagName,
+      tagValue: parsedTags.value.tagValue,
     });
 
     return Response.json(result);

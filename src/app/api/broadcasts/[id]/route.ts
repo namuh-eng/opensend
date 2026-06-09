@@ -1,4 +1,3 @@
-import { unauthorizedResponse } from "@/lib/api-auth";
 import { BroadcastServiceError, createBroadcastService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 import { resolveBroadcastRouteUserId } from "../auth";
@@ -43,10 +42,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await resolveBroadcastRouteUserId(
+  const userIdOrResponse = await resolveBroadcastRouteUserId(
     request.headers.get("authorization"),
   );
-  if (!userId) return unauthorizedResponse();
+  if (userIdOrResponse instanceof Response) return userIdOrResponse;
+  const userId = userIdOrResponse;
 
   try {
     const { id } = await params;
@@ -69,10 +69,11 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await resolveBroadcastRouteUserId(
+  const userIdOrResponse = await resolveBroadcastRouteUserId(
     request.headers.get("authorization"),
   );
-  if (!userId) return unauthorizedResponse();
+  if (userIdOrResponse instanceof Response) return userIdOrResponse;
+  const userId = userIdOrResponse;
 
   try {
     const { id } = await params;
@@ -101,10 +102,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await resolveBroadcastRouteUserId(
+  const userIdOrResponse = await resolveBroadcastRouteUserId(
     request.headers.get("authorization"),
   );
-  if (!userId) return unauthorizedResponse();
+  if (userIdOrResponse instanceof Response) return userIdOrResponse;
+  const userId = userIdOrResponse;
 
   try {
     const { id } = await params;

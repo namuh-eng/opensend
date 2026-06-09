@@ -6,15 +6,28 @@ import {
   StatCard,
 } from "@/components/ui-new";
 import { getServerSession } from "@/lib/api-auth";
+import {
+  dashboardMetricStateLabel,
+  getOpenTrackingMetricState,
+  getProviderFeedbackMetricState,
+} from "@/lib/dashboard-deliverability-state";
+import {
+  type ProviderFeedbackCandidate,
+  areAllRecentSenderDomainsWired,
+  resolveProviderFeedbackWiring,
+} from "@/lib/dashboard-provider-feedback";
 import { db } from "@/lib/db";
 import { domains, emailEvents, emails } from "@/lib/db/schema";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { getTodayApiBaseUrl } from "@/lib/today-dashboard";
+import { desc, eq, sql } from "drizzle-orm";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 const HOUR_MS = 60 * 60 * 1000;
+const RECENT_SENDER_DOMAIN_LIMIT = 50;
 
 type StatusKind = "verified" | "pending" | "warning";
 type HourBucket = {
@@ -24,22 +37,60 @@ type HourBucket = {
   bounced: number;
 };
 
-async function loadStats(userId: string) {
+type TodayStats = {
+  total: number;
+  delivered: number;
+  opened: number;
+  bounced: number;
+  openTrackingEnabled: boolean;
+};
+
+async function loadStats(userId: string): Promise<TodayStats> {
   const since = new Date(Date.now() - 24 * HOUR_MS);
   try {
-    const rows = await db
-      .select({
-        total: sql<number>`count(*)::int`,
-        delivered: sql<number>`count(*) filter (where ${emails.status} = 'delivered')::int`,
-        opened: sql<number>`count(*) filter (where ${emails.status} = 'opened')::int`,
-        bounced: sql<number>`count(*) filter (where ${emails.status} = 'bounced')::int`,
-      })
-      .from(emails)
-      .where(and(eq(emails.userId, userId), gte(emails.createdAt, since)));
-    const r = rows[0] ?? { total: 0, delivered: 0, opened: 0, bounced: 0 };
-    return r;
+    const result = await db.execute(sql`
+      SELECT
+        count(distinct e.id)::int AS total,
+        count(distinct e.id) FILTER (WHERE ev.type = 'delivered')::int AS delivered,
+        count(distinct e.id) FILTER (WHERE ev.type = 'opened')::int AS opened,
+        count(distinct e.id) FILTER (WHERE ev.type = 'bounced')::int AS bounced,
+        exists (
+          SELECT 1
+          FROM ${domains} d
+          JOIN ${emails} se
+            ON se.user_id = d.user_id
+           AND (
+             lower(se.from) LIKE '%@' || lower(d.name)
+             OR lower(se.from) LIKE '%@' || lower(d.name) || '>'
+           )
+          WHERE d.user_id = ${userId}
+            AND d.track_opens = true
+            AND se.created_at >= ${since}
+        ) AS open_tracking_enabled
+      FROM ${emails} e
+      LEFT JOIN ${emailEvents} ev ON ev.email_id = e.id
+      WHERE e.user_id = ${userId} AND e.created_at >= ${since}
+    `);
+    const rows = ((result as unknown as { rows?: unknown[] }).rows ??
+      result) as unknown[];
+    const row = (rows as Array<Record<string, unknown>>)[0];
+    return {
+      total: Number(row?.total ?? 0),
+      delivered: Number(row?.delivered ?? 0),
+      opened: Number(row?.opened ?? 0),
+      bounced: Number(row?.bounced ?? 0),
+      openTrackingEnabled:
+        row?.open_tracking_enabled === true ||
+        row?.open_tracking_enabled === "true",
+    };
   } catch {
-    return { total: 0, delivered: 0, opened: 0, bounced: 0 };
+    return {
+      total: 0,
+      delivered: 0,
+      opened: 0,
+      bounced: 0,
+      openTrackingEnabled: false,
+    };
   }
 }
 
@@ -55,17 +106,19 @@ async function loadHourly(userId: string): Promise<HourBucket[]> {
   try {
     const result = await db.execute(sql`
       SELECT
-        date_trunc('hour', created_at) AS bucket,
-        count(*)::int AS sent,
-        count(*) FILTER (WHERE status = 'delivered')::int AS delivered,
-        count(*) FILTER (WHERE status = 'opened')::int AS opened,
-        count(*) FILTER (WHERE status = 'bounced')::int AS bounced
-      FROM emails
-      WHERE user_id = ${userId} AND created_at >= ${since}
+        date_trunc('hour', e.created_at) AS bucket,
+        count(distinct e.id)::int AS sent,
+        count(distinct e.id) FILTER (WHERE ev.type = 'delivered')::int AS delivered,
+        count(distinct e.id) FILTER (WHERE ev.type = 'opened')::int AS opened,
+        count(distinct e.id) FILTER (WHERE ev.type = 'bounced')::int AS bounced
+      FROM ${emails} e
+      LEFT JOIN ${emailEvents} ev ON ev.email_id = e.id
+      WHERE e.user_id = ${userId} AND e.created_at >= ${since}
       GROUP BY bucket
       ORDER BY bucket ASC
     `);
-    const rows = (result as unknown as { rows?: unknown[] }).rows ?? result;
+    const rows = ((result as unknown as { rows?: unknown[] }).rows ??
+      result) as unknown[];
     const byBucket = new Map<number, HourBucket>();
     for (const raw of rows as Array<{
       bucket: Date | string;
@@ -131,41 +184,115 @@ type DomainRow = {
   id: string;
   name: string;
   status: string;
+  region: string;
+  configurationSetName: string | null;
   total: number;
   delivered: number;
   opened: number;
+  providerFeedbackWired: boolean;
+  providerFeedbackUnknown: boolean;
+  openTrackingEnabled: boolean;
 };
 
-async function loadDomainReputation(userId: string): Promise<DomainRow[]> {
+type DomainReputationRow = Omit<
+  DomainRow,
+  "providerFeedbackWired" | "providerFeedbackUnknown"
+>;
+type RecentSenderDomainsResult = {
+  candidates: ProviderFeedbackCandidate[];
+  truncated: boolean;
+  loadFailed: boolean;
+};
+
+async function loadRecentSenderDomains(
+  userId: string,
+): Promise<RecentSenderDomainsResult> {
+  const since = new Date(Date.now() - 24 * HOUR_MS);
+  try {
+    const result = await db.execute(sql`
+      SELECT
+        d.id::text AS id,
+        d.name AS name,
+        d.region AS region,
+        d.ses_configuration_set_name AS "configurationSetName",
+        max(e.created_at) AS "lastSentAt"
+      FROM ${domains} d
+      JOIN ${emails} e
+        ON e.user_id = d.user_id
+       AND e.created_at >= ${since}
+       AND (
+         lower(e.from) LIKE '%@' || lower(d.name)
+         OR lower(e.from) LIKE '%@' || lower(d.name) || '>'
+       )
+      WHERE d.user_id = ${userId}
+      GROUP BY d.id, d.name, d.region, d.ses_configuration_set_name
+      ORDER BY max(e.created_at) DESC
+      LIMIT ${RECENT_SENDER_DOMAIN_LIMIT + 1}
+    `);
+    const rawRows = (result as unknown as { rows?: unknown[] }).rows;
+    const rows: unknown[] = rawRows ?? (result as unknown as unknown[]);
+    const boundedRows = (rows as ProviderFeedbackCandidate[]).slice(
+      0,
+      RECENT_SENDER_DOMAIN_LIMIT,
+    );
+    return {
+      candidates: boundedRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        region: row.region,
+        configurationSetName: row.configurationSetName ?? null,
+      })),
+      truncated: rows.length > RECENT_SENDER_DOMAIN_LIMIT,
+      loadFailed: false,
+    };
+  } catch {
+    return { candidates: [], truncated: false, loadFailed: true };
+  }
+}
+
+async function loadDomainReputation(
+  userId: string,
+): Promise<DomainReputationRow[]> {
+  const since = new Date(Date.now() - 24 * HOUR_MS);
   try {
     const result = await db.execute(sql`
       SELECT
         d.id::text AS id,
         d.name AS name,
         d.status AS status,
-        count(e.id)::int AS total,
-        count(e.id) FILTER (WHERE e.status = 'delivered')::int AS delivered,
-        count(e.id) FILTER (WHERE e.status = 'opened')::int AS opened
+        d.region AS region,
+        d.ses_configuration_set_name AS "configurationSetName",
+        d.track_opens = true AS "openTrackingEnabled",
+        count(distinct e.id)::int AS total,
+        count(distinct e.id) FILTER (WHERE ev.type = 'delivered')::int AS delivered,
+        count(distinct e.id) FILTER (WHERE ev.type = 'opened')::int AS opened
       FROM ${domains} d
       LEFT JOIN ${emails} e
         ON e.user_id = d.user_id
+       AND e.created_at >= ${since}
        AND (
          lower(e.from) LIKE '%@' || lower(d.name)
          OR lower(e.from) LIKE '%@' || lower(d.name) || '>'
        )
+      LEFT JOIN ${emailEvents} ev ON ev.email_id = e.id
       WHERE d.user_id = ${userId}
-      GROUP BY d.id, d.name, d.status, d.created_at
+      GROUP BY d.id, d.name, d.status, d.region, d.ses_configuration_set_name, d.track_opens, d.created_at
       ORDER BY d.created_at DESC
       LIMIT 6
     `);
     const rows = (result as unknown as { rows?: unknown[] }).rows ?? result;
-    return (rows as DomainRow[]).map((r) => ({
+    return (rows as DomainReputationRow[]).map((r) => ({
       id: r.id,
       name: r.name,
       status: r.status,
+      region: r.region,
+      configurationSetName: r.configurationSetName ?? null,
       total: Number(r.total),
       delivered: Number(r.delivered),
       opened: Number(r.opened),
+      openTrackingEnabled:
+        r.openTrackingEnabled === true ||
+        String(r.openTrackingEnabled) === "true",
     }));
   } catch {
     return [];
@@ -227,23 +354,53 @@ function relativeTime(d: Date | string): string {
   return `${Math.floor(ms / 86_400_000)}d`;
 }
 
-function getApiBaseUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (!raw) return "https://your-opensend-host";
-  return raw.replace(/\/$/, "");
-}
-
 export default async function TodayPage() {
   const session = await getServerSession();
   if (!session) redirect("/auth");
 
   const userId = session.user.id;
-  const [stats, hourly, activity, domainRows] = await Promise.all([
-    loadStats(userId),
-    loadHourly(userId),
-    loadActivity(userId),
-    loadDomainReputation(userId),
-  ]);
+  const [stats, hourly, activity, rawDomainRows, recentSenderDomainsResult] =
+    await Promise.all([
+      loadStats(userId),
+      loadHourly(userId),
+      loadActivity(userId),
+      loadDomainReputation(userId),
+      loadRecentSenderDomains(userId),
+    ]);
+  const recentSenderDomains = recentSenderDomainsResult.candidates;
+  const providerFeedbackReadErrorIds = new Set<string>();
+  const providerFeedbackWiring = await resolveProviderFeedbackWiring(
+    [
+      ...rawDomainRows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        region: row.region,
+        configurationSetName: row.configurationSetName,
+      })),
+      ...recentSenderDomains,
+    ],
+    {
+      onReadError: (candidate, error) => {
+        providerFeedbackReadErrorIds.add(candidate.id);
+        console.warn(
+          `Failed to read SES event destination for ${candidate.name}:`,
+          error,
+        );
+      },
+    },
+  );
+  const domainRows: DomainRow[] = rawDomainRows.map((row) => ({
+    ...row,
+    providerFeedbackWired: providerFeedbackWiring.get(row.id) ?? false,
+    providerFeedbackUnknown: providerFeedbackReadErrorIds.has(row.id),
+  }));
+  const providerFeedbackUnknown =
+    recentSenderDomainsResult.truncated ||
+    recentSenderDomainsResult.loadFailed ||
+    providerFeedbackReadErrorIds.size > 0;
+  const providerFeedbackWired =
+    !providerFeedbackUnknown &&
+    areAllRecentSenderDomainsWired(recentSenderDomains, providerFeedbackWiring);
   const firstName =
     (session.user.name || session.user.email || "there").split(/[\s@]/)[0] ||
     "there";
@@ -259,8 +416,21 @@ export default async function TodayPage() {
   const openedSpark = hourly.map((h) => h.opened);
   const bouncedSpark = hourly.map((h) => h.bounced);
   const chartMax = Math.max(1, ...sentSpark);
+  const chartTotal = hourly.reduce((sum, bucket) => sum + bucket.sent, 0);
+  const deliveryState = getProviderFeedbackMetricState({
+    total: stats.total,
+    providerFeedbackWired,
+    providerFeedbackUnknown,
+  });
+  const openState = getOpenTrackingMetricState({
+    total: stats.total,
+    openTrackingEnabled: stats.openTrackingEnabled,
+  });
+  const deliveryStateLabel = dashboardMetricStateLabel(deliveryState);
+  const openStateLabel = dashboardMetricStateLabel(openState);
 
-  const apiBase = getApiBaseUrl();
+  const requestHeaders = await headers();
+  const apiBase = getTodayApiBaseUrl(requestHeaders);
   const apiSendUrl = `${apiBase}/emails`;
   const fromExample = domainRows[0]?.name
     ? `hi@${domainRows[0].name}`
@@ -296,20 +466,30 @@ export default async function TodayPage() {
           <StatCard
             kicker="Delivered"
             value={
-              <>
-                {formatPct(stats.delivered, stats.total)}
-                <span className="text-[24px] text-fg-3">%</span>
-              </>
+              deliveryStateLabel ? (
+                <span className="text-[18px] text-fg-3">
+                  {deliveryStateLabel}
+                </span>
+              ) : (
+                <>
+                  {formatPct(stats.delivered, stats.total)}
+                  <span className="text-[24px] text-fg-3">%</span>
+                </>
+              )
             }
             spark={deliveredSpark}
           />
           <StatCard
             kicker="Opens"
             value={
-              <>
-                {formatPct(stats.opened, stats.total)}
-                <span className="text-[24px] text-fg-3">%</span>
-              </>
+              openStateLabel ? (
+                <span className="text-[18px] text-fg-3">{openStateLabel}</span>
+              ) : (
+                <>
+                  {formatPct(stats.opened, stats.total)}
+                  <span className="text-[24px] text-fg-3">%</span>
+                </>
+              )
             }
             spark={openedSpark}
           />
@@ -330,6 +510,7 @@ export default async function TodayPage() {
             <SectionHeader
               kicker="// send volume · last 24h"
               title="Hourly sends"
+              sub="Accepted sends grouped by hour, with opens and bounces overlaid when tracking or provider feedback exists."
               action={
                 <div className="mono flex gap-3.5 text-[11.5px] text-fg-3">
                   <span className="inline-flex items-center gap-1.5">
@@ -347,10 +528,20 @@ export default async function TodayPage() {
                 </div>
               }
             />
-            <div className="mt-3 flex h-[180px] items-end gap-1.5">
+            <div className="mono mt-3 flex items-center justify-between text-[11px] text-fg-4">
+              <span>24h ago</span>
+              <span>
+                {chartTotal.toLocaleString()} send
+                {chartTotal === 1 ? "" : "s"} · peak {chartMax.toLocaleString()}
+                /hr
+              </span>
+              <span>now</span>
+            </div>
+            <div className="mt-2 flex h-[180px] items-end gap-1.5 border-b border-line/70 pb-1">
               {hourly.map((h, i) => {
                 const sentH = (h.sent / chartMax) * 100;
                 const openH = (h.opened / chartMax) * 100;
+                const bounceH = (h.bounced / chartMax) * 100;
                 return (
                   <div
                     // biome-ignore lint/suspicious/noArrayIndexKey: hour buckets are stable ordinals
@@ -364,6 +555,10 @@ export default async function TodayPage() {
                     <div
                       className="w-full rounded-sm bg-violet/60"
                       style={{ height: `${openH * 0.45}%` }}
+                    />
+                    <div
+                      className="w-full rounded-sm bg-red/70"
+                      style={{ height: `${bounceH * 0.45}%` }}
                     />
                   </div>
                 );
@@ -428,6 +623,7 @@ export default async function TodayPage() {
             <SectionHeader
               kicker="// deliverability"
               title="Reputation by domain"
+              sub="Last-24h provider feedback from accepted sends and SES/SNS lifecycle events."
               action={
                 <Link
                   href="/domains"
@@ -452,6 +648,19 @@ export default async function TodayPage() {
                     d.total > 0 ? (d.delivered / d.total) * 100 : null;
                   const openedPct =
                     d.total > 0 ? (d.opened / d.total) * 100 : null;
+                  const rowDeliveryLabel = dashboardMetricStateLabel(
+                    getProviderFeedbackMetricState({
+                      total: d.total,
+                      providerFeedbackWired: d.providerFeedbackWired,
+                      providerFeedbackUnknown: d.providerFeedbackUnknown,
+                    }),
+                  );
+                  const rowOpenLabel = dashboardMetricStateLabel(
+                    getOpenTrackingMetricState({
+                      total: d.total,
+                      openTrackingEnabled: d.openTrackingEnabled,
+                    }),
+                  );
                   return (
                     <div
                       key={d.id}
@@ -474,12 +683,14 @@ export default async function TodayPage() {
                       <Meter
                         label="delivered"
                         value={deliveredPct}
+                        stateLabel={rowDeliveryLabel}
                         color="var(--accent)"
                         max={100}
                       />
                       <Meter
                         label="opens"
                         value={openedPct}
+                        stateLabel={rowOpenLabel}
                         color="var(--violet)"
                         max={100}
                       />
@@ -522,11 +733,13 @@ export default async function TodayPage() {
 function Meter({
   label,
   value,
+  stateLabel,
   max,
   color,
 }: {
   label: string;
   value: number | null;
+  stateLabel?: string | null;
   max: number;
   color: string;
 }) {
@@ -535,7 +748,9 @@ function Meter({
       <div className="mono mb-1 text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
         {label}
       </div>
-      {value === null ? (
+      {stateLabel ? (
+        <span className="text-[12px] text-fg-4">{stateLabel}</span>
+      ) : value === null ? (
         <span className="text-[12px] text-fg-4">—</span>
       ) : (
         <div className="flex items-center gap-2.5">

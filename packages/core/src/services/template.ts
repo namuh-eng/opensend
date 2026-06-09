@@ -376,6 +376,17 @@ function toReactEmailStarterVariables(
   );
 }
 
+function isReactEmailDocument(document: unknown): boolean {
+  if (!isRecord(document)) return false;
+  if (document.kind === "react_email") return true;
+
+  const rendering = document.rendering;
+  if (isRecord(rendering) && rendering.kind === "react_email") return true;
+
+  const renderer = document.renderer;
+  return isRecord(renderer) && renderer.kind === "react_email";
+}
+
 function getReactEmailTemplateKey(input: Record<string, unknown>): string {
   const rawKey = input.react_email_template_key;
   return typeof rawKey === "string" ? rawKey.trim() : "";
@@ -598,6 +609,14 @@ export function createTemplateService({
 
       if (body.html !== undefined || body.subject !== undefined) {
         updateData.variables = buildAutomaticVariables(existing, body);
+      }
+
+      if (
+        typeof body.html === "string" &&
+        body.html !== existing.html &&
+        isReactEmailDocument(existing.document)
+      ) {
+        updateData.document = null;
       }
 
       if (body.variables !== undefined) {

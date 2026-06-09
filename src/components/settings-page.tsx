@@ -59,7 +59,7 @@ const DEFAULT_USAGE: UsageData = {
   plan: { name: "Free", slug: "free" },
   transactional: {
     monthlyUsed: 0,
-    monthlyLimit: 3000,
+    monthlyLimit: 5000,
     dailyUsed: 0,
     dailyLimit: 100,
   },

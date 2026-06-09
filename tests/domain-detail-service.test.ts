@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { domains } from "../packages/core/src/db/schema";
+import { configurationSetService } from "../packages/core/src/services/configurationSet";
 import {
   type DomainDetailServiceDependencies,
   DomainDetailServiceError,
@@ -51,6 +52,8 @@ function domainRow(overrides: Partial<DomainRow> = {}): DomainRow {
     dkimPublicKey: null,
     dkimPrivateKeyCt: null,
     dkimPrivateKeyIv: null,
+    dedicatedIpPoolId: null,
+    sesConfigurationSetName: null,
     ...overrides,
   };
 }
@@ -308,6 +311,63 @@ describe("domain detail service", () => {
         process.env.TRACKING_CNAME_TARGET = undefined;
       } else {
         process.env.TRACKING_CNAME_TARGET = previousTrackingTarget;
+      }
+    }
+  });
+
+  it("writes back the config-set name returned by a successful SES resync", async () => {
+    const previousTopicArn = process.env.SES_EVENTS_SNS_TOPIC_ARN;
+    process.env.SES_EVENTS_SNS_TOPIC_ARN =
+      "arn:aws:sns:us-east-1:123456789012:opensend-ses-events";
+    const syncDomainConfigurationSet = vi
+      .spyOn(configurationSetService, "syncDomainConfigurationSet")
+      .mockResolvedValueOnce("opensend-domain-11111111");
+    const updateCalls: DomainUpdateInput[] = [];
+    let current = domainRow({ sesConfigurationSetName: null });
+    const service = createDomainDetailService({
+      getDomainById: async () => current,
+      updateDomainForUser: async (input) => {
+        updateCalls.push(input);
+        current = domainRow({ ...current, ...input.updates });
+        return current;
+      },
+    });
+
+    try {
+      const result = await service.updateDomainDetail({
+        id: current.id,
+        userId: "user-1",
+        updates: { tls: "required" },
+      });
+
+      expect(result.changedFields).toEqual(["tls"]);
+      expect(syncDomainConfigurationSet).toHaveBeenCalledWith({
+        domainId: current.id,
+        tls: "required",
+        dedicatedIpPoolSesName: null,
+        existingConfigSetName: null,
+        eventDestinationTopicArn:
+          "arn:aws:sns:us-east-1:123456789012:opensend-ses-events",
+        region: "us-east-1",
+      });
+      expect(updateCalls).toEqual([
+        {
+          id: current.id,
+          userId: "user-1",
+          updates: { tls: "required" },
+        },
+        {
+          id: current.id,
+          userId: "user-1",
+          updates: { sesConfigurationSetName: "opensend-domain-11111111" },
+        },
+      ]);
+    } finally {
+      syncDomainConfigurationSet.mockRestore();
+      if (previousTopicArn === undefined) {
+        process.env.SES_EVENTS_SNS_TOPIC_ARN = "";
+      } else {
+        process.env.SES_EVENTS_SNS_TOPIC_ARN = previousTopicArn;
       }
     }
   });

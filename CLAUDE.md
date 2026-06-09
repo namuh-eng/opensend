@@ -51,12 +51,19 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 - `docker compose up -d` — full stack with Postgres + auto-migration
 
 
+## Worktrees
+- Use the `hack/` scripts to manage per-branch git worktrees — don't hand-roll `git worktree add`.
+- `./hack/create_worktree.sh [name] [base_branch]` (or `./hack/create_worktree.sh origin/some-branch`) — creates a worktree under `$HOME/wt/opensend` (override with `OPENSEND_WORKTREE_OVERRIDE_BASE`). It copies untracked agent config (`.claude`/`.codex`/`.agents`), symlinks every `.env*` (except `.env.example`) and `.mcp.json` back to the main checkout, and runs `bun install`, rolling back on failure. No name → a generated one; no base → current branch.
+- `./hack/cleanup_worktree.sh [name]` — removes a worktree (best-effort stops its dev server), prompts before deleting the branch, and prunes. No args lists the worktrees.
+- Secrets live only in the main checkout's `.env` and are symlinked in — never copy real `.env` files into a worktree. The dev `PORT` is shared via that symlink; replace it with a real `.env` in the worktree to run multiple dev servers at once.
+
+
 ## Documentation Standards
-- Public docs must be OpenSend-owned first-party content. Do not route users to Resend docs or other competitor docs from OpenSend docs pages, `llms.txt`, examples, or public navigation. Use competitor docs only as private/internal parity inspiration.
+- Public docs must be OpenSend-owned first-party content. Do not route users to third-party docs from OpenSend docs pages, `llms.txt`, examples, or public navigation.
 - Canonical LLM documentation lives at `/docs/llms.txt`. Root `/llms.txt` may redirect there, but do not maintain a separate root LLM corpus.
 - Public markdown docs live under `public/docs/**/*.md` and must be indexed from `/docs/llms.txt` in the same style as a markdown documentation corpus. When adding a public API, SDK, dashboard feature, webhook event, automation feature, or operational guide, add/update the matching `.md` page and run `bun run docs:generate` in the same change.
 - `/docs` should present OpenSend as a complete first-party product surface: quickstart, OpenAPI, API groups, SDKs, MCP/LLM guidance, self-hosting, deliverability, webhooks, receiving, automations, logs, exports, suppressions, and troubleshooting. Do not leave implemented routes/features undocumented.
-- Keep docs truthful to the repo. If a feature is partial or operator-only, label it clearly instead of implying full hosted parity. Prefer route/file/OpenAPI evidence over aspirational copy.
+- Keep docs truthful to the repo. If a feature is partial or operator-only, label it clearly. Prefer route/file/OpenAPI evidence over aspirational copy.
 
 ## Quality Standards
 - TypeScript strict mode, no `any` types

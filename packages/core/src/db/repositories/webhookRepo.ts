@@ -1,4 +1,4 @@
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, lt, sql } from "drizzle-orm";
 import { db } from "../client";
 import { webhooks } from "../schema";
 
@@ -78,6 +78,34 @@ export const webhookRepo = {
       .select()
       .from(webhooks)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(webhooks.id))
+      .limit(limit + 1);
+
+    const hasMore = results.length > limit;
+    const data = hasMore ? results.slice(0, limit) : results;
+
+    return { data, hasMore };
+  },
+
+  async listForUserDispatch(options: {
+    userId: string;
+    eventType: string;
+    limit?: number;
+    after?: string;
+  }) {
+    const { userId, eventType, limit = 20, after } = options;
+    const conditions = [
+      eq(webhooks.userId, userId),
+      eq(webhooks.status, "active"),
+      sql`${webhooks.eventTypes} ? ${eventType}`,
+    ];
+
+    if (after) conditions.push(lt(webhooks.id, after));
+
+    const results = await db
+      .select()
+      .from(webhooks)
+      .where(and(...conditions))
       .orderBy(desc(webhooks.id))
       .limit(limit + 1);
 

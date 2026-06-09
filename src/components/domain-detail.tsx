@@ -27,11 +27,53 @@ export interface DomainDetailData {
     priority?: number;
   }> | null;
   events: Array<{ type: string; timestamp: string }>;
+  deliverability?: {
+    bimi: {
+      status: string;
+      selector: string;
+      recordName: string;
+      logoUrl: string | null;
+      certificateUrl: string | null;
+      notes: string | null;
+      checks: Array<{
+        key: string;
+        label: string;
+        status: "pass" | "warning" | "fail" | "info";
+        message: string;
+      }>;
+    };
+    appleBrandedMail: { status: string; notes: string | null };
+    lastCheckedAt: string | null;
+  };
 }
+
+type DomainDnsRecord = NonNullable<DomainDetailData["records"]>[number];
 
 interface DomainDetailProps {
   domain: DomainDetailData;
 }
+
+const DEFAULT_DELIVERABILITY: NonNullable<DomainDetailData["deliverability"]> =
+  {
+    bimi: {
+      status: "not_configured",
+      selector: "default",
+      recordName: "default._bimi",
+      logoUrl: null,
+      certificateUrl: null,
+      notes: null,
+      checks: [
+        {
+          key: "bimi_dns",
+          label: "BIMI TXT record",
+          status: "fail",
+          message: "No BIMI readiness check has been run for this domain yet.",
+        },
+      ],
+    },
+    appleBrandedMail: { status: "not_started", notes: null },
+    lastCheckedAt: null,
+  };
 
 async function apiRequest(
   input: string,
@@ -77,6 +119,45 @@ function getDomainStatusVariant(
       return "error";
     default:
       return "default";
+  }
+}
+
+function getCheckVariant(
+  status: "pass" | "warning" | "fail" | "info",
+): "success" | "error" | "warning" | "info" | "default" {
+  switch (status) {
+    case "pass":
+      return "success";
+    case "fail":
+      return "error";
+    case "warning":
+      return "warning";
+    case "info":
+      return "info";
+    default:
+      return "default";
+  }
+}
+
+function getReadinessVariant(
+  status: string,
+): "success" | "error" | "warning" | "info" | "default" {
+  switch (status) {
+    case "ready":
+    case "approved":
+    case "active":
+      return "success";
+    case "action_required":
+    case "rejected":
+      return "error";
+    case "manual_review":
+    case "requested":
+      return "warning";
+    case "not_configured":
+    case "not_started":
+      return "default";
+    default:
+      return "info";
   }
 }
 
@@ -185,6 +266,7 @@ export function DomainDetail({ domain }: DomainDetailProps) {
 
   const regionFriendly = REGION_DISPLAY[domain.region] || domain.region;
   const isVerified = domain.status === "verified";
+  const deliverability = domain.deliverability ?? DEFAULT_DELIVERABILITY;
 
   const handleVerify = useCallback(async () => {
     if (verifying) return;
@@ -442,6 +524,86 @@ export function DomainDetail({ domain }: DomainDetailProps) {
         </div>
       </div>
 
+      {/* Deliverability readiness */}
+      <div className="mb-8 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-line bg-bg-2 p-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold tracking-wider text-fg-2">
+                BIMI READINESS
+              </p>
+              <p className="mt-1 text-[13px] text-fg-2">
+                Automated DNS/status check only. OpenSend does not provision
+                BIMI records, logos, VMCs, or CMCs in this v1 slice.
+              </p>
+            </div>
+            <StatusBadge
+              status={formatStatusLabel(deliverability.bimi.status)}
+              variant={getReadinessVariant(deliverability.bimi.status)}
+            />
+          </div>
+          <p className="mb-3 font-mono text-[12px] text-fg-2">
+            TXT {deliverability.bimi.recordName}
+          </p>
+          <div className="space-y-2">
+            {deliverability.bimi.checks.map((check) => (
+              <div
+                key={check.key}
+                className="rounded-md border border-line bg-bg-3 p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[13px] font-medium text-fg">
+                    {check.label}
+                  </p>
+                  <StatusBadge
+                    status={formatStatusLabel(check.status)}
+                    variant={getCheckVariant(check.status)}
+                  />
+                </div>
+                <p className="mt-1 text-[12px] text-fg-2">{check.message}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-line bg-bg-2 p-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-semibold tracking-wider text-fg-2">
+                BRANDED MAIL & DEDICATED IP
+              </p>
+              <p className="mt-1 text-[13px] text-fg-2">
+                Apple Branded Mail is operator-notes only. Dedicated IPs are
+                tracked as manual lifecycle states; OpenSend v1 does not start
+                provider provisioning or warming flows automatically.
+              </p>
+            </div>
+            <StatusBadge
+              status={formatStatusLabel(deliverability.appleBrandedMail.status)}
+              variant={getReadinessVariant(
+                deliverability.appleBrandedMail.status,
+              )}
+            />
+          </div>
+          <div className="space-y-2 text-[13px] text-fg-2">
+            <p>Apple notes: {deliverability.appleBrandedMail.notes || "—"}</p>
+            <p>BIMI notes: {deliverability.bimi.notes || "—"}</p>
+            <p>
+              Last checked:{" "}
+              {deliverability.lastCheckedAt
+                ? formatRelativeTime(deliverability.lastCheckedAt)
+                : "Not checked yet"}
+            </p>
+            <Link
+              href="/settings/dedicated-ips"
+              className="inline-flex text-accent transition-colors hover:text-accent/80"
+            >
+              View dedicated IP lifecycle tracking
+            </Link>
+          </div>
+        </div>
+      </div>
+
       {/* Tabs */}
       <div className="border-b border-line mb-6">
         <div className="flex items-center gap-0">
@@ -525,7 +687,7 @@ function CopyButton({ value }: { value: string }) {
 function DNSRecordTable({
   records,
 }: {
-  records: DomainDetailData["records"];
+  records: DomainDnsRecord[] | null;
 }) {
   const rows = records || [];
   return (
@@ -598,6 +760,21 @@ function DNSRecordTable({
   );
 }
 
+function buildReceivingRecord(domain: DomainDetailData): DomainDnsRecord {
+  return {
+    type: "MX",
+    name: domain.name,
+    value: `inbound-smtp.${domain.region}.amazonaws.com`,
+    status: "manual",
+    ttl: "Auto",
+    priority: 10,
+  };
+}
+
+function recommendedReceivingSubdomain(domainName: string): string {
+  return `inbound.${domainName}`;
+}
+
 function RecordsTab({ domain }: { domain: DomainDetailData }) {
   const router = useRouter();
   const [sendingEnabled, setSendingEnabled] = useState(domain.sendingEnabled);
@@ -666,6 +843,9 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
   const trackingRecords = records.filter(
     (r) => r.type === "CNAME" && !r.name.includes("_domainkey"),
   );
+  const receivingRecords = receivingEnabled
+    ? [buildReceivingRecord(domain)]
+    : [];
 
   return (
     <div className="bg-bg-3 border border-line rounded-lg p-6">
@@ -697,9 +877,9 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
         <DNSRecordTable records={dkimRecords.length > 0 ? dkimRecords : null} />
       </div>
 
-      {/* Section 2: Enable Sending (SPF) */}
+      {/* Section 2: Enable Sending — SPF + DMARC live here */}
       <div className="mb-8 border-t border-line pt-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-1">
           <h3 className="text-[14px] font-semibold text-fg">Enable Sending</h3>
           <button
             type="button"
@@ -723,24 +903,39 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
             />
           </button>
         </div>
-        <DNSRecordTable
-          records={sendingRecords.length > 0 ? sendingRecords : null}
-        />
-      </div>
-
-      {/* Section 3: DMARC guidance */}
-      <div className="mb-8 border-t border-line pt-6">
-        <h3 className="text-[14px] font-semibold text-fg mb-1">DMARC Policy</h3>
         <p className="text-[13px] text-fg-2 mb-4">
-          Publish this starter TXT record so receivers can evaluate SPF and DKIM
-          alignment before you enforce a stricter policy.
+          DNS records that let receiving mail servers accept and authenticate
+          messages from this domain.
         </p>
-        <DNSRecordTable
-          records={dmarcRecords.length > 0 ? dmarcRecords : null}
-        />
+
+        {/* SPF + Return-Path */}
+        <div className="mb-6">
+          <p className="text-[13px] text-blue-400 mb-2">
+            SPF &amp; Return-Path
+          </p>
+          <DNSRecordTable
+            records={sendingRecords.length > 0 ? sendingRecords : null}
+          />
+        </div>
+
+        {/* DMARC — nested under Sending so it reads as send-side, not receive-side */}
+        <div>
+          <p className="text-[13px] text-blue-400 mb-1">DMARC Policy</p>
+          <p className="text-[12px] text-fg-2 mb-3">
+            Tells other mail servers what to do with messages claiming to be
+            from your domain that fail SPF/DKIM. Starter record uses{" "}
+            <span className="font-mono text-fg">p=none</span> (monitor only) —
+            tighten to <span className="font-mono text-fg">quarantine</span> or{" "}
+            <span className="font-mono text-fg">reject</span> once you trust
+            your sending setup.
+          </p>
+          <DNSRecordTable
+            records={dmarcRecords.length > 0 ? dmarcRecords : null}
+          />
+        </div>
       </div>
 
-      {/* Section 4: Tracking CNAME */}
+      {/* Section 3: Tracking CNAME */}
       <div className="mb-8 border-t border-line pt-6">
         <h3 className="text-[14px] font-semibold text-fg mb-1">
           Tracking CNAME
@@ -754,9 +949,9 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
         />
       </div>
 
-      {/* Section 5: Enable Receiving */}
+      {/* Section 4: Enable Receiving */}
       <div className="border-t border-line pt-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-1">
           <h3 className="text-[14px] font-semibold text-fg">
             Enable Receiving
           </h3>
@@ -782,6 +977,24 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
             />
           </button>
         </div>
+        <p className="text-[13px] text-fg-2 mb-4">
+          Receive inbound mail for this exact domain after your provider receipt
+          rule is connected to the OpenSend ingester.
+        </p>
+        <div className="mb-4 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2">
+          <p className="text-[12px] leading-5 text-amber-200">
+            Changing MX on a domain with an existing mailbox can move that
+            mailbox traffic to OpenSend. To keep current inboxes untouched, add{" "}
+            <span className="font-mono text-fg">
+              {recommendedReceivingSubdomain(domain.name)}
+            </span>{" "}
+            as a separate domain and enable receiving there instead.
+          </p>
+        </div>
+        <p className="text-[13px] text-blue-400 mb-2">Inbound MX</p>
+        <DNSRecordTable
+          records={receivingRecords.length > 0 ? receivingRecords : null}
+        />
       </div>
     </div>
   );

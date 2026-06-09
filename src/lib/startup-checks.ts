@@ -14,6 +14,32 @@ function isProd(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
+const LOCAL_BETTER_AUTH_SECRET =
+  "local-dev-better-auth-secret-replace-before-production";
+
+function isLocalUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const hostname = new URL(value).hostname;
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname === "[::1]"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function allConfiguredAppUrlsAreLocal(): boolean {
+  const urls = [
+    process.env.BETTER_AUTH_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+  ].filter(Boolean);
+  return urls.length > 0 && urls.every(isLocalUrl);
+}
+
 function requireWebhookSecretKey(logger: Logger): void {
   const key = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
   if (!key || key.length < 16) {
@@ -29,6 +55,48 @@ function requireWebhookSecretKey(logger: Logger): void {
     logger.warn(
       { event: "security.startup.missing_key_dev" },
       "WEBHOOK_SECRET_ENCRYPTION_KEY missing or too short — webhook secret encryption disabled in non-production",
+    );
+  }
+}
+
+function requireBetterAuthSecret(logger: Logger): void {
+  if (!isProd()) return;
+
+  const secret = process.env.BETTER_AUTH_SECRET?.trim();
+  if (!secret || secret.length < 32) {
+    logger.error(
+      { event: "security.startup.weak_auth_secret" },
+      "BETTER_AUTH_SECRET missing or too short (>=32 chars required) — refusing to boot",
+    );
+    throw new Error("BETTER_AUTH_SECRET missing/too short in production");
+  }
+
+  if (secret === LOCAL_BETTER_AUTH_SECRET && !allConfiguredAppUrlsAreLocal()) {
+    logger.error(
+      { event: "security.startup.local_auth_secret_in_production" },
+      "BETTER_AUTH_SECRET still uses the local .env.example placeholder for a non-local deployment",
+    );
+    throw new Error("Local BETTER_AUTH_SECRET placeholder is forbidden");
+  }
+}
+
+function requireIntegrationSecretKey(logger: Logger): void {
+  const key =
+    process.env.INTEGRATION_SECRET_ENCRYPTION_KEY ??
+    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
+  if (!key || key.length < 16) {
+    if (isProd()) {
+      logger.error(
+        { event: "security.startup.missing_integration_key" },
+        "INTEGRATION_SECRET_ENCRYPTION_KEY missing or too short (>=16 chars required) — refusing to boot",
+      );
+      throw new Error(
+        "INTEGRATION_SECRET_ENCRYPTION_KEY missing/too short in production",
+      );
+    }
+    logger.warn(
+      { event: "security.startup.missing_integration_key_dev" },
+      "INTEGRATION_SECRET_ENCRYPTION_KEY missing or too short — integration connectors cannot store credentials until configured",
     );
   }
 }
@@ -69,6 +137,8 @@ function requirePostgresPassword(logger: Logger): void {
 
 export function runStartupChecks(logger: Logger = defaultLogger): void {
   requireWebhookSecretKey(logger);
+  requireBetterAuthSecret(logger);
+  requireIntegrationSecretKey(logger);
   warnIfRateLimitDisabled(logger);
   requirePostgresPassword(logger);
 }

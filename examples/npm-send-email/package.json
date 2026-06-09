@@ -1,0 +1,11 @@
+{
+  "name": "opensend-npm-send-email-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node send-email.mjs"
+  },
+  "dependencies": {
+    "opensend": "^0.1.0"
+  }
+}

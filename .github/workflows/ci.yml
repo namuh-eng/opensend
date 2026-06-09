@@ -73,6 +73,47 @@ jobs:
       - name: bunx vitest run
         run: bunx vitest run
 
+
+  php-sdk:
+    name: PHP SDK tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          coverage: none
+
+      - name: Install PHP SDK dependencies
+        working-directory: packages/php-sdk
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Run PHP SDK tests
+        working-directory: packages/php-sdk
+        run: composer test
+
+  jvm-sdk:
+    name: JVM SDK tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+
+      - name: Run JVM SDK tests
+        working-directory: packages/jvm-sdk
+        run: mvn --batch-mode test
+
+      - name: Compile JVM SDK Kotlin examples
+        working-directory: packages/jvm-sdk
+        run: mvn --batch-mode -Pkotlin-examples test-compile
+
+
   onboarding:
     name: Onboarding acceptance
     runs-on: ubuntu-latest
@@ -91,7 +132,21 @@ jobs:
       - name: Prepare documented local env
         run: |
           cp .env.example .env
-          node -e "const fs=require('fs'); const path='.env'; let env=fs.readFileSync(path,'utf8'); if(/^DASHBOARD_KEY=$/m.test(env)){ env=env.replace(/^DASHBOARD_KEY=$/m, 'DASHBOARD_KEY=ci-test-key'); } else if(!/^DASHBOARD_KEY=/m.test(env)){ env += '\nDASHBOARD_KEY=ci-test-key\n'; } fs.writeFileSync(path, env);"
+          node - <<'NODE'
+          const fs = require("node:fs");
+          const path = ".env";
+          let env = fs.readFileSync(path, "utf8");
+
+          function upsertEnv(name, value) {
+            const pattern = new RegExp(`^#?\\s*${name}=.*$`, "m");
+            const line = `${name}=${value}`;
+            env = pattern.test(env) ? env.replace(pattern, line) : `${env}\n${line}\n`;
+          }
+
+          upsertEnv("DASHBOARD_KEY", "ci-test-key");
+          upsertEnv("INGESTER_JOB_TOKEN", "ci-test-ingester-job-token-000000");
+          fs.writeFileSync(path, env);
+          NODE
 
       - name: Validate Docker Compose config
         run: docker compose config

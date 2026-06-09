@@ -58,7 +58,7 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
 
   if (plans.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-line p-12 text-center text-[14px] text-fg-2">
+      <div className="rounded-2xl border border-dashed border-[rgba(176,199,217,0.145)] bg-[rgba(24,25,28,0.45)] p-12 text-center text-[14px] text-[#A1A4A5]">
         No public plans available. Run database seed to load the default plan
         catalogue.
       </div>
@@ -154,7 +154,7 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
       </div>
       {error ? (
         <p
-          className="text-[13px] text-amber"
+          className="text-center text-[13px] text-amber-300"
           role="alert"
           data-testid="pricing-grid-error"
         >

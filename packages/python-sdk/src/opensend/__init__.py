@@ -1,97 +1,187 @@
-"""Minimal Resend-shaped Python SDK for OpenSend transactional email sends."""
+"""OpenSend Python SDK — full surface parity with the TypeScript SDK.
+
+Quick start (instance API — recommended)::
+
+    import opensend
+
+    client = opensend.OpenSend("os_...")
+    result = client.emails.send({"from": "you@example.com", "to": "them@example.com",
+                                  "subject": "Hi", "html": "<p>Hi</p>"})
+
+Module-level API (backwards-compatible shorthand)::
+
+    import opensend
+    opensend.api_key = "os_..."
+    opensend.Emails.send({"from": "you@example.com", ...})
+"""
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional, Sequence, TypedDict, Union, cast
-from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from typing import Any, Mapping, Optional, Sequence, cast
 
-DEFAULT_BASE_URL = "https://api.opensend.com"
+from ._http import DEFAULT_BASE_URL, HttpClient, OpenSendError, normalize_base_url
+from ._types import (
+    # Emails
+    BatchEmailResponse,
+    CancelEmailResponse,
+    EmailAttachment,
+    EmailDetailResponse,
+    EmailListItem,
+    EmailListOptions,
+    EmailListResponse,
+    EmailResponse,
+    EmailTag,
+    EmailTemplateReference,
+    SendParams,
+    # Domains
+    CreateDomainPayload,
+    DeleteDomainResponse,
+    DomainListItem,
+    DomainListResponse,
+    DomainRecord,
+    DomainResponse,
+    UpdateDomainPayload,
+    # API Keys
+    ApiKeyListItem,
+    ApiKeyListResponse,
+    ApiKeyResponse,
+    CreateApiKeyPayload,
+    # Contacts
+    ContactListItem,
+    ContactListResponse,
+    ContactResponse,
+    ContactTopicPreference,
+    CreateContactPayload,
+    CreateContactResponse,
+    DeleteContactResponse,
+    UpdateContactPayload,
+    # Segments
+    CreateSegmentPayload,
+    DeleteSegmentResponse,
+    SegmentContactListItem,
+    SegmentContactListResponse,
+    SegmentListItem,
+    SegmentListOptions,
+    SegmentListResponse,
+    SegmentResponse,
+    # Audiences
+    AudienceListItem,
+    AudienceListOptions,
+    AudienceListResponse,
+    AudienceResponse,
+    CreateAudiencePayload,
+    DeleteAudienceResponse,
+    # Broadcasts
+    BroadcastListItem,
+    BroadcastListOptions,
+    BroadcastListResponse,
+    BroadcastResponse,
+    BroadcastStatus,
+    CreateBroadcastPayload,
+    CreateBroadcastResponse,
+    DeleteBroadcastResponse,
+    SendBroadcastPayload,
+    SendBroadcastResponse,
+    UpdateBroadcastPayload,
+    # Templates
+    CreateTemplatePayload,
+    CreateTemplateResponse,
+    DeleteTemplateResponse,
+    DuplicateTemplateResponse,
+    PublishTemplateResponse,
+    TemplateListItem,
+    TemplateListOptions,
+    TemplateListResponse,
+    TemplateResponse,
+    TemplateStatus,
+    TemplateVariable,
+    UpdateTemplatePayload,
+    UpdateTemplateResponse,
+    # Automations
+    AutomationDeleteResponse,
+    AutomationDetailResponse,
+    AutomationListItem,
+    AutomationListResponse,
+    AutomationRunDetailItem,
+    AutomationRunListItem,
+    AutomationRunListOptions,
+    AutomationRunListResponse,
+    AutomationRunMetricsOptions,
+    AutomationRunMetricsResponse,
+    AutomationRunStepState,
+    AutomationStatus,
+    AutomationStepPayload,
+    AutomationStepResponse,
+    CancelAutomationRunPayload,
+    CreateAutomationPayload,
+    # Events
+    CreateEventPayload,
+    CustomEvent,
+    CustomEventDelivery,
+    CustomEventListResponse,
+    ListOptions,
+    SendCustomEventResponse,
+    SendEventPayload,
+    # Webhooks
+    CreateWebhookPayload,
+    DeleteWebhookResponse,
+    UpdateWebhookPayload,
+    WebhookCreateResponse,
+    WebhookDeliveryItem,
+    WebhookDeliveryListResponse,
+    WebhookDeliveryReplayResponse,
+    WebhookDetailResponse,
+    WebhookListItem,
+    WebhookListResponse,
+    WebhookResponse,
+    WebhookStatus,
+    WebhookUpdateResponse,
+    # Topics
+    CreateTopicPayload,
+    CreateTopicResponse,
+    DeleteTopicResponse,
+    TopicDefaultSubscription,
+    TopicListItem,
+    TopicListOptions,
+    TopicListResponse,
+    TopicResponse,
+    TopicVisibility,
+    UpdateTopicPayload,
+    # Suppressions
+    CreateSuppressionPayload,
+    DeleteSuppressionResponse,
+    SuppressionListOptions,
+    SuppressionListResponse,
+    SuppressionPublicItem,
+    SuppressionReason,
+    # Logs
+    LogDetailResponse,
+    LogListItem,
+    LogListOptions,
+    LogListResponse,
+)
+from .emails import EmailsResource
+from .domains import DomainsResource
+from .api_keys import ApiKeysResource
+from .contacts import ContactsResource
+from .segments import SegmentsResource
+from .audiences import AudiencesResource
+from .broadcasts import BroadcastsResource
+from .templates import TemplatesResource
+from .automations import AutomationsResource
+from .events import EventsResource
+from .webhooks import WebhooksResource
+from .topics import TopicsResource
+from .suppressions import SuppressionsResource
+from .logs import LogsResource
+
+# ---------------------------------------------------------------------------
+# Module-level state (backwards-compatible shorthand API)
+# ---------------------------------------------------------------------------
 
 api_key: Optional[str] = None
 base_url: str = DEFAULT_BASE_URL
-
-JsonObject = dict[str, Any]
-EmailAddress = Union[str, Sequence[str]]
-
-
-class EmailAttachment(TypedDict, total=False):
-    filename: str
-    content: str
-    path: str
-    content_type: str
-    content_id: str
-
-
-class EmailTag(TypedDict):
-    name: str
-    value: str
-
-
-class EmailTemplateReference(TypedDict, total=False):
-    id: str
-    variables: Mapping[str, Any]
-
-
-SendParams = TypedDict(
-    "SendParams",
-    {
-        "from": str,
-        "from_": str,
-        "from_email": str,
-        "to": EmailAddress,
-        "subject": str,
-        "html": str,
-        "text": str,
-        "cc": EmailAddress,
-        "bcc": EmailAddress,
-        "reply_to": EmailAddress,
-        "headers": Mapping[str, str],
-        "attachments": Sequence[EmailAttachment],
-        "tags": Sequence[EmailTag],
-        "scheduled_at": str,
-        "topic_id": str,
-        "template": EmailTemplateReference,
-    },
-    total=False,
-)
-
-
-class EmailResponse(TypedDict):
-    id: str
-
-
-class BatchEmailResponse(TypedDict):
-    data: list[EmailResponse]
-
-
-class OpenSendError(Exception):
-    """Raised when OpenSend returns an API error or a request cannot be made."""
-
-    def __init__(
-        self,
-        message: str,
-        *,
-        status_code: int,
-        name: Optional[str] = None,
-        code: Optional[str] = None,
-        details: Optional[Mapping[str, Any]] = None,
-    ) -> None:
-        super().__init__(message)
-        self.message = message
-        self.status_code = status_code
-        self.name = name
-        self.code = code
-        self.details = dict(details) if details is not None else None
-
-    def __repr__(self) -> str:
-        return (
-            f"OpenSendError(message={self.message!r}, status_code={self.status_code!r}, "
-            f"name={self.name!r}, code={self.code!r}, details={self.details!r})"
-        )
 
 
 @dataclass(frozen=True)
@@ -99,108 +189,62 @@ class RequestOptions:
     idempotency_key: Optional[str] = None
 
 
-class _HttpClient:
-    def __init__(self, key: str, origin: str) -> None:
-        if not key:
-            raise ValueError("API key is required")
-        self._api_key = key
-        self._base_url = _normalize_base_url(origin)
-
-    def request(
-        self,
-        method: str,
-        path: str,
-        payload: Any = None,
-        *,
-        idempotency_key: Optional[str] = None,
-    ) -> JsonObject:
-        body = None if payload is None else json.dumps(payload).encode("utf-8")
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": "opensend-python/0.1.0",
-        }
-        if idempotency_key is not None:
-            headers["Idempotency-Key"] = idempotency_key
-
-        request = Request(
-            f"{self._base_url}{path}",
-            data=body,
-            headers=headers,
-            method=method,
-        )
-
-        try:
-            with urlopen(request, timeout=30) as response:  # noqa: S310 - SDK caller controls base_url.
-                return _decode_json(response.read())
-        except HTTPError as error:
-            raise _api_error_from_http_error(error) from None
-        except URLError as error:
-            raise OpenSendError(
-                str(error.reason),
-                status_code=0,
-                name="request_error",
-                code="request_error",
-            ) from error
-
-
-class _EmailsResource:
-    SendParams = SendParams
-    EmailResponse = EmailResponse
-    BatchEmailResponse = BatchEmailResponse
-
-    def __init__(self, client: _HttpClient) -> None:
-        self._client = client
-
-    def send(
-        self,
-        params: SendParams,
-        *,
-        idempotency_key: Optional[str] = None,
-    ) -> EmailResponse:
-        payload = _normalize_send_params(params)
-        return cast(
-            EmailResponse,
-            self._client.request(
-                "POST",
-                "/emails",
-                payload,
-                idempotency_key=idempotency_key,
-            ),
-        )
-
-    def send_batch(
-        self,
-        params: Sequence[SendParams],
-        *,
-        idempotency_key: Optional[str] = None,
-    ) -> BatchEmailResponse:
-        payload = [_normalize_send_params(item) for item in params]
-        return cast(
-            BatchEmailResponse,
-            self._client.request(
-                "POST",
-                "/emails/batch",
-                payload,
-                idempotency_key=idempotency_key,
-            ),
-        )
+# ---------------------------------------------------------------------------
+# Instance client
+# ---------------------------------------------------------------------------
 
 
 class OpenSend:
-    """Instance client for OpenSend APIs."""
+    """Full OpenSend API client.
+
+    Usage::
+
+        client = OpenSend("os_your_api_key")
+        client.emails.send({"from": "...", "to": "...", "subject": "...", "html": "..."})
+    """
 
     def __init__(self, api_key: str, *, base_url: str = DEFAULT_BASE_URL) -> None:
-        self.emails = _EmailsResource(_HttpClient(api_key, base_url))
+        http = HttpClient(api_key, base_url)
+
+        self.emails: EmailsResource = EmailsResource(http)
+        self.domains: DomainsResource = DomainsResource(http)
+        self.api_keys: ApiKeysResource = ApiKeysResource(http)
+        self.contacts: ContactsResource = ContactsResource(http)
+        self.segments: SegmentsResource = SegmentsResource(http)
+        self.audiences: AudiencesResource = AudiencesResource(http)
+        self.broadcasts: BroadcastsResource = BroadcastsResource(http)
+        self.templates: TemplatesResource = TemplatesResource(http)
+        self.automations: AutomationsResource = AutomationsResource(http)
+        self.events: EventsResource = EventsResource(http)
+        self.webhooks: WebhooksResource = WebhooksResource(http)
+        self.topics: TopicsResource = TopicsResource(http)
+        self.suppressions: SuppressionsResource = SuppressionsResource(http)
+        self.logs: LogsResource = LogsResource(http)
 
 
 class Resend(OpenSend):
-    """Resend-shaped alias for easier migration to OpenSend."""
+    """Alias of :class:`OpenSend` for code migrating from Resend to OpenSend."""
+
+
+# ---------------------------------------------------------------------------
+# Module-level convenience helpers
+# ---------------------------------------------------------------------------
+
+
+def _resolve_client(
+    *, api_key: Optional[str], base_url: Optional[str]
+) -> HttpClient:
+    key = api_key if api_key is not None else globals()["api_key"]
+    if key is None:
+        raise ValueError(
+            "API key is required; set opensend.api_key or pass api_key=..."
+        )
+    origin = base_url if base_url is not None else globals()["base_url"]
+    return HttpClient(key, origin)
 
 
 class Emails:
-    """Module-level Resend-style email resource using ``opensend.api_key``."""
+    """Module-level email resource using the global ``opensend.api_key``."""
 
     SendParams = SendParams
     EmailResponse = EmailResponse
@@ -214,10 +258,8 @@ class Emails:
         base_url: Optional[str] = None,
         idempotency_key: Optional[str] = None,
     ) -> EmailResponse:
-        return _default_emails(api_key=api_key, base_url=base_url).send(
-            params,
-            idempotency_key=idempotency_key,
-        )
+        http = _resolve_client(api_key=api_key, base_url=base_url)
+        return EmailsResource(http).send(params, idempotency_key=idempotency_key)
 
     @staticmethod
     def send_batch(
@@ -227,101 +269,211 @@ class Emails:
         base_url: Optional[str] = None,
         idempotency_key: Optional[str] = None,
     ) -> BatchEmailResponse:
-        return _default_emails(api_key=api_key, base_url=base_url).send_batch(
-            params,
-            idempotency_key=idempotency_key,
-        )
+        http = _resolve_client(api_key=api_key, base_url=base_url)
+        return EmailsResource(http).send_batch(params, idempotency_key=idempotency_key)
+
+    @staticmethod
+    def list(
+        options: Optional[EmailListOptions] = None,
+        *,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ) -> EmailListResponse:
+        http = _resolve_client(api_key=api_key, base_url=base_url)
+        return EmailsResource(http).list(options)
+
+    @staticmethod
+    def get(
+        email_id: str,
+        *,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ) -> EmailDetailResponse:
+        http = _resolve_client(api_key=api_key, base_url=base_url)
+        return EmailsResource(http).get(email_id)
+
+    @staticmethod
+    def cancel(
+        email_id: str,
+        *,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+    ) -> CancelEmailResponse:
+        http = _resolve_client(api_key=api_key, base_url=base_url)
+        return EmailsResource(http).cancel(email_id)
 
 
-def _default_emails(*, api_key: Optional[str], base_url: Optional[str]) -> _EmailsResource:
-    key = api_key if api_key is not None else globals()["api_key"]
-    if key is None:
-        raise ValueError("API key is required; set opensend.api_key or pass api_key=...")
-    origin = base_url if base_url is not None else globals()["base_url"]
-    return _EmailsResource(_HttpClient(key, origin))
-
-
-def _normalize_base_url(origin: str) -> str:
-    if not origin or not origin.strip():
-        raise ValueError("base_url must be a non-empty string when provided")
-
-    parsed = urlsplit(origin)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError("base_url must be a valid absolute http or https URL")
-
-    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path.rstrip("/"), "", ""))
-
-
-def _normalize_send_params(params: SendParams) -> JsonObject:
-    payload = dict(cast(Mapping[str, Any], params))
-
-    from_email = payload.pop("from_email", None)
-    from_ = payload.pop("from_", None)
-    if "from" not in payload:
-        if from_email is not None:
-            payload["from"] = from_email
-        elif from_ is not None:
-            payload["from"] = from_
-
-    return payload
-
-
-def _decode_json(raw: bytes) -> JsonObject:
-    if not raw:
-        return {}
-    decoded = json.loads(raw.decode("utf-8"))
-    if isinstance(decoded, dict):
-        return cast(JsonObject, decoded)
-    raise OpenSendError(
-        "Expected a JSON object response from OpenSend",
-        status_code=0,
-        name="invalid_response",
-        code="invalid_response",
-    )
-
-
-def _api_error_from_http_error(error: HTTPError) -> OpenSendError:
-    raw = error.read()
-    try:
-        body: object = json.loads(raw.decode("utf-8")) if raw else {}
-    except json.JSONDecodeError:
-        body = {}
-
-    parsed = body if isinstance(body, dict) else {}
-    message = _string(parsed.get("message")) or _string(parsed.get("error")) or error.reason
-    name = _string(parsed.get("name"))
-    code = _string(parsed.get("code"))
-    details = parsed.get("details") if isinstance(parsed.get("details"), Mapping) else None
-
-    return OpenSendError(
-        message,
-        status_code=error.code,
-        name=name,
-        code=code,
-        details=cast(Optional[Mapping[str, Any]], details),
-    )
-
-
-def _string(value: object) -> Optional[str]:
-    return value if isinstance(value, str) else None
-
-
+# Alias ApiError → OpenSendError for backwards compat
 ApiError = OpenSendError
 
+# ---------------------------------------------------------------------------
+# __all__
+# ---------------------------------------------------------------------------
+
 __all__ = [
-    "ApiError",
-    "BatchEmailResponse",
-    "DEFAULT_BASE_URL",
-    "EmailAttachment",
-    "EmailResponse",
-    "EmailTag",
-    "EmailTemplateReference",
-    "Emails",
+    # Core classes
     "OpenSend",
-    "OpenSendError",
-    "RequestOptions",
     "Resend",
-    "SendParams",
+    "OpenSendError",
+    "ApiError",
+    "RequestOptions",
+    "DEFAULT_BASE_URL",
+    # Module-level state
     "api_key",
     "base_url",
+    # Module-level convenience
+    "Emails",
+    # Resource classes (for type hints / subclassing)
+    "EmailsResource",
+    "DomainsResource",
+    "ApiKeysResource",
+    "ContactsResource",
+    "SegmentsResource",
+    "AudiencesResource",
+    "BroadcastsResource",
+    "TemplatesResource",
+    "AutomationsResource",
+    "EventsResource",
+    "WebhooksResource",
+    "TopicsResource",
+    "SuppressionsResource",
+    "LogsResource",
+    # Email types
+    "SendParams",
+    "EmailResponse",
+    "BatchEmailResponse",
+    "EmailAttachment",
+    "EmailTag",
+    "EmailTemplateReference",
+    "EmailListOptions",
+    "EmailListItem",
+    "EmailListResponse",
+    "EmailDetailResponse",
+    "CancelEmailResponse",
+    # Domain types
+    "CreateDomainPayload",
+    "DomainRecord",
+    "DomainResponse",
+    "DomainListItem",
+    "DomainListResponse",
+    "UpdateDomainPayload",
+    "DeleteDomainResponse",
+    # API key types
+    "CreateApiKeyPayload",
+    "ApiKeyResponse",
+    "ApiKeyListItem",
+    "ApiKeyListResponse",
+    # Contact types
+    "CreateContactPayload",
+    "CreateContactResponse",
+    "ContactResponse",
+    "ContactListItem",
+    "ContactListResponse",
+    "UpdateContactPayload",
+    "DeleteContactResponse",
+    "ContactTopicPreference",
+    # Segment types
+    "CreateSegmentPayload",
+    "SegmentResponse",
+    "SegmentListItem",
+    "SegmentListOptions",
+    "SegmentListResponse",
+    "DeleteSegmentResponse",
+    "SegmentContactListItem",
+    "SegmentContactListResponse",
+    # Audience types
+    "CreateAudiencePayload",
+    "AudienceResponse",
+    "AudienceListItem",
+    "AudienceListOptions",
+    "AudienceListResponse",
+    "DeleteAudienceResponse",
+    # Broadcast types
+    "BroadcastStatus",
+    "CreateBroadcastPayload",
+    "UpdateBroadcastPayload",
+    "SendBroadcastPayload",
+    "BroadcastListOptions",
+    "BroadcastListItem",
+    "BroadcastListResponse",
+    "BroadcastResponse",
+    "CreateBroadcastResponse",
+    "DeleteBroadcastResponse",
+    "SendBroadcastResponse",
+    # Template types
+    "TemplateStatus",
+    "TemplateVariable",
+    "CreateTemplatePayload",
+    "UpdateTemplatePayload",
+    "TemplateListOptions",
+    "TemplateListItem",
+    "TemplateListResponse",
+    "TemplateResponse",
+    "CreateTemplateResponse",
+    "UpdateTemplateResponse",
+    "DeleteTemplateResponse",
+    "PublishTemplateResponse",
+    "DuplicateTemplateResponse",
+    # Automation types
+    "AutomationStatus",
+    "AutomationStepPayload",
+    "AutomationStepResponse",
+    "CreateAutomationPayload",
+    "AutomationDetailResponse",
+    "AutomationListItem",
+    "AutomationListResponse",
+    "AutomationDeleteResponse",
+    "AutomationRunStepState",
+    "AutomationRunListItem",
+    "AutomationRunDetailItem",
+    "AutomationRunListResponse",
+    "AutomationRunListOptions",
+    "CancelAutomationRunPayload",
+    "AutomationRunMetricsOptions",
+    "AutomationRunMetricsResponse",
+    # Event types
+    "CreateEventPayload",
+    "CustomEvent",
+    "CustomEventListResponse",
+    "CustomEventDelivery",
+    "SendCustomEventResponse",
+    "SendEventPayload",
+    "ListOptions",
+    # Webhook types
+    "WebhookStatus",
+    "CreateWebhookPayload",
+    "UpdateWebhookPayload",
+    "WebhookDeliveryItem",
+    "WebhookListItem",
+    "WebhookListResponse",
+    "WebhookResponse",
+    "WebhookCreateResponse",
+    "WebhookDetailResponse",
+    "WebhookUpdateResponse",
+    "DeleteWebhookResponse",
+    "WebhookDeliveryListResponse",
+    "WebhookDeliveryReplayResponse",
+    # Topic types
+    "TopicDefaultSubscription",
+    "TopicVisibility",
+    "CreateTopicPayload",
+    "UpdateTopicPayload",
+    "TopicListOptions",
+    "TopicListItem",
+    "TopicListResponse",
+    "TopicResponse",
+    "CreateTopicResponse",
+    "DeleteTopicResponse",
+    # Suppression types
+    "SuppressionReason",
+    "SuppressionPublicItem",
+    "SuppressionListOptions",
+    "SuppressionListResponse",
+    "DeleteSuppressionResponse",
+    "CreateSuppressionPayload",
+    # Log types
+    "LogListOptions",
+    "LogListItem",
+    "LogListResponse",
+    "LogDetailResponse",
 ]

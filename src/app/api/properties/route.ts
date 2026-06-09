@@ -4,6 +4,7 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
+import { getRootApiAlias } from "@/lib/root-api-compatibility";
 import {
   AudienceMetadataServiceError,
   createAudienceMetadataService,
@@ -13,6 +14,11 @@ import { type NextRequest, NextResponse } from "next/server";
 type PropertyRouteAuth = NonNullable<
   Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
 >;
+
+function inputMode(request: NextRequest) {
+  const alias = getRootApiAlias(request.headers);
+  return alias === "contact-properties" ? "root" : "api";
+}
 
 async function resolveUserId(auth: PropertyRouteAuth): Promise<string | null> {
   if ("userId" in auth) return auth.userId;
@@ -76,6 +82,7 @@ export async function POST(request: NextRequest) {
     const result = await audienceMetadataService().createProperty({
       userId,
       body,
+      mode: inputMode(request),
     });
 
     return NextResponse.json(result, { status: 201 });

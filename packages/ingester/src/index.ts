@@ -1,8 +1,11 @@
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import {
   createBackgroundJob,
+  createDomainService,
+  createInboundEmailIngestionService,
   createTelemetryContext,
-  domainService,
   emailEventRepo,
+  emailRepo,
   emailService,
   emitCloudWatchMetric,
   enqueueDomainEvent,
@@ -16,8 +19,12 @@ import {
   webhookRepo,
 } from "@opensend/core";
 import { Hono } from "hono";
+import { invalidateDomainCaches } from "./cache/domain-cache";
+
+const domainService = createDomainService({ invalidateDomainCaches });
 import { webhookDispatcher } from "./dispatcher";
 import { queueWorker } from "./queue-worker";
+import { Sentry } from "./sentry";
 import { normalizeSesEvent } from "./ses-event-normalization";
 import {
   SnsValidationError,
@@ -33,6 +40,9 @@ import {
 } from "./stripe-webhook";
 
 const app = new Hono();
+const inboundS3Client = new S3Client({
+  region: process.env.AWS_REGION ?? "us-east-1",
+});
 
 type SesSuppressionOutcome = {
   reason: "bounced" | "complained";
@@ -90,8 +100,142 @@ function getSesSuppressionOutcome(
 
 function isAuthorizedJobRequest(authHeader: string | undefined): boolean {
   const token = process.env.INGESTER_JOB_TOKEN?.trim();
-  if (!token) return true;
+  if (!token) return process.env.NODE_ENV !== "production";
   return timingSafeStringEqual(authHeader, `Bearer ${token}`);
+}
+
+function isAuthorizedInboundRequest(authHeader: string | undefined): boolean {
+  const token = process.env.INGESTER_INBOUND_TOKEN?.trim();
+  if (!token) return process.env.NODE_ENV !== "production";
+  return timingSafeStringEqual(authHeader, `Bearer ${token}`);
+}
+
+function getExpectedSesEventsTopicArn(): string | null {
+  const raw = process.env.SES_EVENTS_SNS_TOPIC_ARN?.trim();
+  if (!raw || raw === "undefined" || raw === "null") return null;
+  return raw;
+}
+
+function getExpectedInboundSesS3TopicArn(): string | null {
+  const raw = [
+    process.env.INBOUND_SES_S3_SNS_TOPIC_ARN,
+    process.env.SES_INBOUND_S3_SNS_TOPIC_ARN,
+    process.env.SES_EVENTS_SNS_TOPIC_ARN,
+  ]
+    .map((value) => value?.trim())
+    .find((value) => value);
+  if (!raw || raw === "undefined" || raw === "null") return null;
+  return raw;
+}
+
+function assertAllowedSesEventsTopicArn(topicArn: string): void {
+  const expectedTopicArn = getExpectedSesEventsTopicArn();
+  if (!expectedTopicArn || topicArn !== expectedTopicArn) {
+    throw new SnsValidationError("SES SNS topic is not allowed", 403);
+  }
+}
+
+function assertAllowedInboundSesS3TopicArn(topicArn: string): void {
+  const expectedTopicArn = getExpectedInboundSesS3TopicArn();
+  if (!expectedTopicArn || topicArn !== expectedTopicArn) {
+    throw new SnsValidationError(
+      "Inbound SES S3 SNS topic is not allowed",
+      403,
+    );
+  }
+}
+
+function readStringField(
+  value: Record<string, unknown>,
+  key: string,
+): string | null {
+  const field = value[key];
+  return typeof field === "string" && field.length > 0 ? field : null;
+}
+
+function readStringArrayField(
+  value: Record<string, unknown>,
+  key: string,
+): string[] | undefined {
+  const field = value[key];
+  if (!Array.isArray(field)) return undefined;
+  const strings = field.filter(
+    (item): item is string => typeof item === "string",
+  );
+  return strings.length > 0 ? strings : undefined;
+}
+
+function extractSesReceiptS3Action(message: Record<string, unknown>): {
+  bucketName: string;
+  objectKey: string;
+} {
+  const receipt = message.receipt;
+  if (!isRecord(receipt)) {
+    throw new SnsValidationError(
+      "SES receipt notification is missing receipt",
+      400,
+    );
+  }
+
+  const action = receipt.action;
+  if (!isRecord(action)) {
+    throw new SnsValidationError(
+      "SES receipt notification is missing action",
+      400,
+    );
+  }
+
+  const actionType = readStringField(action, "type");
+  const bucketName = readStringField(action, "bucketName");
+  const objectKey = readStringField(action, "objectKey");
+  if (actionType !== "S3" || !bucketName || !objectKey) {
+    throw new SnsValidationError(
+      "SES receipt notification must reference an S3 action",
+      400,
+    );
+  }
+
+  const expectedBucket =
+    process.env.SES_INBOUND_BUCKET_NAME?.trim() ||
+    process.env.S3_BUCKET_NAME?.trim();
+  if (expectedBucket && bucketName !== expectedBucket) {
+    throw new SnsValidationError("SES receipt S3 bucket is not allowed", 400);
+  }
+
+  return { bucketName, objectKey };
+}
+
+async function objectBodyToBuffer(body: unknown): Promise<Buffer> {
+  if (!body) throw new Error("S3 object body is empty");
+  if (Buffer.isBuffer(body)) return body;
+  if (body instanceof Uint8Array) return Buffer.from(body);
+  if (typeof body === "string") return Buffer.from(body, "utf8");
+  if (
+    typeof body === "object" &&
+    body !== null &&
+    "transformToByteArray" in body &&
+    typeof body.transformToByteArray === "function"
+  ) {
+    return Buffer.from(await body.transformToByteArray());
+  }
+  if (Symbol.asyncIterator in Object(body)) {
+    const chunks: Buffer[] = [];
+    for await (const chunk of body as AsyncIterable<Uint8Array | string>) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+  throw new Error("Unsupported S3 object body");
+}
+
+async function readInboundS3Object(input: {
+  bucketName: string;
+  objectKey: string;
+}): Promise<Buffer> {
+  const response = await inboundS3Client.send(
+    new GetObjectCommand({ Bucket: input.bucketName, Key: input.objectKey }),
+  );
+  return await objectBodyToBuffer(response.Body);
 }
 
 async function runJobEndpoint<T>(
@@ -109,6 +253,15 @@ async function runJobEndpoint<T>(
 }
 
 app.get("/health", (c) => c.text("OK"));
+
+app.get("/__sentry-test", async (c) => {
+  if (c.req.header("x-sentry-smoke") !== "1") {
+    return c.text("forbidden", 403);
+  }
+  Sentry.captureException(new Error("sentry-smoke-test:opensend-ingester"));
+  await Sentry.flush(2000);
+  return c.json({ ok: true });
+});
 
 app.post("/jobs/poll", async (c) =>
   runJobEndpoint(c, async () => await queueWorker.pollOnce()),
@@ -172,6 +325,11 @@ app.post("/jobs/domain-verify", async (c) =>
       updated: result.updated,
       unchanged: result.unchanged,
       failed: result.failed,
+      changes: result.changes.map((c) => ({
+        id: c.domainId,
+        prev: c.previousStatus,
+        next: c.nextStatus,
+      })),
     });
 
     emitCloudWatchMetric(telemetry, {
@@ -287,6 +445,243 @@ app.post("/webhooks/stripe", async (c) => {
   }
 });
 
+app.post("/events/inbound", async (c) => {
+  const telemetry = createTelemetryContext({
+    service: "ingester",
+    operation: "POST /events/inbound",
+    headers: {
+      traceparent: c.req.header("traceparent"),
+      tracestate: c.req.header("tracestate"),
+      "x-correlation-id": c.req.header("x-correlation-id"),
+    },
+  });
+
+  if (!isAuthorizedInboundRequest(c.req.header("authorization"))) {
+    return c.text("Unauthorized", 401);
+  }
+
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json(
+      { ok: false, status: "malformed_mime", reason: "Invalid JSON body" },
+      400,
+    );
+  }
+
+  if (!isRecord(body) || typeof body.event_id !== "string") {
+    return c.json(
+      {
+        ok: false,
+        status: "malformed_mime",
+        reason: "Inbound payload requires event_id",
+      },
+      422,
+    );
+  }
+
+  const recipients = Array.isArray(body.recipients)
+    ? body.recipients.filter(
+        (recipient): recipient is string => typeof recipient === "string",
+      )
+    : undefined;
+
+  const metadata = isRecord(body.metadata) ? body.metadata : undefined;
+  const service = createInboundEmailIngestionService();
+
+  try {
+    const outcome = await service.process({
+      provider: typeof body.provider === "string" ? body.provider : "generic",
+      eventId: body.event_id,
+      messageId:
+        typeof body.message_id === "string" ? body.message_id : undefined,
+      recipients,
+      rawMime: typeof body.raw_mime === "string" ? body.raw_mime : undefined,
+      rawMimeBase64:
+        typeof body.raw_mime_base64 === "string"
+          ? body.raw_mime_base64
+          : undefined,
+      rawMimeUrl:
+        typeof body.raw_mime_url === "string" ? body.raw_mime_url : undefined,
+      metadata,
+    });
+
+    const status = outcome.status === "processed" ? 202 : 200;
+    logTelemetry("info", "inbound.event.ingested", telemetry, {
+      inbound_status: outcome.status,
+      provider_event_id: outcome.provider_event_id,
+      received_email_id:
+        "received_email_id" in outcome ? outcome.received_email_id : undefined,
+    });
+
+    emitCloudWatchMetric(telemetry, {
+      metrics: [{ name: "InboundEventIngested", value: 1, unit: "Count" }],
+      dimensions: {
+        Service: "ingester",
+        Operation: "inbound.ingest",
+        Outcome: outcome.status,
+      },
+    });
+
+    return c.json({ ok: outcome.status === "processed", ...outcome }, status);
+  } catch (error) {
+    recordTelemetryError(telemetry, "inbound.ingest.failed", error);
+    emitCloudWatchMetric(telemetry, {
+      metrics: [{ name: "InboundEventIngestFailed", value: 1, unit: "Count" }],
+      dimensions: {
+        Service: "ingester",
+        Operation: "inbound.ingest",
+        Outcome: "failed",
+      },
+    });
+    return c.json({ ok: false, error: "Internal Server Error" }, 500);
+  }
+});
+
+app.post("/events/inbound/ses-s3", async (c) => {
+  const telemetry = createTelemetryContext({
+    service: "ingester",
+    operation: "POST /events/inbound/ses-s3",
+    headers: {
+      traceparent: c.req.header("traceparent"),
+      tracestate: c.req.header("tracestate"),
+      "x-correlation-id": c.req.header("x-correlation-id"),
+    },
+  });
+
+  try {
+    const body = await c.req.json();
+    const snsType = c.req.header("x-amz-sns-message-type");
+    const snsMessage = parseSnsEnvelope(body, snsType);
+
+    await verifySnsSignature(snsMessage);
+    assertAllowedInboundSesS3TopicArn(snsMessage.TopicArn);
+
+    if (snsMessage.Type === "SubscriptionConfirmation") {
+      logTelemetry(
+        "info",
+        "inbound.ses_s3.subscription_confirmation",
+        telemetry,
+        {
+          sns_message_id: snsMessage.MessageId,
+        },
+      );
+      if (snsMessage.SubscribeURL) {
+        if (!isAllowedSnsSubscribeUrl(snsMessage.SubscribeURL)) {
+          logTelemetry(
+            "warn",
+            "inbound.ses_s3.subscription_url_rejected",
+            telemetry,
+            {
+              sns_message_id: snsMessage.MessageId,
+            },
+          );
+        } else {
+          const response = await fetch(snsMessage.SubscribeURL);
+          logTelemetry(
+            "info",
+            "inbound.ses_s3.subscription_confirmed",
+            telemetry,
+            {
+              sns_message_id: snsMessage.MessageId,
+              confirm_status: response.status,
+            },
+          );
+        }
+      }
+      return c.text("OK");
+    }
+
+    if (snsMessage.Type === "UnsubscribeConfirmation") {
+      logTelemetry(
+        "warn",
+        "inbound.ses_s3.unsubscribe_confirmation",
+        telemetry,
+        {
+          sns_message_id: snsMessage.MessageId,
+        },
+      );
+      return c.text("OK");
+    }
+
+    const sesMessage = parseSesNotification(snsMessage.Message);
+    const rawSesMessage = JSON.parse(snsMessage.Message) as Record<
+      string,
+      unknown
+    >;
+    const { bucketName, objectKey } = extractSesReceiptS3Action(rawSesMessage);
+    const rawMime = await readInboundS3Object({ bucketName, objectKey });
+
+    const mail = isRecord(rawSesMessage.mail) ? rawSesMessage.mail : {};
+    const receipt = isRecord(rawSesMessage.receipt)
+      ? rawSesMessage.receipt
+      : {};
+    const recipients =
+      readStringArrayField(mail, "destination") ??
+      readStringArrayField(receipt, "recipients");
+
+    const outcome = await createInboundEmailIngestionService().process({
+      provider: "aws-ses-receiving",
+      eventId: snsMessage.MessageId,
+      messageId: sesMessage.mail.messageId,
+      recipients,
+      rawMimeBase64: rawMime.toString("base64"),
+      metadata: {
+        sns_message_id: snsMessage.MessageId,
+        sns_topic_arn: snsMessage.TopicArn,
+        ses_event_type: sesMessage.eventType,
+        ses_message_id: sesMessage.mail.messageId,
+        s3_bucket: bucketName,
+        s3_key: objectKey,
+      },
+    });
+
+    logTelemetry("info", "inbound.ses_s3.ingested", telemetry, {
+      inbound_status: outcome.status,
+      provider_event_id: outcome.provider_event_id,
+      received_email_id:
+        "received_email_id" in outcome ? outcome.received_email_id : undefined,
+      s3_bucket: bucketName,
+      s3_key: objectKey,
+    });
+
+    emitCloudWatchMetric(telemetry, {
+      metrics: [{ name: "InboundSesS3EventIngested", value: 1, unit: "Count" }],
+      dimensions: {
+        Service: "ingester",
+        Operation: "inbound.ses_s3",
+        Outcome: outcome.status,
+      },
+    });
+
+    const status = outcome.status === "processed" ? 202 : 200;
+    return c.json({ ok: outcome.status === "processed", ...outcome }, status);
+  } catch (error) {
+    if (error instanceof SnsValidationError) {
+      recordTelemetryError(
+        telemetry,
+        "inbound.ses_s3.validation_failed",
+        error,
+      );
+      return new Response(error.message, { status: error.status });
+    }
+
+    recordTelemetryError(telemetry, "inbound.ses_s3.failed", error);
+    emitCloudWatchMetric(telemetry, {
+      metrics: [
+        { name: "InboundSesS3EventIngestFailed", value: 1, unit: "Count" },
+      ],
+      dimensions: {
+        Service: "ingester",
+        Operation: "inbound.ses_s3",
+        Outcome: "failed",
+      },
+    });
+    return new Response("Internal Server Error", { status: 500 });
+  }
+});
+
 app.post("/events/ses", async (c) => {
   const telemetry = createTelemetryContext({
     service: "ingester",
@@ -304,6 +699,7 @@ app.post("/events/ses", async (c) => {
     const snsMessage = parseSnsEnvelope(body, snsType);
 
     await verifySnsSignature(snsMessage);
+    assertAllowedSesEventsTopicArn(snsMessage.TopicArn);
 
     if (snsMessage.Type === "SubscriptionConfirmation") {
       logTelemetry("info", "ses.sns.subscription_confirmation", telemetry, {
@@ -372,8 +768,28 @@ app.post("/events/ses", async (c) => {
       return c.text("OK");
     }
 
+    const email = await emailRepo.findById(emailId);
+    if (!email) {
+      logTelemetry("warn", "ses.event.unknown_email_id", telemetry, {
+        ses_message_id: sesId,
+        ses_event_type: eventType,
+        email_id: emailId,
+      });
+      return c.text("OK");
+    }
+
+    if (!email.userId) {
+      logTelemetry("warn", "ses.event.email_missing_user_id", telemetry, {
+        ses_message_id: sesId,
+        ses_event_type: eventType,
+        email_id: emailId,
+      });
+      return c.text("OK");
+    }
+
     const { event, created } = await emailEventRepo.createOrIgnoreDuplicate({
       emailId,
+      userId: email.userId,
       sourceId: snsMessage.MessageId,
       type: normalizedEvent.type,
       payload: sesMessage[normalizedEvent.payloadKey] || sesMessage,
@@ -422,25 +838,34 @@ app.post("/events/ses", async (c) => {
       return c.text("OK");
     }
 
-    const { data: hooks } = await webhookRepo.listForDispatch({ limit: 100 });
+    const { data: hooks } = await webhookRepo.listForUserDispatch({
+      userId: email.userId,
+      eventType: webhookEventType,
+      limit: 100,
+    });
     for (const hook of hooks) {
       const types = hook.eventTypes as string[];
-      if (hook.status === "active" && types.includes(webhookEventType)) {
-        const delivery = await webhookDispatcher.enqueue(hook.id, event.id);
-        await publishBackgroundJob(
-          createBackgroundJob({
-            id: `webhook.dispatch:${delivery.id}`,
-            type: "webhook.dispatch",
-            source: "ses-ingest",
-            deliveryId: delivery.id,
-            trace: getTelemetryCarrier(telemetry),
-          }),
-          {
-            deduplicationId: `webhook.dispatch:${delivery.id}`,
-            groupId: "webhook.dispatch",
-          },
-        );
+      if (
+        hook.userId !== email.userId ||
+        hook.status !== "active" ||
+        !types.includes(webhookEventType)
+      ) {
+        continue;
       }
+      const delivery = await webhookDispatcher.enqueue(hook.id, event.id);
+      await publishBackgroundJob(
+        createBackgroundJob({
+          id: `webhook.dispatch:${delivery.id}`,
+          type: "webhook.dispatch",
+          source: "ses-ingest",
+          deliveryId: delivery.id,
+          trace: getTelemetryCarrier(telemetry),
+        }),
+        {
+          deduplicationId: `webhook.dispatch:${delivery.id}`,
+          groupId: "webhook.dispatch",
+        },
+      );
     }
 
     return c.text("OK");

@@ -14,6 +14,7 @@
     "check": "node scripts/check-changed-files.mjs",
     "check:full": "bun run typecheck && bun run lint",
     "billing:preflight": "bun src/lib/billing/cutover-preflight.ts",
+    "deliverability:preflight": "bun src/lib/deliverability/repair-preflight.ts",
     "hooks:install": "node scripts/install-git-hooks.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -27,7 +28,8 @@
     "dev:api": "bun run --cwd services/api dev",
     "start:api": "bun run --cwd services/api start",
     "build:api": "bun run --cwd services/api build",
-    "docs:generate": "node tools/generate-docs-index.mjs"
+    "docs:generate": "node tools/generate-docs-index.mjs",
+    "docs:check": "node tools/check-docs-quality.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-eventbridge": "^3.1038.0",
@@ -44,6 +46,8 @@
     "@radix-ui/react-switch": "^1.1.2",
     "@radix-ui/react-tabs": "^1.1.2",
     "@react-email/render": "^2.0.8",
+    "@sentry/nextjs": "^10.53.1",
+    "@sentry/node": "^10.53.1",
     "@testing-library/dom": "^10.4.1",
     "better-auth": "^1.6.8",
     "clsx": "^2.1.1",
@@ -54,6 +58,8 @@
     "next": "^16.2.6",
     "papaparse": "^5.5.3",
     "pg": "^8.16.3",
+    "posthog-js": "^1.376.0",
+    "posthog-node": "^5.35.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "redis": "^5.12.1",

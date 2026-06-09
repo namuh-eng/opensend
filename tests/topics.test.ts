@@ -58,14 +58,14 @@ describe("TopicsList", () => {
     // Should have create topic buttons (one in filter bar, one in empty state)
     const createButtons = screen.getAllByText("Create topic");
     expect(createButtons.length).toBe(2);
-    // The unsubscribe page editor is intentionally disabled until implemented.
+    // The unsubscribe page editor links to the customization page.
     const customizeControls = screen.getAllByText("Customize page");
     expect(customizeControls.length).toBeGreaterThanOrEqual(1);
-    expect(
-      screen.getAllByText(
-        "Editor unavailable; the default unsubscribe page remains active.",
-      ).length,
-    ).toBeGreaterThanOrEqual(1);
+    for (const control of customizeControls) {
+      expect(control.closest("a")?.getAttribute("href")).toBe(
+        "/audience/topics/unsubscribe-page/edit",
+      );
+    }
   });
 
   it("renders topics list with data", async () => {
@@ -264,7 +264,7 @@ describe("TopicsList", () => {
     });
   });
 
-  it("disables the unavailable unsubscribe page editor CTA", async () => {
+  it("links the unsubscribe page editor CTA to the editor", async () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ data: [], total: 0, page: 1, limit: 20 }),
@@ -277,15 +277,12 @@ describe("TopicsList", () => {
     });
 
     const control = screen.getByText("Edit Unsubscribe Page");
-    const button = control.closest("button");
-    expect(button).toBeTruthy();
-    expect(button?.hasAttribute("disabled")).toBe(true);
-    expect(control.closest("a")).toBeNull();
-    expect(
-      screen.getAllByText(
-        "Editor unavailable; the default unsubscribe page remains active.",
-      ).length,
-    ).toBeGreaterThanOrEqual(1);
+    const link = control.closest("a");
+    expect(link).toBeTruthy();
+    expect(link?.getAttribute("href")).toBe(
+      "/audience/topics/unsubscribe-page/edit",
+    );
+    expect(control.closest("button")).toBeNull();
   });
 
   it("shows unsubscribe page preview section", async () => {

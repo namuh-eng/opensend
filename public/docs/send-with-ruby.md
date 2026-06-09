@@ -1,11 +1,10 @@
 # Send emails with Ruby
 
-Send email from Ruby with the first-party OpenSend Ruby SDK.
+Send email from Ruby with the first-party OpenSend Ruby SDK. It works in Rails, Sinatra, Ruby scripts, and background jobs.
 
 ## Install
 
-The `opensend` gem package is ready for RubyGems publishing. Until the
-RubyGems release is available, build and install it from this repository:
+The `opensend` gem package is ready for RubyGems publishing. Until the RubyGems release is available, build and install it from this repository:
 
 ```bash
 cd packages/ruby-sdk
@@ -23,12 +22,12 @@ gem install opensend
 
 ```bash
 export OPENSEND_API_KEY="os_your_api_key"
+export OPENSEND_BASE_URL="http://localhost:3015" # optional for self-hosting
 ```
 
 If `OPENSEND_BASE_URL` is unset, the SDK targets `https://opensend.namuh.co`.
-Set `OPENSEND_BASE_URL` only when using a self-hosted OpenSend deployment.
 
-## Send
+## Send one email
 
 ```ruby
 require "opensend"
@@ -36,7 +35,7 @@ require "opensend"
 OpenSend.api_key ENV.fetch("OPENSEND_API_KEY")
 OpenSend.base_url ENV.fetch("OPENSEND_BASE_URL", OpenSend::DEFAULT_BASE_URL)
 
-email = OpenSend::Emails.send(
+email = OpenSend.emails.send(
   from: "hello@yourdomain.com",
   to: "recipient@example.com",
   subject: "Hello from OpenSend",
@@ -46,4 +45,34 @@ email = OpenSend::Emails.send(
 puts email.fetch("id")
 ```
 
-See `packages/ruby-sdk/README.md` for the full API surface and migration alias.
+## Instance client
+
+Use an instance client when a process needs multiple API keys or base URLs:
+
+```ruby
+client = OpenSend::Client.new(
+  api_key: ENV.fetch("OPENSEND_API_KEY"),
+  base_url: ENV.fetch("OPENSEND_BASE_URL", OpenSend::DEFAULT_BASE_URL)
+)
+
+client.emails.send(
+  from: "hello@yourdomain.com",
+  to: "recipient@example.com",
+  subject: "Hello",
+  text: "It works!"
+)
+```
+
+## Idempotency and batch sends
+
+```ruby
+client.emails.send(payload, idempotency_key: "receipt-123")
+client.emails.send_batch([payload_one, payload_two], idempotency_key: "batch-123")
+```
+
+## Framework guides
+
+- [Rails](./send-with-rails.md)
+- [Sinatra](./send-with-sinatra.md)
+
+The Ruby package also exports `Resend` as a compatibility alias for migration-oriented code.

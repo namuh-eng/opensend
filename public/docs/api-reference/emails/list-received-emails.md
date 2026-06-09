@@ -1,19 +1,60 @@
 # List Received Emails
 
-List inbound emails received by OpenSend.
+List inbound email rows stored for the authenticated OpenSend tenant.
 
-`GET /api/emails/receiving`
+`GET /emails/receiving`
 
+Compatibility note: `GET /api/emails/receiving` remains available for existing OpenSend integrations; new API clients can use the root compatibility path above. Browser dashboard navigation is preserved for page routes that share these names.
 
 ## Authentication
 
-Use an OpenSend API key in the Authorization header.
+Use an OpenSend API key in the Authorization header. The API key must belong to a tenant; dashboard session cookies are not API credentials for public API calls.
 
 ```http
 Authorization: Bearer os_YOUR_API_KEY
 ```
 
-Dashboard session cookies are not API credentials.
+## Query parameters
 
+| Name | Type | Description |
+| --- | --- | --- |
+| `limit` | number | Number of rows to return. Values are clamped from `1` to `100`; default is `20`. |
+| `after` | string | Cursor for older rows. OpenSend compares against received-email IDs and returns rows after that cursor in descending order. |
+| `to` | string | Optional recipient address filter. OpenSend normalizes whitespace and case before querying the recipient array. |
 
-Inbound email support depends on deployment configuration and receiving-domain setup.
+## Response
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "6f6f8b7e-534f-4b62-b0c1-64b79e45f3c2",
+      "from": "support@example.com",
+      "to": ["agent@inbound.example.com"],
+      "subject": "New support request",
+      "route_decisions": [
+        {
+          "recipient": "agent@inbound.example.com",
+          "status": "exact",
+          "routeId": "22222222-2222-4222-8222-222222222222",
+          "routeType": "exact",
+          "targetAddress": "agent@inbound.example.com"
+        }
+      ],
+      "reply_match_status": "unmatched",
+      "thread_id": null,
+      "reply_to_email_id": null,
+      "contact_id": null,
+      "created_at": "2026-05-10T00:00:00.000Z"
+    }
+  ],
+  "has_more": false
+}
+```
+
+Rows are scoped to the owner of the API key. `route_decisions` is an empty array for legacy rows inserted before route audit metadata existed. `reply_match_status` is `matched` when the ingester validated a tenant/domain-scoped reply token and linked the message to an outbound email thread; otherwise it is `unmatched`. Empty lists are returned as `200` responses with `data: []`.
+
+## Self-hosting notes
+
+OpenSend includes a standalone ingester foundation for inbound MIME notifications at `POST /events/inbound`. Configure MX records and provider receipt rules for your deployment, then send provider notifications with raw MIME payloads or fetch URLs to the ingester. The ingester writes `received_emails` only after resolving the recipient to one tenant and storing attachments through the storage abstraction.

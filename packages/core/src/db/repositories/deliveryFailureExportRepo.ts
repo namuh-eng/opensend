@@ -10,7 +10,12 @@ import {
   sql,
 } from "drizzle-orm";
 import { db } from "../client";
-import { emailEvents, emailSuppressions, emails } from "../schema";
+import {
+  type SuppressionReason,
+  emailEvents,
+  emailSuppressions,
+  emails,
+} from "../schema";
 
 export type DeliveryFailureEmailStatus = "bounced" | "complained";
 
@@ -35,7 +40,7 @@ export type DeliveryFailureEventRow = {
 export type DeliveryFailureSuppressionRow = {
   id: string;
   email: string;
-  reason: "bounced" | "complained";
+  reason: SuppressionReason;
   sourceEmailId: string | null;
   sourceMessageId: string | null;
   suppressedAt: Date;

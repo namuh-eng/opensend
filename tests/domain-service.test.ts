@@ -30,6 +30,8 @@ function domainRow(overrides: Partial<DomainRow> = {}): DomainRow {
     dkimPublicKey: null,
     dkimPrivateKeyCt: null,
     dkimPrivateKeyIv: null,
+    dedicatedIpPoolId: null,
+    sesConfigurationSetName: null,
     ...overrides,
   };
 }
@@ -61,6 +63,12 @@ function createRepository(overrides: Partial<DomainRepository> = {}) {
 }
 
 describe("domain service", () => {
+  it("createDomainService({}) throws containing 'invalidateDomainCaches'", () => {
+    expect(() =>
+      createDomainService({} as Parameters<typeof createDomainService>[0]),
+    ).toThrow("invalidateDomainCaches");
+  });
+
   it("uses the core domain identity provider when route adapters do not inject SES", async () => {
     const inserted: DomainInsert[] = [];
     const createDomainIdentity = vi
@@ -80,7 +88,11 @@ describe("domain service", () => {
     });
 
     try {
-      const service = createDomainService({ repository });
+      const service = createDomainService({
+        repository,
+        invalidateDomainCaches: vi.fn(),
+        syncDomainConfigurationSet: vi.fn(async () => "cfg-created-domain"),
+      });
       await service.createDomain({ name: "Example.COM", userId: "user-1" });
 
       expect(createDomainIdentity).toHaveBeenCalledWith("example.com", {
@@ -115,9 +127,9 @@ describe("domain service", () => {
     }));
     const invalidateDomainCaches =
       vi.fn<
-        (_: {
-          id: string;
-          name: string;
+        (params: {
+          id?: string | null;
+          name?: string | null;
           region?: string | null;
         }) => Promise<void>
       >();
@@ -138,6 +150,7 @@ describe("domain service", () => {
       repository,
       createDomainIdentity,
       invalidateDomainCaches,
+      syncDomainConfigurationSet: vi.fn(async () => "cfg-created-domain"),
     });
 
     const previousTrackingTarget = process.env.TRACKING_CNAME_TARGET;
@@ -236,6 +249,58 @@ describe("domain service", () => {
     });
   });
 
+  it("passes the SES events topic ARN into config-set sync and persists the returned name", async () => {
+    const previousTopicArn = process.env.SES_EVENTS_SNS_TOPIC_ARN;
+    process.env.SES_EVENTS_SNS_TOPIC_ARN =
+      "arn:aws:sns:us-east-1:123456789012:opensend-ses-events";
+    const updates: Array<{ id: string; data: Partial<DomainInsert> }> = [];
+    const syncDomainConfigurationSet = vi.fn(async () => "cfg-created-domain");
+    const repository = createRepository({
+      async create(data) {
+        return [domainRow({ ...data, id: "created-domain" })];
+      },
+      async update(id, data) {
+        updates.push({ id, data });
+        return [domainRow({ id, ...data })];
+      },
+    });
+    const service = createDomainService({
+      repository,
+      createDomainIdentity: async () => ({ dkimTokens: [] }),
+      invalidateDomainCaches: vi.fn(),
+      syncDomainConfigurationSet,
+    });
+
+    try {
+      await service.createDomain({
+        name: "example.com",
+        userId: "user-1",
+      });
+
+      expect(syncDomainConfigurationSet).toHaveBeenCalledWith({
+        domainId: "created-domain",
+        tls: "opportunistic",
+        dedicatedIpPoolSesName: null,
+        existingConfigSetName: null,
+        eventDestinationTopicArn:
+          "arn:aws:sns:us-east-1:123456789012:opensend-ses-events",
+        region: "us-east-1",
+      });
+      expect(updates).toEqual([
+        {
+          id: "created-domain",
+          data: { sesConfigurationSetName: "cfg-created-domain" },
+        },
+      ]);
+    } finally {
+      if (previousTopicArn === undefined) {
+        process.env.SES_EVENTS_SNS_TOPIC_ARN = "";
+      } else {
+        process.env.SES_EVENTS_SNS_TOPIC_ARN = previousTopicArn;
+      }
+    }
+  });
+
   it("uses external API defaults when optional create fields are omitted", async () => {
     const inserted: DomainInsert[] = [];
     const service = createDomainService({
@@ -246,6 +311,8 @@ describe("domain service", () => {
         },
       }),
       createDomainIdentity: async () => ({ dkimTokens: [] }),
+      invalidateDomainCaches: vi.fn(),
+      syncDomainConfigurationSet: vi.fn(async () => "cfg-domain-1"),
     });
 
     await service.createDomain({ name: "example.com" });
@@ -315,6 +382,7 @@ describe("domain service", () => {
       ],
     });
     const getDomainIdentity = vi.fn(async () => ({ verified: true }));
+    const syncDomainConfigurationSet = vi.fn(async () => "cfg-dom-1");
     const repository = createRepository({
       async findById() {
         return existingDomain;
@@ -328,6 +396,8 @@ describe("domain service", () => {
     const service = createDomainService({
       repository,
       getDomainIdentity,
+      invalidateDomainCaches: vi.fn(),
+      syncDomainConfigurationSet,
     });
 
     const result = await service.reconcileVerification("dom-1");
@@ -336,7 +406,7 @@ describe("domain service", () => {
       region: "ap-northeast-1",
     });
     expect(result.status).toBe("updated");
-    expect(updates).toHaveLength(1);
+    expect(updates).toHaveLength(2);
     expect(updates[0].data.status).toBe("verified");
     expect(updates[0].data.records).toEqual([
       expect.objectContaining({
@@ -348,16 +418,86 @@ describe("domain service", () => {
         status: "verified",
       }),
     ]);
+    expect(updates[1]).toEqual({
+      id: "dom-1",
+      data: { sesConfigurationSetName: "cfg-dom-1" },
+    });
     if (result.status === "updated") {
       expect(result.previousStatus).toBe("pending");
       expect(result.domain.status).toBe("verified");
+      expect(result.domain.sesConfigurationSetName).toBe("cfg-dom-1");
     }
   });
 
-  it("reconciles verification: returns unchanged when status and records are stable", async () => {
+  it("repairs verified domains by writing back the authoritative config-set name", async () => {
+    const previousTopicArn = process.env.SES_EVENTS_SNS_TOPIC_ARN;
+    process.env.SES_EVENTS_SNS_TOPIC_ARN =
+      "arn:aws:sns:us-east-1:123456789012:opensend-ses-events";
+    const updates: Array<{ id: string; data: Partial<DomainInsert> }> = [];
+    const existingDomain = domainRow({
+      id: "dom-repair",
+      name: "example.com",
+      status: "verified",
+      sesConfigurationSetName: null,
+    });
+    const syncDomainConfigurationSet = vi.fn(
+      async () => "opensend-domain-dom-repair",
+    );
+    const repository = createRepository({
+      async findById() {
+        return existingDomain;
+      },
+      async update(id, data) {
+        updates.push({ id, data });
+        return [domainRow({ ...existingDomain, ...data })];
+      },
+    });
+    const service = createDomainService({
+      repository,
+      getDomainIdentity: async () => ({ verified: true }),
+      invalidateDomainCaches: vi.fn(),
+      syncDomainConfigurationSet,
+    });
+
+    try {
+      const result = await service.reconcileVerification("dom-repair");
+
+      expect(result.status).toBe("unchanged");
+      expect(syncDomainConfigurationSet).toHaveBeenCalledWith({
+        domainId: "dom-repair",
+        tls: "opportunistic",
+        dedicatedIpPoolSesName: null,
+        existingConfigSetName: null,
+        eventDestinationTopicArn:
+          "arn:aws:sns:us-east-1:123456789012:opensend-ses-events",
+        region: "us-east-1",
+      });
+      expect(updates).toEqual([
+        {
+          id: "dom-repair",
+          data: { sesConfigurationSetName: "opensend-domain-dom-repair" },
+        },
+      ]);
+      if (result.status === "unchanged") {
+        expect(result.domain.sesConfigurationSetName).toBe(
+          "opensend-domain-dom-repair",
+        );
+      }
+    } finally {
+      if (previousTopicArn === undefined) {
+        process.env.SES_EVENTS_SNS_TOPIC_ARN = "";
+      } else {
+        process.env.SES_EVENTS_SNS_TOPIC_ARN = previousTopicArn;
+      }
+    }
+  });
+
+  it("reconciles verification: returns unchanged when status and records are stable — invalidates caches on unchanged path", async () => {
     const updates: Array<{ id: string; data: Partial<DomainInsert> }> = [];
     const existingDomain = domainRow({
       id: "dom-2",
+      name: "example.com",
+      region: "us-east-1",
       status: "pending",
       records: [
         {
@@ -378,16 +518,33 @@ describe("domain service", () => {
         return [domainRow({ ...existingDomain, ...data })];
       },
     });
+    const invalidateDomainCaches =
+      vi.fn<
+        (params: {
+          id?: string | null;
+          name?: string | null;
+          region?: string | null;
+        }) => Promise<void>
+      >();
 
     const service = createDomainService({
       repository,
       getDomainIdentity: async () => ({ verified: false }),
+      invalidateDomainCaches,
     });
 
     const result = await service.reconcileVerification("dom-2");
 
     expect(result.status).toBe("unchanged");
     expect(updates).toHaveLength(0);
+    // The unchanged path now calls invalidateDomainCaches once as a cache-repair
+    // step to fix stale entries that might have been set before the last update.
+    expect(invalidateDomainCaches).toHaveBeenCalledOnce();
+    expect(invalidateDomainCaches).toHaveBeenCalledWith({
+      id: "dom-2",
+      name: "example.com",
+      region: "us-east-1",
+    });
   });
 
   it("reconcileAllPendingVerifications: tolerates per-domain failures", async () => {
@@ -429,6 +586,8 @@ describe("domain service", () => {
         if (name === "a.example") return { verified: true };
         throw new Error("ses unavailable");
       },
+      invalidateDomainCaches: vi.fn(),
+      syncDomainConfigurationSet: vi.fn(async () => "cfg-reconciled-domain"),
     });
 
     const result = await service.reconcileAllPendingVerifications();
@@ -462,6 +621,7 @@ describe("domain service", () => {
           };
         },
       }),
+      invalidateDomainCaches: vi.fn(),
     });
 
     const result = await service.listDomains({

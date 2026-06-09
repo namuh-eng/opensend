@@ -38,6 +38,9 @@ function makeEmail(overrides: Partial<EmailRow> = {}): EmailRow {
     userId: "user-1",
     topicId: null,
     idempotencyKey: null,
+    threadId: null,
+    replyAddress: null,
+    replyToken: null,
     ...overrides,
   };
 }

@@ -33,7 +33,7 @@ test.describe("API Code Drawer", () => {
     ).toBeVisible();
 
     // Verify Node.js code is shown
-    await expect(drawer.locator("code").first()).toContainText("Resend");
+    await expect(drawer.locator("code").first()).toContainText("Opensend");
 
     // Switch to cURL tab
     const curlTab = page.getByTestId("lang-tab-curl");

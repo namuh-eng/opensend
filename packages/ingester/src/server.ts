@@ -1,3 +1,4 @@
+import "./sentry";
 import app from "./index";
 import { queueWorker } from "./queue-worker";
 import { runIngesterStartupChecks } from "./startup-checks";

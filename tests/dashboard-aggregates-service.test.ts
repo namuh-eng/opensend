@@ -41,6 +41,9 @@ function makeRepository(
     async listDomainBreakdown() {
       return [];
     },
+    async listTagBreakdown() {
+      return [];
+    },
     async listTagOptions() {
       return [];
     },
@@ -134,6 +137,7 @@ describe("dashboard aggregate service", () => {
       tagOptions: [],
       dailyData: [{ date: "2026-04-23", count: 7 }],
       domainBreakdown: [{ domain: "example.com", count: 10, rate: 70 }],
+      tagBreakdown: [],
       bounceBreakdown: {
         permanent: 1,
         transient: 1,
@@ -151,7 +155,8 @@ describe("dashboard aggregate service", () => {
     const end = new Date("2026-05-11T23:59:59.999Z");
     const metricInputs: MetricsBaseInput[] = [];
     const dailyInputs: DailyCountsInput[] = [];
-    let tagOptionsUserId: string | undefined;
+    let tagOptionsInput: MetricsBaseInput | undefined;
+    let tagBreakdownInput: MetricsBaseInput | undefined;
 
     const service = createDashboardAggregateService({
       repository: makeRepository({
@@ -183,8 +188,14 @@ describe("dashboard aggregate service", () => {
           metricInputs.push(input);
           return [];
         },
-        async listTagOptions(userId) {
-          tagOptionsUserId = userId;
+        async listTagBreakdown(input) {
+          tagBreakdownInput = input;
+          return [
+            { name: "campaign", value: "launch", total: 5, delivered: 4 },
+          ];
+        },
+        async listTagOptions(input) {
+          tagOptionsInput = input;
           return [{ name: "campaign", values: ["launch"] }];
         },
       }),
@@ -215,9 +226,13 @@ describe("dashboard aggregate service", () => {
       expectedBase,
     ]);
     expect(dailyInputs).toEqual([{ ...expectedBase, statuses: ["delivered"] }]);
-    expect(tagOptionsUserId).toBe("tenant-1");
+    expect(tagBreakdownInput).toEqual(expectedBase);
+    expect(tagOptionsInput).toEqual(expectedBase);
     expect(payload.tagOptions).toEqual([
       { name: "campaign", values: ["launch"] },
+    ]);
+    expect(payload.tagBreakdown).toEqual([
+      { name: "campaign", value: "launch", count: 5, rate: 80 },
     ]);
     expect(payload.totalEmails).toBe(0);
     expect(payload.dailyData).toEqual([]);
@@ -276,7 +291,7 @@ describe("dashboard aggregate service", () => {
       plan: { name: "Free", slug: "free" },
       transactional: {
         monthlyUsed: 42,
-        monthlyLimit: 3000,
+        monthlyLimit: 5000,
         dailyUsed: 3,
         dailyLimit: 100,
       },

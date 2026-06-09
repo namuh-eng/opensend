@@ -39,6 +39,22 @@ vi.mock("@/components/domain-detail", () => ({
   ),
 }));
 
+const mockEnsureDeliverabilityForDomain = vi.hoisted(() => vi.fn());
+
+vi.mock("@opensend/core", () => ({
+  domainDeliverabilityStatusRepo: {
+    ensureForDomain: mockEnsureDeliverabilityForDomain,
+  },
+  evaluateBimiReadiness: vi.fn(() => ({
+    status: "not_configured",
+    selector: "default",
+    bimiRecordName: "default._bimi.example.com",
+    logoUrl: null,
+    certificateUrl: null,
+    checks: [],
+  })),
+}));
+
 const VALID_UUID = "11111111-1111-4111-8111-111111111111";
 
 async function importPage() {
@@ -58,6 +74,16 @@ describe("DomainDetailPage server component", () => {
     fromMock.mockClear();
     whereMock.mockClear();
     limitMock.mockReset();
+    mockEnsureDeliverabilityForDomain.mockReset();
+    mockEnsureDeliverabilityForDomain.mockResolvedValue({
+      bimiSelector: "default",
+      bimiLogoUrl: null,
+      bimiCertificateUrl: null,
+      bimiNotes: null,
+      appleBrandedMailStatus: "not_started",
+      appleBrandedMailNotes: null,
+      lastCheckedAt: null,
+    });
   });
 
   it("redirects unauthenticated dashboard users before loading a domain", async () => {

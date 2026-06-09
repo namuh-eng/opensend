@@ -77,6 +77,20 @@ function readOptionalString(record: Record<string, unknown>, key: string) {
   throw new SnsValidationError(`SNS payload has invalid ${key}`, 400);
 }
 
+function readSesEventType(record: Record<string, unknown>): string {
+  for (const key of ["eventType", "notificationType"] as const) {
+    const value = record[key];
+    if (typeof value === "string" && value.length > 0) {
+      return value;
+    }
+  }
+
+  throw new SnsValidationError(
+    "SES notification is missing eventType or notificationType",
+    400,
+  );
+}
+
 function normalizeSnsType(type: string): SnsMessageType {
   if (
     type === "Notification" ||
@@ -242,7 +256,7 @@ export function parseSesNotification(rawMessage: string): SesNotification {
     );
   }
 
-  const eventType = readString(parsed, "eventType");
+  const eventType = readSesEventType(parsed);
   const mail = parsed.mail;
 
   if (!isRecord(mail)) {

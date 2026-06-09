@@ -148,6 +148,9 @@ describe("dashboard CSV export route", () => {
         region: "us-east-1",
         permission: "full_access",
         method: "post",
+        source: undefined,
+        domain: undefined,
+        topicId: undefined,
         userAgent: "Chrome",
       },
     });
@@ -173,6 +176,151 @@ describe("dashboard CSV export route", () => {
       code: "export_too_large",
       resource: "contacts",
       limit: 1000,
+    });
+  });
+});
+
+describe("dashboard export schema fixtures", () => {
+  it("keeps supported resource CSV headers versioned and stable", async () => {
+    const { getDashboardExportSchema } = await import(
+      "@/lib/dashboard-export-service"
+    );
+
+    expect(getDashboardExportSchema("emails")).toEqual({
+      version: 1,
+      headers: [
+        "id",
+        "to",
+        "from",
+        "subject",
+        "status",
+        "created_at",
+        "sent_at",
+        "scheduled_at",
+      ],
+    });
+    expect(getDashboardExportSchema("email-events")).toEqual({
+      version: 1,
+      headers: ["id", "email_id", "source_id", "type", "received_at"],
+    });
+    expect(getDashboardExportSchema("contacts")).toEqual({
+      version: 1,
+      headers: [
+        "id",
+        "email",
+        "first_name",
+        "last_name",
+        "status",
+        "segments",
+        "created_at",
+      ],
+    });
+    expect(getDashboardExportSchema("segments")).toEqual({
+      version: 1,
+      headers: [
+        "id",
+        "name",
+        "contacts_count",
+        "unsubscribed_count",
+        "created_at",
+      ],
+    });
+    expect(getDashboardExportSchema("topics")).toEqual({
+      version: 1,
+      headers: [
+        "id",
+        "name",
+        "description",
+        "default_subscription",
+        "visibility",
+        "created_at",
+      ],
+    });
+    expect(getDashboardExportSchema("suppressions")).toEqual({
+      version: 1,
+      headers: [
+        "id",
+        "email",
+        "reason",
+        "source",
+        "source_email_id",
+        "source_message_id",
+        "suppressed_at",
+        "updated_at",
+      ],
+    });
+    expect(getDashboardExportSchema("webhook-deliveries")).toEqual({
+      version: 1,
+      headers: [
+        "id",
+        "webhook_id",
+        "event_id",
+        "event_type",
+        "attempt",
+        "status",
+        "status_code",
+        "attempted_at",
+        "next_retry_at",
+        "created_at",
+      ],
+    });
+    expect(getDashboardExportSchema("logs")).toEqual({
+      version: 1,
+      headers: [
+        "id",
+        "method",
+        "endpoint",
+        "status",
+        "api_key_id",
+        "user_agent",
+        "created_at",
+      ],
+    });
+    expect(getDashboardExportSchema("broadcasts")).toEqual({
+      version: 1,
+      headers: [
+        "id",
+        "name",
+        "status",
+        "audience_id",
+        "subject",
+        "created_at",
+        "scheduled_at",
+      ],
+    });
+    expect(getDashboardExportSchema("automation-runs")).toEqual({
+      version: 1,
+      headers: [
+        "id",
+        "automation_id",
+        "automation_name",
+        "trigger_event_id",
+        "contact_id",
+        "status",
+        "current_step_key",
+        "started_at",
+        "completed_at",
+        "next_step_at",
+        "failure_reason",
+        "created_at",
+        "updated_at",
+      ],
+    });
+    expect(getDashboardExportSchema("domains")).toEqual({
+      version: 1,
+      headers: ["id", "name", "status", "region", "created_at"],
+    });
+    expect(getDashboardExportSchema("api-keys")).toEqual({
+      version: 1,
+      headers: [
+        "id",
+        "name",
+        "token_preview",
+        "permission",
+        "domain",
+        "last_used_at",
+        "created_at",
+      ],
     });
   });
 });

@@ -1,4 +1,3 @@
-import { unauthorizedResponse } from "@/lib/api-auth";
 import {
   BROADCAST_METRICS_CACHE_TTL_SECONDS,
   getBroadcastMetricsCacheKey,
@@ -26,10 +25,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await resolveBroadcastRouteUserId(
+  const userIdOrResponse = await resolveBroadcastRouteUserId(
     request.headers.get("authorization"),
   );
-  if (!userId) return unauthorizedResponse();
+  if (userIdOrResponse instanceof Response) return userIdOrResponse;
+  const userId = userIdOrResponse;
 
   try {
     const { id } = await params;

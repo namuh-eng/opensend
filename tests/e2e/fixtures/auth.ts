@@ -38,6 +38,10 @@ function getDatabaseUrl(): string | null {
   return process.env.DATABASE_URL ?? null;
 }
 
+function requireBetterAuthSecret(): string | null {
+  return process.env.BETTER_AUTH_SECRET ?? null;
+}
+
 export function getE2EBaseUrl(): string {
   return (
     process.env.E2E_BASE_URL ??
@@ -73,8 +77,13 @@ function hashApiKey(rawKey: string): string {
 }
 
 export function signBetterAuthSessionToken(sessionToken: string): string {
-  const secret =
-    process.env.BETTER_AUTH_SECRET ?? "better-auth-secret-12345678901234567890";
+  const secret = requireBetterAuthSecret();
+  if (!secret) {
+    throw new Error(
+      "BETTER_AUTH_SECRET is required for auth-backed E2E session cookies",
+    );
+  }
+
   const signature = createHmac("sha256", secret)
     .update(sessionToken)
     .digest("base64");
@@ -90,6 +99,14 @@ export async function cleanupE2ERun(
   const emailPattern = `%@${runId}.e2e.opensend.test`;
 
   await client.query(
+    "delete from dashboard_export_jobs where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query(
+    "delete from integration_connections where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query(
     `delete from webhook_deliveries
      where event_id in (
        select id from email_events
@@ -97,6 +114,13 @@ export async function cleanupE2ERun(
      )`,
     [`${userPrefix}%`],
   );
+  await client.query(
+    "delete from custom_event_deliveries where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query("delete from custom_events where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query(
     `delete from webhook_deliveries
      where webhook_id in (
@@ -108,10 +132,26 @@ export async function cleanupE2ERun(
   await client.query("delete from email_events where user_id like $1", [
     `${userPrefix}%`,
   ]);
+  await client.query("delete from forwarding_attempts where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query("delete from forwarding_rules where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query(
+    "delete from inbound_provider_events where user_id like $1 or raw_metadata->>'test_run_id' = $2",
+    [`${userPrefix}%`, runId],
+  );
   await client.query(
     "delete from email_suppressions where user_id like $1 or email like $2",
     [`${userPrefix}%`, emailPattern],
   );
+  await client.query("delete from received_emails where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query("delete from receiving_routes where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query("delete from emails where user_id like $1", [
     `${userPrefix}%`,
   ]);
@@ -122,6 +162,34 @@ export async function cleanupE2ERun(
     "delete from logs where user_id like $1 or document->>'test_run_id' = $2",
     [`${userPrefix}%`, runId],
   );
+  await client.query(
+    `delete from automation_runs
+     where user_id like $1
+        or automation_id in (
+          select id from automations
+          where user_id like $1 or document->>'test_run_id' = $2
+        )`,
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
+    `delete from automation_steps
+     where automation_id in (
+       select id from automations
+       where user_id like $1 or document->>'test_run_id' = $2
+     )`,
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
+    "delete from automations where user_id like $1 or document->>'test_run_id' = $2",
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
+    "delete from custom_event_deliveries where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query("delete from custom_events where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
   await client.query("delete from templates where user_id like $1", [
     `${userPrefix}%`,
   ]);
@@ -146,10 +214,46 @@ export async function cleanupE2ERun(
     [`${userPrefix}%`, runId],
   );
   await client.query(
+    "delete from domain_deliverability_statuses where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query("delete from domains where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query("delete from dedicated_ip_pools where user_id like $1", [
+    `${userPrefix}%`,
+  ]);
+  await client.query(
     "delete from api_keys where user_id like $1 or name like $2 or document->>'test_run_id' = $3",
     [`${userPrefix}%`, `${apiKeyPrefix}%`, runId],
   );
   await client.query('delete from "session" where user_id like $1', [
+    `${userPrefix}%`,
+  ]);
+  await client.query(
+    `delete from workspace_entitlements
+     where workspace_id in (
+       select id from workspaces where owner_user_id like $1
+       union
+       select workspace_id from workspace_memberships where user_id like $1
+     )`,
+    [`${userPrefix}%`],
+  );
+  await client.query(
+    `delete from workspace_invitations
+     where workspace_id in (
+       select id from workspaces where owner_user_id like $1
+       union
+       select workspace_id from workspace_memberships where user_id like $1
+     )
+     or email like $2`,
+    [`${userPrefix}%`, emailPattern],
+  );
+  await client.query(
+    "delete from workspace_memberships where user_id like $1",
+    [`${userPrefix}%`],
+  );
+  await client.query("delete from workspaces where owner_user_id like $1", [
     `${userPrefix}%`,
   ]);
   await client.query('delete from "account" where user_id like $1', [
@@ -287,6 +391,13 @@ export const test = base.extend<AuthFixtures>({
         sameSite: "Lax",
       },
     ]);
+
+    const sessionResponse = await page.request.get("/api/auth/get-session");
+    expect(sessionResponse.ok()).toBe(true);
+    const sessionBody = (await sessionResponse.json()) as {
+      user?: { id?: string };
+    } | null;
+    expect(sessionBody?.user?.id).toBe(e2eUser.id);
 
     await use(page);
   },
