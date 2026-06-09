@@ -1,5 +1,5 @@
 import { ReceivingList } from "@/components/receiving-list";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 afterEach(cleanup);
@@ -27,6 +27,8 @@ const receivedEmail = {
   from: "customer@example.com",
   to: ["support@inbound.example.com"],
   subject: "Inbound support request",
+  html: "<p>Full HTML body</p>",
+  text: "Full text body",
   status: "received",
   preview: "Can you help us with the onboarding checklist?",
   route_decisions: [
@@ -71,6 +73,28 @@ describe("ReceivingList", () => {
         "Forwarding destinations for support@inbound.example.com",
       ),
     ).toBeDefined();
+  });
+
+  it("opens received email contents from the inbox", () => {
+    render(
+      <ReceivingList
+        domains={[domain]}
+        routes={[route]}
+        forwardingRules={[]}
+        receivedEmails={[receivedEmail]}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Open received email: Inbound support request",
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Text" }));
+
+    expect(screen.getByText("Full text body")).toBeDefined();
+    expect(screen.getAllByText("From").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText("customer@example.com").length).toBe(2);
   });
 
   it("uses development demo data when the inbox and config are empty", () => {

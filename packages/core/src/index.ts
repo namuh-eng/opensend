@@ -66,6 +66,7 @@ export * from "./services/emailDetail";
 export * from "./services/receivedEmail";
 export * from "./services/replyThreading";
 export * from "./services/receivingRoutes";
+export * from "./services/receivingProvisioning";
 export * from "./services/forwardingRules";
 export * from "./services/inboundMime";
 export * from "./services/inboundEmailIngestion";

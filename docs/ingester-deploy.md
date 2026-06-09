@@ -91,8 +91,12 @@ BACKGROUND_WORKER_POLL=true
 INGESTER_JOB_TOKEN=<32+-char-random-bearer-token>
 # Required only when using /events/inbound in production.
 INGESTER_INBOUND_TOKEN=<32+-char-random-bearer-token>
+# Required for hosted-style SES receiving rule provisioning.
+SES_INBOUND_SNS_TOPIC_ARN=arn:aws:sns:<region>:<account>:opensend-inbound-mail
 # Optional allowlist for SES receipt-rule S3 ingestion. Defaults to S3_BUCKET_NAME.
 SES_INBOUND_BUCKET_NAME=<private-raw-mail-bucket>
+# Optional; defaults to opensend-inbound.
+SES_INBOUND_RULE_SET_NAME=opensend-inbound
 ```
 
 For hosted Stripe billing cutover, also set these on the ingester service from
@@ -113,7 +117,7 @@ https://events.yourdomain.com/webhooks/stripe
 
 ## Inbound receiving through SES receipt rules
 
-For hosted receiving, route AWS SES receipt-rule notifications to the ingester instead of building a separate mailbox service. The supported production path is:
+For hosted receiving, OpenSend creates one SES receipt rule per receiving-enabled domain. Route AWS SES receipt-rule notifications to the ingester instead of building a separate mailbox service. The supported production path is:
 
 1. SES receipt rule accepts mail for the receiving domain.
 2. The rule stores the raw MIME object in a private S3 bucket.
@@ -134,27 +138,9 @@ aws sns subscribe \
   --topic-arn <topic-arn> \
   --protocol https \
   --notification-endpoint https://events.yourdomain.com/events/inbound/ses-s3
-
-aws ses create-receipt-rule-set --rule-set-name opensend-inbound
-aws ses set-active-receipt-rule-set --rule-set-name opensend-inbound
-aws ses create-receipt-rule \
-  --rule-set-name opensend-inbound \
-  --rule '{
-    "Name": "opensend-example-com",
-    "Enabled": true,
-    "Recipients": ["example.com"],
-    "Actions": [
-      {
-        "S3Action": {
-          "BucketName": "<private-raw-mail-bucket>",
-          "ObjectKeyPrefix": "ses-inbound/example.com/",
-          "TopicArn": "<topic-arn>"
-        }
-      }
-    ],
-    "ScanEnabled": true
-  }'
 ```
+
+Set `SES_INBOUND_SNS_TOPIC_ARN=<topic-arn>` on the app and ingester. Set `S3_BUCKET_NAME` or `SES_INBOUND_BUCKET_NAME=<private-raw-mail-bucket>` on the app and ingester. The app creates and activates the `SES_INBOUND_RULE_SET_NAME` rule set, default `opensend-inbound`, and upserts a receipt rule when the dashboard receiving toggle is enabled.
 
 Also grant SES permission to write to the bucket and SNS permission to publish from SES in your account/region. Keep the bucket private; OpenSend stores parsed attachment bodies through its normal storage boundary after ingestion.
 

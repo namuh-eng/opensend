@@ -249,6 +249,123 @@ describe("domain detail service", () => {
     });
   });
 
+  it("provisions hosted receiving before enabling the receiving capability", async () => {
+    const existing = domainRow({
+      status: "verified",
+      capabilities: [
+        { name: "sending", enabled: true },
+        { name: "receiving", enabled: false },
+      ],
+    });
+    const updateCalls: DomainUpdateInput[] = [];
+    const operationOrder: string[] = [];
+    const provisionReceivingDomain = vi.fn<
+      (_input: { domainName: string; region?: string | null }) => Promise<void>
+    >(async () => {
+      operationOrder.push("provision");
+    });
+    const service = createDomainDetailService({
+      getDomainById: async () => existing,
+      provisionReceivingDomain,
+      updateDomainForUser: async (input) => {
+        operationOrder.push("update");
+        updateCalls.push(input);
+        return domainRow({ ...existing, ...input.updates });
+      },
+    });
+
+    const result = await service.updateDomainDetail({
+      id: existing.id,
+      userId: "user-1",
+      updates: { receiving_enabled: true },
+    });
+
+    expect(result.changedFields).toEqual(["capabilities"]);
+    expect(operationOrder).toEqual(["provision", "update"]);
+    expect(provisionReceivingDomain).toHaveBeenCalledWith({
+      domainName: "example.com",
+      region: "us-east-1",
+    });
+    expect(updateCalls).toEqual([
+      {
+        id: existing.id,
+        userId: "user-1",
+        updates: {
+          capabilities: [
+            { name: "sending", enabled: true },
+            { name: "receiving", enabled: true },
+          ],
+        },
+      },
+    ]);
+  });
+
+  it("does not persist receiving_enabled when hosted receiving provisioning fails", async () => {
+    const existing = domainRow({
+      capabilities: [
+        { name: "sending", enabled: true },
+        { name: "receiving", enabled: false },
+      ],
+    });
+    const updateDomainForUser =
+      vi.fn<(_input: DomainUpdateInput) => Promise<DomainRow | undefined>>();
+    const service = createDomainDetailService({
+      getDomainById: async () => existing,
+      provisionReceivingDomain: async () => {
+        throw new Error("missing receiving infra");
+      },
+      updateDomainForUser,
+    });
+
+    await expect(
+      service.updateDomainDetail({
+        id: existing.id,
+        userId: "user-1",
+        updates: { receiving_enabled: true },
+      }),
+    ).rejects.toMatchObject({
+      code: "receiving_provisioning_failed",
+      message: "Failed to provision receiving for this domain",
+    });
+    expect(updateDomainForUser).not.toHaveBeenCalled();
+  });
+
+  it("deprovisions hosted receiving before disabling the receiving capability", async () => {
+    const existing = domainRow({
+      status: "verified",
+      capabilities: [
+        { name: "sending", enabled: true },
+        { name: "receiving", enabled: true },
+      ],
+    });
+    const operationOrder: string[] = [];
+    const deprovisionReceivingDomain = vi.fn<
+      (_input: { domainName: string; region?: string | null }) => Promise<void>
+    >(async () => {
+      operationOrder.push("deprovision");
+    });
+    const service = createDomainDetailService({
+      getDomainById: async () => existing,
+      deprovisionReceivingDomain,
+      updateDomainForUser: async (input) => {
+        operationOrder.push("update");
+        return domainRow({ ...existing, ...input.updates });
+      },
+    });
+
+    await service.updateDomainDetail({
+      id: existing.id,
+      userId: "user-1",
+      updates: { receiving_enabled: false },
+    });
+
+    expect(operationOrder).toEqual(["deprovision", "update"]);
+    expect(deprovisionReceivingDomain).toHaveBeenCalledWith({
+      domainName: "example.com",
+      region: "us-east-1",
+    });
+  });
+
   it("updates tracking subdomain and reconciles the pending CNAME record", async () => {
     const previousTrackingTarget = process.env.TRACKING_CNAME_TARGET;
     process.env.TRACKING_CNAME_TARGET = "track.opensend.example";
