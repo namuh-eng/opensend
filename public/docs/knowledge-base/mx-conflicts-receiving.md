@@ -6,7 +6,7 @@ MX records decide where inbound mail for a domain is delivered. Changing MX reco
 
 - Identify where mail currently lands: Google Workspace, Microsoft 365, a help desk, or another provider.
 - Decide whether OpenSend should receive the whole domain or only a subdomain such as `inbound.example.com`.
-- Confirm your OpenSend deployment has an inbound ingestion path. The default repo documents receiving read APIs and storage, but automatic inbound MIME ingestion is operator-owned until implemented for your environment.
+- Confirm your OpenSend deployment has an inbound ingestion path. Hosted OpenSend provisions SES receipt rules when receiving is enabled; self-hosted deployments must configure the inbound SNS topic, raw MIME bucket, and ingester endpoint first.
 
 ## Safe patterns
 

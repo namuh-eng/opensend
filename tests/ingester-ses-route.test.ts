@@ -34,6 +34,8 @@ const mockRecordTelemetryError = vi.fn();
 const mockSuppressFromSesEvent = vi.fn();
 const mockS3Send = vi.fn();
 const SES_EVENTS_TOPIC_ARN = "arn:aws:sns:us-east-1:123456789012:ses-events";
+const SES_INBOUND_TOPIC_ARN =
+  "arn:aws:sns:us-east-1:123456789012:opensend-inbound-mail";
 
 vi.mock("@aws-sdk/client-s3", () => ({
   GetObjectCommand: class MockGetObjectCommand {
@@ -635,6 +637,51 @@ describe("SES SNS ingestion route", () => {
 
     expect(response.status).toBe(400);
     expect(await response.text()).toContain("S3 bucket is not allowed");
+    expect(mockS3Send).not.toHaveBeenCalled();
+    expect(mockInboundProcess).not.toHaveBeenCalled();
+  });
+
+  it("rejects SES receipt-rule S3 notifications from an unexpected inbound SNS topic", async () => {
+    vi.stubEnv("SES_INBOUND_BUCKET_NAME", "opensend-inbound-mail");
+    vi.stubEnv("SES_INBOUND_SNS_TOPIC_ARN", SES_INBOUND_TOPIC_ARN);
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope({
+      overrides: {
+        TopicArn: "arn:aws:sns:us-east-1:123456789012:attacker-topic",
+      },
+      sesMessage: {
+        eventType: "Received",
+        mail: {
+          messageId: "ses-inbound-msg-3",
+          destination: ["support@example.test"],
+          headers: [],
+        },
+        receipt: {
+          action: {
+            type: "S3",
+            bucketName: "opensend-inbound-mail",
+            objectKey: "mail",
+          },
+        },
+      },
+    });
+
+    const response = await app.request(
+      "http://localhost/events/inbound/ses-s3",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-amz-sns-message-type": "Notification",
+        },
+        body: JSON.stringify(envelope),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain(
+      "Inbound SES S3 SNS topic is not allowed",
+    );
     expect(mockS3Send).not.toHaveBeenCalled();
     expect(mockInboundProcess).not.toHaveBeenCalled();
   });

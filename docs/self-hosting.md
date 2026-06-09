@@ -134,6 +134,9 @@ contributor-facing set; the table below adds the production-only entries.
 | `BACKGROUND_WORKER_POLL=true` | Set on the **ingester** service only. Enables long-poll SQS consumer. |
 | `INGESTER_JOB_TOKEN` | Required 32+ character bearer token for `/jobs/*` endpoints when the scheduler/EventBridge invokes them over HTTP. Docker Compose refuses to start the ingester/scheduler without it. |
 | `INGESTER_INBOUND_TOKEN` | Optional for local development. In production, `/events/inbound` rejects requests unless this bearer token is configured and sent by the inbound provider. |
+| `SES_INBOUND_SNS_TOPIC_ARN` | SNS topic for SES receipt-rule S3 notifications. Required for hosted-style receiving provisioning. Subscribe it to `/events/inbound/ses-s3`. |
+| `SES_INBOUND_BUCKET_NAME` | Optional raw MIME bucket allowlist for SES receipt-rule ingestion. Defaults to `S3_BUCKET_NAME`. |
+| `SES_INBOUND_RULE_SET_NAME` | Optional SES receipt rule set managed by the dashboard receiving toggle. Defaults to `opensend-inbound`. |
 | `INGESTER_SCHEDULER_INTERVAL_SECONDS` | Compose scheduler cadence for `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify`. Default `60`; minimum `10`. |
 | `RATE_LIMIT_BACKEND` | `disabled` (single-process dev), or `redis` (production). |
 | `REDIS_URL` | TLS Redis endpoint, e.g. `rediss://default:<password>@<endpoint>:6379`. Used for rate limiting AND auth/domain metadata cache. |

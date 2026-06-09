@@ -785,19 +785,26 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
   const [autoConfigureError, setAutoConfigureError] = useState<string | null>(
     null,
   );
+  const [capabilityError, setCapabilityError] = useState<string | null>(null);
 
   const handleToggle = useCallback(
     async (field: "sending_enabled" | "receiving_enabled", value: boolean) => {
       try {
+        setCapabilityError(null);
         await apiRequest(`/api/domains/${domain.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ [field]: value }),
         });
         router.refresh();
-      } catch {
+      } catch (error) {
         if (field === "sending_enabled") setSendingEnabled(!value);
         else setReceivingEnabled(!value);
+        setCapabilityError(
+          error instanceof Error
+            ? error.message
+            : "Failed to update domain capability",
+        );
       }
     },
     [domain.id, router],
@@ -855,6 +862,11 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
           {autoConfigureError && (
             <p className="mt-2 text-[12px] text-red-400" role="alert">
               {autoConfigureError}
+            </p>
+          )}
+          {capabilityError && (
+            <p className="mt-2 text-[12px] text-red-400" role="alert">
+              {capabilityError}
             </p>
           )}
         </div>
@@ -978,8 +990,8 @@ function RecordsTab({ domain }: { domain: DomainDetailData }) {
           </button>
         </div>
         <p className="text-[13px] text-fg-2 mb-4">
-          Receive inbound mail for this exact domain after your provider receipt
-          rule is connected to the OpenSend ingester.
+          Receive inbound mail for this exact domain. OpenSend provisions the
+          SES receiving rule; add the MX record below so mail reaches it.
         </p>
         <div className="mb-4 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2">
           <p className="text-[12px] leading-5 text-amber-200">

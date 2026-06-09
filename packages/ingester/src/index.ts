@@ -118,6 +118,7 @@ function getExpectedSesEventsTopicArn(): string | null {
 
 function getExpectedInboundSesS3TopicArn(): string | null {
   const raw = [
+    process.env.SES_INBOUND_SNS_TOPIC_ARN,
     process.env.INBOUND_SES_S3_SNS_TOPIC_ARN,
     process.env.SES_INBOUND_S3_SNS_TOPIC_ARN,
     process.env.SES_EVENTS_SNS_TOPIC_ARN,
