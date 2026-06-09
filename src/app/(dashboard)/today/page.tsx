@@ -417,6 +417,39 @@ export default async function TodayPage() {
   const bouncedSpark = hourly.map((h) => h.bounced);
   const chartMax = Math.max(1, ...sentSpark);
   const chartTotal = hourly.reduce((sum, bucket) => sum + bucket.sent, 0);
+  const chartInsetTop = 8;
+  const chartInsetBottom = 14;
+  const chartHeight = 100;
+  const chartUsableHeight = chartHeight - chartInsetTop - chartInsetBottom;
+  const toChartPoints = (values: number[]) =>
+    values.map((value, index) => {
+      const x = values.length <= 1 ? 0 : (index / (values.length - 1)) * 100;
+      const y =
+        chartInsetTop +
+        chartUsableHeight -
+        (Math.max(0, value) / chartMax) * chartUsableHeight;
+      return { x, y };
+    });
+  const toLinePath = (points: Array<{ x: number; y: number }>) =>
+    points
+      .map(
+        (point, index) =>
+          `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(
+            2,
+          )}`,
+      )
+      .join(" ");
+  const sentPoints = toChartPoints(sentSpark);
+  const openedPoints = toChartPoints(openedSpark);
+  const bouncedPoints = toChartPoints(bouncedSpark);
+  const sentLinePath = toLinePath(sentPoints);
+  const openedLinePath = toLinePath(openedPoints);
+  const bouncedLinePath = toLinePath(bouncedPoints);
+  const sentAreaPath = sentPoints.length
+    ? `M ${sentPoints[0]?.x.toFixed(2)} ${chartHeight} L ${sentLinePath.slice(
+        2,
+      )} L ${sentPoints.at(-1)?.x.toFixed(2)} ${chartHeight} Z`
+    : "";
   const deliveryState = getProviderFeedbackMetricState({
     total: stats.total,
     providerFeedbackWired,
@@ -529,40 +562,111 @@ export default async function TodayPage() {
               }
             />
             <div className="mono mt-3 flex items-center justify-between text-[11px] text-fg-4">
-              <span>24h ago</span>
+              <span>00:00</span>
               <span>
                 {chartTotal.toLocaleString()} send
                 {chartTotal === 1 ? "" : "s"} · peak {chartMax.toLocaleString()}
                 /hr
               </span>
-              <span>now</span>
+              <span>24:00</span>
             </div>
-            <div className="mt-2 flex h-[180px] items-end gap-1.5 border-b border-line/70 pb-1">
-              {hourly.map((h, i) => {
-                const sentH = (h.sent / chartMax) * 100;
-                const openH = (h.opened / chartMax) * 100;
-                const bounceH = (h.bounced / chartMax) * 100;
-                return (
-                  <div
-                    // biome-ignore lint/suspicious/noArrayIndexKey: hour buckets are stable ordinals
-                    key={i}
-                    className="group relative flex flex-1 flex-col justify-end gap-px"
+            <div className="relative mt-2 h-[220px] overflow-hidden">
+              <svg
+                aria-label="Hourly sends chart"
+                className="absolute inset-0 h-full w-full"
+                preserveAspectRatio="none"
+                role="img"
+                viewBox="0 0 100 100"
+              >
+                <defs>
+                  <linearGradient
+                    id="today-sent-area"
+                    x1="0"
+                    x2="0"
+                    y1="0"
+                    y2="1"
                   >
-                    <div
-                      className="w-full rounded-sm bg-accent/85 transition-opacity group-hover:opacity-100"
-                      style={{ height: `${sentH}%`, opacity: 0.85 }}
+                    <stop
+                      offset="0%"
+                      stopColor="var(--accent)"
+                      stopOpacity="0.26"
                     />
-                    <div
-                      className="w-full rounded-sm bg-violet/60"
-                      style={{ height: `${openH * 0.45}%` }}
+                    <stop
+                      offset="100%"
+                      stopColor="var(--accent)"
+                      stopOpacity="0.03"
                     />
-                    <div
-                      className="w-full rounded-sm bg-red/70"
-                      style={{ height: `${bounceH * 0.45}%` }}
-                    />
-                  </div>
-                );
-              })}
+                  </linearGradient>
+                </defs>
+                {[22, 40, 58, 76].map((y) => (
+                  <line
+                    key={y}
+                    stroke="rgba(255,255,255,0.06)"
+                    strokeDasharray="1.5 2.5"
+                    strokeWidth="0.25"
+                    vectorEffect="non-scaling-stroke"
+                    x1="0"
+                    x2="100"
+                    y1={y}
+                    y2={y}
+                  />
+                ))}
+                {sentAreaPath && (
+                  <path d={sentAreaPath} fill="url(#today-sent-area)" />
+                )}
+                <path
+                  d={sentLinePath}
+                  fill="none"
+                  stroke="var(--accent)"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="0.8"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <path
+                  d={openedLinePath}
+                  fill="none"
+                  stroke="var(--violet)"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="0.65"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <path
+                  d={bouncedLinePath}
+                  fill="none"
+                  stroke="var(--red)"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeOpacity="0.72"
+                  strokeWidth="0.55"
+                  vectorEffect="non-scaling-stroke"
+                />
+                {sentPoints.map((point, index) => (
+                  <circle
+                    // biome-ignore lint/suspicious/noArrayIndexKey: hour buckets are stable ordinals
+                    key={index}
+                    className="opacity-0 transition-opacity hover:opacity-100"
+                    cx={point.x}
+                    cy={point.y}
+                    fill="var(--accent)"
+                    r="1.2"
+                  >
+                    <title>
+                      {`${hourly[index]?.sent ?? 0} sent · ${
+                        hourly[index]?.opened ?? 0
+                      } opened · ${hourly[index]?.bounced ?? 0} bounced`}
+                    </title>
+                  </circle>
+                ))}
+              </svg>
+              <div className="mono pointer-events-none absolute inset-x-0 bottom-0 flex justify-between border-t border-line/70 pt-2 text-[11px] text-fg-4">
+                <span>00:00</span>
+                <span>06:00</span>
+                <span>12:00</span>
+                <span>18:00</span>
+                <span>24:00</span>
+              </div>
             </div>
             {stats.total === 0 && (
               <div className="mono mt-3 text-[11.5px] text-fg-4">
