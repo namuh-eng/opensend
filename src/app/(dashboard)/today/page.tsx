@@ -18,7 +18,9 @@ import {
 } from "@/lib/dashboard-provider-feedback";
 import { db } from "@/lib/db";
 import { domains, emailEvents, emails } from "@/lib/db/schema";
+import { getTodayApiBaseUrl } from "@/lib/today-dashboard";
 import { desc, eq, sql } from "drizzle-orm";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -251,6 +253,7 @@ async function loadRecentSenderDomains(
 async function loadDomainReputation(
   userId: string,
 ): Promise<DomainReputationRow[]> {
+  const since = new Date(Date.now() - 24 * HOUR_MS);
   try {
     const result = await db.execute(sql`
       SELECT
@@ -266,6 +269,7 @@ async function loadDomainReputation(
       FROM ${domains} d
       LEFT JOIN ${emails} e
         ON e.user_id = d.user_id
+       AND e.created_at >= ${since}
        AND (
          lower(e.from) LIKE '%@' || lower(d.name)
          OR lower(e.from) LIKE '%@' || lower(d.name) || '>'
@@ -350,12 +354,6 @@ function relativeTime(d: Date | string): string {
   return `${Math.floor(ms / 86_400_000)}d`;
 }
 
-function getApiBaseUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (!raw) return "https://your-opensend-host";
-  return raw.replace(/\/$/, "");
-}
-
 export default async function TodayPage() {
   const session = await getServerSession();
   if (!session) redirect("/auth");
@@ -418,6 +416,7 @@ export default async function TodayPage() {
   const openedSpark = hourly.map((h) => h.opened);
   const bouncedSpark = hourly.map((h) => h.bounced);
   const chartMax = Math.max(1, ...sentSpark);
+  const chartTotal = hourly.reduce((sum, bucket) => sum + bucket.sent, 0);
   const deliveryState = getProviderFeedbackMetricState({
     total: stats.total,
     providerFeedbackWired,
@@ -430,7 +429,8 @@ export default async function TodayPage() {
   const deliveryStateLabel = dashboardMetricStateLabel(deliveryState);
   const openStateLabel = dashboardMetricStateLabel(openState);
 
-  const apiBase = getApiBaseUrl();
+  const requestHeaders = await headers();
+  const apiBase = getTodayApiBaseUrl(requestHeaders);
   const apiSendUrl = `${apiBase}/emails`;
   const fromExample = domainRows[0]?.name
     ? `hi@${domainRows[0].name}`
@@ -510,6 +510,7 @@ export default async function TodayPage() {
             <SectionHeader
               kicker="// send volume · last 24h"
               title="Hourly sends"
+              sub="Accepted sends grouped by hour, with opens and bounces overlaid when tracking or provider feedback exists."
               action={
                 <div className="mono flex gap-3.5 text-[11.5px] text-fg-3">
                   <span className="inline-flex items-center gap-1.5">
@@ -527,10 +528,20 @@ export default async function TodayPage() {
                 </div>
               }
             />
-            <div className="mt-3 flex h-[180px] items-end gap-1.5">
+            <div className="mono mt-3 flex items-center justify-between text-[11px] text-fg-4">
+              <span>24h ago</span>
+              <span>
+                {chartTotal.toLocaleString()} send
+                {chartTotal === 1 ? "" : "s"} · peak {chartMax.toLocaleString()}
+                /hr
+              </span>
+              <span>now</span>
+            </div>
+            <div className="mt-2 flex h-[180px] items-end gap-1.5 border-b border-line/70 pb-1">
               {hourly.map((h, i) => {
                 const sentH = (h.sent / chartMax) * 100;
                 const openH = (h.opened / chartMax) * 100;
+                const bounceH = (h.bounced / chartMax) * 100;
                 return (
                   <div
                     // biome-ignore lint/suspicious/noArrayIndexKey: hour buckets are stable ordinals
@@ -544,6 +555,10 @@ export default async function TodayPage() {
                     <div
                       className="w-full rounded-sm bg-violet/60"
                       style={{ height: `${openH * 0.45}%` }}
+                    />
+                    <div
+                      className="w-full rounded-sm bg-red/70"
+                      style={{ height: `${bounceH * 0.45}%` }}
                     />
                   </div>
                 );
@@ -608,6 +623,7 @@ export default async function TodayPage() {
             <SectionHeader
               kicker="// deliverability"
               title="Reputation by domain"
+              sub="Last-24h provider feedback from accepted sends and SES/SNS lifecycle events."
               action={
                 <Link
                   href="/domains"
