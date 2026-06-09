@@ -1,6 +1,6 @@
 # Receiving Routing
 
-Receiving routes decide which stored inbox target should own an inbound recipient on a verified receiving domain. They do not forward mail, send replies, or create provider DNS records.
+Receiving routes decide which stored inbox target should own an inbound recipient on a verified receiving domain. They do not forward mail, send replies, or create DNS records.
 
 ## Route types
 
@@ -33,4 +33,4 @@ Received email rows can store `route_decisions`, one decision per recipient. A d
 
 ## Limits of this slice
 
-This routing model is storage and audit infrastructure. Forwarding delivery, threaded replies, provider receipt-rule creation, and DNS automation changes remain operator-owned or future work.
+This routing model is storage and audit infrastructure. Forwarding delivery and threaded replies are separate workflows, and DNS records still need to be added at your DNS provider.

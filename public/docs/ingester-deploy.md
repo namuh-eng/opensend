@@ -10,6 +10,8 @@ Deploy the standalone ingester and queue worker. Provider callbacks should targe
 
 Set `INGESTER_INBOUND_TOKEN` to require `Authorization: Bearer <token>` on inbound MIME notifications. Production ingesters reject `/events/inbound` requests when the token is missing.
 
+For SES receipt-rule receiving, set `SES_INBOUND_SNS_TOPIC_ARN` and `S3_BUCKET_NAME` or `SES_INBOUND_BUCKET_NAME` on the app and ingester, subscribe that SNS topic to `/events/inbound/ses-s3`, and grant SES permission to write raw MIME objects to the bucket. Hosted-style receiving uses these values to create SES receipt rules when receiving is enabled for a domain.
+
 ## SES delivery feedback
 
 Delivery, bounce, complaint, and delivery-delay metrics require SES configuration sets to publish events to the ingester SNS topic. Set `SES_EVENTS_SNS_TOPIC_ARN` on both the app and ingester services, subscribe that topic to `https://events.yourdomain.com/events/ses`, then run:

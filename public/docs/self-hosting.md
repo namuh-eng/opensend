@@ -64,7 +64,7 @@ Production values to plan before real traffic:
 | Domain DNS | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID` when using automatic DNS setup |
 | Background jobs | `BACKGROUND_JOBS_QUEUE_URL`, `BACKGROUND_JOBS_REQUIRE_QUEUE=true`, `BACKGROUND_WORKER_POLL=true` on the ingester |
 | Scheduler auth | `INGESTER_JOB_TOKEN`, `INGESTER_SCHEDULER_INTERVAL_SECONDS` |
-| Inbound auth | `INGESTER_INBOUND_TOKEN` when `/events/inbound` is exposed |
+| Inbound receiving | `INGESTER_INBOUND_TOKEN` when `/events/inbound` is exposed, plus `SES_INBOUND_SNS_TOPIC_ARN` and `S3_BUCKET_NAME` or `SES_INBOUND_BUCKET_NAME` for SES receipt-rule ingestion |
 | Rate limiting/cache | `RATE_LIMIT_BACKEND=redis`, `REDIS_URL` |
 | Secret encryption | `WEBHOOK_SECRET_ENCRYPTION_KEY`, optional `INTEGRATION_SECRET_ENCRYPTION_KEY`, optional DKIM encryption key variables |
 | Observability | Sentry, PostHog, CloudWatch, or OTel variables you explicitly configure |
@@ -127,8 +127,9 @@ Before sending real production traffic:
 3. Confirm the ingester `/health` endpoint returns healthy.
 4. Send a real SES-backed email and confirm provider success.
 5. Confirm SES/SNS events reach `/events/ses`.
-6. Confirm scheduled jobs run with the same `INGESTER_JOB_TOKEN` configured on the scheduler and ingester.
-7. Confirm rate limiting, queue, integration encryption, and secret-manager variables are set for shared deployments.
+6. If using receiving, confirm the inbound SNS topic reaches `/events/inbound/ses-s3` and SES can write raw MIME to the configured bucket.
+7. Confirm scheduled jobs run with the same `INGESTER_JOB_TOKEN` configured on the scheduler and ingester.
+8. Confirm rate limiting, queue, integration encryption, and secret-manager variables are set for shared deployments.
 
 Useful local checks:
 

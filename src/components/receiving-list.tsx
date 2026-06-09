@@ -1,6 +1,7 @@
 "use client";
 
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
+import { Modal } from "@/components/modal";
 import { StatusBadge } from "@/components/status-badge";
 import {
   Forward,
@@ -70,6 +71,8 @@ export interface ReceivedEmailItem {
   from: string;
   to: string[];
   subject: string;
+  html?: string | null;
+  text?: string | null;
   status: string;
   preview: string | null;
   route_decisions: ReceivedRouteDecision[];
@@ -176,6 +179,8 @@ const demoReceivedEmails: ReceivedEmailItem[] = [
     from: "maya@customer.example",
     to: ["hello@inbound.opliora.com"],
     subject: "Can you confirm our onboarding window?",
+    html: "<p>We are ready to start the workspace migration next week.</p><p>Could you confirm the DNS and forwarding path before Friday?</p>",
+    text: "We are ready to start the workspace migration next week. Could you confirm the DNS and forwarding path before Friday?",
     status: "received",
     preview:
       "We are ready to start the workspace migration next week. Could you confirm the DNS and forwarding path before Friday?",
@@ -201,6 +206,8 @@ const demoReceivedEmails: ReceivedEmailItem[] = [
     from: "alerts@aws.amazon.com",
     to: ["help@support.namuh.co"],
     subject: "SES receipt rule notification",
+    html: null,
+    text: "Receipt rule processed the inbound message and stored the raw MIME object in the configured bucket.",
     status: "received",
     preview:
       "Receipt rule processed the inbound message and stored the raw MIME object in the configured bucket.",
@@ -226,6 +233,8 @@ const demoReceivedEmails: ReceivedEmailItem[] = [
     from: "alex@partner.example",
     to: ["reply+demo-thread@inbound.opliora.com"],
     subject: "Re: launch checklist",
+    html: "<p>Looks good. We updated the launch copy and sent the test cases back over for review.</p>",
+    text: "Looks good. We updated the launch copy and sent the test cases back over for review.",
     status: "received",
     preview:
       "Looks good. We updated the launch copy and sent the test cases back over for review.",
@@ -611,6 +620,10 @@ function Metric({
 }
 
 function ReceivedInboxTable({ emails }: { emails: ReceivedEmailItem[] }) {
+  const [selectedEmail, setSelectedEmail] = useState<ReceivedEmailItem | null>(
+    null,
+  );
+
   if (emails.length === 0) {
     return (
       <div className="rounded-lg border border-line bg-black px-6 py-14 text-center">
@@ -626,104 +639,215 @@ function ReceivedInboxTable({ emails }: { emails: ReceivedEmailItem[] }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-line bg-black">
-      <table className="w-full">
-        <thead>
-          <tr className="border-b border-line">
-            <th className="mono px-4 py-3 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
-              From
-            </th>
-            <th className="mono px-4 py-3 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
-              To
-            </th>
-            <th className="mono px-4 py-3 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
-              Route
-            </th>
-            <th className="mono px-4 py-3 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
-              Subject
-            </th>
-            <th className="mono px-4 py-3 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
-              Received
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {emails.map((email) => (
-            <tr
-              key={email.id}
-              className="border-b border-line transition-colors last:border-b-0 hover:bg-bg-2"
-            >
-              <td className="px-4 py-3 text-[13.5px] text-fg">
-                <div className="flex min-w-[180px] items-center gap-2.5">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-semibold text-accent">
-                    {email.from.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="truncate">{email.from}</div>
-                    <div className="mt-1 flex items-center gap-2">
-                      <StatusBadge
-                        status={statusLabel(email.status)}
-                        variant={statusVariant(email.status)}
-                      />
-                      {email.demo && (
-                        <span className="text-[11px] text-fg-3">Demo</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </td>
-              <td className="px-4 py-3 text-[13px] text-fg-2">
-                <div className="max-w-[220px] truncate">
-                  {primaryRecipient(email)}
-                </div>
-                {email.to.length > 1 && (
-                  <div className="mt-1 text-[12px] text-fg-3">
-                    +{email.to.length - 1} more
-                  </div>
-                )}
-              </td>
-              <td className="px-4 py-3">
-                <div className="flex flex-col gap-1">
-                  <StatusBadge
-                    status={routeDecisionLabel(email)}
-                    variant={routeDecisionVariant(email)}
-                  />
-                  {email.reply_match_status === "matched" && (
-                    <span className="text-[12px] text-fg-3">
-                      Thread matched
-                    </span>
-                  )}
-                </div>
-              </td>
-              <td className="px-4 py-3">
-                <div className="max-w-[360px]">
-                  <div className="truncate text-[13.5px] text-fg">
-                    {email.subject}
-                  </div>
-                  {email.preview && (
-                    <div className="mt-1 line-clamp-1 text-[12.5px] text-fg-3">
-                      {email.preview}
-                    </div>
-                  )}
-                  {email.attachment_count > 0 && (
-                    <div className="mt-1 flex items-center gap-1 text-[12px] text-fg-3">
-                      <Paperclip aria-hidden className="h-3.5 w-3.5" />
-                      {email.attachment_count} attachment
-                      {email.attachment_count === 1 ? "" : "s"}
-                    </div>
-                  )}
-                </div>
-              </td>
-              <td
-                className="mono whitespace-nowrap px-4 py-3 text-[12px] text-fg-3"
-                title={new Date(email.created_at).toLocaleString()}
-              >
-                {formatRelativeTime(email.created_at)}
-              </td>
+    <>
+      <div className="overflow-hidden rounded-lg border border-line bg-black">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-line">
+              <th className="mono px-4 py-3 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
+                From
+              </th>
+              <th className="mono px-4 py-3 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
+                To
+              </th>
+              <th className="mono px-4 py-3 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
+                Route
+              </th>
+              <th className="mono px-4 py-3 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
+                Subject
+              </th>
+              <th className="mono px-4 py-3 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
+                Received
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {emails.map((email) => (
+              <tr
+                key={email.id}
+                className="border-b border-line transition-colors last:border-b-0 hover:bg-bg-2"
+              >
+                <td className="px-4 py-3 text-[13.5px] text-fg">
+                  <div className="flex min-w-[180px] items-center gap-2.5">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent/15 text-[11px] font-semibold text-accent">
+                      {email.from.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate">{email.from}</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <StatusBadge
+                          status={statusLabel(email.status)}
+                          variant={statusVariant(email.status)}
+                        />
+                        {email.demo && (
+                          <span className="text-[11px] text-fg-3">Demo</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-[13px] text-fg-2">
+                  <div className="max-w-[220px] truncate">
+                    {primaryRecipient(email)}
+                  </div>
+                  {email.to.length > 1 && (
+                    <div className="mt-1 text-[12px] text-fg-3">
+                      +{email.to.length - 1} more
+                    </div>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-col gap-1">
+                    <StatusBadge
+                      status={routeDecisionLabel(email)}
+                      variant={routeDecisionVariant(email)}
+                    />
+                    {email.reply_match_status === "matched" && (
+                      <span className="text-[12px] text-fg-3">
+                        Thread matched
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    className="max-w-[360px] text-left"
+                    aria-label={`Open received email: ${email.subject}`}
+                    onClick={() => setSelectedEmail(email)}
+                  >
+                    <span className="block truncate text-[13.5px] text-fg">
+                      {email.subject}
+                    </span>
+                    {email.preview && (
+                      <span className="mt-1 block line-clamp-1 text-[12.5px] text-fg-3">
+                        {email.preview}
+                      </span>
+                    )}
+                    {email.attachment_count > 0 && (
+                      <span className="mt-1 flex items-center gap-1 text-[12px] text-fg-3">
+                        <Paperclip aria-hidden className="h-3.5 w-3.5" />
+                        {email.attachment_count} attachment
+                        {email.attachment_count === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </button>
+                </td>
+                <td
+                  className="mono whitespace-nowrap px-4 py-3 text-[12px] text-fg-3"
+                  title={new Date(email.created_at).toLocaleString()}
+                >
+                  {formatRelativeTime(email.created_at)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <ReceivedEmailModal
+        email={selectedEmail}
+        onClose={() => setSelectedEmail(null)}
+      />
+    </>
+  );
+}
+
+function ReceivedEmailModal({
+  email,
+  onClose,
+}: {
+  email: ReceivedEmailItem | null;
+  onClose: () => void;
+}) {
+  const [view, setView] = useState<"html" | "text">("html");
+  const hasHtml = Boolean(email?.html);
+  const hasText = Boolean(email?.text);
+  const activeView = hasHtml && view === "html" ? "html" : "text";
+
+  return (
+    <Modal
+      open={Boolean(email)}
+      onClose={onClose}
+      title={email?.subject ?? "Received email"}
+    >
+      {email && (
+        <div className="space-y-4">
+          <div className="grid gap-2 text-[12.5px] text-fg-2 sm:grid-cols-2">
+            <EmailMeta label="From" value={email.from} />
+            <EmailMeta label="To" value={email.to.join(", ")} />
+            <EmailMeta
+              label="Received"
+              value={new Date(email.created_at).toLocaleString()}
+            />
+            <EmailMeta label="Route" value={routeDecisionLabel(email)} />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={!hasHtml}
+              className={`rounded-md border px-3 py-1.5 text-[12px] transition-colors ${
+                activeView === "html"
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-line text-fg-2 hover:bg-bg-2"
+              } ${!hasHtml ? "cursor-not-allowed opacity-45" : ""}`}
+              onClick={() => setView("html")}
+            >
+              HTML
+            </button>
+            <button
+              type="button"
+              disabled={!hasText}
+              className={`rounded-md border px-3 py-1.5 text-[12px] transition-colors ${
+                activeView === "text"
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-line text-fg-2 hover:bg-bg-2"
+              } ${!hasText ? "cursor-not-allowed opacity-45" : ""}`}
+              onClick={() => setView("text")}
+            >
+              Text
+            </button>
+          </div>
+
+          <div className="max-h-[52vh] overflow-auto rounded-md border border-line bg-black">
+            {activeView === "html" && email.html ? (
+              <iframe
+                title="Received email HTML"
+                sandbox=""
+                srcDoc={email.html}
+                className="min-h-[360px] w-full border-0 bg-white"
+              />
+            ) : email.text ? (
+              <pre className="whitespace-pre-wrap p-4 text-[13px] leading-6 text-fg">
+                {email.text}
+              </pre>
+            ) : (
+              <p className="p-4 text-[13px] text-fg-3">
+                No message body was stored for this received email.
+              </p>
+            )}
+          </div>
+
+          {email.attachment_count > 0 && (
+            <p className="flex items-center gap-2 text-[12.5px] text-fg-3">
+              <Paperclip aria-hidden className="h-3.5 w-3.5" />
+              {email.attachment_count} attachment
+              {email.attachment_count === 1 ? "" : "s"} stored
+            </p>
+          )}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function EmailMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-md border border-line bg-bg-2 px-3 py-2">
+      <div className="mono text-[10px] uppercase tracking-[0.12em] text-fg-3">
+        {label}
+      </div>
+      <div className="mt-1 truncate text-fg">{value}</div>
     </div>
   );
 }

@@ -76,6 +76,10 @@ function internalErrorResponse() {
   return NextResponse.json({ error: "Internal server error" }, { status: 500 });
 }
 
+function provisioningErrorResponse(error: DomainDetailServiceError) {
+  return NextResponse.json({ error: error.message }, { status: 503 });
+}
+
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -167,6 +171,12 @@ export async function PATCH(
       error.code === "not_found"
     ) {
       return notFoundResponse();
+    }
+    if (
+      error instanceof DomainDetailServiceError &&
+      error.code === "receiving_provisioning_failed"
+    ) {
+      return provisioningErrorResponse(error);
     }
 
     console.error("Failed to update domain:", error);
