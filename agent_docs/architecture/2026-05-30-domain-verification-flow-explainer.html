@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OpenSend domain verification — what's broken in prod</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #131923;
+    --border: #1f2937;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --green: #10b981;
+    --amber: #f59e0b;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --purple: #a78bfa;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.55; }
+  main { max-width: 980px; margin: 0 auto; padding: 48px 32px 96px; }
+  h1 { font-size: 32px; margin: 0 0 8px; letter-spacing: -0.5px; }
+  h2 { font-size: 22px; margin: 56px 0 16px; padding-top: 24px; border-top: 1px solid var(--border); }
+  h3 { font-size: 16px; margin: 32px 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+  p { margin: 0 0 12px; }
+  code, .mono { font-family: var(--mono); font-size: 13px; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; }
+  .lede { font-size: 17px; color: #cbd5e1; margin-bottom: 24px; }
+
+  .flow {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+    margin: 24px 0; padding: 24px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  }
+  .step {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 8px;
+    padding: 14px 12px; font-size: 13px; position: relative;
+  }
+  .step strong { display: block; font-size: 14px; margin-bottom: 4px; color: var(--text); }
+  .step span { color: var(--muted); font-size: 12px; }
+
+  .arrow { position: absolute; right: -12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 14px; z-index: 1; }
+  .step:last-child .arrow { display: none; }
+
+  .box {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 24px; margin: 20px 0;
+  }
+  .bad { border-left: 4px solid var(--red); }
+  .good { border-left: 4px solid var(--green); }
+  .warn { border-left: 4px solid var(--amber); }
+  .info { border-left: 4px solid var(--blue); }
+
+  .pill {
+    display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px;
+    font-weight: 600; margin-right: 6px; vertical-align: middle;
+  }
+  .pill.fixed { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid var(--green); }
+  .pill.broken { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid var(--red); }
+  .pill.partial { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid var(--amber); }
+
+  .diagram {
+    display: grid; gap: 0; margin: 24px 0;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 28px; position: relative;
+  }
+  .actor-row { display: grid; grid-template-columns: 140px 1fr; gap: 16px; padding: 16px 0; border-bottom: 1px dashed var(--border); align-items: center; }
+  .actor-row:last-child { border-bottom: none; }
+  .actor {
+    font-weight: 600; color: var(--text); font-size: 14px;
+  }
+  .actor-sub { color: var(--muted); font-size: 12px; display: block; }
+  .messages { display: flex; flex-direction: column; gap: 8px; }
+  .msg { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; font-size: 13px; }
+  .msg.broken-link { border: 1px dashed var(--red); color: #fca5a5; }
+  .msg.broken-link::before { content: "✗ "; color: var(--red); font-weight: 700; }
+  .msg.ok::before { content: "✓ "; color: var(--green); font-weight: 700; }
+
+  table {
+    width: 100%; border-collapse: collapse; margin: 16px 0;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  }
+  th, td { padding: 12px 16px; text-align: left; font-size: 14px; border-bottom: 1px solid var(--border); }
+  th { background: rgba(255,255,255,0.03); color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+  tr:last-child td { border-bottom: none; }
+
+  .timeline {
+    list-style: none; padding: 0; margin: 24px 0;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  }
+  .timeline li {
+    padding: 16px 24px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 80px 1fr; gap: 16px; align-items: start;
+  }
+  .timeline li:last-child { border-bottom: none; }
+  .time { color: var(--muted); font-family: var(--mono); font-size: 12px; padding-top: 2px; }
+  .what { font-size: 14px; }
+  .what em { color: var(--muted); font-style: normal; display: block; margin-top: 4px; font-size: 13px; }
+
+  .heart {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle;
+  }
+  .heart.alive { background: var(--green); box-shadow: 0 0 0 0 rgba(16,185,129,0.5); animation: pulse 1.6s infinite; }
+  .heart.dead  { background: var(--red); }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); }
+    70%  { box-shadow: 0 0 0 8px rgba(16,185,129,0); }
+    100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+  }
+
+  .ascii { font-family: var(--mono); font-size: 12px; line-height: 1.4; background: rgba(0,0,0,0.3); padding: 16px; border-radius: 8px; border: 1px solid var(--border); overflow-x: auto; white-space: pre; color: #cbd5e1; }
+
+  .ratio-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin: 16px 0; }
+  .ratio-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .ratio-card h4 { margin: 0 0 8px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .ratio-card .num { font-size: 28px; font-weight: 700; font-family: var(--mono); }
+  .ratio-card.good .num { color: var(--green); }
+  .ratio-card.bad .num { color: var(--red); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Why your domain stays "Pending" — the actual story</h1>
+  <p class="lede">You asked: <em>"what's the problem we're trying to solve?"</em>. This page walks through it. There are <strong>two</strong> bugs, not one. We shipped a fix for the first. The second is still broken — and now we can see it.</p>
+
+  <h2>1. The happy-path flow (what should happen)</h2>
+
+  <p>When you add a domain to OpenSend, here's the sequence that <em>should</em> turn it Verified within ~60 seconds of DNS propagation:</p>
+
+  <div class="flow">
+    <div class="step"><strong>1.</strong><span>You add a domain in dashboard</span><span class="arrow">→</span></div>
+    <div class="step"><strong>2.</strong><span>OpenSend tells AWS SES to track it</span><span class="arrow">→</span></div>
+    <div class="step"><strong>3.</strong><span>SES generates DNS records you need to add</span><span class="arrow">→</span></div>
+    <div class="step"><strong>4.</strong><span>You add records at your DNS provider</span><span class="arrow">→</span></div>
+    <div class="step"><strong>5.</strong><span>Status flips to "Verified"</span></div>
+  </div>
+
+  <p>The interesting part is step 5. SES doesn't push you a notification when it has verified a domain. <strong>You have to ask SES, every so often, "is this verified yet?"</strong> That's what the <em>scheduler</em> does — it's a small process that pings every 60 seconds.</p>
+
+  <div class="diagram">
+    <h3 style="margin-top:0">The verification loop, every 60s</h3>
+    <div class="actor-row">
+      <div class="actor">Scheduler<span class="actor-sub">runs every 60s</span></div>
+      <div class="messages">
+        <div class="msg ok">POST <code>/jobs/domain-verify</code> → Ingester</div>
+      </div>
+    </div>
+    <div class="actor-row">
+      <div class="actor">Ingester<span class="actor-sub">does the reconcile</span></div>
+      <div class="messages">
+        <div class="msg ok">Reads pending domains from Postgres</div>
+        <div class="msg ok">For each: asks SES "is this verified?"</div>
+        <div class="msg ok">If yes → updates Postgres status to "verified"</div>
+        <div class="msg ok">Tells Redis to forget the old cached "pending" value</div>
+      </div>
+    </div>
+    <div class="actor-row">
+      <div class="actor">Dashboard<span class="actor-sub">next time you refresh</span></div>
+      <div class="messages">
+        <div class="msg ok">Reads from Redis → MISS → reads fresh from Postgres → sees "verified"</div>
+      </div>
+    </div>
+  </div>
+
+  <h2>2. Bug #1 — the cache invalidation hole <span class="pill fixed">FIXED in #578</span></h2>
+
+  <div class="box bad">
+    <p><strong>The bug:</strong> the ingester DID update Postgres correctly. But it called a "tell Redis to forget" function that was secretly a no-op.</p>
+    <p>How that happened: the function was passed in as a dependency. The dependency had a default value of <code>async () =&gt; {}</code> — an empty function. When the ingester forgot to pass in the real one, it silently used the empty one. <strong>Cache never got cleared. Dashboard kept serving stale "Pending".</strong></p>
+  </div>
+
+  <h3>The fix in #578</h3>
+  <ol style="padding-left: 20px;">
+    <li>Made the "tell Redis to forget" dependency <strong>required</strong> — you can't construct the service without it. Code that forgets now fails to compile.</li>
+    <li>Deleted the global "convenience" instance that had the bug baked in.</li>
+    <li>Added a heartbeat table in Postgres — every time the scheduler runs a job, it writes "I'm alive" into a row.</li>
+    <li>Added a new endpoint <code>/api/health/scheduler</code> that reads those heartbeats and tells you which jobs aren't firing.</li>
+  </ol>
+
+  <p>That last point matters for Bug #2.</p>
+
+  <h2>2. Bug #2 — the scheduler doesn't exist in prod <span class="pill broken">STILL BROKEN</span></h2>
+
+  <div class="box bad">
+    <p><strong>This is the actual root cause of "domain stuck Pending 20+ min" you reported.</strong> Even with Bug #1 fixed, nothing has changed unless something is calling <code>/jobs/domain-verify</code> every 60s.</p>
+    <p>In docker-compose (for self-hosters) there's a tiny container called <code>scheduler</code> that does this. In your AWS production deploy, <strong>that container doesn't exist</strong>. Your ECS deploy script (<code>scripts/deploy.sh</code>) only deploys two services: the app and the ingester. No scheduler.</p>
+  </div>
+
+  <div class="diagram">
+    <h3 style="margin-top:0">What's actually running in prod right now</h3>
+    <div class="actor-row">
+      <div class="actor"><span class="heart dead"></span>Scheduler<span class="actor-sub">NOT DEPLOYED</span></div>
+      <div class="messages">
+        <div class="msg broken-link">(would POST /jobs/domain-verify every 60s)</div>
+        <div class="msg broken-link">(nothing is doing this in prod)</div>
+      </div>
+    </div>
+    <div class="actor-row">
+      <div class="actor"><span class="heart alive"></span>App<span class="actor-sub">ECS Fargate</span></div>
+      <div class="messages">
+        <div class="msg ok">Serves /api/* + dashboard</div>
+        <div class="msg ok">Reads from Redis cache</div>
+      </div>
+    </div>
+    <div class="actor-row">
+      <div class="actor"><span class="heart alive"></span>Ingester<span class="actor-sub">ECS Fargate</span></div>
+      <div class="messages">
+        <div class="msg ok">Receives SES SNS bounce/complaint webhooks</div>
+        <div class="msg ok">Has /jobs/* endpoints ready</div>
+        <div class="msg broken-link">...but nothing is calling them</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Live proof — your new health endpoint, hit right now</h3>
+  <div class="ascii">$ curl https://opensend.namuh.co/api/health/scheduler
+HTTP 503
+{
+  "scheduler": "missing",
+  "jobs": [
+    { "name": "scheduled-emails", "state": "missing", "last_seen_ms_ago": null, "interval_ms": null },
+    { "name": "webhooks",         "state": "missing", "last_seen_ms_ago": null, "interval_ms": null },
+    { "name": "domain-verify",    "state": "missing", "last_seen_ms_ago": null, "interval_ms": null }
+  ]
+}</div>
+  <p><strong>This is the diagnostic we built for ourselves.</strong> Before #578 deployed, you had no way to know the scheduler wasn't firing — you just saw "domain still pending" with no explanation. Now: HTTP 503 + a list saying exactly which jobs are missing. Bug #2 surfaces itself.</p>
+
+  <h2>3. Why we left Bug #2 unfixed (for now)</h2>
+
+  <p>Fixing it requires touching your AWS infrastructure (Terraform/CDK or ECS task definitions), not application code. That's a different repo and a different deploy path. The three PRs we just merged were code changes only — they fixed Bug #1 cleanly and exposed Bug #2 so you can see it.</p>
+
+  <h3>Three ways to fix Bug #2 (pick one)</h3>
+  <table>
+    <tr><th>Option</th><th>What it is</th><th>Effort</th></tr>
+    <tr>
+      <td><strong>EventBridge Scheduler rules</strong></td>
+      <td>AWS-native cron. Three rules, each POSTs to <code>events.opensend.namuh.co/jobs/&lt;name&gt;</code> every 60s with the bearer token.</td>
+      <td>~30 min in Terraform/CDK. Best long-term fit.</td>
+    </tr>
+    <tr>
+      <td><strong>ECS scheduler service</strong></td>
+      <td>Add a third ECS service running <code>bun /app/job-scheduler.js</code>. Mirrors how docker-compose works for self-hosters.</td>
+      <td>~1 hour. Closest to the existing setup.</td>
+    </tr>
+    <tr>
+      <td><strong>Sidecar container</strong></td>
+      <td>Add the scheduler as a sidecar container in the ingester ECS task definition. Same task as ingester, separate process inside it.</td>
+      <td>~20 min. Tightest coupling, smallest infra change.</td>
+    </tr>
+  </table>
+
+  <h2>4. Summary of what we shipped this session</h2>
+
+  <table>
+    <tr><th>PR</th><th>What it does</th><th>State</th></tr>
+    <tr>
+      <td><strong>#577</strong></td>
+      <td>Dashboard UI: meatball menu wired with Verify/Delete actions; DMARC moved under "Enable Sending" with better copy</td>
+      <td><span class="pill fixed">Merged + deployed</span></td>
+    </tr>
+    <tr>
+      <td><strong>#578</strong></td>
+      <td>Bug #1 fix: cache invalidation contract + scheduler heartbeat table + <code>/api/health/scheduler</code> diagnostic</td>
+      <td><span class="pill fixed">Merged + deployed</span></td>
+    </tr>
+    <tr>
+      <td><strong>#579</strong></td>
+      <td>Go CLI binary (<code>opensend version/health/domains/api-keys/logs/send/doctor</code>) + Bun-vs-Go worker benchmark proving the worker rewrite isn't justified</td>
+      <td><span class="pill fixed">Merged + deployed</span></td>
+    </tr>
+    <tr>
+      <td><strong>(not a PR)</strong></td>
+      <td>Bug #2: the scheduler is not deployed in prod. Needs an infra change.</td>
+      <td><span class="pill broken">Still broken — but visible now</span></td>
+    </tr>
+  </table>
+
+  <h2>5. Bonus: the Go benchmark result that ended the worker-migration question</h2>
+  <p>During this session we debated for ten rounds whether to rewrite the ingester worker in Go for performance. We then built a benchmark and ran it. The result:</p>
+  <div class="ratio-grid">
+    <div class="ratio-card good"><h4>JSON decode SES event</h4><div class="num">3.2× ↑</div>Bun is 3.2× faster than Go</div>
+    <div class="ratio-card good"><h4>HMAC-SHA256 sign</h4><div class="num">1.8× ↓</div>Go is 1.8× faster than Bun</div>
+    <div class="ratio-card"><h4>Fan out 1000 webhook POSTs</h4><div class="num">tie</div>Statistical dead heat — 41ms vs 41ms</div>
+    <div class="ratio-card"><h4>Verdict</h4><div class="num" style="font-size: 16px; line-height: 1.4;">Don't rewrite the worker</div>The real bottleneck is the network, not the runtime.</div>
+  </div>
+
+  <h2>Bottom line</h2>
+  <div class="box info">
+    <p><strong>You came in with one symptom (domain stuck Pending) and we found two distinct bugs causing it.</strong></p>
+    <p>Bug #1 (cache hole) — fixed and deployed.</p>
+    <p>Bug #2 (no scheduler in prod) — exposed by the new diagnostic; needs a 30-minute infra change to fix.</p>
+    <p>You also walked out with: a Go CLI binary, a deleted dead-code skeleton, a benchmark that settled a strategic argument, three learning docs, and an architectural learning about why optional-with-no-op-default DI fields are footguns.</p>
+  </div>
+</main>
+</body>
+</html>

@@ -11,6 +11,7 @@ dist/
 .omc/
 .omx/state/
 .omx/metrics.json
+.handoffs/
 # Track only QA/review-relevant logs; ignore noisy runtime hook logs.
 .omx/logs/*.jsonl
 !.omx/logs/omx-*.jsonl
