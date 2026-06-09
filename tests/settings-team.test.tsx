@@ -106,7 +106,10 @@ describe("TeamTab", () => {
   it("posts an invitation and displays the one-time manual token", async () => {
     const user = userEvent.setup();
     mockFetch.mockImplementation(async (input, init) => {
-      if (input === "/api/invites" && init?.method === "POST") {
+      if (
+        input === "/api/invites?workspace_id=workspace-1" &&
+        init?.method === "POST"
+      ) {
         return jsonResponse(
           {
             id: "invite-created",
@@ -134,8 +137,37 @@ describe("TeamTab", () => {
     expect(await screen.findByText("manual-token-123")).toBeDefined();
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        "/api/invites",
+        "/api/invites?workspace_id=workspace-1",
         expect.objectContaining({ method: "POST" }),
+      );
+    });
+  });
+
+  it("loads the accepted workspace after accepting an invitation", async () => {
+    const user = userEvent.setup();
+    mockFetch.mockImplementation(async (input, init) => {
+      if (input === "/api/invites/accept" && init?.method === "POST") {
+        return jsonResponse({
+          invitation: { id: "invite-accepted" },
+          membership: {
+            id: "membership-accepted",
+            workspace_id: "workspace-invited",
+            role: "member",
+          },
+        });
+      }
+      return jsonResponse(teamResponse());
+    });
+
+    render(<TeamTab />);
+    await screen.findByText("Ada's Workspace");
+
+    await user.type(screen.getByLabelText("Invitation token"), "manual-token");
+    await user.click(screen.getByRole("button", { name: "Accept invitation" }));
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        "/api/invites?workspace_id=workspace-invited",
       );
     });
   });

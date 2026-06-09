@@ -108,6 +108,7 @@ async function authorizeEventRequest(
 ): Promise<EventRouteAuthResult> {
   const auth = await validateApiKey(request.headers.get("authorization"));
   if (!auth) return { ok: false, response: unauthorizedResponse() };
+  if (!auth.userId) return { ok: false, response: unauthorizedResponse() };
   const permissionError = requireFullAccessApiKey(auth);
   if (permissionError !== null) {
     return { ok: false, response: permissionError };

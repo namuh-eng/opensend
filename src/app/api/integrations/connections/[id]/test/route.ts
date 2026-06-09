@@ -1,3 +1,4 @@
+import { integrationConnectionIdSchema } from "@/lib/validation/integrations";
 import { createIntegrationService } from "@opensend/core";
 import {
   authorizeIntegrationRoute,
@@ -16,7 +17,12 @@ export async function POST(
   const auth = await authorizeIntegrationRoute(request);
   if ("response" in auth) return auth.response;
 
-  const { id } = await params;
+  const { id: rawId } = await params;
+  const parsedId = integrationConnectionIdSchema.safeParse(rawId);
+  if (!parsedId.success) {
+    return Response.json({ error: "Invalid integration id" }, { status: 400 });
+  }
+  const id = parsedId.data;
   try {
     const result = await service().sendWebhookTestEvent({
       id,

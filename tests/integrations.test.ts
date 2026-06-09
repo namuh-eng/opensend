@@ -189,6 +189,13 @@ describe("integration connector service", () => {
   it("uses pinned-safe outbound fetch by default for webhook test dispatch", async () => {
     const repository = new MemoryIntegrationRepository();
     const service = createIntegrationService({ repository });
+    const connection = await service.connectWebhook({
+      userId: "user-1",
+      name: "Zapier",
+      webhookUrl: "https://rebind.example.test/zapier/catch",
+      signingSecret: "receiver-secret",
+    });
+
     const lookup = vi
       .spyOn(dns, "lookup")
       .mockImplementation((async () => [
@@ -197,13 +204,6 @@ describe("integration connector service", () => {
     const globalFetch = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response("unsafe global fetch should not run"));
-
-    const connection = await service.connectWebhook({
-      userId: "user-1",
-      name: "Zapier",
-      webhookUrl: "https://rebind.example.test/zapier/catch",
-      signingSecret: "receiver-secret",
-    });
 
     await expect(
       service.sendWebhookTestEvent({
@@ -276,5 +276,34 @@ describe("integration connector service", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("does not dispatch test events for disconnected webhook connections", async () => {
+    const repository = new MemoryIntegrationRepository();
+    const fetchImpl = vi.fn<IntegrationFetch>(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+    }));
+    const service = createIntegrationService({ repository, fetchImpl });
+    const connection = await service.connectWebhook({
+      userId: "user-1",
+      name: "Zapier",
+      webhookUrl: "https://example.com/zapier/catch",
+      signingSecret: "receiver-secret",
+    });
+
+    await service.disconnect({ id: connection.id, userId: "user-1" });
+
+    await expect(
+      service.sendWebhookTestEvent({
+        id: connection.id,
+        userId: "user-1",
+      }),
+    ).rejects.toMatchObject({
+      code: "not_connected",
+      message: "Integration connection is disconnected",
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 });

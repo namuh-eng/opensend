@@ -1,5 +1,8 @@
 import { recordAuditEvent } from "@/lib/audit-events";
-import { updateWebhookIntegrationSchema } from "@/lib/validation/integrations";
+import {
+  integrationConnectionIdSchema,
+  updateWebhookIntegrationSchema,
+} from "@/lib/validation/integrations";
 import { createIntegrationService } from "@opensend/core";
 import {
   authorizeIntegrationRoute,
@@ -18,6 +21,17 @@ function validationResponse(error: { flatten: () => unknown }) {
   );
 }
 
+async function parseConnectionId(
+  params: Promise<{ id: string }>,
+): Promise<string | Response> {
+  const { id } = await params;
+  const parsed = integrationConnectionIdSchema.safeParse(id);
+  if (!parsed.success) {
+    return Response.json({ error: "Invalid integration id" }, { status: 400 });
+  }
+  return parsed.data;
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -25,7 +39,9 @@ export async function GET(
   const auth = await authorizeIntegrationRoute(request);
   if ("response" in auth) return auth.response;
 
-  const { id } = await params;
+  const idOrResponse = await parseConnectionId(params);
+  if (idOrResponse instanceof Response) return idOrResponse;
+  const id = idOrResponse;
   try {
     const connection = await service().getConnection({
       id,
@@ -59,7 +75,9 @@ export async function PATCH(
   const parsed = updateWebhookIntegrationSchema.safeParse(body);
   if (!parsed.success) return validationResponse(parsed.error);
 
-  const { id } = await params;
+  const idOrResponse = await parseConnectionId(params);
+  if (idOrResponse instanceof Response) return idOrResponse;
+  const id = idOrResponse;
   try {
     const connection = await service().updateWebhookConnection({
       id,
@@ -100,7 +118,9 @@ export async function DELETE(
   const auth = await authorizeIntegrationRoute(request);
   if ("response" in auth) return auth.response;
 
-  const { id } = await params;
+  const idOrResponse = await parseConnectionId(params);
+  if (idOrResponse instanceof Response) return idOrResponse;
+  const id = idOrResponse;
   try {
     const connection = await service().disconnect({ id, userId: auth.userId });
 

@@ -409,6 +409,7 @@ function shouldHandleApiCompatibilityAlias(request: NextRequest): boolean {
     isEmailReadAlias(pathname, method);
 
   if (!isAlias) return false;
+  if (isEventsAlias(pathname, method)) return true;
   if (method === "GET") return isApiLikeRequest(request);
   return true;
 }

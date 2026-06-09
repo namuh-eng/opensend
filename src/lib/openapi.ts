@@ -2480,6 +2480,29 @@ export const openApiDocument = {
           ...errorResponses,
         },
       },
+      patch: {
+        tags: ["Dedicated IPs"],
+        summary: "Update a dedicated IP lifecycle record",
+        operationId: "updateDedicatedIpPool",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateDedicatedIpPoolRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Dedicated IP pool updated.",
+            content: jsonContent({
+              $ref: "#/components/schemas/DedicatedIpPool",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
       delete: {
         tags: ["Dedicated IPs"],
         summary: "Retire a dedicated IP lifecycle record",
@@ -2491,6 +2514,149 @@ export const openApiDocument = {
             description: "Pool retired.",
             content: jsonContent({
               $ref: "#/components/schemas/DedicatedIpPoolDeleted",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/integrations": {
+      get: {
+        tags: ["Integrations"],
+        summary: "List integration catalog entries",
+        description:
+          "Returns the shipped integration catalog. Add `connections=true` to list saved connections instead.",
+        operationId: "listIntegrations",
+        security: bearerSecurity,
+        parameters: [
+          {
+            name: "connections",
+            in: "query",
+            description: "When true, list saved integration connections.",
+            schema: { type: "boolean" },
+          },
+        ],
+        responses: {
+          "200": {
+            description: "Integration catalog or connection list.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationCatalogResponse",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/integrations/webhook": {
+      get: {
+        tags: ["Integrations"],
+        summary: "Get webhook integration connection",
+        operationId: "getWebhookIntegration",
+        security: bearerSecurity,
+        responses: {
+          "200": {
+            description: "Webhook connection detail.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationConnectionEnvelope",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+      post: {
+        tags: ["Integrations"],
+        summary: "Connect webhook integration",
+        operationId: "connectWebhookIntegration",
+        security: bearerSecurity,
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/ConnectWebhookIntegrationRequest",
+          }),
+        },
+        responses: {
+          "201": {
+            description: "Webhook connection created.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationConnectionEnvelope",
+            }),
+          },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/integrations/connections/{id}": {
+      get: {
+        tags: ["Integrations"],
+        summary: "Retrieve an integration connection",
+        operationId: "getIntegrationConnection",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Integration connection detail.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationConnectionEnvelope",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      patch: {
+        tags: ["Integrations"],
+        summary: "Update a webhook integration connection",
+        operationId: "updateIntegrationConnection",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        requestBody: {
+          required: true,
+          content: jsonContent({
+            $ref: "#/components/schemas/UpdateWebhookIntegrationRequest",
+          }),
+        },
+        responses: {
+          "200": {
+            description: "Integration connection updated.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationConnectionEnvelope",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+      delete: {
+        tags: ["Integrations"],
+        summary: "Disconnect an integration connection",
+        operationId: "disconnectIntegrationConnection",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Integration connection disconnected.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationConnectionEnvelope",
+            }),
+          },
+          "404": { $ref: "#/components/responses/NotFound" },
+          ...errorResponses,
+        },
+      },
+    },
+    "/api/integrations/connections/{id}/test": {
+      post: {
+        tags: ["Integrations"],
+        summary: "Send a webhook integration test event",
+        operationId: "sendIntegrationTestEvent",
+        security: bearerSecurity,
+        parameters: [idPathParameter],
+        responses: {
+          "200": {
+            description: "Test event delivery result.",
+            content: jsonContent({
+              $ref: "#/components/schemas/IntegrationTestEvent",
             }),
           },
           "404": { $ref: "#/components/responses/NotFound" },
@@ -5257,6 +5423,41 @@ export const openApiDocument = {
         },
         required: ["name"],
       },
+      UpdateDedicatedIpPoolRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 255 },
+          status: {
+            type: "string",
+            enum: [
+              "requested",
+              "provisioned",
+              "warming",
+              "active",
+              "suspended",
+              "retired",
+            ],
+          },
+          provider_pool_name: {
+            type: "string",
+            nullable: true,
+            minLength: 1,
+            maxLength: 255,
+          },
+          ses_pool_name: {
+            type: "string",
+            nullable: true,
+            minLength: 1,
+            maxLength: 255,
+          },
+          scaling_mode: { type: "string", enum: ["STANDARD", "MANAGED"] },
+          operator_notes: {
+            type: "string",
+            nullable: true,
+            maxLength: 4000,
+          },
+        },
+      },
       DedicatedIpPoolDeleted: {
         type: "object",
         properties: {
@@ -5266,6 +5467,116 @@ export const openApiDocument = {
           status: { type: "string", enum: ["retired"] },
         },
         required: ["object", "id", "retired", "status"],
+      },
+      // ── Integrations ─────────────────────────────────────────────
+      IntegrationConnection: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          provider: { type: "string", enum: ["webhook"] },
+          name: { type: "string" },
+          status: { type: "string", enum: ["connected", "disconnected"] },
+          scopes: { type: "array", items: { type: "string" } },
+          config: { type: "object", additionalProperties: true },
+          health: { type: "string", enum: ["unknown", "healthy", "unhealthy"] },
+          last_health_check_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          last_sync_at: { type: "string", format: "date-time", nullable: true },
+          last_event_at: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+          },
+          last_error: { type: "string", nullable: true },
+          created_at: { type: "string", format: "date-time" },
+          updated_at: { type: "string", format: "date-time" },
+        },
+        required: [
+          "id",
+          "provider",
+          "name",
+          "status",
+          "scopes",
+          "config",
+          "health",
+          "created_at",
+          "updated_at",
+        ],
+      },
+      IntegrationConnectionEnvelope: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["integration_connection"] },
+          data: {
+            oneOf: [
+              { $ref: "#/components/schemas/IntegrationConnection" },
+              { type: "null" },
+            ],
+          },
+        },
+        required: ["object", "data"],
+      },
+      IntegrationCatalogItem: {
+        type: "object",
+        properties: {
+          provider: { type: "string", enum: ["webhook"] },
+          name: { type: "string" },
+          description: { type: "string" },
+          status: { type: "string", enum: ["installed", "uninstalled"] },
+          connection: {
+            oneOf: [
+              { $ref: "#/components/schemas/IntegrationConnection" },
+              { type: "null" },
+            ],
+          },
+        },
+        required: ["provider", "name", "description", "status", "connection"],
+      },
+      IntegrationCatalogResponse: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["integration_catalog", "list"] },
+          data: {
+            type: "array",
+            items: {
+              oneOf: [
+                { $ref: "#/components/schemas/IntegrationCatalogItem" },
+                { $ref: "#/components/schemas/IntegrationConnection" },
+              ],
+            },
+          },
+          has_more: { type: "boolean" },
+        },
+        required: ["object", "data"],
+      },
+      ConnectWebhookIntegrationRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 255 },
+          webhook_url: { type: "string", format: "uri", maxLength: 2048 },
+          signing_secret: { type: "string", nullable: true, maxLength: 512 },
+        },
+        required: ["webhook_url"],
+      },
+      UpdateWebhookIntegrationRequest: {
+        type: "object",
+        properties: {
+          name: { type: "string", minLength: 1, maxLength: 255 },
+          webhook_url: { type: "string", format: "uri", maxLength: 2048 },
+          signing_secret: { type: "string", nullable: true, maxLength: 512 },
+        },
+      },
+      IntegrationTestEvent: {
+        type: "object",
+        properties: {
+          object: { type: "string", enum: ["integration_test_event"] },
+          connection: { $ref: "#/components/schemas/IntegrationConnection" },
+          delivery: { type: "object", additionalProperties: true },
+        },
+        required: ["object", "connection", "delivery"],
       },
     },
     responses: {
@@ -5659,13 +5970,23 @@ const audienceSchema = {
   required: ["object", "id", "name"],
 } satisfies JsonSchema;
 
+const audienceListItemSchema = {
+  type: "object",
+  properties: {
+    id: { type: "string" },
+    name: { type: "string" },
+    created_at: { type: "string", format: "date-time" },
+  },
+  required: ["id", "name"],
+} satisfies JsonSchema;
+
 const audienceListSchema = {
   type: "object",
   properties: {
     object: { type: "string" },
     data: {
       type: "array",
-      items: audienceSchema,
+      items: audienceListItemSchema,
     },
     has_more: { type: "boolean" },
   },

@@ -116,6 +116,7 @@ export type IntegrationServiceDependencies = {
 export type IntegrationServiceErrorCode =
   | "not_found"
   | "invalid_provider"
+  | "not_connected"
   | "invalid_config"
   | "unsafe_url"
   | "dispatch_failed";
@@ -471,6 +472,12 @@ export function createIntegrationService({
         throw new IntegrationServiceError(
           "invalid_provider",
           "Only webhook connector test events are supported",
+        );
+      }
+      if (row.status !== "connected") {
+        throw new IntegrationServiceError(
+          "not_connected",
+          "Integration connection is disconnected",
         );
       }
       const credentials = parseCredentials(row.credentialsEnc);

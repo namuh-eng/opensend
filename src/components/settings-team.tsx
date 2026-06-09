@@ -158,6 +158,12 @@ function roleLabel(role: WorkspaceRole): string {
   return role.charAt(0).toUpperCase() + role.slice(1);
 }
 
+function workspaceUrl(path: string, workspaceId: string | null): string {
+  if (!workspaceId) return path;
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  return `${path}?${params.toString()}`;
+}
+
 function labelFromString(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -183,6 +189,7 @@ function buttonClass(
 export function TeamTab() {
   const { data: session, isPending } = authClient.useSession();
   const user = session?.user;
+  const userId = user?.id ?? null;
   const [team, setTeam] = useState<TeamResponse | null>(null);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -195,33 +202,36 @@ export function TeamTab() {
   const [draftRoles, setDraftRoles] = useState<DraftRoles>({});
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
-  const loadTeam = useCallback(async () => {
-    if (!user) return;
-    setLoadingTeam(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/invites");
-      if (!response.ok) {
-        throw new Error("Could not load team members.");
+  const loadTeam = useCallback(
+    async (workspaceId: string | null = null) => {
+      if (!userId) return;
+      setLoadingTeam(true);
+      setError(null);
+      try {
+        const response = await fetch(workspaceUrl("/api/invites", workspaceId));
+        if (!response.ok) {
+          throw new Error("Could not load team members.");
+        }
+        const parsed = parseTeamResponse(await response.json());
+        if (!parsed) throw new Error("Team response was not recognized.");
+        setTeam(parsed);
+        setDraftRoles(
+          Object.fromEntries(
+            parsed.data.map((member) => [member.membership_id, member.role]),
+          ),
+        );
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Could not load team members.",
+        );
+      } finally {
+        setLoadingTeam(false);
       }
-      const parsed = parseTeamResponse(await response.json());
-      if (!parsed) throw new Error("Team response was not recognized.");
-      setTeam(parsed);
-      setDraftRoles(
-        Object.fromEntries(
-          parsed.data.map((member) => [member.membership_id, member.role]),
-        ),
-      );
-    } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Could not load team members.",
-      );
-    } finally {
-      setLoadingTeam(false);
-    }
-  }, [user]);
+    },
+    [userId],
+  );
 
   useEffect(() => {
     void loadTeam();
@@ -243,7 +253,8 @@ export function TeamTab() {
     setMessage(null);
     setManualToken(null);
     try {
-      const response = await fetch("/api/invites", {
+      const workspaceId = team?.workspace.id ?? null;
+      const response = await fetch(workspaceUrl("/api/invites", workspaceId), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
@@ -264,7 +275,7 @@ export function TeamTab() {
       setMessage(
         "Invitation created. Copy the manual token and share it securely.",
       );
-      await loadTeam();
+      await loadTeam(workspaceId);
     } catch (inviteError) {
       setError(
         inviteError instanceof Error
@@ -289,17 +300,27 @@ export function TeamTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: acceptToken }),
       });
+      const body = (await response.json()) as Record<string, unknown>;
       if (!response.ok) {
-        const body = (await response.json()) as Record<string, unknown>;
         throw new Error(
           typeof body.error === "string"
             ? body.error
             : "Could not accept invitation.",
         );
       }
+      const membership =
+        body.membership &&
+        typeof body.membership === "object" &&
+        !Array.isArray(body.membership)
+          ? (body.membership as Record<string, unknown>)
+          : null;
+      const acceptedWorkspaceId =
+        typeof membership?.workspace_id === "string"
+          ? membership.workspace_id
+          : null;
       setAcceptToken("");
       setMessage("Invitation accepted. Your workspace membership is active.");
-      await loadTeam();
+      await loadTeam(acceptedWorkspaceId);
     } catch (acceptError) {
       setError(
         acceptError instanceof Error
@@ -316,9 +337,13 @@ export function TeamTab() {
     setError(null);
     setMessage(null);
     try {
-      const response = await fetch(`/api/invites/${invitation.id}`, {
-        method: "DELETE",
-      });
+      const workspaceId = team?.workspace.id ?? null;
+      const response = await fetch(
+        workspaceUrl(`/api/invites/${invitation.id}`, workspaceId),
+        {
+          method: "DELETE",
+        },
+      );
       if (!response.ok) {
         const body = (await response.json()) as Record<string, unknown>;
         throw new Error(
@@ -328,7 +353,7 @@ export function TeamTab() {
         );
       }
       setMessage(`Revoked invitation for ${invitation.email}.`);
-      await loadTeam();
+      await loadTeam(workspaceId);
     } catch (revokeError) {
       setError(
         revokeError instanceof Error
@@ -347,7 +372,10 @@ export function TeamTab() {
     setMessage(null);
     try {
       const response = await fetch(
-        `/api/workspace-members/${member.membership_id}`,
+        workspaceUrl(
+          `/api/workspace-members/${member.membership_id}`,
+          team?.workspace.id ?? null,
+        ),
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -363,7 +391,7 @@ export function TeamTab() {
         );
       }
       setMessage(`Updated ${member.email} to ${roleLabel(role)}.`);
-      await loadTeam();
+      await loadTeam(team?.workspace.id ?? null);
     } catch (roleError) {
       setError(
         roleError instanceof Error
@@ -380,8 +408,12 @@ export function TeamTab() {
     setError(null);
     setMessage(null);
     try {
+      const workspaceId = team?.workspace.id ?? null;
       const response = await fetch(
-        `/api/workspace-members/${member.membership_id}`,
+        workspaceUrl(
+          `/api/workspace-members/${member.membership_id}`,
+          workspaceId,
+        ),
         {
           method: "DELETE",
         },
@@ -395,7 +427,7 @@ export function TeamTab() {
         );
       }
       setMessage(`Removed ${member.email} from the workspace.`);
-      await loadTeam();
+      await loadTeam(workspaceId);
     } catch (removeError) {
       setError(
         removeError instanceof Error

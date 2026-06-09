@@ -59,7 +59,7 @@ CREATE INDEX "workspace_memberships_workspace_role_idx" ON "workspace_membership
 CREATE UNIQUE INDEX "workspaces_owner_user_id_idx" ON "workspaces" USING btree ("owner_user_id");--> statement-breakpoint
 CREATE INDEX "workspaces_created_at_idx" ON "workspaces" USING btree ("created_at");--> statement-breakpoint
 INSERT INTO "workspaces" ("name", "owner_user_id")
-SELECT COALESCE(NULLIF("name", ''), 'Personal') || '''s Workspace', "id"
+SELECT LEFT(COALESCE(NULLIF("name", ''), 'Personal'), 243) || '''s Workspace', "id"
 FROM "user"
 ON CONFLICT ("owner_user_id") DO NOTHING;
 --> statement-breakpoint

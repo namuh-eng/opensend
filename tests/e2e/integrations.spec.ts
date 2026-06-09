@@ -84,6 +84,11 @@ test("webhook integration API and dashboard stay tenant scoped", async ({
   );
   expect(otherDisconnect.status()).toBe(404);
 
+  const malformedDetail = await e2eApiRequest.get(
+    "/api/integrations/connections/not-a-uuid",
+  );
+  expect(malformedDetail.status()).toBe(400);
+
   await page.goto("/integrations");
   await expect(
     page.getByRole("heading", { name: "App integrations" }),
@@ -105,6 +110,11 @@ test("webhook integration API and dashboard stay tenant scoped", async ({
     data: { status: string };
   };
   expect(disconnected.data.status).toBe("disconnected");
+
+  const disconnectedTest = await e2eApiRequest.post(
+    `/api/integrations/connections/${created.data.id}/test`,
+  );
+  expect(disconnectedTest.status()).toBe(422);
 
   const auditRows = await e2eDb.query<{
     action: string;

@@ -4,6 +4,7 @@ import {
   getServerSession,
   unauthorizedResponse,
 } from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
 import { domainRouteParamsSchema } from "@/lib/validation/domains";
@@ -40,6 +41,9 @@ async function resolveUserId(req: Request): Promise<string | Response> {
     req.headers.get("authorization"),
   );
   if (!auth) return unauthorizedResponse();
+
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
+  if (permissionError) return permissionError;
 
   if ("dashboard" in auth) {
     const session = await getServerSession();
