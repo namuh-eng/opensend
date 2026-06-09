@@ -18,7 +18,10 @@ import {
 } from "@/lib/dashboard-provider-feedback";
 import { db } from "@/lib/db";
 import { domains, emailEvents, emails } from "@/lib/db/schema";
-import { getTodayApiBaseUrl } from "@/lib/today-dashboard";
+import {
+  getTodayApiBaseUrl,
+  getTodayChartSummary,
+} from "@/lib/today-dashboard";
 import { desc, eq, sql } from "drizzle-orm";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -415,8 +418,11 @@ export default async function TodayPage() {
   const deliveredSpark = hourly.map((h) => h.delivered);
   const openedSpark = hourly.map((h) => h.opened);
   const bouncedSpark = hourly.map((h) => h.bounced);
-  const chartMax = Math.max(1, ...sentSpark);
-  const chartTotal = hourly.reduce((sum, bucket) => sum + bucket.sent, 0);
+  const chartSummary = getTodayChartSummary({
+    total: stats.total,
+    hourly,
+  });
+  const chartMax = chartSummary.peak;
   const chartInsetTop = 8;
   const chartInsetBottom = 14;
   const chartHeight = 100;
@@ -564,8 +570,7 @@ export default async function TodayPage() {
             <div className="mono mt-3 flex items-center justify-between text-[11px] text-fg-4">
               <span>00:00</span>
               <span>
-                {chartTotal.toLocaleString()} send
-                {chartTotal === 1 ? "" : "s"} · peak {chartMax.toLocaleString()}
+                {chartSummary.label}
                 /hr
               </span>
               <span>24:00</span>

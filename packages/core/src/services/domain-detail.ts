@@ -501,6 +501,20 @@ export function createDomainDetailService({
     }): Promise<DomainDetailDeleteResult> {
       const domain = await getExistingForUser(input.id, input.userId);
 
+      if (hasCapabilityEnabled(domain.capabilities, "receiving")) {
+        try {
+          await deprovisionReceivingDomain({
+            domainName: domain.name,
+            region: domain.region,
+          });
+        } catch (receivingErr) {
+          logger.warn(
+            `Failed to deprovision hosted receiving for ${domain.name}:`,
+            receivingErr,
+          );
+        }
+      }
+
       try {
         await deleteDomainIdentity(domain.name, { region: domain.region });
       } catch (sesErr) {

@@ -1,4 +1,7 @@
-import { getTodayApiBaseUrl } from "@/lib/today-dashboard";
+import {
+  getTodayApiBaseUrl,
+  getTodayChartSummary,
+} from "@/lib/today-dashboard";
 import { afterEach, describe, expect, it } from "vitest";
 
 function makeHeaders(values: Record<string, string>): Headers {
@@ -52,5 +55,26 @@ describe("today dashboard helpers", () => {
     setEnv("BETTER_AUTH_URL", "");
 
     expect(getTodayApiBaseUrl()).toBe("http://localhost:3015");
+  });
+  it("uses the full 24h stats total for the chart summary instead of summing visible hourly buckets", () => {
+    const summary = getTodayChartSummary({
+      total: 25,
+      hourly: [{ sent: 4 }, { sent: 6 }, { sent: 8 }],
+    });
+
+    expect(summary).toEqual({
+      total: 25,
+      peak: 8,
+      label: "25 sends · peak 8",
+    });
+  });
+
+  it("keeps singular send copy when the 24h total is one", () => {
+    expect(
+      getTodayChartSummary({
+        total: 1,
+        hourly: [],
+      }).label,
+    ).toBe("1 send · peak 1");
   });
 });
