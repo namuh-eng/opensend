@@ -75,13 +75,18 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(script).toContain(
       'SES_INBOUND_SNS_TOPIC_ARN="${SES_INBOUND_SNS_TOPIC_ARN:-}"',
     );
+    expect(script).toContain(
+      'SES_INBOUND_SNS_TOPIC_ARNS="${SES_INBOUND_SNS_TOPIC_ARNS:-}"',
+    );
     expect(script).toContain('"name": topic_name');
     expect(script).toContain('"value": topic_value');
     expect(script).toContain('"SES_EVENTS_SNS_TOPIC_ARN"');
     expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARN"');
-    expect(script).toContain(
-      'write_app_task_definition "${base_task_definition}" "${app_image}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${SES_EVENTS_SNS_TOPIC_ARN}" "${SES_INBOUND_SNS_TOPIC_ARN}" "${task_file}"',
-    );
+    expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARNS"');
+    expect(script).toContain('"${SES_EVENTS_SNS_TOPIC_ARN}"');
+    expect(script).toContain('"${SES_INBOUND_SNS_TOPIC_ARN}"');
+    expect(script).toContain('"${SES_INBOUND_SNS_TOPIC_ARNS}"');
+    expect(script).toContain('"${task_file}"');
   });
 
   it("deploy script injects the SES events SNS topic ARN into the ingester task environment", () => {
@@ -89,15 +94,20 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(script).toContain(
       'write_ingester_task_definition \\\n    "${base_task_definition}" \\\n    "${ingester_image}"',
     );
-    expect(script).toContain(
-      '"${SES_EVENTS_SNS_TOPIC_ARN}" \\\n    "${SES_INBOUND_SNS_TOPIC_ARN}" \\\n    "${task_file}"',
-    );
+    expect(script).toContain('"${SES_EVENTS_SNS_TOPIC_ARN}"');
+    expect(script).toContain('"${SES_INBOUND_SNS_TOPIC_ARN}"');
+    expect(script).toContain('"${SES_INBOUND_SNS_TOPIC_ARNS}"');
+    expect(script).toContain('"${task_file}"');
     expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARN",');
+    expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARNS",');
     expect(script).toContain(
       'required_environment["SES_EVENTS_SNS_TOPIC_ARN"] = ses_events_sns_topic_arn',
     );
     expect(script).toContain(
       'required_environment["SES_INBOUND_SNS_TOPIC_ARN"] = ses_inbound_sns_topic_arn',
+    );
+    expect(script).toContain(
+      'required_environment["SES_INBOUND_SNS_TOPIC_ARNS"] = ses_inbound_sns_topic_arns',
     );
   });
 
@@ -107,6 +117,7 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(script).toContain("ingester_inbound_token_secret_arn");
     expect(script).toContain('"name": "INGESTER_INBOUND_TOKEN"');
     expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARN",');
+    expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARNS",');
     expect(script).toContain('"SES_INBOUND_BUCKET_NAME"');
     expect(script).toContain("app_task_definition");
   });

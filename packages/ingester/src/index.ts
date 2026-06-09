@@ -9,6 +9,7 @@ import {
   emailService,
   emitCloudWatchMetric,
   enqueueDomainEvent,
+  getSesInboundSnsTopicArns,
   getTelemetryCarrier,
   logTelemetry,
   publishBackgroundJob,
@@ -116,17 +117,18 @@ function getExpectedSesEventsTopicArn(): string | null {
   return raw;
 }
 
-function getExpectedInboundSesS3TopicArn(): string | null {
-  const raw = [
-    process.env.SES_INBOUND_SNS_TOPIC_ARN,
+function getExpectedInboundSesS3TopicArns(): string[] {
+  const configuredTopics = new Set(getSesInboundSnsTopicArns());
+  for (const value of [
     process.env.INBOUND_SES_S3_SNS_TOPIC_ARN,
     process.env.SES_INBOUND_S3_SNS_TOPIC_ARN,
     process.env.SES_EVENTS_SNS_TOPIC_ARN,
-  ]
-    .map((value) => value?.trim())
-    .find((value) => value);
-  if (!raw || raw === "undefined" || raw === "null") return null;
-  return raw;
+  ]) {
+    const raw = value?.trim();
+    if (!raw || raw === "undefined" || raw === "null") continue;
+    configuredTopics.add(raw);
+  }
+  return [...configuredTopics];
 }
 
 function assertAllowedSesEventsTopicArn(topicArn: string): void {
@@ -137,8 +139,8 @@ function assertAllowedSesEventsTopicArn(topicArn: string): void {
 }
 
 function assertAllowedInboundSesS3TopicArn(topicArn: string): void {
-  const expectedTopicArn = getExpectedInboundSesS3TopicArn();
-  if (!expectedTopicArn || topicArn !== expectedTopicArn) {
+  const expectedTopicArns = getExpectedInboundSesS3TopicArns();
+  if (!expectedTopicArns.includes(topicArn)) {
     throw new SnsValidationError(
       "Inbound SES S3 SNS topic is not allowed",
       403,

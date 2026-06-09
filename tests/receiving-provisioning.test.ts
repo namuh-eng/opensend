@@ -25,6 +25,8 @@ import {
   ReceivingProvisioningService,
   buildInboundObjectPrefix,
   buildReceivingReceiptRuleName,
+  getSesInboundSnsTopicArn,
+  getSesInboundSnsTopicArns,
 } from "@opensend/core";
 
 const config = {
@@ -43,6 +45,16 @@ function missingRuleError() {
 describe("receiving provisioning", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("AWS_ACCESS_KEY_ID", "test-key");
+    vi.stubEnv("AWS_SECRET_ACCESS_KEY", "test-secret");
+    vi.stubEnv("SES_INBOUND_SNS_TOPIC_ARN", "");
+    vi.stubEnv("SES_INBOUND_SNS_TOPIC_ARNS", "");
+    vi.stubEnv("SES_INBOUND_SNS_TOPIC_ARN_US_EAST_1", "");
+    vi.stubEnv("SES_INBOUND_SNS_TOPIC_ARN_EU_WEST_1", "");
+    vi.stubEnv("SES_INBOUND_BUCKET_NAME", "");
+    vi.stubEnv("S3_BUCKET_NAME", "");
+    vi.stubEnv("SES_INBOUND_RULE_SET_NAME", "");
   });
 
   it("builds SES-safe stable receipt rule names", () => {
@@ -96,6 +108,92 @@ describe("receiving provisioning", () => {
             S3Action: {
               BucketName: "opensend-raw-mail",
               ObjectKeyPrefix: "ses-inbound/inbound.example.com/",
+              TopicArn:
+                "arn:aws:sns:us-east-1:123456789012:opensend-inbound-mail",
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it("selects the inbound SNS topic ARN for the requested receiving region", async () => {
+    vi.stubEnv("SES_INBOUND_BUCKET_NAME", "opensend-raw-mail");
+    vi.stubEnv(
+      "SES_INBOUND_SNS_TOPIC_ARNS",
+      JSON.stringify({
+        "us-east-1": "arn:aws:sns:us-east-1:123456789012:opensend-inbound-mail",
+        "eu-west-1": "arn:aws:sns:eu-west-1:123456789012:opensend-inbound-mail",
+      }),
+    );
+    vi.stubEnv(
+      "SES_INBOUND_SNS_TOPIC_ARN",
+      "arn:aws:sns:us-east-1:123456789012:legacy-inbound-mail",
+    );
+    mockSend
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(missingRuleError())
+      .mockResolvedValueOnce({});
+    const service = new ReceivingProvisioningService();
+
+    await expect(
+      service.provisionDomain({
+        domainName: "Inbound.Example.com",
+        region: "eu-west-1",
+      }),
+    ).resolves.toMatchObject({ action: "created" });
+
+    expect(getSesInboundSnsTopicArn("eu-west-1")).toBe(
+      "arn:aws:sns:eu-west-1:123456789012:opensend-inbound-mail",
+    );
+    expect(getSesInboundSnsTopicArns()).toEqual([
+      "arn:aws:sns:us-east-1:123456789012:opensend-inbound-mail",
+      "arn:aws:sns:eu-west-1:123456789012:opensend-inbound-mail",
+      "arn:aws:sns:us-east-1:123456789012:legacy-inbound-mail",
+    ]);
+    expect(mockSend.mock.calls[3][0].input).toMatchObject({
+      Rule: {
+        Actions: [
+          {
+            S3Action: {
+              TopicArn:
+                "arn:aws:sns:eu-west-1:123456789012:opensend-inbound-mail",
+            },
+          },
+        ],
+      },
+    });
+  });
+
+  it("preserves legacy single inbound SNS topic behavior", async () => {
+    vi.stubEnv("SES_INBOUND_BUCKET_NAME", "opensend-raw-mail");
+    vi.stubEnv(
+      "SES_INBOUND_SNS_TOPIC_ARN",
+      "arn:aws:sns:us-east-1:123456789012:opensend-inbound-mail",
+    );
+    mockSend
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(missingRuleError())
+      .mockResolvedValueOnce({});
+    const service = new ReceivingProvisioningService();
+
+    await expect(
+      service.provisionDomain({
+        domainName: "Inbound.Example.com",
+        region: "us-east-1",
+      }),
+    ).resolves.toMatchObject({ action: "created" });
+
+    expect(getSesInboundSnsTopicArn("us-east-1")).toBe(
+      "arn:aws:sns:us-east-1:123456789012:opensend-inbound-mail",
+    );
+    expect(mockSend.mock.calls[3][0].input).toMatchObject({
+      Rule: {
+        Actions: [
+          {
+            S3Action: {
               TopicArn:
                 "arn:aws:sns:us-east-1:123456789012:opensend-inbound-mail",
             },
