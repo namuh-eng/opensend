@@ -151,6 +151,7 @@ describe("integration connector service", () => {
     const repository = new MemoryIntegrationRepository();
     const fetchImpl = vi.fn<IntegrationFetch>(async (_url, init) => {
       expect(init.method).toBe("POST");
+      expect(init.signal).toBeInstanceOf(AbortSignal);
       expect(init.headers["x-opensend-integration-provider"]).toBe("webhook");
       expect(init.headers["x-opensend-signature"]).toMatch(/^[a-f0-9]{64}$/);
       expect(JSON.parse(init.body)).toMatchObject({
@@ -223,5 +224,57 @@ describe("integration connector service", () => {
     expect(repository.rows[0]?.lastError).toBe(
       "Unsafe outbound URL: private_ip_resolved",
     );
+  });
+
+  it("bounds webhook test dispatch with an abort signal and records timeout health", async () => {
+    vi.useFakeTimers();
+    try {
+      const repository = new MemoryIntegrationRepository();
+      let abortObserved = false;
+      const fetchImpl = vi.fn<IntegrationFetch>(
+        (_url, init) =>
+          new Promise((_resolve, reject) => {
+            expect(init.signal).toBeInstanceOf(AbortSignal);
+            const signal = init.signal;
+            if (!signal)
+              throw new Error("Expected webhook test dispatch signal");
+            signal.addEventListener(
+              "abort",
+              () => {
+                abortObserved = true;
+                reject(new Error("abort listener observed timeout"));
+              },
+              { once: true },
+            );
+          }),
+      );
+      const service = createIntegrationService({ repository, fetchImpl });
+      const connection = await service.connectWebhook({
+        userId: "user-1",
+        name: "Zapier",
+        webhookUrl: "https://example.com/zapier/catch",
+        signingSecret: "receiver-secret",
+      });
+
+      const dispatch = service.sendWebhookTestEvent({
+        id: connection.id,
+        userId: "user-1",
+      });
+      const dispatchExpectation = expect(dispatch).rejects.toMatchObject({
+        code: "dispatch_failed",
+        message: "Webhook connector test dispatch timed out after 10000ms",
+      });
+      await vi.advanceTimersByTimeAsync(10_000);
+      await dispatchExpectation;
+      expect(abortObserved).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(repository.rows[0]?.healthStatus).toBe("unhealthy");
+      expect(repository.rows[0]?.lastHealthCheckAt).toBeInstanceOf(Date);
+      expect(repository.rows[0]?.lastError).toBe(
+        "Webhook connector test dispatch timed out after 10000ms",
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

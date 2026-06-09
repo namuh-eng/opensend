@@ -54,6 +54,40 @@ test.describe("workspace role enforcement on API key management", () => {
       const workspaceId = workspaceRows.rows[0]?.workspace_id;
       expect(workspaceId).toEqual(expect.any(String));
 
+      const ownerLowerRoleInviteResponse = await ownerRequest.post(
+        "/api/invites",
+        {
+          data: { email: e2eTenant.user.email, role: "member" },
+        },
+      );
+      expect(ownerLowerRoleInviteResponse.status()).toBe(201);
+      const ownerLowerRoleInvite =
+        (await ownerLowerRoleInviteResponse.json()) as {
+          token: string;
+        };
+
+      const ownerAcceptResponse = await ownerRequest.post(
+        "/api/invites/accept",
+        {
+          data: { token: ownerLowerRoleInvite.token },
+        },
+      );
+      expect(ownerAcceptResponse.status()).toBe(200);
+      await expect(ownerAcceptResponse.json()).resolves.toMatchObject({
+        membership: {
+          user_id: e2eTenant.user.id,
+          role: "owner",
+        },
+      });
+
+      const ownerMembershipRows = await e2eDb.query<{ role: string }>(
+        `select role
+         from workspace_memberships
+         where workspace_id = $1 and user_id = $2`,
+        [workspaceId, e2eTenant.user.id],
+      );
+      expect(ownerMembershipRows.rows).toEqual([{ role: "owner" }]);
+
       const memberCreate = await memberRequest.post("/api/api-keys", {
         headers: { "x-opensend-workspace-id": workspaceId },
         data: {

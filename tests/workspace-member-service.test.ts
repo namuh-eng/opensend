@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import {
+  type WorkspaceInvitationRow,
   type WorkspaceMembershipRow,
   type WorkspaceRepository,
   createWorkspaceService,
@@ -30,13 +32,48 @@ function membership(input: {
   };
 }
 
-function createRepository(initialMemberships: WorkspaceMembershipRow[]) {
+function inviteTokenHash(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function invitation(input: {
+  id: string;
+  email: string;
+  role: "owner" | "admin" | "member";
+  token: string;
+  workspaceId?: string;
+  status?: "pending" | "accepted" | "revoked" | "expired";
+}): WorkspaceInvitationRow {
+  return {
+    id: input.id,
+    workspaceId: input.workspaceId ?? workspace.id,
+    email: input.email,
+    role: input.role,
+    tokenHash: inviteTokenHash(input.token),
+    invitedByUserId: "owner-1",
+    status: input.status ?? "pending",
+    expiresAt: new Date("2026-06-09T12:00:00.000Z"),
+    acceptedAt: null,
+    revokedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function createRepository(
+  initialMemberships: WorkspaceMembershipRow[],
+  initialInvitations: WorkspaceInvitationRow[] = [],
+) {
   const memberships = new Map(
     initialMemberships.map((row) => [row.id, { ...row }]),
+  );
+  const invitations = new Map(
+    initialInvitations.map((row) => [row.id, { ...row }]),
   );
   const calls = {
     updateRole: 0,
     deleteMembership: 0,
+    upsertMembership: 0,
   };
 
   const repository: WorkspaceRepository = {
@@ -59,6 +96,16 @@ function createRepository(initialMemberships: WorkspaceMembershipRow[]) {
       return row?.workspaceId === workspaceId ? row : undefined;
     },
     async upsertMembership(data) {
+      calls.upsertMembership += 1;
+      const existing = Array.from(memberships.values()).find(
+        (row) =>
+          row.workspaceId === data.workspaceId && row.userId === data.userId,
+      );
+      if (existing) {
+        existing.role = data.role;
+        existing.updatedAt = now;
+        return existing;
+      }
       const row = membership({
         id: "upserted-membership",
         workspaceId: data.workspaceId,
@@ -97,14 +144,20 @@ function createRepository(initialMemberships: WorkspaceMembershipRow[]) {
     async findInvitationById() {
       return undefined;
     },
-    async findInvitationByTokenHash() {
-      return undefined;
+    async findInvitationByTokenHash(tokenHash) {
+      return Array.from(invitations.values()).find(
+        (row) => row.tokenHash === tokenHash,
+      );
     },
     async listInvitations() {
       return [];
     },
-    async updateInvitation() {
-      return undefined;
+    async updateInvitation(id, data) {
+      const row = invitations.get(id);
+      if (!row) return undefined;
+      const updated = { ...row, ...data, updatedAt: now };
+      invitations.set(id, updated);
+      return updated;
     },
     async findEntitlement() {
       return undefined;
@@ -114,7 +167,7 @@ function createRepository(initialMemberships: WorkspaceMembershipRow[]) {
     },
   };
 
-  return { repository, calls, memberships };
+  return { repository, calls, memberships, invitations };
 }
 
 describe("workspace member lifecycle service", () => {
@@ -245,5 +298,128 @@ describe("workspace member lifecycle service", () => {
       code: "forbidden",
     });
     expect(calls.deleteMembership).toBe(0);
+  });
+
+  it("preserves an existing owner role when accepting a lower-role invite", async () => {
+    const token = "owner-lower-role-token";
+    const { repository, calls, invitations, memberships } = createRepository(
+      [
+        membership({
+          id: "owner-membership",
+          userId: "owner-1",
+          role: "owner",
+        }),
+      ],
+      [
+        invitation({
+          id: "owner-member-invite",
+          email: "owner@example.com",
+          role: "member",
+          token,
+        }),
+      ],
+    );
+    const service = createWorkspaceService({ repository, now: () => now });
+
+    await expect(
+      service.acceptInvitation({
+        actorUserId: "owner-1",
+        actorEmail: "OWNER@example.com",
+        token,
+      }),
+    ).resolves.toMatchObject({
+      invitation: {
+        id: "owner-member-invite",
+        status: "accepted",
+      },
+      membership: {
+        id: "owner-membership",
+        user_id: "owner-1",
+        role: "owner",
+      },
+    });
+    expect(calls.upsertMembership).toBe(0);
+    expect(memberships.get("owner-membership")?.role).toBe("owner");
+    expect(invitations.get("owner-member-invite")?.status).toBe("accepted");
+    expect(invitations.get("owner-member-invite")?.acceptedAt).toBe(now);
+  });
+
+  it("preserves an existing member role when accepting an admin invite", async () => {
+    const token = "member-admin-token";
+    const { repository, calls, memberships } = createRepository(
+      [
+        membership({
+          id: "member-membership",
+          userId: "member-1",
+          role: "member",
+        }),
+      ],
+      [
+        invitation({
+          id: "member-admin-invite",
+          email: "member@example.com",
+          role: "admin",
+          token,
+        }),
+      ],
+    );
+    const service = createWorkspaceService({ repository, now: () => now });
+
+    await expect(
+      service.acceptInvitation({
+        actorUserId: "member-1",
+        actorEmail: "member@example.com",
+        token,
+      }),
+    ).resolves.toMatchObject({
+      membership: {
+        id: "member-membership",
+        user_id: "member-1",
+        role: "member",
+      },
+    });
+    expect(calls.upsertMembership).toBe(0);
+    expect(memberships.get("member-membership")?.role).toBe("member");
+  });
+
+  it("creates a membership when a non-member accepts an invite", async () => {
+    const token = "new-member-token";
+    const { repository, calls, memberships } = createRepository(
+      [
+        membership({
+          id: "owner-membership",
+          userId: "owner-1",
+          role: "owner",
+        }),
+      ],
+      [
+        invitation({
+          id: "new-member-invite",
+          email: "new-member@example.com",
+          role: "member",
+          token,
+        }),
+      ],
+    );
+    const service = createWorkspaceService({ repository, now: () => now });
+
+    await expect(
+      service.acceptInvitation({
+        actorUserId: "new-member-1",
+        actorEmail: "new-member@example.com",
+        token,
+      }),
+    ).resolves.toMatchObject({
+      membership: {
+        user_id: "new-member-1",
+        role: "member",
+      },
+    });
+    expect(calls.upsertMembership).toBe(1);
+    expect(
+      Array.from(memberships.values()).some(
+        (row) => row.userId === "new-member-1" && row.role === "member",
+      ),
+    ).toBe(true);
   });
 });

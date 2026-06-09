@@ -49,14 +49,22 @@ test.describe("root contact relationship API", () => {
       const segmentId = createdSegment.id;
 
       const createTopicResponse = await e2eApiRequest.post("/topics", {
-        data: { name: `Relationship Topic ${e2eRunId}` },
+        data: {
+          name: `Relationship Topic ${e2eRunId}`,
+          default_subscription: "opt_out",
+          visibility: "public",
+        },
       });
       expect(createTopicResponse.status()).toBe(201);
       const createdTopic = (await createTopicResponse.json()) as { id: string };
       const topicId = createdTopic.id;
 
       const createOtherTopicResponse = await otherRequest.post("/topics", {
-        data: { name: `Other Relationship Topic ${e2eRunId}` },
+        data: {
+          name: `Other Relationship Topic ${e2eRunId}`,
+          default_subscription: "opt_out",
+          visibility: "public",
+        },
       });
       expect(createOtherTopicResponse.status()).toBe(201);
       const createdOtherTopic = (await createOtherTopicResponse.json()) as {

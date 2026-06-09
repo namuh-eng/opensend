@@ -536,11 +536,17 @@ export function createWorkspaceService({
         );
       }
 
-      const membership = await repository.upsertMembership({
-        workspaceId: invitation.workspaceId,
-        userId: input.actorUserId,
-        role: invitation.role,
-      });
+      const existingMembership = await repository.findMembership(
+        invitation.workspaceId,
+        input.actorUserId,
+      );
+      const membership =
+        existingMembership ??
+        (await repository.upsertMembership({
+          workspaceId: invitation.workspaceId,
+          userId: input.actorUserId,
+          role: invitation.role,
+        }));
       const accepted = await repository.updateInvitation(invitation.id, {
         status: "accepted" satisfies WorkspaceInvitationStatus,
         acceptedAt: now(),

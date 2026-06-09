@@ -131,6 +131,7 @@ export class IntegrationServiceError extends Error {
 }
 
 const WEBHOOK_SCOPES = ["integration:webhook:test_event"] as const;
+const WEBHOOK_TEST_DISPATCH_TIMEOUT_MS = 10_000;
 
 function normalizeName(value: string | undefined): string {
   const trimmed = value?.trim();
@@ -276,6 +277,35 @@ function sanitizeDispatchError(error: unknown): string {
     return error.message.slice(0, 500);
   }
   return "Webhook connector test dispatch failed";
+}
+
+async function fetchWebhookTestWithTimeout(
+  fetchImpl: IntegrationFetch,
+  url: string,
+  init: Parameters<IntegrationFetch>[1],
+): ReturnType<IntegrationFetch> {
+  const controller = new AbortController();
+  let timedOut = false;
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, WEBHOOK_TEST_DISPATCH_TIMEOUT_MS);
+
+  try {
+    return await fetchImpl(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (timedOut) {
+      throw new Error(
+        `Webhook connector test dispatch timed out after ${WEBHOOK_TEST_DISPATCH_TIMEOUT_MS}ms`,
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function createIntegrationService({
@@ -454,12 +484,16 @@ export function createIntegrationService({
           "x-opensend-integration-provider": "webhook",
           ...signPayload(body, credentials.signingSecret),
         };
-        const response = await fetchImpl(credentials.webhookUrl, {
-          method: "POST",
-          headers,
-          body,
-          redirect: "error",
-        });
+        const response = await fetchWebhookTestWithTimeout(
+          fetchImpl,
+          credentials.webhookUrl,
+          {
+            method: "POST",
+            headers,
+            body,
+            redirect: "error",
+          },
+        );
         const updated = await repository.update(input.id, input.userId, {
           healthStatus: response.ok ? "healthy" : "unhealthy",
           lastHealthCheckAt: new Date(),
