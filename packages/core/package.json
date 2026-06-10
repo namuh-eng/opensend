@@ -5,6 +5,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.1019.0",
     "lru-cache": "^11.0.0"
   }
 }

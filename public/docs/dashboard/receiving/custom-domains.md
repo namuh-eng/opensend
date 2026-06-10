@@ -6,11 +6,11 @@ Use a custom domain or subdomain for inbound addresses that route into OpenSend-
 
 Inbound email routing uses MX records. If the same root domain already receives human mailbox traffic elsewhere, use a subdomain such as `inbound.example.com` or `agents.example.com` to avoid disrupting existing mailboxes.
 
-Example operator-owned DNS shape:
+Example DNS shape:
 
 | Host | Type | Value |
 | --- | --- | --- |
-| `inbound.example.com` | MX | Provider receiving endpoint, such as an AWS SES inbound endpoint for your region. |
+| `inbound.example.com` | MX | `inbound-smtp.<region>.amazonaws.com` for hosted SES receiving. |
 | `inbound.example.com` | TXT | Optional provider verification record. |
 
 ## Tenant mapping
@@ -19,7 +19,7 @@ OpenSend received-email rows must include the tenant `user_id`. Your inbound wor
 
 ## Dashboard status
 
-The dashboard can show receiving-capable domains, but MX validation and provider receipt-rule creation are still operator-owned. For hosted SES receiving, create a receipt rule that stores raw MIME in S3 and publishes SNS notifications to the ingester `/events/inbound/ses-s3` endpoint. Label your internal runbook clearly so users know whether receiving is enabled for a domain or only prepared in DNS.
+When receiving is enabled, hosted OpenSend provisions an SES receipt rule for the domain. The creator still adds the shown MX record so inbound mail reaches SES. Self-hosted operators must configure `SES_INBOUND_SNS_TOPIC_ARN` and `S3_BUCKET_NAME` or `SES_INBOUND_BUCKET_NAME`, subscribe the inbound SNS topic to `/events/inbound/ses-s3`, and grant SES permission to write raw MIME objects to the bucket.
 
 ## Routing rules
 

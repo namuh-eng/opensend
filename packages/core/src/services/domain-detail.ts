@@ -13,6 +13,10 @@ import {
   cloudflareDnsCleanupProvider,
   domainIdentityProvider,
 } from "./domain-providers";
+import {
+  ReceivingProvisioningError,
+  receivingProvisioningService,
+} from "./receivingProvisioning";
 
 type DomainRow = typeof domains.$inferSelect;
 type DomainInsert = typeof domains.$inferInsert;
@@ -104,7 +108,9 @@ export type DomainDetailDnsRecord = {
   content: string;
 };
 
-export type DomainDetailServiceErrorCode = "not_found";
+export type DomainDetailServiceErrorCode =
+  | "not_found"
+  | "receiving_provisioning_failed";
 
 export class DomainDetailServiceError extends Error {
   constructor(
@@ -138,6 +144,14 @@ export type DomainDetailServiceDependencies = {
   invalidateDomainCaches?: (domain: {
     id?: string | null;
     name?: string | null;
+    region?: string | null;
+  }) => Promise<void>;
+  provisionReceivingDomain?: (input: {
+    domainName: string;
+    region?: string | null;
+  }) => Promise<void>;
+  deprovisionReceivingDomain?: (input: {
+    domainName: string;
     region?: string | null;
   }) => Promise<void>;
   logger?: Pick<Console, "warn">;
@@ -210,6 +224,17 @@ function toDomainDetailResponse(domain: DomainRow): DomainDetailResponse {
 
 function valuesEqual(a: unknown, b: unknown): boolean {
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
+function hasCapabilityEnabled(
+  capabilities: DomainCapability[] | null | undefined,
+  name: DomainCapability["name"],
+): boolean {
+  return Boolean(
+    capabilities?.some(
+      (capability) => capability.name === name && capability.enabled,
+    ),
+  );
 }
 
 function toUpdateData(
@@ -311,6 +336,12 @@ export function createDomainDetailService({
   deleteDNSRecord = (id: string) =>
     cloudflareDnsCleanupProvider.deleteDNSRecord(id),
   invalidateDomainCaches = async () => {},
+  provisionReceivingDomain = async (input) => {
+    await receivingProvisioningService.provisionDomain(input);
+  },
+  deprovisionReceivingDomain = async (input) => {
+    await receivingProvisioningService.deprovisionDomain(input);
+  },
   logger = console,
 }: DomainDetailServiceDependencies = {}) {
   async function getExistingForUser(
@@ -352,6 +383,40 @@ export function createDomainDetailService({
           },
           changedFields,
         };
+      }
+
+      const previousReceivingEnabled = hasCapabilityEnabled(
+        existingDomain.capabilities,
+        "receiving",
+      );
+      const nextReceivingEnabled = hasCapabilityEnabled(
+        updates.capabilities ?? existingDomain.capabilities,
+        "receiving",
+      );
+
+      if (previousReceivingEnabled !== nextReceivingEnabled) {
+        try {
+          if (nextReceivingEnabled) {
+            await provisionReceivingDomain({
+              domainName: existingDomain.name,
+              region: existingDomain.region,
+            });
+          } else {
+            await deprovisionReceivingDomain({
+              domainName: existingDomain.name,
+              region: existingDomain.region,
+            });
+          }
+        } catch (error) {
+          const message =
+            error instanceof ReceivingProvisioningError
+              ? error.message
+              : "Failed to provision receiving for this domain";
+          throw new DomainDetailServiceError(
+            "receiving_provisioning_failed",
+            message,
+          );
+        }
       }
 
       let updated = await updateDomainForUser({
@@ -435,6 +500,20 @@ export function createDomainDetailService({
       userId: string;
     }): Promise<DomainDetailDeleteResult> {
       const domain = await getExistingForUser(input.id, input.userId);
+
+      if (hasCapabilityEnabled(domain.capabilities, "receiving")) {
+        try {
+          await deprovisionReceivingDomain({
+            domainName: domain.name,
+            region: domain.region,
+          });
+        } catch (receivingErr) {
+          logger.warn(
+            `Failed to deprovision hosted receiving for ${domain.name}:`,
+            receivingErr,
+          );
+        }
+      }
 
       try {
         await deleteDomainIdentity(domain.name, { region: domain.region });

@@ -44,6 +44,8 @@ WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN="${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET
 TRACKING_SECRET_SECRET_ID="${TRACKING_SECRET_SECRET_ID:-${PRODUCT}/tracking-secret}"
 TRACKING_SECRET_SECRET_ARN="${TRACKING_SECRET_SECRET_ARN:-}"
 SES_EVENTS_SNS_TOPIC_ARN="${SES_EVENTS_SNS_TOPIC_ARN:-}"
+SES_INBOUND_SNS_TOPIC_ARN="${SES_INBOUND_SNS_TOPIC_ARN:-}"
+SES_INBOUND_SNS_TOPIC_ARNS="${SES_INBOUND_SNS_TOPIC_ARNS:-}"
 
 ING_REPO="${PRODUCT}-ingester"
 ING_SERVICE="${PRODUCT}-ingester"
@@ -175,7 +177,7 @@ write_service_network_configuration() {
 }
 
 write_app_task_definition() {
-  local base_task_definition="$1" app_image="$2" webhook_secret_arn="$3" tracking_secret_arn="$4" ses_events_sns_topic_arn="$5" output_file="$6"
+  local base_task_definition="$1" app_image="$2" webhook_secret_arn="$3" tracking_secret_arn="$4" ses_events_sns_topic_arn="$5" ses_inbound_sns_topic_arn="$6" ses_inbound_sns_topic_arns="$7" output_file="$8"
   local base_task_file
   base_task_file="$(mktemp)"
 
@@ -185,7 +187,7 @@ write_app_task_definition() {
     --query 'taskDefinition' \
     --output json > "${base_task_file}"
 
-  python3 - "${base_task_file}" "${app_image}" "${APP_CONTAINER_NAME}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${ses_events_sns_topic_arn}" > "${output_file}" <<'PY'
+  python3 - "${base_task_file}" "${app_image}" "${APP_CONTAINER_NAME}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${ses_events_sns_topic_arn}" "${ses_inbound_sns_topic_arn}" "${ses_inbound_sns_topic_arns}" > "${output_file}" <<'PY'
 import copy
 import json
 import sys
@@ -197,7 +199,9 @@ import sys
     webhook_secret_arn,
     tracking_secret_arn,
     ses_events_sns_topic_arn,
-) = sys.argv[1:7]
+    ses_inbound_sns_topic_arn,
+    ses_inbound_sns_topic_arns,
+) = sys.argv[1:9]
 with open(base_task_file, "r", encoding="utf-8") as handle:
     task = json.load(handle)
 
@@ -233,11 +237,18 @@ if selected is None:
     raise SystemExit(f"base task definition has no {container_name!r} container")
 
 selected["image"] = app_image
-if ses_events_sns_topic_arn:
+topic_environment = {
+    "SES_EVENTS_SNS_TOPIC_ARN": ses_events_sns_topic_arn,
+    "SES_INBOUND_SNS_TOPIC_ARN": ses_inbound_sns_topic_arn,
+    "SES_INBOUND_SNS_TOPIC_ARNS": ses_inbound_sns_topic_arns,
+}
+for topic_name, topic_value in topic_environment.items():
+    if not topic_value:
+        continue
     environment = selected.setdefault("environment", [])
     required_environment = {
-        "name": "SES_EVENTS_SNS_TOPIC_ARN",
-        "value": ses_events_sns_topic_arn,
+        "name": topic_name,
+        "value": topic_value,
     }
     for index, item in enumerate(environment):
         if item.get("name") == required_environment["name"]:
@@ -277,7 +288,7 @@ register_app_task_definition() {
   tracking_secret_arn="$(tracking_secret_secret_arn)"
   task_file="$(mktemp)"
 
-  write_app_task_definition "${base_task_definition}" "${app_image}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${SES_EVENTS_SNS_TOPIC_ARN}" "${task_file}"
+  write_app_task_definition "${base_task_definition}" "${app_image}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${SES_EVENTS_SNS_TOPIC_ARN}" "${SES_INBOUND_SNS_TOPIC_ARN}" "${SES_INBOUND_SNS_TOPIC_ARNS}" "${task_file}"
 
   aws ecs register-task-definition \
     --cli-input-json "file://${task_file}" \
@@ -296,7 +307,7 @@ ingester_task_definition() {
 }
 
 write_ingester_task_definition() {
-  local base_task_definition="$1" ingester_image="$2" job_token_arn="$3" inbound_token_arn="$4" tracking_secret_arn="$5" app_task_definition="$6" ses_events_sns_topic_arn="$7" output_file="$8"
+  local base_task_definition="$1" ingester_image="$2" job_token_arn="$3" inbound_token_arn="$4" tracking_secret_arn="$5" app_task_definition="$6" ses_events_sns_topic_arn="$7" ses_inbound_sns_topic_arn="$8" ses_inbound_sns_topic_arns="$9" output_file="${10}"
   local base_task_file app_task_file
   base_task_file="$(mktemp)"
   app_task_file="$(mktemp)"
@@ -313,7 +324,7 @@ write_ingester_task_definition() {
     --query 'taskDefinition' \
     --output json > "${app_task_file}"
 
-  python3 - "${base_task_file}" "${app_task_file}" "${ingester_image}" "${ING_CONTAINER_NAME}" "${job_token_arn}" "${inbound_token_arn}" "${tracking_secret_arn}" "${ses_events_sns_topic_arn}" > "${output_file}" <<'PY'
+  python3 - "${base_task_file}" "${app_task_file}" "${ingester_image}" "${ING_CONTAINER_NAME}" "${job_token_arn}" "${inbound_token_arn}" "${tracking_secret_arn}" "${ses_events_sns_topic_arn}" "${ses_inbound_sns_topic_arn}" "${ses_inbound_sns_topic_arns}" > "${output_file}" <<'PY'
 import copy
 import json
 import sys
@@ -327,7 +338,9 @@ import sys
     inbound_token_arn,
     tracking_secret_arn,
     ses_events_sns_topic_arn,
-) = sys.argv[1:9]
+    ses_inbound_sns_topic_arn,
+    ses_inbound_sns_topic_arns,
+) = sys.argv[1:11]
 with open(base_task_file, "r", encoding="utf-8") as handle:
     task = json.load(handle)
 with open(app_task_file, "r", encoding="utf-8") as handle:
@@ -378,11 +391,21 @@ required_environment = {
     "NODE_ENV": "production",
     "HOST": "0.0.0.0",
 }
-for name in ["AWS_REGION", "S3_BUCKET_NAME", "SES_EVENTS_SNS_TOPIC_ARN"]:
+for name in [
+    "AWS_REGION",
+    "S3_BUCKET_NAME",
+    "SES_EVENTS_SNS_TOPIC_ARN",
+    "SES_INBOUND_SNS_TOPIC_ARN",
+    "SES_INBOUND_SNS_TOPIC_ARNS",
+]:
     if name in app_environment:
         required_environment[name] = app_environment[name]
 if ses_events_sns_topic_arn:
     required_environment["SES_EVENTS_SNS_TOPIC_ARN"] = ses_events_sns_topic_arn
+if ses_inbound_sns_topic_arn:
+    required_environment["SES_INBOUND_SNS_TOPIC_ARN"] = ses_inbound_sns_topic_arn
+if ses_inbound_sns_topic_arns:
+    required_environment["SES_INBOUND_SNS_TOPIC_ARNS"] = ses_inbound_sns_topic_arns
 if "SES_INBOUND_BUCKET_NAME" in app_environment:
     required_environment["SES_INBOUND_BUCKET_NAME"] = app_environment[
         "SES_INBOUND_BUCKET_NAME"
@@ -439,6 +462,8 @@ register_ingester_task_definition() {
     "${tracking_secret_arn}" \
     "${app_base_task_definition}" \
     "${SES_EVENTS_SNS_TOPIC_ARN}" \
+    "${SES_INBOUND_SNS_TOPIC_ARN}" \
+    "${SES_INBOUND_SNS_TOPIC_ARNS}" \
     "${task_file}"
 
   aws ecs register-task-definition \

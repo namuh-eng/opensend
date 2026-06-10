@@ -18,7 +18,12 @@ import {
 } from "@/lib/dashboard-provider-feedback";
 import { db } from "@/lib/db";
 import { domains, emailEvents, emails } from "@/lib/db/schema";
+import {
+  getTodayApiBaseUrl,
+  getTodayChartSummary,
+} from "@/lib/today-dashboard";
 import { desc, eq, sql } from "drizzle-orm";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -251,6 +256,7 @@ async function loadRecentSenderDomains(
 async function loadDomainReputation(
   userId: string,
 ): Promise<DomainReputationRow[]> {
+  const since = new Date(Date.now() - 24 * HOUR_MS);
   try {
     const result = await db.execute(sql`
       SELECT
@@ -266,6 +272,7 @@ async function loadDomainReputation(
       FROM ${domains} d
       LEFT JOIN ${emails} e
         ON e.user_id = d.user_id
+       AND e.created_at >= ${since}
        AND (
          lower(e.from) LIKE '%@' || lower(d.name)
          OR lower(e.from) LIKE '%@' || lower(d.name) || '>'
@@ -350,12 +357,6 @@ function relativeTime(d: Date | string): string {
   return `${Math.floor(ms / 86_400_000)}d`;
 }
 
-function getApiBaseUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (!raw) return "https://your-opensend-host";
-  return raw.replace(/\/$/, "");
-}
-
 export default async function TodayPage() {
   const session = await getServerSession();
   if (!session) redirect("/auth");
@@ -417,7 +418,44 @@ export default async function TodayPage() {
   const deliveredSpark = hourly.map((h) => h.delivered);
   const openedSpark = hourly.map((h) => h.opened);
   const bouncedSpark = hourly.map((h) => h.bounced);
-  const chartMax = Math.max(1, ...sentSpark);
+  const chartSummary = getTodayChartSummary({
+    total: stats.total,
+    hourly,
+  });
+  const chartMax = chartSummary.peak;
+  const chartInsetTop = 8;
+  const chartInsetBottom = 14;
+  const chartHeight = 100;
+  const chartUsableHeight = chartHeight - chartInsetTop - chartInsetBottom;
+  const toChartPoints = (values: number[]) =>
+    values.map((value, index) => {
+      const x = values.length <= 1 ? 0 : (index / (values.length - 1)) * 100;
+      const y =
+        chartInsetTop +
+        chartUsableHeight -
+        (Math.max(0, value) / chartMax) * chartUsableHeight;
+      return { x, y };
+    });
+  const toLinePath = (points: Array<{ x: number; y: number }>) =>
+    points
+      .map(
+        (point, index) =>
+          `${index === 0 ? "M" : "L"} ${point.x.toFixed(2)} ${point.y.toFixed(
+            2,
+          )}`,
+      )
+      .join(" ");
+  const sentPoints = toChartPoints(sentSpark);
+  const openedPoints = toChartPoints(openedSpark);
+  const bouncedPoints = toChartPoints(bouncedSpark);
+  const sentLinePath = toLinePath(sentPoints);
+  const openedLinePath = toLinePath(openedPoints);
+  const bouncedLinePath = toLinePath(bouncedPoints);
+  const sentAreaPath = sentPoints.length
+    ? `M ${sentPoints[0]?.x.toFixed(2)} ${chartHeight} L ${sentLinePath.slice(
+        2,
+      )} L ${sentPoints.at(-1)?.x.toFixed(2)} ${chartHeight} Z`
+    : "";
   const deliveryState = getProviderFeedbackMetricState({
     total: stats.total,
     providerFeedbackWired,
@@ -430,7 +468,8 @@ export default async function TodayPage() {
   const deliveryStateLabel = dashboardMetricStateLabel(deliveryState);
   const openStateLabel = dashboardMetricStateLabel(openState);
 
-  const apiBase = getApiBaseUrl();
+  const requestHeaders = await headers();
+  const apiBase = getTodayApiBaseUrl(requestHeaders);
   const apiSendUrl = `${apiBase}/emails`;
   const fromExample = domainRows[0]?.name
     ? `hi@${domainRows[0].name}`
@@ -510,6 +549,7 @@ export default async function TodayPage() {
             <SectionHeader
               kicker="// send volume · last 24h"
               title="Hourly sends"
+              sub="Accepted sends grouped by hour, with opens and bounces overlaid when tracking or provider feedback exists."
               action={
                 <div className="mono flex gap-3.5 text-[11.5px] text-fg-3">
                   <span className="inline-flex items-center gap-1.5">
@@ -527,27 +567,111 @@ export default async function TodayPage() {
                 </div>
               }
             />
-            <div className="mt-3 flex h-[180px] items-end gap-1.5">
-              {hourly.map((h, i) => {
-                const sentH = (h.sent / chartMax) * 100;
-                const openH = (h.opened / chartMax) * 100;
-                return (
-                  <div
-                    // biome-ignore lint/suspicious/noArrayIndexKey: hour buckets are stable ordinals
-                    key={i}
-                    className="group relative flex flex-1 flex-col justify-end gap-px"
+            <div className="mono mt-3 flex items-center justify-between text-[11px] text-fg-4">
+              <span>00:00</span>
+              <span>
+                {chartSummary.label}
+                /hr
+              </span>
+              <span>24:00</span>
+            </div>
+            <div className="relative mt-2 h-[220px] overflow-hidden">
+              <svg
+                aria-label="Hourly sends chart"
+                className="absolute inset-0 h-full w-full"
+                preserveAspectRatio="none"
+                role="img"
+                viewBox="0 0 100 100"
+              >
+                <defs>
+                  <linearGradient
+                    id="today-sent-area"
+                    x1="0"
+                    x2="0"
+                    y1="0"
+                    y2="1"
                   >
-                    <div
-                      className="w-full rounded-sm bg-accent/85 transition-opacity group-hover:opacity-100"
-                      style={{ height: `${sentH}%`, opacity: 0.85 }}
+                    <stop
+                      offset="0%"
+                      stopColor="var(--accent)"
+                      stopOpacity="0.26"
                     />
-                    <div
-                      className="w-full rounded-sm bg-violet/60"
-                      style={{ height: `${openH * 0.45}%` }}
+                    <stop
+                      offset="100%"
+                      stopColor="var(--accent)"
+                      stopOpacity="0.03"
                     />
-                  </div>
-                );
-              })}
+                  </linearGradient>
+                </defs>
+                {[22, 40, 58, 76].map((y) => (
+                  <line
+                    key={y}
+                    stroke="rgba(255,255,255,0.06)"
+                    strokeDasharray="1.5 2.5"
+                    strokeWidth="0.25"
+                    vectorEffect="non-scaling-stroke"
+                    x1="0"
+                    x2="100"
+                    y1={y}
+                    y2={y}
+                  />
+                ))}
+                {sentAreaPath && (
+                  <path d={sentAreaPath} fill="url(#today-sent-area)" />
+                )}
+                <path
+                  d={sentLinePath}
+                  fill="none"
+                  stroke="var(--accent)"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="0.8"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <path
+                  d={openedLinePath}
+                  fill="none"
+                  stroke="var(--violet)"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="0.65"
+                  vectorEffect="non-scaling-stroke"
+                />
+                <path
+                  d={bouncedLinePath}
+                  fill="none"
+                  stroke="var(--red)"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeOpacity="0.72"
+                  strokeWidth="0.55"
+                  vectorEffect="non-scaling-stroke"
+                />
+                {sentPoints.map((point, index) => (
+                  <circle
+                    // biome-ignore lint/suspicious/noArrayIndexKey: hour buckets are stable ordinals
+                    key={index}
+                    className="opacity-0 transition-opacity hover:opacity-100"
+                    cx={point.x}
+                    cy={point.y}
+                    fill="var(--accent)"
+                    r="1.2"
+                  >
+                    <title>
+                      {`${hourly[index]?.sent ?? 0} sent · ${
+                        hourly[index]?.opened ?? 0
+                      } opened · ${hourly[index]?.bounced ?? 0} bounced`}
+                    </title>
+                  </circle>
+                ))}
+              </svg>
+              <div className="mono pointer-events-none absolute inset-x-0 bottom-0 flex justify-between border-t border-line/70 pt-2 text-[11px] text-fg-4">
+                <span>00:00</span>
+                <span>06:00</span>
+                <span>12:00</span>
+                <span>18:00</span>
+                <span>24:00</span>
+              </div>
             </div>
             {stats.total === 0 && (
               <div className="mono mt-3 text-[11.5px] text-fg-4">
@@ -608,6 +732,7 @@ export default async function TodayPage() {
             <SectionHeader
               kicker="// deliverability"
               title="Reputation by domain"
+              sub="Last-24h provider feedback from accepted sends and SES/SNS lifecycle events."
               action={
                 <Link
                   href="/domains"

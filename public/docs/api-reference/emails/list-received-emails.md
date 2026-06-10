@@ -57,4 +57,4 @@ Rows are scoped to the owner of the API key. `route_decisions` is an empty array
 
 ## Self-hosting notes
 
-OpenSend includes a standalone ingester foundation for inbound MIME notifications at `POST /events/inbound`. Configure MX records and provider receipt rules for your deployment, then send provider notifications with raw MIME payloads or fetch URLs to the ingester. The ingester writes `received_emails` only after resolving the recipient to one tenant and storing attachments through the storage abstraction.
+Hosted OpenSend provisions SES receipt rules when receiving is enabled for a domain, then writes `received_emails` after the ingester resolves the recipient to one tenant and stores attachments through the storage abstraction. Self-hosted deployments should set `SES_INBOUND_SNS_TOPIC_ARN` and `S3_BUCKET_NAME` or `SES_INBOUND_BUCKET_NAME`, subscribe the inbound SNS topic to `/events/inbound/ses-s3`, and add the MX records shown in the dashboard.
