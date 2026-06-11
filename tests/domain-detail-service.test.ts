@@ -568,6 +568,86 @@ describe("domain detail service", () => {
     }
   });
 
+  it("deprovisions hosted receiving before deleting a receiving-enabled domain", async () => {
+    const operationOrder: string[] = [];
+    const deprovisionReceivingDomain = vi.fn<
+      (_input: { domainName: string; region?: string | null }) => Promise<void>
+    >(async () => {
+      operationOrder.push("deprovision");
+    });
+    const service = createDomainDetailService({
+      getDomainById: async () =>
+        domainRow({
+          capabilities: [
+            { name: "sending", enabled: true },
+            { name: "receiving", enabled: true },
+          ],
+        }),
+      deprovisionReceivingDomain,
+      deleteDomainIdentity: async () => {
+        operationOrder.push("delete-ses-identity");
+      },
+      listDNSRecords: async () => [],
+      deleteDomainForUser: async (input) => {
+        operationOrder.push("delete-db-row");
+        return { id: input.id, name: "example.com" };
+      },
+    });
+
+    await service.deleteDomainDetail({
+      id: "11111111-1111-4111-8111-111111111111",
+      userId: "user-1",
+    });
+
+    expect(operationOrder).toEqual([
+      "deprovision",
+      "delete-ses-identity",
+      "delete-db-row",
+    ]);
+    expect(deprovisionReceivingDomain).toHaveBeenCalledWith({
+      domainName: "example.com",
+      region: "us-east-1",
+    });
+  });
+
+  it("continues deleting a receiving-enabled domain when hosted receiving deprovision fails", async () => {
+    const warn = vi.fn<Console["warn"]>();
+    const deleteDomainForUser = vi.fn<
+      (_input: DomainDeleteInput) => Promise<{ id: string; name: string }>
+    >(async (input) => ({ id: input.id, name: "example.com" }));
+    const service = createDomainDetailService({
+      getDomainById: async () =>
+        domainRow({
+          capabilities: [
+            { name: "sending", enabled: true },
+            { name: "receiving", enabled: true },
+          ],
+        }),
+      deprovisionReceivingDomain: async () => {
+        throw new Error("receipt rule unavailable");
+      },
+      deleteDomainIdentity: async () => {},
+      listDNSRecords: async () => [],
+      deleteDomainForUser,
+      logger: { warn },
+    });
+
+    const result = await service.deleteDomainDetail({
+      id: "11111111-1111-4111-8111-111111111111",
+      userId: "user-1",
+    });
+
+    expect(result.response.deleted).toBe(true);
+    expect(deleteDomainForUser).toHaveBeenCalledWith({
+      id: "11111111-1111-4111-8111-111111111111",
+      userId: "user-1",
+    });
+    expect(warn).toHaveBeenCalledWith(
+      "Failed to deprovision hosted receiving for example.com:",
+      expect.any(Error),
+    );
+  });
+
   it("deletes with best-effort SES and Cloudflare cleanup, cache invalidation, and event payload", async () => {
     const deletedInputs: DomainDeleteInput[] = [];
     const deleteDomainIdentity = vi.fn<(_: string) => Promise<void>>();

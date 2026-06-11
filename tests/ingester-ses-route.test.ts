@@ -135,6 +135,28 @@ vi.mock("@opensend/core", () => {
     },
     emitCloudWatchMetric: mockEmitCloudWatchMetric,
     enqueueDomainEvent: mockEnqueueDomainEvent,
+    getSesInboundSnsTopicArns: () => {
+      const topics = new Set<string>();
+      const configuredMap = process.env.SES_INBOUND_SNS_TOPIC_ARNS?.trim();
+      if (configuredMap?.startsWith("{")) {
+        const parsed: unknown = JSON.parse(configuredMap);
+        if (typeof parsed === "object" && parsed !== null) {
+          for (const value of Object.values(parsed)) {
+            if (typeof value === "string" && value.trim()) {
+              topics.add(value.trim());
+            }
+          }
+        }
+      }
+      for (const [name, value] of Object.entries(process.env)) {
+        if (!name.startsWith("SES_INBOUND_SNS_TOPIC_ARN_")) continue;
+        const topicArn = value?.trim();
+        if (topicArn) topics.add(topicArn);
+      }
+      const legacyTopicArn = process.env.SES_INBOUND_SNS_TOPIC_ARN?.trim();
+      if (legacyTopicArn) topics.add(legacyTopicArn);
+      return [...topics];
+    },
     getTelemetryCarrier: (context: {
       traceparent: string;
       correlationId: string;
@@ -602,6 +624,62 @@ describe("SES SNS ingestion route", () => {
     });
   });
 
+  it("allows SES receipt-rule S3 notifications from a configured region-specific inbound topic", async () => {
+    vi.stubEnv("SES_INBOUND_BUCKET_NAME", "opensend-inbound-mail");
+    vi.stubEnv(
+      "SES_INBOUND_SNS_TOPIC_ARNS",
+      JSON.stringify({
+        "eu-west-1": "arn:aws:sns:eu-west-1:123456789012:opensend-inbound-mail",
+      }),
+    );
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope({
+      overrides: {
+        TopicArn: "arn:aws:sns:eu-west-1:123456789012:opensend-inbound-mail",
+        SigningCertURL:
+          "https://sns.eu-west-1.amazonaws.com/SimpleNotificationService-test.pem",
+      },
+      sesMessage: {
+        eventType: "Received",
+        mail: {
+          messageId: "ses-inbound-msg-region",
+          destination: ["support@example.test"],
+          headers: [],
+        },
+        receipt: {
+          action: {
+            type: "S3",
+            bucketName: "opensend-inbound-mail",
+            objectKey: "mail/region",
+          },
+        },
+      },
+    });
+
+    const response = await app.request(
+      "http://localhost/events/inbound/ses-s3",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-amz-sns-message-type": "Notification",
+        },
+        body: JSON.stringify(envelope),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    expect(mockInboundProcess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: "sns-msg-1",
+        metadata: expect.objectContaining({
+          sns_topic_arn:
+            "arn:aws:sns:eu-west-1:123456789012:opensend-inbound-mail",
+        }),
+      }),
+    );
+  });
+
   it("rejects SES receipt-rule S3 notifications from an unexpected bucket", async () => {
     vi.stubEnv("SES_INBOUND_BUCKET_NAME", "opensend-inbound-mail");
     const app = (await import("../packages/ingester/src/index")).default;
@@ -653,6 +731,48 @@ describe("SES SNS ingestion route", () => {
         eventType: "Received",
         mail: {
           messageId: "ses-inbound-msg-3",
+          destination: ["support@example.test"],
+          headers: [],
+        },
+        receipt: {
+          action: {
+            type: "S3",
+            bucketName: "opensend-inbound-mail",
+            objectKey: "mail",
+          },
+        },
+      },
+    });
+
+    const response = await app.request(
+      "http://localhost/events/inbound/ses-s3",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-amz-sns-message-type": "Notification",
+        },
+        body: JSON.stringify(envelope),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain(
+      "Inbound SES S3 SNS topic is not allowed",
+    );
+    expect(mockS3Send).not.toHaveBeenCalled();
+    expect(mockInboundProcess).not.toHaveBeenCalled();
+  });
+
+  it("rejects the outbound SES events topic on the inbound route once an inbound topic is configured", async () => {
+    vi.stubEnv("SES_INBOUND_BUCKET_NAME", "opensend-inbound-mail");
+    vi.stubEnv("SES_INBOUND_SNS_TOPIC_ARN", SES_INBOUND_TOPIC_ARN);
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope({
+      sesMessage: {
+        eventType: "Received",
+        mail: {
+          messageId: "ses-inbound-msg-events-topic",
           destination: ["support@example.test"],
           headers: [],
         },

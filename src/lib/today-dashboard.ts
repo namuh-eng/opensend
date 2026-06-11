@@ -31,3 +31,28 @@ export function getTodayApiBaseUrl(headers?: HeaderReader): string {
 
   return `${proto}://${host}`;
 }
+
+export type TodayChartSummaryInput = {
+  total: number;
+  hourly: Array<{ sent: number }>;
+};
+
+export type TodayChartSummary = {
+  total: number;
+  peak: number;
+  label: string;
+};
+
+export function getTodayChartSummary({
+  total,
+  hourly,
+}: TodayChartSummaryInput): TodayChartSummary {
+  const peak = Math.max(1, ...hourly.map((bucket) => bucket.sent));
+  return {
+    total,
+    peak,
+    label: `${total.toLocaleString()} send${
+      total === 1 ? "" : "s"
+    } · peak ${peak.toLocaleString()}`,
+  };
+}

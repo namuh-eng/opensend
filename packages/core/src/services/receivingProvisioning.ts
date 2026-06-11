@@ -50,7 +50,7 @@ export class ReceivingProvisioningError extends Error {
 }
 
 function normalizeSesRegion(region: string | null | undefined): string {
-  const trimmed = region?.trim();
+  const trimmed = region?.trim().toLowerCase();
   return trimmed || DEFAULT_SES_REGION;
 }
 
@@ -60,8 +60,111 @@ function readConfiguredValue(value: string | null | undefined): string | null {
   return trimmed;
 }
 
-export function getSesInboundSnsTopicArn(): string | null {
-  return readConfiguredValue(process.env.SES_INBOUND_SNS_TOPIC_ARN);
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function envNameForSesInboundSnsTopicArn(region: string): string {
+  return `SES_INBOUND_SNS_TOPIC_ARN_${region
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")}`;
+}
+
+function readTopicArnMapEntry(
+  value: string | null | undefined,
+  region: string,
+): string | null {
+  const configured = readConfiguredValue(value);
+  if (!configured) return null;
+
+  if (configured.startsWith("{")) {
+    try {
+      const parsed: unknown = JSON.parse(configured);
+      if (!isRecord(parsed)) return null;
+      for (const [key, topicArn] of Object.entries(parsed)) {
+        if (
+          normalizeSesRegion(key) !== region ||
+          typeof topicArn !== "string"
+        ) {
+          continue;
+        }
+        return readConfiguredValue(topicArn);
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  for (const entry of configured.split(/[\n,;]/)) {
+    const separatorIndex = entry.indexOf("=");
+    if (separatorIndex === -1) continue;
+    const key = entry.slice(0, separatorIndex);
+    if (normalizeSesRegion(key) !== region) continue;
+    return readConfiguredValue(entry.slice(separatorIndex + 1));
+  }
+
+  return null;
+}
+
+export function getSesInboundSnsTopicArn(
+  region?: string | null,
+): string | null {
+  const resolvedRegion = normalizeSesRegion(region);
+  const regionSpecificTopicArn = readConfiguredValue(
+    process.env[envNameForSesInboundSnsTopicArn(resolvedRegion)],
+  );
+
+  return (
+    regionSpecificTopicArn ??
+    readTopicArnMapEntry(
+      process.env.SES_INBOUND_SNS_TOPIC_ARNS,
+      resolvedRegion,
+    ) ??
+    readConfiguredValue(process.env.SES_INBOUND_SNS_TOPIC_ARN)
+  );
+}
+
+export function getSesInboundSnsTopicArns(): string[] {
+  const topicArns = new Set<string>();
+
+  for (const [name, value] of Object.entries(process.env)) {
+    if (!name.startsWith("SES_INBOUND_SNS_TOPIC_ARN_")) continue;
+    const topicArn = readConfiguredValue(value);
+    if (topicArn) topicArns.add(topicArn);
+  }
+
+  const configuredMap = readConfiguredValue(
+    process.env.SES_INBOUND_SNS_TOPIC_ARNS,
+  );
+  if (configuredMap?.startsWith("{")) {
+    try {
+      const parsed: unknown = JSON.parse(configuredMap);
+      if (isRecord(parsed)) {
+        for (const topicArn of Object.values(parsed)) {
+          if (typeof topicArn !== "string") continue;
+          const configuredTopicArn = readConfiguredValue(topicArn);
+          if (configuredTopicArn) topicArns.add(configuredTopicArn);
+        }
+      }
+    } catch {
+      // Ignore malformed optional maps and fall through to the legacy value.
+    }
+  } else if (configuredMap) {
+    for (const entry of configuredMap.split(/[\n,;]/)) {
+      const separatorIndex = entry.indexOf("=");
+      if (separatorIndex === -1) continue;
+      const topicArn = readConfiguredValue(entry.slice(separatorIndex + 1));
+      if (topicArn) topicArns.add(topicArn);
+    }
+  }
+
+  const legacyTopicArn = readConfiguredValue(
+    process.env.SES_INBOUND_SNS_TOPIC_ARN,
+  );
+  if (legacyTopicArn) topicArns.add(legacyTopicArn);
+
+  return [...topicArns];
 }
 
 export function getSesInboundBucketName(): string | null {
@@ -104,14 +207,14 @@ export function buildReceivingReceiptRuleName(domainName: string): string {
   return `${prefix}-${hash}`;
 }
 
-function readConfig(): ReceivingProvisioningConfig {
+function readConfig(region?: string | null): ReceivingProvisioningConfig {
   const bucketName = getSesInboundBucketName();
-  const topicArn = getSesInboundSnsTopicArn();
+  const topicArn = getSesInboundSnsTopicArn(region);
 
   if (!bucketName || !topicArn) {
     throw new ReceivingProvisioningError(
       "missing_config",
-      "OpenSend receiving is not configured. Set SES_INBOUND_SNS_TOPIC_ARN and S3_BUCKET_NAME or SES_INBOUND_BUCKET_NAME before enabling receiving.",
+      "OpenSend receiving is not configured. Set SES_INBOUND_SNS_TOPIC_ARN (or SES_INBOUND_SNS_TOPIC_ARNS for multi-region receiving) and S3_BUCKET_NAME or SES_INBOUND_BUCKET_NAME before enabling receiving.",
     );
   }
 
@@ -168,10 +271,16 @@ function isMissingRuleError(error: unknown): boolean {
   );
 }
 
+type ReceivingProvisioningConfigReader = (
+  region?: string | null,
+) => ReceivingProvisioningConfig;
+
 export class ReceivingProvisioningService {
   private readonly clients = new Map<string, SESClient>();
 
-  constructor(private readonly configReader = readConfig) {}
+  constructor(
+    private readonly configReader: ReceivingProvisioningConfigReader = readConfig,
+  ) {}
 
   private getClient(region?: string | null): SesReceivingClient {
     const resolved = normalizeSesRegion(region);
@@ -231,7 +340,7 @@ export class ReceivingProvisioningService {
       };
     }
 
-    const config = this.configReader();
+    const config = this.configReader(input.region);
     const client = this.getClient(input.region);
     await this.ensureRuleSet({ client, ruleSetName: config.ruleSetName });
 
