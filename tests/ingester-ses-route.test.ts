@@ -764,6 +764,48 @@ describe("SES SNS ingestion route", () => {
     expect(mockInboundProcess).not.toHaveBeenCalled();
   });
 
+  it("rejects the outbound SES events topic on the inbound route once an inbound topic is configured", async () => {
+    vi.stubEnv("SES_INBOUND_BUCKET_NAME", "opensend-inbound-mail");
+    vi.stubEnv("SES_INBOUND_SNS_TOPIC_ARN", SES_INBOUND_TOPIC_ARN);
+    const app = (await import("../packages/ingester/src/index")).default;
+    const envelope = createSignedEnvelope({
+      sesMessage: {
+        eventType: "Received",
+        mail: {
+          messageId: "ses-inbound-msg-events-topic",
+          destination: ["support@example.test"],
+          headers: [],
+        },
+        receipt: {
+          action: {
+            type: "S3",
+            bucketName: "opensend-inbound-mail",
+            objectKey: "mail",
+          },
+        },
+      },
+    });
+
+    const response = await app.request(
+      "http://localhost/events/inbound/ses-s3",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-amz-sns-message-type": "Notification",
+        },
+        body: JSON.stringify(envelope),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toContain(
+      "Inbound SES S3 SNS topic is not allowed",
+    );
+    expect(mockS3Send).not.toHaveBeenCalled();
+    expect(mockInboundProcess).not.toHaveBeenCalled();
+  });
+
   it("verifies the SNS signature, persists a normalized event, and queues webhook delivery", async () => {
     const persistedEvent = {
       id: "evt-1",

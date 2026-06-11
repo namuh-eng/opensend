@@ -122,11 +122,19 @@ function getExpectedInboundSesS3TopicArns(): string[] {
   for (const value of [
     process.env.INBOUND_SES_S3_SNS_TOPIC_ARN,
     process.env.SES_INBOUND_S3_SNS_TOPIC_ARN,
-    process.env.SES_EVENTS_SNS_TOPIC_ARN,
   ]) {
     const raw = value?.trim();
     if (!raw || raw === "undefined" || raw === "null") continue;
     configuredTopics.add(raw);
+  }
+  // The outbound SES events topic is a legacy fallback only for deployments
+  // without an inbound-specific topic; once one is configured, the events
+  // topic must not reach the inbound S3 parsing path.
+  if (configuredTopics.size === 0) {
+    const raw = process.env.SES_EVENTS_SNS_TOPIC_ARN?.trim();
+    if (raw && raw !== "undefined" && raw !== "null") {
+      configuredTopics.add(raw);
+    }
   }
   return [...configuredTopics];
 }
