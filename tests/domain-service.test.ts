@@ -80,6 +80,9 @@ describe("domain service", () => {
         dkimPublicKey: "public-key",
         dkimPrivateKeyEnc: { ct: "ciphertext", iv: "iv" },
       });
+    const setMailFromDomain = vi
+      .spyOn(domainIdentityProvider, "setMailFromDomain")
+      .mockResolvedValue(undefined);
     const repository = createRepository({
       async create(data) {
         inserted.push(data);
@@ -114,8 +117,14 @@ describe("domain service", () => {
         status: "pending",
         ttl: "Auto",
       });
+      expect(setMailFromDomain).toHaveBeenCalledWith(
+        "example.com",
+        "send.example.com",
+        { region: "us-east-1" },
+      );
     } finally {
       createDomainIdentity.mockRestore();
+      setMailFromDomain.mockRestore();
     }
   });
 
@@ -146,9 +155,11 @@ describe("domain service", () => {
       },
     });
 
+    const setMailFromDomain = vi.fn(async () => undefined);
     const service = createDomainService({
       repository,
       createDomainIdentity,
+      setMailFromDomain,
       invalidateDomainCaches,
       syncDomainConfigurationSet: vi.fn(async () => "cfg-created-domain"),
     });
@@ -176,6 +187,12 @@ describe("domain service", () => {
       userId: "user-1",
       region: "eu-west-1",
     });
+    // Custom return path label drives the MAIL FROM subdomain.
+    expect(setMailFromDomain).toHaveBeenCalledWith(
+      "example.com",
+      "outbound.example.com",
+      { region: "eu-west-1" },
+    );
     expect(inserted[0]).toMatchObject({
       name: "example.com",
       region: "eu-west-1",
@@ -265,6 +282,7 @@ describe("domain service", () => {
       },
     });
     const service = createDomainService({
+      setMailFromDomain: vi.fn(async () => undefined),
       repository,
       createDomainIdentity: async () => ({ dkimTokens: [] }),
       invalidateDomainCaches: vi.fn(),
@@ -304,6 +322,7 @@ describe("domain service", () => {
   it("uses external API defaults when optional create fields are omitted", async () => {
     const inserted: DomainInsert[] = [];
     const service = createDomainService({
+      setMailFromDomain: vi.fn(async () => undefined),
       repository: createRepository({
         async create(data) {
           inserted.push(data);
@@ -394,6 +413,7 @@ describe("domain service", () => {
     });
 
     const service = createDomainService({
+      setMailFromDomain: vi.fn(async () => undefined),
       repository,
       getDomainIdentity,
       invalidateDomainCaches: vi.fn(),
@@ -453,6 +473,7 @@ describe("domain service", () => {
       },
     });
     const service = createDomainService({
+      setMailFromDomain: vi.fn(async () => undefined),
       repository,
       getDomainIdentity: async () => ({ verified: true }),
       invalidateDomainCaches: vi.fn(),
@@ -528,6 +549,7 @@ describe("domain service", () => {
       >();
 
     const service = createDomainService({
+      setMailFromDomain: vi.fn(async () => undefined),
       repository,
       getDomainIdentity: async () => ({ verified: false }),
       invalidateDomainCaches,
@@ -581,6 +603,7 @@ describe("domain service", () => {
     });
 
     const service = createDomainService({
+      setMailFromDomain: vi.fn(async () => undefined),
       repository,
       getDomainIdentity: async (name) => {
         if (name === "a.example") return { verified: true };
@@ -612,6 +635,7 @@ describe("domain service", () => {
       userId?: string | null;
     } | null = null;
     const service = createDomainService({
+      setMailFromDomain: vi.fn(async () => undefined),
       repository: createRepository({
         async list(options) {
           listOptions = options;
@@ -648,5 +672,75 @@ describe("domain service", () => {
       ],
       hasMore: true,
     });
+  });
+
+  it("reconcileVerification activates MAIL FROM on verified identities that lack it", async () => {
+    const setMailFromDomain = vi.fn(async () => undefined);
+    const service = createDomainService({
+      repository: createRepository({
+        async findById() {
+          return domainRow({ status: "pending" });
+        },
+      }),
+      getDomainIdentity: vi.fn(async () => ({
+        verified: true,
+        mailFromDomain: null,
+      })),
+      setMailFromDomain,
+      invalidateDomainCaches: vi.fn(),
+      syncDomainConfigurationSet: vi.fn(async () => "cfg-domain-1"),
+    });
+
+    await service.reconcileVerification("domain-1");
+
+    expect(setMailFromDomain).toHaveBeenCalledWith(
+      "example.com",
+      "send.example.com",
+      { region: "us-east-1" },
+    );
+  });
+
+  it("reconcileVerification skips MAIL FROM when SES already matches the return path", async () => {
+    const setMailFromDomain = vi.fn(async () => undefined);
+    const service = createDomainService({
+      repository: createRepository({
+        async findById() {
+          return domainRow({ status: "verified" });
+        },
+      }),
+      getDomainIdentity: vi.fn(async () => ({
+        verified: true,
+        mailFromDomain: "send.example.com",
+      })),
+      setMailFromDomain,
+      invalidateDomainCaches: vi.fn(),
+      syncDomainConfigurationSet: vi.fn(async () => "cfg-domain-1"),
+    });
+
+    await service.reconcileVerification("domain-1");
+
+    expect(setMailFromDomain).not.toHaveBeenCalled();
+  });
+
+  it("createDomain succeeds even when the MAIL FROM call fails (non-fatal)", async () => {
+    const service = createDomainService({
+      repository: createRepository(),
+      createDomainIdentity: vi.fn(async () => ({
+        dkimTokens: ["dkim-a"],
+        status: "PENDING",
+      })),
+      setMailFromDomain: vi.fn(async () => {
+        throw new Error("ses unavailable");
+      }),
+      invalidateDomainCaches: vi.fn(),
+      syncDomainConfigurationSet: vi.fn(async () => "cfg-created-domain"),
+    });
+
+    const result = await service.createDomain({
+      name: "example.com",
+      userId: "user-1",
+    });
+
+    expect(result.name).toBe("example.com");
   });
 });

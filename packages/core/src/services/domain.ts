@@ -225,9 +225,14 @@ export type DomainServiceDependencies = {
   getDomainIdentity?: (
     domain: string,
     options?: { region?: string },
-  ) => Promise<{ verified?: boolean }>;
+  ) => Promise<{ verified?: boolean; mailFromDomain?: string | null }>;
   deleteDomainIdentity?: (
     domain: string,
+    options?: { region?: string },
+  ) => Promise<void>;
+  setMailFromDomain?: (
+    domain: string,
+    mailFromDomain: string,
     options?: { region?: string },
   ) => Promise<void>;
   /**
@@ -370,6 +375,12 @@ export function createDomainService({
     domainIdentityProvider.getDomainIdentity(domain, options),
   deleteDomainIdentity = (domain: string, options?: { region?: string }) =>
     domainIdentityProvider.deleteDomainIdentity(domain, options),
+  setMailFromDomain = (
+    domain: string,
+    mailFromDomain: string,
+    options?: { region?: string },
+  ) =>
+    domainIdentityProvider.setMailFromDomain(domain, mailFromDomain, options),
   invalidateDomainCaches,
   syncDomainConfigurationSet = (input) =>
     configurationSetService.syncDomainConfigurationSet(input),
@@ -419,6 +430,37 @@ export function createDomainService({
         configErr,
       );
       return domain;
+    }
+  }
+
+  /**
+   * Point SES's MAIL FROM (envelope/bounce) domain at the return-path
+   * subdomain we already ask customers to add DNS records for, so SPF aligns
+   * with their domain. Without this call the records are decorative and every
+   * send goes out with MAIL FROM = amazonses.com (issue #650).
+   *
+   * Non-fatal by design: SES falls back to the default MAIL FROM on MX
+   * failure, so the worst case equals the previous behavior.
+   */
+  async function ensureMailFromAttributes(
+    domain: Pick<DomainRow, "id" | "name" | "region" | "customReturnPath">,
+    currentMailFromDomain?: string | null,
+  ): Promise<void> {
+    const desired = buildReturnPathRecordName(
+      domain.name,
+      domain.customReturnPath,
+    );
+    if (currentMailFromDomain === desired) return;
+
+    try {
+      await setMailFromDomain(domain.name, desired, {
+        region: domain.region ?? undefined,
+      });
+    } catch (mailFromErr) {
+      console.warn(
+        `Failed to set SES MAIL FROM for domain ${domain.id}:`,
+        mailFromErr,
+      );
     }
   }
 
@@ -482,6 +524,10 @@ export function createDomainService({
       const domainWithConfigSet =
         await syncAndPersistDomainConfigurationSet(row);
 
+      // Activate the custom MAIL FROM immediately so SES starts watching the
+      // return-path DNS records the customer is about to add.
+      await ensureMailFromAttributes(domainWithConfigSet);
+
       await invalidateDomainCaches({
         id: domainWithConfigSet.id,
         name: domainWithConfigSet.name,
@@ -516,6 +562,12 @@ export function createDomainService({
           (record, idx) => record.status !== recordsForUpdate[idx].status,
         );
       const statusChanged = domain.status !== nextStatus;
+
+      if (nextStatus === "verified") {
+        // Repair pass for identities that predate automatic MAIL FROM
+        // activation (or whose SES-side setting drifted).
+        await ensureMailFromAttributes(domain, identity.mailFromDomain);
+      }
 
       if (!statusChanged && !recordsChanged) {
         const repairedDomain =
