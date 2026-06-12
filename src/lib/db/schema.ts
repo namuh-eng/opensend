@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -814,6 +815,12 @@ export const inboundProviderEvents = pgTable(
       table.provider,
       table.providerEventId,
     ),
+    // Partial unique guard: at most one non-duplicate row per provider event.
+    // Mirrors the hand-authored index in the migration chain; declared here so
+    // push-provisioned databases get the same dedupe protection.
+    uniqueIndex("inbound_provider_events_primary_event_idx")
+      .on(table.provider, table.providerEventId)
+      .where(sql`status <> 'duplicate_provider_event'`),
     index("inbound_provider_events_status_idx").on(table.status),
     index("inbound_provider_events_user_created_at_idx").on(
       table.userId,
