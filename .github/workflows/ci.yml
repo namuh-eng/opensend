@@ -95,7 +95,22 @@ jobs:
         run: docker compose up postgres -d
 
       - name: Wait for Postgres
-        run: until docker compose exec -T postgres pg_isready -U opensend >/dev/null 2>&1; do sleep 1; done
+        # pg_isready alone races the initdb temp-server restart: it reports
+        # ready, then the server shuts down to restart with the final config
+        # ("FATAL: the database system is shutting down"). Require a real
+        # query to succeed twice across a 2s gap before proceeding.
+        run: |
+          for i in $(seq 1 60); do
+            if docker compose exec -T postgres psql -U opensend -d opensend -At -c 'SELECT 1' >/dev/null 2>&1; then
+              sleep 2
+              if docker compose exec -T postgres psql -U opensend -d opensend -At -c 'SELECT 1' >/dev/null 2>&1; then
+                exit 0
+              fi
+            fi
+            sleep 1
+          done
+          echo "Postgres did not become ready in time" >&2
+          exit 1
 
       - name: Create comparison databases
         run: |
