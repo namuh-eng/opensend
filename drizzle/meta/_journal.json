@@ -253,6 +253,13 @@
       "when": 1781248612743,
       "tag": "0035_reconcile_api_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1781250501813,
+      "tag": "0036_schema_parity_reconciliation",
+      "breakpoints": true
     }
   ]
 }
