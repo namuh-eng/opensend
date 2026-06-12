@@ -5,6 +5,7 @@ import {
   DeleteEmailIdentityCommand,
   GetEmailIdentityCommand,
   PutEmailIdentityDkimSigningAttributesCommand,
+  PutEmailIdentityMailFromAttributesCommand,
   SESv2Client,
   SendEmailCommand,
 } from "@aws-sdk/client-sesv2";
@@ -46,6 +47,10 @@ type EmailProviderGetDomainIdentityResult = {
   verified: boolean;
   dkimStatus: string;
   dkimTokens: string[];
+  /** Custom MAIL FROM domain configured on the identity, if any. */
+  mailFromDomain: string | null;
+  /** SES MAIL FROM state: PENDING | SUCCESS | FAILED | TEMPORARY_FAILURE | NOT_STARTED. */
+  mailFromStatus: string;
 };
 
 const hasAwsCredentials =
@@ -166,7 +171,13 @@ export class EmailProviderService {
     if (!domain) throw new Error("domain is required");
 
     if (useDevStub) {
-      return { verified: false, dkimStatus: "NOT_STARTED", dkimTokens: [] };
+      return {
+        verified: false,
+        dkimStatus: "NOT_STARTED",
+        dkimTokens: [],
+        mailFromDomain: null,
+        mailFromStatus: "NOT_STARTED",
+      };
     }
 
     const res = await this.getClient(options.region).send(
@@ -177,7 +188,39 @@ export class EmailProviderService {
       verified: res.VerifiedForSendingStatus ?? false,
       dkimStatus: res.DkimAttributes?.Status ?? "NOT_STARTED",
       dkimTokens: res.DkimAttributes?.Tokens ?? [],
+      mailFromDomain: res.MailFromAttributes?.MailFromDomain ?? null,
+      mailFromStatus:
+        res.MailFromAttributes?.MailFromDomainStatus ?? "NOT_STARTED",
     };
+  }
+
+  /**
+   * Point the identity's MAIL FROM (envelope/bounce) domain at the customer's
+   * return-path subdomain so SPF aligns with their domain. USE_DEFAULT_VALUE
+   * keeps mail flowing on amazonses.com if the MX record is missing or breaks.
+   */
+  async setMailFromDomain(
+    domain: string,
+    mailFromDomain: string,
+    options: { region?: string } = {},
+  ): Promise<void> {
+    if (!domain) throw new Error("domain is required");
+    if (!mailFromDomain) throw new Error("mailFromDomain is required");
+
+    if (useDevStub) {
+      console.log(
+        `[DEV] Would set SES MAIL FROM for ${domain} to ${mailFromDomain} in ${normalizeSesRegion(options.region)}`,
+      );
+      return;
+    }
+
+    await this.getClient(options.region).send(
+      new PutEmailIdentityMailFromAttributesCommand({
+        EmailIdentity: domain,
+        MailFromDomain: mailFromDomain,
+        BehaviorOnMxFailure: "USE_DEFAULT_VALUE",
+      }),
+    );
   }
 
   async deleteDomainIdentity(
