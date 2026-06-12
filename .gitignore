@@ -25,6 +25,7 @@ scripts/*
 !scripts/seed.ts
 !scripts/install-git-hooks.mjs
 !scripts/check-changed-files.mjs
+!scripts/check-migration-parity.sh
 !scripts/deploy.sh
 
 # Playwright test artifacts
