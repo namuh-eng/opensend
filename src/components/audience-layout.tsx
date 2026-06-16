@@ -1,6 +1,7 @@
 "use client";
 
 import { AddContactModal } from "@/components/add-contact-modal";
+import { ImportCsvModal } from "@/components/import-csv-modal";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -25,6 +26,7 @@ export function AudienceLayout({ stats, children }: AudienceLayoutProps) {
   const pathname = usePathname();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -88,7 +90,10 @@ export function AudienceLayout({ stats, children }: AudienceLayoutProps) {
               <button
                 type="button"
                 className="w-full text-left px-3 py-2 text-[13px] text-fg hover:bg-white/10 transition-colors"
-                onClick={() => setDropdownOpen(false)}
+                onClick={() => {
+                  setDropdownOpen(false);
+                  setImportModalOpen(true);
+                }}
               >
                 Import CSV
               </button>
@@ -159,6 +164,11 @@ export function AudienceLayout({ stats, children }: AudienceLayoutProps) {
       <AddContactModal
         open={addModalOpen}
         onClose={() => setAddModalOpen(false)}
+        onSuccess={() => router.refresh()}
+      />
+      <ImportCsvModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
         onSuccess={() => router.refresh()}
       />
     </div>
