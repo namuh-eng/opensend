@@ -2,6 +2,7 @@
 
 import { StatusBadge } from "@/components/status-badge";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export interface EmailListItem {
   id: string;
@@ -113,7 +114,6 @@ export function EmailsSendingDataTable({
           <th className="mono px-4 py-2.5 text-left text-[10.5px] uppercase tracking-[0.12em] text-fg-3">
             Sent
           </th>
-          <th className="w-10 px-4 py-2.5" />
         </tr>
       </thead>
       <tbody>
@@ -150,10 +150,25 @@ function EmailRow({
   email,
   primaryTo,
 }: { email: EmailListItem; primaryTo: string }) {
+  const router = useRouter();
   const displayedTimestamp = email.sentAt ?? email.createdAt;
+  const href = `/emails/${email.id}`;
+  const openEmail = () => router.push(href);
 
   return (
-    <tr className="border-b border-line transition-colors hover:bg-bg-2">
+    <tr
+      className="group cursor-pointer border-b border-line transition-colors hover:bg-bg-2 focus-within:bg-bg-2"
+      data-testid="email-row"
+      onClick={openEmail}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openEmail();
+        }
+      }}
+      tabIndex={0}
+      title={`Open email ${email.subject}`}
+    >
       <td className="px-4 py-3 text-[13.5px] text-fg">
         <div className="flex items-center gap-2.5">
           <div
@@ -163,12 +178,9 @@ function EmailRow({
           >
             {primaryTo.charAt(0).toUpperCase()}
           </div>
-          <Link
-            href={`/emails/${email.id}`}
-            className="text-fg transition-colors hover:text-accent"
-          >
+          <span className="text-fg transition-colors group-hover:text-accent">
             {primaryTo}
-          </Link>
+          </span>
         </div>
       </td>
       <td className="px-4 py-3">
@@ -177,38 +189,21 @@ function EmailRow({
           variant={getStatusVariant(email.lastEvent)}
         />
       </td>
-      <td className="px-4 py-3 text-[13.5px] text-fg-2">{email.subject}</td>
+      <td className="px-4 py-3 text-[13.5px]">
+        <Link
+          href={href}
+          className="font-medium text-fg transition-colors hover:text-accent"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {email.subject}
+        </Link>
+      </td>
       <td
         className="mono px-4 py-3 text-[12px] text-fg-3"
         title={new Date(displayedTimestamp).toLocaleString()}
       >
         {formatRelativeTime(displayedTimestamp)}
       </td>
-      <td className="relative w-10 px-4 py-3">
-        <RowActions />
-      </td>
     </tr>
-  );
-}
-
-function RowActions() {
-  return (
-    <button
-      type="button"
-      aria-label="More actions"
-      className="btn btn-ghost btn-sm p-1"
-    >
-      <svg
-        aria-hidden="true"
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-      >
-        <circle cx="12" cy="5" r="1.5" />
-        <circle cx="12" cy="12" r="1.5" />
-        <circle cx="12" cy="19" r="1.5" />
-      </svg>
-    </button>
   );
 }
