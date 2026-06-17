@@ -511,6 +511,9 @@ describe("contact API tenant isolation", () => {
   });
 
   it("stamps imported contacts with the caller user", async () => {
+    // CSV import is dashboard-session-only: the caller user comes from the
+    // authenticated session, not a Bearer key.
+    mockGetServerSession.mockResolvedValue({ user: { id: "user-b" } });
     mockContactOperationsService.importContacts.mockResolvedValueOnce({
       object: "import",
       created_count: 1,
@@ -528,7 +531,7 @@ describe("contact API tenant isolation", () => {
 
     const route = await import("@/app/api/contacts/import/route");
     const response = await route.POST({
-      headers: new Headers({ authorization: "Bearer user-b-key" }),
+      headers: new Headers(),
       formData: async () => formData,
     } as never);
 

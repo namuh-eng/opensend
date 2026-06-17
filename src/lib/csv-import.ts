@@ -1,18 +1,29 @@
 import Papa from "papaparse";
 
 /**
- * Reads only the header row of a CSV file using PapaParse preview mode.
- * O(first-row) on the client — does not load the full file into memory.
+ * Reads only the first few rows of a CSV file using PapaParse preview mode —
+ * does not load the full file into memory.
+ *
+ * Uses `skipEmptyLines: "greedy"` so comma-only junk rows (e.g. a leading
+ * `,,,,,,` exported by some tools) are skipped and the real header row is
+ * used. `preview` is > 1 because greedy-skipped rows still count toward the
+ * preview budget, so preview: 1 would return nothing when a junk row leads.
+ * Parses without `header` so we read the raw header cells directly, trim
+ * them, and drop blank columns (trailing `,,,,`) — otherwise PapaParse
+ * surfaces them as nameless `_1`, `_2`, … columns in the mapping UI.
  */
 export function parseCsvHeaders(file: File): Promise<string[]> {
   return new Promise((resolve, reject) => {
-    Papa.parse(file, {
-      preview: 1,
-      header: true,
-      skipEmptyLines: true,
+    Papa.parse<string[]>(file, {
+      preview: 5,
+      header: false,
+      skipEmptyLines: "greedy",
       complete(results) {
-        const fields = results.meta.fields ?? [];
-        resolve(fields);
+        const firstRow = (results.data[0] as string[] | undefined) ?? [];
+        const headers = firstRow
+          .map((cell) => (typeof cell === "string" ? cell.trim() : ""))
+          .filter((cell) => cell.length > 0);
+        resolve(headers);
       },
       error(err) {
         reject(new Error(err.message));

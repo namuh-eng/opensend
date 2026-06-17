@@ -1,15 +1,18 @@
-import path from "node:path";
 import { expect, test } from "./fixtures/auth";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Absolute path to the shared CSV fixture. */
-const FIXTURE_CSV = path.join(
-  import.meta.dirname,
-  "../fixtures/contacts-sample.csv",
-);
+/**
+ * Path to the shared CSV fixture, relative to the repo root. Playwright's
+ * setInputFiles resolves relative paths against the cwd (the project root
+ * when running `bunx playwright test`).
+ */
+const FIXTURE_CSV = "tests/fixtures/contacts-sample.csv";
+
+/** Fixture with a non-standard `plan` column for custom-property mapping. */
+const FIXTURE_WITH_PROPERTY = "tests/fixtures/contacts-with-property.csv";
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -79,12 +82,14 @@ test.describe("Import CSV modal", () => {
 
     await page.getByLabel("CSV file").setInputFiles(FIXTURE_CSV);
 
-    // Mapping step should appear with column headers detected
+    // Mapping step should appear with the CSV column headers detected.
+    // Use exact matches so the column-name cells are not confused with the
+    // "Email address" select options or the "Emails" nav item.
     await expect(
       page.getByText(/map csv columns/i, { exact: false }),
     ).toBeVisible();
-    await expect(page.getByText("email")).toBeVisible();
-    await expect(page.getByText("first_name")).toBeVisible();
+    await expect(page.getByText("email", { exact: true })).toBeVisible();
+    await expect(page.getByText("first_name", { exact: true })).toBeVisible();
   });
 
   test("Import button is disabled until email column is mapped", async ({
@@ -113,7 +118,6 @@ test.describe("Import CSV modal", () => {
   test("happy path: imports contacts from CSV and shows success", async ({
     authenticatedPage: page,
     e2eDb,
-    e2eRunId,
     e2eTenant,
   }) => {
     await page.goto("/audience");
@@ -143,12 +147,20 @@ test.describe("Import CSV modal", () => {
       page.getByRole("heading", { name: "Import CSV" }),
     ).not.toBeVisible();
 
-    // Verify at least one of the fixture emails landed in the DB
+    // Verify all three fixture contacts landed in the DB under this tenant.
+    // The fixture uses a static @e2erunid.e2e.opensend.test domain; cleanup
+    // removes them via the user_id prefix regardless of the email domain.
     const { rows } = await e2eDb.query<{ email: string }>(
-      `select email from contacts where email like '%@${e2eRunId}.e2e.opensend.test' and user_id = $1`,
+      `select email from contacts
+       where user_id = $1 and email like '%@e2erunid.e2e.opensend.test'
+       order by email`,
       [e2eTenant.user.id],
     );
-    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.map((r) => r.email)).toEqual([
+      "alice@e2erunid.e2e.opensend.test",
+      "bob@e2erunid.e2e.opensend.test",
+      "carol@e2erunid.e2e.opensend.test",
+    ]);
   });
 
   test("shows file type error for non-CSV files without making a network request", async ({
@@ -196,5 +208,39 @@ test.describe("Import CSV modal", () => {
     await expect(
       page.getByRole("button", { name: "Import" }),
     ).not.toBeVisible();
+  });
+
+  test("maps a non-standard column to a custom property", async ({
+    authenticatedPage: page,
+    e2eDb,
+    e2eTenant,
+  }) => {
+    await page.goto("/audience");
+
+    await page.getByRole("button", { name: /add contacts/i }).click();
+    await page.getByText("Import CSV").click();
+
+    await page.getByLabel("CSV file").setInputFiles(FIXTURE_WITH_PROPERTY);
+
+    // The `plan` column is not a standard field, so it offers a
+    // "New property" option keyed by the column name.
+    await page
+      .getByLabel("Map column plan to contact field")
+      .selectOption("plan");
+
+    await page.getByRole("button", { name: "Import" }).click();
+    await expect(page.getByText(/import complete/i)).toBeVisible();
+    await page.getByRole("button", { name: "Done" }).click();
+
+    // The custom property is stored on the contact's custom_properties JSON.
+    const { rows } = await e2eDb.query<{
+      custom_properties: Record<string, string> | null;
+    }>(
+      `select custom_properties from contacts
+       where user_id = $1 and email = 'dave@e2erunid.e2e.opensend.test'`,
+      [e2eTenant.user.id],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.custom_properties).toMatchObject({ plan: "pro" });
   });
 });

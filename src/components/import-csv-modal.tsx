@@ -26,6 +26,24 @@ function extractSegments(payload: unknown): Segment[] {
   return Array.isArray(m.data) ? m.data.filter(isSegment) : [];
 }
 
+interface PropertyOption {
+  key: string;
+  name: string;
+}
+
+function isProperty(value: unknown): value is PropertyOption {
+  if (typeof value !== "object" || value === null) return false;
+  const m = value as Record<string, unknown>;
+  return typeof m.key === "string" && typeof m.name === "string";
+}
+
+function extractProperties(payload: unknown): PropertyOption[] {
+  if (Array.isArray(payload)) return payload.filter(isProperty);
+  if (typeof payload !== "object" || payload === null) return [];
+  const m = payload as Record<string, unknown>;
+  return Array.isArray(m.data) ? m.data.filter(isProperty) : [];
+}
+
 const CONTACT_IMPORT_MAX_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MIME = new Set([
   "text/csv",
@@ -52,6 +70,7 @@ export function ImportCsvModal({
   const [assignments, setAssignments] = useState<Record<string, string>>({});
   const [fileError, setFileError] = useState<string | null>(null);
   const [segments, setSegments] = useState<Segment[]>([]);
+  const [properties, setProperties] = useState<PropertyOption[]>([]);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
   const [segmentSearch, setSegmentSearch] = useState("");
   const [segmentDropdownOpen, setSegmentDropdownOpen] = useState(false);
@@ -81,6 +100,19 @@ export function ImportCsvModal({
     }
   }, []);
 
+  const fetchProperties = useCallback(async () => {
+    try {
+      // Same-origin: the dashboard session cookie authenticates the request.
+      const res = await fetch("/api/properties");
+      if (res.ok) {
+        const data = await res.json();
+        setProperties(extractProperties(data));
+      }
+    } catch {
+      // ignore — custom-property options are optional
+    }
+  }, []);
+
   // Reset state when modal opens
   useEffect(() => {
     if (open) {
@@ -94,8 +126,9 @@ export function ImportCsvModal({
       setSegmentSearch("");
       setCreatedCount(0);
       fetchSegments();
+      fetchProperties();
     }
-  }, [open, fetchSegments]);
+  }, [open, fetchSegments, fetchProperties]);
 
   // Escape to close
   useEffect(() => {
@@ -153,11 +186,14 @@ export function ImportCsvModal({
       }
       setFile(picked);
       setHeaders(cols);
-      // Pre-assign columns whose names exactly match known field keys
+      // Pre-assign columns whose names match a known field or a defined
+      // custom property key; everything else defaults to skip.
       const autoAssign: Record<string, string> = {};
       for (const col of cols) {
-        const match = KNOWN_FIELD_KEYS.find((k) => k === col.toLowerCase());
-        autoAssign[col] = match ?? SKIP_SENTINEL;
+        const lower = col.toLowerCase();
+        const known = KNOWN_FIELD_KEYS.find((k) => k === lower);
+        const prop = properties.find((p) => p.key.toLowerCase() === lower);
+        autoAssign[col] = known ?? prop?.key ?? SKIP_SENTINEL;
       }
       setAssignments(autoAssign);
       setStep("map");
@@ -170,17 +206,6 @@ export function ImportCsvModal({
 
   const handleSubmit = async () => {
     if (!file) return;
-
-    const apiKey =
-      typeof window !== "undefined"
-        ? (localStorage?.getItem?.("api_key") ?? null)
-        : null;
-    if (!apiKey) {
-      setSubmitError(
-        "No API key found. Add a full-access API key in Settings first.",
-      );
-      return;
-    }
 
     let mapping: Record<string, string>;
     try {
@@ -203,9 +228,10 @@ export function ImportCsvModal({
         formData.append("segment_id", selectedSegment.id);
       }
 
+      // Same-origin request: the browser sends the dashboard session cookie
+      // automatically, so no Authorization header is needed.
       const res = await fetch("/api/contacts/import", {
         method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
         body: formData,
       });
 
@@ -351,6 +377,21 @@ export function ImportCsvModal({
                         <option value="email">Email address</option>
                         <option value="first_name">First name</option>
                         <option value="last_name">Last name</option>
+                        {properties.length > 0 && (
+                          <optgroup label="Custom properties">
+                            {properties.map((p) => (
+                              <option key={p.key} value={p.key}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {!KNOWN_FIELD_KEYS.includes(
+                          col.toLowerCase() as (typeof KNOWN_FIELD_KEYS)[number],
+                        ) &&
+                          !properties.some((p) => p.key === col) && (
+                            <option value={col}>New property: “{col}”</option>
+                          )}
                       </select>
                     </div>
                   ))}
