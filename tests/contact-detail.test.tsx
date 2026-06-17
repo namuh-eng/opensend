@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
@@ -118,5 +118,45 @@ describe("ContactDetail", () => {
     // ID value is displayed (truncated in UI but full in the component)
     const idText = screen.getByText(mockContact.id);
     expect(idText).toBeDefined();
+  });
+
+  // --- Behavioral: these fail on the previous dead `() => {}` handlers ---
+
+  it("opens the edit modal when Edit contact is clicked", () => {
+    render(<ContactDetail contact={mockContact} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByText("Edit contact"));
+
+    // Edit modal heading + seeded fields appear
+    expect(screen.getByRole("heading", { name: "Edit contact" })).toBeDefined();
+    expect(
+      (screen.getByLabelText("First name") as HTMLInputElement).value,
+    ).toBe("John");
+    expect((screen.getByLabelText("Last name") as HTMLInputElement).value).toBe(
+      "Doe",
+    );
+  });
+
+  it("calls the delete API when deletion is confirmed", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ContactDetail contact={mockContact} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByText("Delete contact"));
+
+    // Confirm dialog, then confirm
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/contacts/${mockContact.id}`,
+      expect.objectContaining({ method: "DELETE" }),
+    );
+
+    vi.unstubAllGlobals();
   });
 });
