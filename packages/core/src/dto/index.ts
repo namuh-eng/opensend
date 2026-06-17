@@ -432,7 +432,7 @@ export const FREE_PLAN_DEFAULTS = {
   slug: FREE_PLAN_SLUG,
   name: "Free",
   monthlyPriceCents: 0,
-  monthlyEmailQuota: 5000,
+  monthlyEmailQuota: 500,
   dailyEmailQuota: 100,
   maxDomains: 1,
   maxApiKeys: 2,

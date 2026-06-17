@@ -1,10 +1,16 @@
 export const PRICING_CONTACT_URL = "mailto:hello@opensend.namuh.co";
 export const PRICING_AUTH_URL = "/auth";
 
-export type PricingPlanFamily = "free" | "starter" | "growth" | "scale";
+export type PricingPlanFamily =
+  | "free"
+  | "lite"
+  | "starter"
+  | "growth"
+  | "scale";
 
 export type PricingTierSlug =
   | "free"
+  | "cloud_lite_15k_monthly"
   | "cloud_starter_55k_monthly"
   | "cloud_starter_100k_monthly"
   | "cloud_growth_120k_monthly"
@@ -42,8 +48,8 @@ const FREE_PLAN: PricingDisplayPlan = {
   name: "Free",
   blurb: "For tinkering and side projects.",
   monthlyPrice: 0,
-  quota: "5,000 API + broadcast emails/mo",
-  quotaValue: 5000,
+  quota: "500 API + broadcast emails/mo",
+  quotaValue: 500,
   domains: "1 verified domain",
   maxDomains: 1,
   keys: "2 API keys",
@@ -52,12 +58,38 @@ const FREE_PLAN: PricingDisplayPlan = {
   ctaStyle: "ghost",
   ctaHref: PRICING_AUTH_URL,
   checkoutKind: "free",
-  selectorLabel: "5k",
+  selectorLabel: "500",
   perks: [
     "Resend-compatible REST API",
     "TypeScript SDK + React Email",
     "HMAC-signed webhooks",
     "Open/click analytics",
+    "Community support",
+  ],
+};
+
+const LITE_PLAN: PricingDisplayPlan = {
+  slug: "cloud_lite_15k_monthly",
+  family: "lite",
+  name: "Lite",
+  blurb: "For indie makers shipping their first product email.",
+  monthlyPrice: 10,
+  quota: "15,000 API + broadcast emails/mo",
+  quotaValue: 15000,
+  domains: "3 verified domains",
+  maxDomains: 3,
+  keys: "5 API keys",
+  maxApiKeys: 5,
+  cta: "Start Lite",
+  ctaStyle: "ghost",
+  ctaHref: PRICING_AUTH_URL,
+  checkoutKind: "stripe",
+  selectorLabel: "15k",
+  perks: [
+    "Everything in Free",
+    "API sends + broadcast fanout",
+    "Contacts, segments, and broadcasts",
+    "Email automations",
     "Community support",
   ],
 };
@@ -68,8 +100,8 @@ const STARTER_55K: PricingDisplayPlan = {
   name: "Starter",
   blurb: "For small teams shipping production email.",
   monthlyPrice: 19,
-  quota: "55,000 API + broadcast emails/mo",
-  quotaValue: 55000,
+  quota: "51,000 API + broadcast emails/mo",
+  quotaValue: 51000,
   domains: "10 verified domains",
   maxDomains: 10,
   keys: "10 API keys",
@@ -78,9 +110,9 @@ const STARTER_55K: PricingDisplayPlan = {
   ctaStyle: "ghost",
   ctaHref: PRICING_AUTH_URL,
   checkoutKind: "stripe",
-  selectorLabel: "55k",
+  selectorLabel: "51k",
   perks: [
-    "Everything in Free",
+    "Everything in Lite",
     "API sends + broadcast fanout",
     "Contacts, segments, and broadcasts",
     "Email automations",
@@ -170,6 +202,7 @@ const SCALE_CUSTOM: PricingDisplayPlan = {
 
 export const PRICING_TIERS: PricingDisplayPlan[] = [
   FREE_PLAN,
+  LITE_PLAN,
   STARTER_55K,
   STARTER_100K,
   GROWTH_120K,
@@ -194,6 +227,7 @@ export function findPricingTier(slug: string): PricingDisplayPlan | null {
 export function defaultTierForFamily(
   family: PricingPlanFamily,
 ): PricingDisplayPlan {
+  if (family === "lite") return LITE_PLAN;
   if (family === "starter") return STARTER_55K;
   if (family === "growth") return GROWTH_120K;
   if (family === "scale") return SCALE_CUSTOM;
@@ -206,5 +240,5 @@ export function getPricingCardsForSelection(
   const selected = findPricingTier(selectedSlug) ?? GROWTH_120K;
   const starter = selected.family === "starter" ? selected : STARTER_55K;
   const growth = selected.family === "growth" ? selected : GROWTH_120K;
-  return [FREE_PLAN, starter, growth, SCALE_CUSTOM];
+  return [FREE_PLAN, LITE_PLAN, starter, growth, SCALE_CUSTOM];
 }
