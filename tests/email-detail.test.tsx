@@ -45,10 +45,14 @@ describe("EmailDetail", () => {
     render(<EmailDetail email={mockEmail} />);
 
     expect(screen.getByText("FROM")).toBeTruthy();
-    expect(screen.getByText("test@updates.foreverbrowsing.com")).toBeTruthy();
+    expect(
+      screen.getAllByText("test@updates.foreverbrowsing.com").length,
+    ).toBeGreaterThanOrEqual(1);
 
     expect(screen.getByText("SUBJECT")).toBeTruthy();
-    expect(screen.getByText("Test email #3 - Invoice")).toBeTruthy();
+    expect(
+      screen.getAllByText("Test email #3 - Invoice").length,
+    ).toBeGreaterThanOrEqual(1);
 
     expect(screen.getByText("TO")).toBeTruthy();
     // The email appears in both the heading and TO field
@@ -87,20 +91,26 @@ describe("EmailDetail", () => {
     expect(screen.getByText("250 Ok")).toBeTruthy();
   });
 
-  it("renders email ID with copy button", () => {
+  it("renders email ID with copy buttons", () => {
     render(<EmailDetail email={mockEmail} />);
 
-    const copyButton = screen.getByLabelText("Copy to clipboard");
-    expect(copyButton).toBeTruthy();
+    const copyButtons = screen.getAllByLabelText("Copy to clipboard");
+    expect(copyButtons.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("renders page header with Email label and recipient", () => {
+  it("renders a detail header with subject and recipient routing", () => {
     render(<EmailDetail email={mockEmail} />);
 
-    expect(screen.getByText("Email")).toBeTruthy();
+    expect(screen.getByText("Email details")).toBeTruthy();
     expect(
-      screen.getByRole("heading", { name: "jaeyunha0317@gmail.com" }),
+      screen.getByRole("heading", { name: "Test email #3 - Invoice" }),
     ).toBeTruthy();
+    expect(
+      screen.getAllByText(/test@updates\.foreverbrowsing\.com/).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByText("jaeyunha0317@gmail.com").length,
+    ).toBeGreaterThanOrEqual(1);
   });
 
   it("renders content tabs (Preview, Plain Text, HTML, Insights)", () => {
@@ -117,6 +127,16 @@ describe("EmailDetail", () => {
 
     // The preview tab should show rendered HTML content
     expect(screen.getByTestId("email-preview")).toBeTruthy();
+  });
+
+  it("falls back to plain text in Preview for text-only messages", () => {
+    render(
+      <EmailDetail email={{ ...mockEmail, html: "", text: "Only text" }} />,
+    );
+
+    expect(screen.getByTestId("email-preview")).toBeTruthy();
+    expect(screen.getByText("Plain text email")).toBeTruthy();
+    expect(screen.getByText("Only text")).toBeTruthy();
   });
 
   it("formats event timestamps", () => {

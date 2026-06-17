@@ -3,10 +3,19 @@ import {
   formatRelativeTime,
   getStatusVariant,
 } from "@/components/emails-sending-data-table";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-afterEach(cleanup);
+const mockPush = vi.hoisted(() => vi.fn());
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
+afterEach(() => {
+  cleanup();
+  mockPush.mockReset();
+});
 
 const mockEmails = [
   {
@@ -62,12 +71,21 @@ describe("EmailsSendingDataTable", () => {
     expect(sentElements.length).toBe(2); // header + badge
   });
 
-  it("renders email links pointing to detail page", () => {
+  it("renders subject links pointing to the detail page", () => {
     render(<EmailsSendingDataTable emails={mockEmails} />);
 
-    const link = screen.getByText("jaeyunha0317@gmail.com");
-    expect(link.closest("a")).toBeTruthy();
-    expect(link.closest("a")?.getAttribute("href")).toBe("/emails/email-1");
+    const link = screen.getByRole("link", {
+      name: "Test email #3 - Invoice",
+    });
+    expect(link.getAttribute("href")).toBe("/emails/email-1");
+  });
+
+  it("opens the detail page when the row is clicked", () => {
+    render(<EmailsSendingDataTable emails={mockEmails} />);
+
+    fireEvent.click(screen.getAllByTestId("email-row")[0]);
+
+    expect(mockPush).toHaveBeenCalledWith("/emails/email-1");
   });
 
   it("renders avatar circles for each email", () => {
@@ -78,11 +96,10 @@ describe("EmailsSendingDataTable", () => {
     expect(avatars.length).toBe(3);
   });
 
-  it("renders three-dot More actions button on each row", () => {
+  it("does not render unwired row action buttons", () => {
     render(<EmailsSendingDataTable emails={mockEmails} />);
 
-    const actionButtons = screen.getAllByLabelText("More actions");
-    expect(actionButtons.length).toBe(3);
+    expect(screen.queryByLabelText("More actions")).toBeNull();
   });
 
   it("shows first-run empty state with visible docs CTA when no emails exist", () => {
