@@ -28,6 +28,12 @@ function makeRequest(url: string, init?: RequestInit) {
 
 vi.mock("@/lib/api-auth", () => ({
   validateApiKey: mockValidateApiKey,
+  // The import route authenticates with authorizeDashboardOrApiKey (session
+  // cookie OR Bearer key). Delegate to the same mock so API-key test setups
+  // continue to drive auth; a real session path returns null here.
+  authorizeDashboardOrApiKey: (header: string | null | undefined) =>
+    mockValidateApiKey(header),
+  getServerSession: vi.fn(async () => null),
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
@@ -35,6 +41,13 @@ vi.mock("@/lib/api-auth", () => ({
 vi.mock("@/lib/api-key-permissions", () => ({
   requireFullAccessApiKey: (auth: { permission?: string }) =>
     auth.permission === "full_access"
+      ? null
+      : Response.json({ error: "Forbidden" }, { status: 403 }),
+  requireFullAccessForApiKeyCaller: (auth: {
+    permission?: string;
+    dashboard?: true;
+  }) =>
+    auth.dashboard || auth.permission === "full_access"
       ? null
       : Response.json({ error: "Forbidden" }, { status: 403 }),
 }));

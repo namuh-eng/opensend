@@ -171,16 +171,12 @@ export function ImportCsvModal({
   const handleSubmit = async () => {
     if (!file) return;
 
+    // Dashboard users authenticate via the Better Auth session cookie; an
+    // api_key in localStorage is only attached as a Bearer token when present.
     const apiKey =
       typeof window !== "undefined"
         ? (localStorage?.getItem?.("api_key") ?? null)
         : null;
-    if (!apiKey) {
-      setSubmitError(
-        "No API key found. Add a full-access API key in Settings first.",
-      );
-      return;
-    }
 
     let mapping: Record<string, string>;
     try {
@@ -203,9 +199,12 @@ export function ImportCsvModal({
         formData.append("segment_id", selectedSegment.id);
       }
 
+      const headers: Record<string, string> = {};
+      if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+
       const res = await fetch("/api/contacts/import", {
         method: "POST",
-        headers: { Authorization: `Bearer ${apiKey}` },
+        headers,
         body: formData,
       });
 

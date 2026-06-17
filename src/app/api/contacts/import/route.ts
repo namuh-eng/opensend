@@ -1,8 +1,25 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
+import {
+  authorizeDashboardOrApiKey,
+  getServerSession,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { createContactOperationsService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 import Papa from "papaparse";
+
+type ImportRouteAuth = NonNullable<
+  Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
+>;
+
+// Dashboard callers authenticate with a Better Auth session cookie; API
+// callers send a full-access Bearer key. Mirror /api/contacts so the
+// in-dashboard Import CSV modal works without a localStorage api_key.
+async function resolveUserId(auth: ImportRouteAuth): Promise<string | null> {
+  if ("userId" in auth) return auth.userId;
+  const session = await getServerSession();
+  return session?.user?.id ?? null;
+}
 
 const CONTACT_IMPORT_MAX_BYTES = 10 * 1024 * 1024;
 const CONTACT_IMPORT_ALLOWED_MIME = new Set([
@@ -16,12 +33,14 @@ function contactOperationsService() {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
-  if (!auth.userId) return unauthorizedResponse();
-  const userId = auth.userId;
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const formData = await request.formData();
