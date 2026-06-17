@@ -1,7 +1,24 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
+import {
+  authorizeDashboardOrApiKey,
+  getServerSession,
+  unauthorizedResponse,
+} from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { queueEvent } from "@/lib/events";
 import { ContactServiceError, createContactService } from "@opensend/core";
+
+type RouteAuth = NonNullable<
+  Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
+>;
+
+// Dashboard callers authenticate with a Better Auth session cookie; API
+// callers send a full-access Bearer key. Resolve the user from whichever
+// applies so contact detail/edit/delete work from the dashboard UI.
+async function resolveUserId(auth: RouteAuth): Promise<string | null> {
+  if ("userId" in auth) return auth.userId;
+  const session = await getServerSession();
+  return session?.user?.id ?? null;
+}
 
 function contactService() {
   return createContactService();
@@ -42,12 +59,14 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
-  if (!auth.userId) return unauthorizedResponse();
-  const userId = auth.userId;
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   const { id } = await params;
 
@@ -63,12 +82,14 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
-  if (!auth.userId) return unauthorizedResponse();
-  const userId = auth.userId;
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   const { id } = await params;
 
@@ -108,12 +129,14 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeDashboardOrApiKey(
+    request.headers.get("authorization"),
+  );
   if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
-  if (!auth.userId) return unauthorizedResponse();
-  const userId = auth.userId;
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   const { id } = await params;
 

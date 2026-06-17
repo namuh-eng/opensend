@@ -237,7 +237,7 @@ describe("audience metadata route adapters", () => {
     });
   });
 
-  it("keeps detail routes API-key-only and tenant-scoped through auth.userId", async () => {
+  it("authenticates detail routes via session or API key and tenant-scopes them", async () => {
     mockGetProperty.mockResolvedValueOnce({
       id: "prop-1",
       key: "company",
@@ -261,7 +261,9 @@ describe("audience metadata route adapters", () => {
       userId: "user-1",
       id: "prop-1",
     });
-    expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+    // Detail routes now accept a dashboard session OR an API key, so they
+    // authenticate through authorizeDashboardOrApiKey (not validateApiKey).
+    expect(mockAuthorizeDashboardOrApiKey).toHaveBeenCalled();
   });
 
   it("keeps segment contacts as an API-key-only thin service adapter", async () => {
@@ -404,13 +406,15 @@ describe("audience metadata route adapters", () => {
     });
   });
 
-  it("rejects detail calls when the API key has no tenant owner", async () => {
-    mockValidateApiKey.mockResolvedValueOnce({
+  it("rejects detail calls when the caller has no tenant owner", async () => {
+    // API key with no userId and no dashboard session → user unresolvable.
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({
       apiKeyId: "legacy-key",
       permission: "full_access",
       domain: null,
       userId: null,
     });
+    mockGetServerSession.mockResolvedValueOnce(null);
     const { GET } = await import("@/app/api/properties/[id]/route");
 
     const response = await GET(

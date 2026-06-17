@@ -303,6 +303,15 @@ describe("contact API tenant isolation", () => {
       domain: null,
       userId: "user-b",
     });
+    // The [id] routes resolve the caller via authorizeDashboardOrApiKey now,
+    // so re-establish it after resetAllMocks (session path returns null).
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({
+      apiKeyId: "key-b",
+      permission: "full_access",
+      domain: null,
+      userId: "user-b",
+    });
+    mockGetServerSession.mockResolvedValue(null);
     mockContactFindFirst.mockResolvedValueOnce({
       id: "contact-b",
       email: "b@example.com",
@@ -545,12 +554,14 @@ describe("contact API tenant isolation", () => {
   });
 
   it("rejects contact routes when the caller user cannot be resolved", async () => {
-    mockValidateApiKey.mockResolvedValueOnce({
+    // API key with no userId and no dashboard session → unresolvable caller.
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({
       apiKeyId: "legacy-key",
       permission: "full_access",
       domain: null,
       userId: null,
     });
+    mockGetServerSession.mockResolvedValueOnce(null);
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.GET(
