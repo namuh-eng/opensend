@@ -11,6 +11,9 @@ import { expect, test } from "./fixtures/auth";
  */
 const FIXTURE_CSV = "tests/fixtures/contacts-sample.csv";
 
+/** Fixture with a non-standard `plan` column for custom-property mapping. */
+const FIXTURE_WITH_PROPERTY = "tests/fixtures/contacts-with-property.csv";
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -205,5 +208,39 @@ test.describe("Import CSV modal", () => {
     await expect(
       page.getByRole("button", { name: "Import" }),
     ).not.toBeVisible();
+  });
+
+  test("maps a non-standard column to a custom property", async ({
+    authenticatedPage: page,
+    e2eDb,
+    e2eTenant,
+  }) => {
+    await page.goto("/audience");
+
+    await page.getByRole("button", { name: /add contacts/i }).click();
+    await page.getByText("Import CSV").click();
+
+    await page.getByLabel("CSV file").setInputFiles(FIXTURE_WITH_PROPERTY);
+
+    // The `plan` column is not a standard field, so it offers a
+    // "New property" option keyed by the column name.
+    await page
+      .getByLabel("Map column plan to contact field")
+      .selectOption("plan");
+
+    await page.getByRole("button", { name: "Import" }).click();
+    await expect(page.getByText(/import complete/i)).toBeVisible();
+    await page.getByRole("button", { name: "Done" }).click();
+
+    // The custom property is stored on the contact's custom_properties JSON.
+    const { rows } = await e2eDb.query<{
+      custom_properties: Record<string, string> | null;
+    }>(
+      `select custom_properties from contacts
+       where user_id = $1 and email = 'dave@e2erunid.e2e.opensend.test'`,
+      [e2eTenant.user.id],
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.custom_properties).toMatchObject({ plan: "pro" });
   });
 });

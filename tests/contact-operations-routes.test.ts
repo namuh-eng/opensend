@@ -191,6 +191,43 @@ describe("contact operations route adapters", () => {
     });
   });
 
+  it("strips a leading comma-only junk row so rows key off the real header", async () => {
+    mockImportContacts.mockResolvedValueOnce({
+      object: "import",
+      created_count: 1,
+      ids: ["contact-1"],
+    });
+    // Mirrors the real export bug: a blank `,,,,,,` row precedes the header
+    // and there are trailing empty columns.
+    const csv =
+      ",,,,,,\r\nid,email,created_at,,,,\r\n3,weswong@gmail.com,2026-03-23\r\n";
+    const formData = {
+      get: (key: string) => {
+        if (key === "file") return { text: async () => csv };
+        if (key === "mapping") return JSON.stringify({ email: "email" });
+        return null;
+      },
+    };
+
+    const route = await import("@/app/api/contacts/import/route");
+    const response = await route.POST({
+      headers: new Headers({ authorization: "Bearer key" }),
+      formData: async () => formData,
+    } as never);
+
+    expect(response.status).toBe(200);
+    const callArg = mockImportContacts.mock.calls[0]?.[0] as {
+      rows: Record<string, string>[];
+    };
+    // The junk row is gone (one real data row), keyed by the real header.
+    expect(callArg.rows).toHaveLength(1);
+    expect(callArg.rows[0]).toMatchObject({
+      id: "3",
+      email: "weswong@gmail.com",
+      created_at: "2026-03-23",
+    });
+  });
+
   it("returns the legacy import 400 before delegating when no file is provided", async () => {
     const route = await import("@/app/api/contacts/import/route");
     const response = await route.POST({

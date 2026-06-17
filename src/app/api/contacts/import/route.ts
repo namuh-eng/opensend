@@ -56,9 +56,16 @@ export async function POST(request: NextRequest) {
 
     const mapping = JSON.parse(mappingStr || "{}") as Record<string, string>;
     const text = await file.text();
-    const parseResult = Papa.parse(text, {
+    // Strip leading blank / comma-only junk rows (e.g. a `,,,,,,` row some
+    // exporters prepend) so header:true uses the REAL header row. PapaParse's
+    // `skipEmptyLines: "greedy"` does not skip a comma-only *header* row, so we
+    // must remove it first. transformHeader trims so the keys match the trimmed
+    // names the client mapper shows in parseCsvHeaders.
+    const normalized = text.replace(/^(?:[\s,]*\r?\n)+/, "");
+    const parseResult = Papa.parse(normalized, {
       header: true,
-      skipEmptyLines: true,
+      skipEmptyLines: "greedy",
+      transformHeader: (h) => h.trim(),
     });
     const rows = parseResult.data as Record<string, string>[];
 
