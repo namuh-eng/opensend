@@ -52,7 +52,10 @@ type UpdatePropertyInput = {
   mode?: ApiCompatibilityMode;
 };
 
-type SegmentListRow = Pick<SegmentRow, "id" | "name" | "createdAt">;
+type SegmentListRow = Pick<SegmentRow, "id" | "name" | "createdAt"> & {
+  contactsCount: number;
+  unsubscribedCount: number;
+};
 type SegmentContactListRow = Pick<
   ContactRow,
   "id" | "email" | "firstName" | "lastName" | "unsubscribed" | "createdAt"
@@ -241,6 +244,8 @@ function toSegmentListItem(row: SegmentListRow) {
     id: row.id,
     name: row.name,
     created_at: row.createdAt,
+    contacts_count: row.contactsCount,
+    unsubscribed_count: row.unsubscribedCount,
   };
 }
 

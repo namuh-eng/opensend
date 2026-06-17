@@ -264,7 +264,15 @@ describe("audience metadata service", () => {
       service.listSegments({ userId: "user-1", search: "vip", limit: 1 }),
     ).resolves.toEqual({
       object: "list",
-      data: [{ id: "seg-c", name: "VIP Customers", created_at: baseDate }],
+      data: [
+        {
+          id: "seg-c",
+          name: "VIP Customers",
+          created_at: baseDate,
+          contacts_count: 0,
+          unsubscribed_count: 0,
+        },
+      ],
       has_more: true,
       total: 2,
     });

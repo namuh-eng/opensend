@@ -1,4 +1,4 @@
-import { type SQL, and, count, desc, eq, ilike, lt } from "drizzle-orm";
+import { type SQL, and, count, desc, eq, ilike, lt, sql } from "drizzle-orm";
 import { db } from "../client";
 import { contacts, contactsToSegments, segments } from "../schema";
 
@@ -64,6 +64,17 @@ export const segmentRepo = {
         id: segments.id,
         name: segments.name,
         createdAt: segments.createdAt,
+        // Membership is tracked in the contacts_to_segments join table.
+        contactsCount: sql<number>`(
+          select count(*) from ${contactsToSegments}
+          where ${contactsToSegments.segmentId} = ${segments.id}
+        )`.mapWith(Number),
+        unsubscribedCount: sql<number>`(
+          select count(*) from ${contactsToSegments}
+          inner join ${contacts} on ${contacts.id} = ${contactsToSegments.contactId}
+          where ${contactsToSegments.segmentId} = ${segments.id}
+          and ${contacts.unsubscribed} = true
+        )`.mapWith(Number),
       })
       .from(segments)
       .where(whereClause)

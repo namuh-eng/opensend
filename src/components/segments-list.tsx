@@ -38,7 +38,26 @@ export function SegmentsList() {
 
       const res = await fetch(`/api/segments?${params.toString()}`);
       const data = await res.json();
-      setSegments(data.data || []);
+      // The API returns snake_case fields; map them to the camelCase shape
+      // this component renders (and fix the previously-undefined fields).
+      const rows = Array.isArray(data.data) ? data.data : [];
+      setSegments(
+        rows.map(
+          (s: {
+            id: string;
+            name: string;
+            created_at: string;
+            contacts_count?: number;
+            unsubscribed_count?: number;
+          }) => ({
+            id: s.id,
+            name: s.name,
+            createdAt: s.created_at,
+            contactsCount: s.contacts_count ?? 0,
+            unsubscribedCount: s.unsubscribed_count ?? 0,
+          }),
+        ),
+      );
       setTotal(data.total || 0);
     } catch {
       setSegments([]);

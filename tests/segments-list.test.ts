@@ -34,27 +34,28 @@ import React from "react";
 // We'll import the component after setting up the fetch mock
 let SegmentsList: typeof import("@/components/segments-list").SegmentsList;
 
+// Matches the snake_case shape returned by GET /api/segments.
 const mockSegments = [
   {
     id: "seg-1",
     name: "VIP Customers",
-    contactsCount: 42,
-    unsubscribedCount: 3,
-    createdAt: new Date().toISOString(),
+    contacts_count: 42,
+    unsubscribed_count: 3,
+    created_at: new Date().toISOString(),
   },
   {
     id: "seg-2",
     name: "Newsletter",
-    contactsCount: 150,
-    unsubscribedCount: 10,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
+    contacts_count: 150,
+    unsubscribed_count: 10,
+    created_at: new Date(Date.now() - 86400000).toISOString(),
   },
   {
     id: "seg-3",
     name: "Beta Testers",
-    contactsCount: 25,
-    unsubscribedCount: 0,
-    createdAt: new Date(Date.now() - 172800000).toISOString(),
+    contacts_count: 25,
+    unsubscribed_count: 0,
+    created_at: new Date(Date.now() - 172800000).toISOString(),
   },
 ];
 
