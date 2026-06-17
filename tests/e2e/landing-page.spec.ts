@@ -96,6 +96,29 @@ test("pricing quota selector updates predefined monthly tiers", async ({
   );
 });
 
+test("pricing page renders the Free, Lite, and Starter tier values", async ({
+  page,
+}) => {
+  await page.goto("/pricing");
+
+  await expect(page.getByTestId("plan-free")).toContainText(
+    "500 API + broadcast emails/mo",
+  );
+
+  await expect(page.getByTestId("plan-lite")).toContainText(/\$\s*10\s*\/mo/);
+  await expect(page.getByTestId("plan-lite")).toContainText(
+    "15,000 API + broadcast emails/mo",
+  );
+
+  await expect(page.getByTestId("plan-starter")).toContainText(
+    "51,000 API + broadcast emails/mo",
+  );
+
+  await expect(
+    page.getByTestId("pricing-tier-cloud_lite_15k_monthly"),
+  ).toBeVisible();
+});
+
 test("unauthenticated dashboard routes remain protected", async ({ page }) => {
   await page.goto("/emails");
   await expect(page).toHaveURL(/\/auth$/);

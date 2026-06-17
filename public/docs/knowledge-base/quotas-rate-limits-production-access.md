@@ -17,7 +17,7 @@ If `RATE_LIMIT_BACKEND` is disabled, these middleware limits are not enforced. I
 
 ## Plan quotas
 
-Hosted plan quotas are counted across API and broadcast sends. Current public plan examples include Free at 5,000 emails/month, Starter tiers at 55,000 or 100,000 emails/month, Growth tiers up to 500,000 emails/month, and Scale/custom for BYO AWS or custom needs. Use the billing dashboard as the source of truth for the active workspace.
+Hosted plan quotas are counted across API and broadcast sends. Current public plan examples include Free at 500 emails/month, Lite at 15,000 emails/month, Starter tiers at 51,000 or 100,000 emails/month, Growth tiers up to 500,000 emails/month, and Scale/custom for BYO AWS or custom needs. Use the billing dashboard as the source of truth for the active workspace.
 
 ## Provider limits
 
