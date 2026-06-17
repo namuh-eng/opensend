@@ -20,7 +20,7 @@ const SELF_HOST_URL = `${GITHUB_URL}#self-host`;
 const FAQ: Array<[string, string]> = [
   [
     "What happens if I exceed my quota?",
-    "You get a soft warning at 80% and a notification at 100%. Sends are not blocked — overage is billed at $0.40 per 1,000 emails until you upgrade.",
+    "You get a soft warning at 80% and a notification at 100%. Sends are not blocked — overage is billed at $0.85 per 1,000 emails until you upgrade.",
   ],
   [
     "Do I have to use AWS SES?",
