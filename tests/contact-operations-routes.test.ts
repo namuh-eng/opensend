@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
+const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockBulkAction = vi.hoisted(() => vi.fn());
 const mockImportContacts = vi.hoisted(() => vi.fn());
 const mockListContactTopics = vi.hoisted(() => vi.fn());
@@ -27,13 +28,10 @@ function makeRequest(url: string, init?: RequestInit) {
 }
 
 vi.mock("@/lib/api-auth", () => ({
+  // The bulk route still authenticates with a Bearer API key.
   validateApiKey: mockValidateApiKey,
-  // The import route authenticates with authorizeDashboardOrApiKey (session
-  // cookie OR Bearer key). Delegate to the same mock so API-key test setups
-  // continue to drive auth; a real session path returns null here.
-  authorizeDashboardOrApiKey: (header: string | null | undefined) =>
-    mockValidateApiKey(header),
-  getServerSession: vi.fn(async () => null),
+  // The CSV import route is dashboard-session-only.
+  getServerSession: mockGetServerSession,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
@@ -41,13 +39,6 @@ vi.mock("@/lib/api-auth", () => ({
 vi.mock("@/lib/api-key-permissions", () => ({
   requireFullAccessApiKey: (auth: { permission?: string }) =>
     auth.permission === "full_access"
-      ? null
-      : Response.json({ error: "Forbidden" }, { status: 403 }),
-  requireFullAccessForApiKeyCaller: (auth: {
-    permission?: string;
-    dashboard?: true;
-  }) =>
-    auth.dashboard || auth.permission === "full_access"
       ? null
       : Response.json({ error: "Forbidden" }, { status: 403 }),
 }));
@@ -72,6 +63,8 @@ describe("contact operations route adapters", () => {
       domain: null,
       userId: "user-1",
     });
+    // CSV import resolves the user from the dashboard session.
+    mockGetServerSession.mockResolvedValue({ user: { id: "user-1" } });
   });
 
   it("keeps /api/contacts/bulk auth in the route and delegates body/user to the service", async () => {

@@ -1,25 +1,7 @@
-import {
-  authorizeDashboardOrApiKey,
-  getServerSession,
-  unauthorizedResponse,
-} from "@/lib/api-auth";
-import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
+import { getServerSession, unauthorizedResponse } from "@/lib/api-auth";
 import { createContactOperationsService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 import Papa from "papaparse";
-
-type ImportRouteAuth = NonNullable<
-  Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
->;
-
-// Dashboard callers authenticate with a Better Auth session cookie; API
-// callers send a full-access Bearer key. Mirror /api/contacts so the
-// in-dashboard Import CSV modal works without a localStorage api_key.
-async function resolveUserId(auth: ImportRouteAuth): Promise<string | null> {
-  if ("userId" in auth) return auth.userId;
-  const session = await getServerSession();
-  return session?.user?.id ?? null;
-}
 
 const CONTACT_IMPORT_MAX_BYTES = 10 * 1024 * 1024;
 const CONTACT_IMPORT_ALLOWED_MIME = new Set([
@@ -33,13 +15,12 @@ function contactOperationsService() {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessForApiKeyCaller(auth);
-  if (permissionError) return permissionError;
-  const userId = await resolveUserId(auth);
+  // CSV file import is a dashboard-only feature, mirroring Resend: CSV upload
+  // lives in the dashboard, while programmatic callers add contacts via the
+  // JSON endpoints (POST /api/contacts, /api/contacts/bulk). Require an
+  // authenticated dashboard session; there is no Bearer-key path here.
+  const session = await getServerSession();
+  const userId = session?.user?.id;
   if (!userId) return unauthorizedResponse();
 
   try {
