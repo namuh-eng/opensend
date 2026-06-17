@@ -1,6 +1,7 @@
 "use client";
 
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import { StatusBadge } from "@/components/status-badge";
 import {
   ExportStatusMessage,
@@ -211,6 +212,7 @@ export function ContactsList() {
                   contact={contact}
                   selected={selectedIds.has(contact.id)}
                   onToggle={() => toggleRow(contact.id)}
+                  onDeleted={fetchContacts}
                 />
               ))}
             </tbody>
@@ -250,10 +252,12 @@ function ContactRow({
   contact,
   selected,
   onToggle,
+  onDeleted,
 }: {
   contact: ContactListItem;
   selected: boolean;
   onToggle: () => void;
+  onDeleted: () => void;
 }) {
   const displayName = [contact.firstName, contact.lastName]
     .filter(Boolean)
@@ -307,23 +311,32 @@ function ContactRow({
         {formatRelativeTime(contact.createdAt)}
       </td>
       <td className="w-10 px-3 py-2 relative">
-        <button
-          type="button"
-          aria-label="More actions"
-          className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100"
-        >
-          <svg
-            aria-hidden="true"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
-            <circle cx="12" cy="5" r="1.5" />
-            <circle cx="12" cy="12" r="1.5" />
-            <circle cx="12" cy="19" r="1.5" />
-          </svg>
-        </button>
+        <RowActionsMenu
+          actions={[
+            {
+              label: "View / edit",
+              onSelect: () => {
+                window.location.href = `/audience/contacts/${contact.id}`;
+              },
+            },
+          ]}
+          deleteAction={{
+            label: "Delete contact",
+            confirmText: `Permanently delete ${contact.email}? This cannot be undone.`,
+            onConfirm: async () => {
+              const res = await fetch(`/api/contacts/${contact.id}`, {
+                method: "DELETE",
+              });
+              if (!res.ok) {
+                const body = (await res.json().catch(() => ({}))) as {
+                  error?: string;
+                };
+                throw new Error(body.error ?? `Server error ${res.status}`);
+              }
+              onDeleted();
+            },
+          }}
+        />
       </td>
     </tr>
   );

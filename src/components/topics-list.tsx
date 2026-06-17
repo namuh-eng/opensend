@@ -1,6 +1,7 @@
 "use client";
 
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -230,23 +231,26 @@ export function TopicsList() {
                     {formatRelativeTime(topic.createdAt)}
                   </td>
                   <td className="w-10 px-3 py-2 relative">
-                    <button
-                      type="button"
-                      aria-label="More actions"
-                      className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                      >
-                        <circle cx="12" cy="5" r="1.5" />
-                        <circle cx="12" cy="12" r="1.5" />
-                        <circle cx="12" cy="19" r="1.5" />
-                      </svg>
-                    </button>
+                    <RowActionsMenu
+                      deleteAction={{
+                        label: "Delete topic",
+                        confirmText: `Permanently delete the topic "${topic.name}"? Existing subscriptions to it are removed.`,
+                        onConfirm: async () => {
+                          const res = await fetch(`/api/topics/${topic.id}`, {
+                            method: "DELETE",
+                          });
+                          if (!res.ok) {
+                            const body = (await res
+                              .json()
+                              .catch(() => ({}))) as { error?: string };
+                            throw new Error(
+                              body.error ?? `Server error ${res.status}`,
+                            );
+                          }
+                          fetchTopics();
+                        },
+                      }}
+                    />
                   </td>
                 </tr>
               ))}
