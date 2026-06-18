@@ -444,7 +444,7 @@ export function buildAlarmPlan(input: BuildPlanInput = {}): AlarmPlan {
           LoadBalancer: target.loadBalancer,
           TargetGroup: target.targetGroup,
         },
-        statistic: "Minimum",
+        statistic: "Maximum",
         period: 60,
         evaluationPeriods: 3,
         datapointsToAlarm: 2,

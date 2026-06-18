@@ -59,6 +59,14 @@ describe("production alerting manifest", () => {
     expect(byMetric.get("SchedulerJobFailed")?.TreatMissingData).toBe(
       "notBreaching",
     );
+
+    const unhealthyHostAlarm = byMetric.get("UnHealthyHostCount");
+    expect(unhealthyHostAlarm?.Statistic).toBe("Maximum");
+    expect(unhealthyHostAlarm?.Threshold).toBe(1);
+    expect(unhealthyHostAlarm?.ComparisonOperator).toBe(
+      "GreaterThanOrEqualToThreshold",
+    );
+
     expect(byMetric.get("SesEventIngestFailed")?.Dimensions).toEqual([
       { Name: "Service", Value: "ingester" },
       { Name: "Operation", Value: "ses.ingest" },
