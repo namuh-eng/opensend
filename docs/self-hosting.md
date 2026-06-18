@@ -138,8 +138,9 @@ contributor-facing set; the table below adds the production-only entries.
 | `SES_INBOUND_BUCKET_NAME` | Optional raw MIME bucket allowlist for SES receipt-rule ingestion. Defaults to `S3_BUCKET_NAME`. |
 | `SES_INBOUND_RULE_SET_NAME` | Optional SES receipt rule set managed by the dashboard receiving toggle. Defaults to `opensend-inbound`. |
 | `INGESTER_SCHEDULER_INTERVAL_SECONDS` | Compose scheduler cadence for `/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`, and `/jobs/billing-overage`. Default `60`; minimum `10`. |
-| `RATE_LIMIT_BACKEND` | `disabled` (single-process dev), or `redis` (production). |
-| `REDIS_URL` | TLS Redis endpoint, e.g. `rediss://default:<password>@<endpoint>:6379`. Used for rate limiting AND auth/domain metadata cache. |
+| `RATE_LIMIT_BACKEND` | `disabled` (single-process dev outside Compose), or `redis` (Compose/shared/staging/production). |
+| `REDIS_URL` | Redis endpoint. Compose defaults to `redis://redis:6379`; managed production should use a private TLS endpoint such as `rediss://default:<password>@<endpoint>:6379`. Used for rate limiting, auth/domain metadata cache, and ingester cache invalidation. |
+| `OPENSEND_APP_REPLICAS` | Expected app replica count. Set greater than `1` when load balancing app containers; startup checks warn unless `RATE_LIMIT_BACKEND=redis`. |
 | `CLOUDWATCH_METRICS_NAMESPACE` | Override the default `OpenSend` EMF metrics namespace. |
 
 ### AWS ECS deploy secret wiring
@@ -425,14 +426,12 @@ the dashboard works for development.
 
 API rate limiting is enforced by `src/middleware.ts`. There are two backends:
 
-- `RATE_LIMIT_BACKEND=disabled` — skip rate limiting entirely. Default. Safe
-  for single-process local dev only.
-- `RATE_LIMIT_BACKEND=redis` — use a shared Redis token bucket. Required for
-  any deployment with more than one app instance.
+- `RATE_LIMIT_BACKEND=disabled` — skip rate limiting entirely. Default outside Docker Compose. Safe for single-process local dev only.
+- `RATE_LIMIT_BACKEND=redis` — use a shared Redis token bucket. Default in Docker Compose and required for any deployment with more than one app instance.
 
-When `redis` is selected, `REDIS_URL` must point at a TLS endpoint
-(`rediss://...`). If Redis is unreachable, requests fail closed with HTTP 503
-rather than silently falling back to per-process memory.
+Compose starts Redis and wires the app/ingester to `redis://redis:6379`. Managed production deployments should use a private TLS endpoint (`rediss://...`). If Redis is selected for rate limiting but unreachable, requests fail closed with HTTP 503 rather than silently falling back to a per-process limiter. `REDIS_URL` alone does not enable rate limiting; `RATE_LIMIT_BACKEND=redis` is required.
+
+Set `OPENSEND_APP_REPLICAS` greater than `1` when a deployment can run multiple app containers. Startup checks warn when that multi-instance config is present without Redis-backed rate limiting.
 
 The same Redis is reused for hot-path metadata caching:
 
@@ -441,6 +440,16 @@ The same Redis is reused for hot-path metadata caching:
 - SES domain identity lookups by domain name (2 min TTL)
 
 Cache invalidation is automatic on create/update/delete/verify flows.
+
+## SMTP relay profile
+
+The repository includes `packages/smtp-relay`, a standalone Bun service that accepts SMTP AUTH with an OpenSend API key as the password and injects accepted messages into the normal send pipeline. It is available in Docker Compose only behind the explicit `smtp` profile:
+
+```bash
+docker compose --profile smtp up -d smtp-relay
+```
+
+The relay publishes `SMTP_RELAY_PORT` (default `2587`) and requires `DATABASE_URL`. `BACKGROUND_JOBS_QUEUE_URL` is optional for local evaluation but should match the app/ingester queue in production. Accepted SMTP messages only enter the normal delivery worker path when `BACKGROUND_JOBS_QUEUE_URL` is configured; without a queue URL, rows can be accepted for local evaluation but delivery is skipped until the queue contract is wired. Configure `SMTP_RELAY_TLS_CERT_PATH` and `SMTP_RELAY_TLS_KEY_PATH` before exposing STARTTLS publicly.
 
 ## Splitting the ingester service
 

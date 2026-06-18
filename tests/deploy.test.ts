@@ -186,6 +186,31 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(compose).toContain("http://127.0.0.1:3016/health");
   });
 
+  it("docker-compose wires Redis-backed rate limiting by default", () => {
+    const compose = readFileSync(join(root, "docker-compose.yml"), "utf-8");
+    expect(compose).toContain("redis:");
+    expect(compose).toContain("image: redis:7-alpine");
+    expect(compose).toContain("REDIS_URL: ${REDIS_URL:-redis://redis:6379}");
+    expect(compose).toContain(
+      "RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-redis}",
+    );
+    expect(compose).toContain(
+      "OPENSEND_APP_REPLICAS: ${OPENSEND_APP_REPLICAS:-1}",
+    );
+    expect(compose).toContain("redisdata:");
+  });
+
+  it("docker-compose keeps the SMTP relay behind an explicit profile", () => {
+    const compose = readFileSync(join(root, "docker-compose.yml"), "utf-8");
+    expect(compose).toContain("smtp-relay:");
+    expect(compose).toContain('profiles: ["smtp"]');
+    expect(compose).toContain("dockerfile: packages/smtp-relay/Dockerfile");
+    expect(compose).toContain(
+      '"${SMTP_RELAY_PORT:-2587}:${SMTP_RELAY_PORT:-2587}"',
+    );
+    expect(compose).not.toContain("smtp-relay:\n    image:");
+  });
+
   it("ingester Dockerfile builds a standalone server bundle", () => {
     const dockerfile = readFileSync(
       join(root, "packages", "ingester", "Dockerfile"),

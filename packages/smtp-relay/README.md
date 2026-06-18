@@ -40,6 +40,22 @@ DATABASE_URL=postgres://... bun packages/smtp-relay/src/index.ts
 
 ## Running with Docker
 
+The repository `docker-compose.yml` exposes the relay behind the explicit
+`smtp` profile so it does not run in the default stack:
+
+```bash
+docker compose --profile smtp up -d smtp-relay
+```
+
+Set `SMTP_RELAY_PORT` to change the published/listen port. Configure TLS paths
+only when the referenced certificate/key files are mounted into the relay
+container. Accepted SMTP messages only enter the normal delivery worker path
+when `BACKGROUND_JOBS_QUEUE_URL` is configured; without a queue URL, rows can
+be accepted for local evaluation but delivery is skipped until the queue
+contract is wired.
+
+For a standalone image:
+
 ```bash
 docker build \
   --platform linux/amd64 \

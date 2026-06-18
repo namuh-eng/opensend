@@ -11,18 +11,25 @@
 #
 # What this brings up:
 #   - postgres   : Postgres 16 with the OpenSend schema, persisted in the named volume `pgdata`.
+#   - redis      : Shared Redis for Compose rate limiting and hot-path cache coordination.
 #   - migrate    : One-shot job that runs Drizzle migrations and exits.
 #   - app        : Next.js dashboard + REST API on http://localhost:${PORT:-3015}.
 #   - ingester   : Production Bun/Hono service that handles SES/SNS, Stripe, and scheduled-email
 #                  webhooks on http://localhost:${INGESTER_PORT:-3016}.
 #   - scheduler  : Durable short-interval driver for ingester /jobs/* scans.
 #
+# Optional profile:
+#   - smtp-relay : `docker compose --profile smtp up -d smtp-relay` publishes SMTP on ${SMTP_RELAY_PORT:-2587}.
 #
 # Optional overrides (all read from .env):
 #   - PORT                        : host port for the app (default 3015)
 #   - INGESTER_PORT               : host port for the ingester (default 3016)
 #   - POSTGRES_PORT               : host port for Postgres (default 5432)
 #   - POSTGRES_PASSWORD           : Postgres password (REQUIRED; set in .env before `docker compose up`)
+#   - REDIS_URL                   : Redis URL for app/ingester (default redis://redis:6379 in Compose)
+#   - RATE_LIMIT_BACKEND          : app rate-limit backend (default redis in Compose)
+#   - OPENSEND_APP_REPLICAS       : expected app replica count for startup warnings (default 1)
+#   - SMTP_RELAY_PORT             : host/container port for the smtp profile (default 2587)
 #   - BETTER_AUTH_SECRET          : required Better Auth session secret for app/ingester.
 #   - AWS_*                       : SES + S3 credentials. If unset, email sending is disabled.
 #   - BACKGROUND_JOBS_*           : SQS/EventBridge wiring for async send pipeline.
@@ -53,6 +60,21 @@ services:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U opensend"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis coordinates rate limiting across app replicas and backs hot-path caches.
+  # Compose uses plain redis:// on the private Docker network; managed production
+  # Redis should use a private TLS endpoint (rediss://...).
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -90,6 +112,9 @@ services:
       BACKGROUND_JOBS_QUEUE_URL: ${BACKGROUND_JOBS_QUEUE_URL:-}
       BACKGROUND_JOBS_EVENT_BUS_NAME: ${BACKGROUND_JOBS_EVENT_BUS_NAME:-}
       BACKGROUND_JOBS_REQUIRE_QUEUE: ${BACKGROUND_JOBS_REQUIRE_QUEUE:-false}
+      RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-redis}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      OPENSEND_APP_REPLICAS: ${OPENSEND_APP_REPLICAS:-1}
       WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?Set WEBHOOK_SECRET_ENCRYPTION_KEY in .env (local placeholder ok only for dev; generate a real secret for production)}
       INGESTER_HEALTH_URL: ${INGESTER_HEALTH_URL:-http://ingester:3016/health}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
@@ -101,6 +126,8 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
@@ -147,11 +174,12 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       BILLING_NOTIFICATION_FROM_EMAIL: ${BILLING_NOTIFICATION_FROM_EMAIL:-}
       STRIPE_OVERAGE_METER_EVENT_NAME: ${STRIPE_OVERAGE_METER_EVENT_NAME:-}
-      # Optional — required only for domain-cache invalidation. Uses the same
-      # Redis instance as the app. Leave unset for a basic local stack.
-      REDIS_URL: ${REDIS_URL:-}
+      # Uses the same Compose Redis as the app for domain-cache invalidation.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
@@ -167,6 +195,33 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # Optional SMTP compatibility relay. It is profile-gated so the default
+  # Compose footprint remains app + ingester + scheduler + data services.
+  # Enable with: docker compose --profile smtp up -d smtp-relay
+  smtp-relay:
+    profiles: ["smtp"]
+    image: opensend-smtp-relay:local
+    build:
+      context: .
+      dockerfile: packages/smtp-relay/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${SMTP_RELAY_PORT:-2587}:${SMTP_RELAY_PORT:-2587}"
+    environment:
+      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}@postgres:5432/opensend
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      BACKGROUND_JOBS_QUEUE_URL: ${BACKGROUND_JOBS_QUEUE_URL:-}
+      SMTP_RELAY_HOST: ${SMTP_RELAY_HOST:-0.0.0.0}
+      SMTP_RELAY_PORT: ${SMTP_RELAY_PORT:-2587}
+      SMTP_RELAY_TLS_CERT_PATH: ${SMTP_RELAY_TLS_CERT_PATH:-}
+      SMTP_RELAY_TLS_KEY_PATH: ${SMTP_RELAY_TLS_KEY_PATH:-}
+      SMTP_RELAY_MAX_MESSAGE_SIZE_BYTES: ${SMTP_RELAY_MAX_MESSAGE_SIZE_BYTES:-41943040}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   # Durable local/self-host scheduler for ingester background scan endpoints.
   # It posts every ${INGESTER_SCHEDULER_INTERVAL_SECONDS:-60}s to:
@@ -189,3 +244,4 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
