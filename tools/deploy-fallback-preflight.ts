@@ -43,8 +43,6 @@ const requiredSecretRefs = [
     arnEnvName: "INGESTER_JOB_TOKEN_SECRET_ARN",
     defaultId: `${product}/ingester-job-token`,
   },
-];
-const optionalSecretRefs = [
   {
     label: "Ingester inbound token",
     idEnvName: "INGESTER_INBOUND_TOKEN_SECRET_ID",
@@ -128,14 +126,7 @@ function secretIdentifier(secretRef: SecretRef): string {
   );
 }
 
-function isOptionalSecretConfigured(secretRef: SecretRef): boolean {
-  return Boolean(env[secretRef.arnEnvName] || env[secretRef.idEnvName]);
-}
-
-function secretMetadataCheck(
-  secretRef: SecretRef,
-  required: boolean,
-): CheckResult {
+function secretMetadataCheck(secretRef: SecretRef): CheckResult {
   const identifier = secretIdentifier(secretRef);
   const source = env[secretRef.arnEnvName]
     ? secretRef.arnEnvName
@@ -157,18 +148,14 @@ function secretMetadataCheck(
   ]);
   if (result.status !== 0) {
     return {
-      label: required
-        ? `Secrets Manager metadata: ${secretRef.label}`
-        : `Optional Secrets Manager metadata: ${secretRef.label}`,
+      label: `Secrets Manager metadata: ${secretRef.label}`,
       ok: false,
       detail: `${source}: ${summarizeFailure(result)}`,
     };
   }
 
   return {
-    label: required
-      ? `Secrets Manager metadata: ${secretRef.label}`
-      : `Optional Secrets Manager metadata: ${secretRef.label}`,
+    label: `Secrets Manager metadata: ${secretRef.label}`,
     ok: true,
     detail: `${source} is resolvable`,
   };
@@ -254,12 +241,7 @@ function main(): void {
       ],
       [appService, ingesterService],
     ),
-    ...requiredSecretRefs.map((secretRef) =>
-      secretMetadataCheck(secretRef, true),
-    ),
-    ...optionalSecretRefs
-      .filter(isOptionalSecretConfigured)
-      .map((secretRef) => secretMetadataCheck(secretRef, false)),
+    ...requiredSecretRefs.map((secretRef) => secretMetadataCheck(secretRef)),
   ];
 
   console.log("OpenSend deploy fallback preflight (non-mutating)");
@@ -273,16 +255,6 @@ function main(): void {
       .map((secretRef) => secretRef.idEnvName)
       .join(", ")}`,
   );
-  const configuredOptionalSecretRefs = optionalSecretRefs.filter(
-    isOptionalSecretConfigured,
-  );
-  if (configuredOptionalSecretRefs.length > 0) {
-    console.log(
-      `Optional configured secret metadata=${configuredOptionalSecretRefs
-        .map((secretRef) => secretRef.idEnvName)
-        .join(", ")}`,
-    );
-  }
   console.log("Secret values are not fetched or printed.\n");
 
   for (const check of checks) {

@@ -308,7 +308,8 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(preflight).toContain("INGESTER_JOB_TOKEN_SECRET_ARN");
     expect(preflight).toContain("INGESTER_INBOUND_TOKEN_SECRET_ID");
     expect(preflight).toContain("INGESTER_INBOUND_TOKEN_SECRET_ARN");
-    expect(preflight).toContain("Optional Secrets Manager metadata");
+    expect(preflight).toContain("Required secret metadata");
+    expect(preflight).not.toContain("Optional Secrets Manager metadata");
     expect(preflight).toContain("Secret values are not fetched or printed");
     expect(preflight).not.toContain("env.APP_REPO");
     expect(preflight).not.toContain("env.ING_REPO");
@@ -328,6 +329,11 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     );
     expect(runbook).toContain("TRACKING_SECRET_SECRET_ID");
     expect(runbook).toContain("INGESTER_JOB_TOKEN_SECRET_ID");
+    expect(runbook).toContain("INGESTER_INBOUND_TOKEN_SECRET_ID");
+    expect(runbook).toContain("ingester inbound token");
+    expect(runbook).not.toContain(
+      "checked by preflight only when explicitly set",
+    );
     expect(runbook).toContain(
       "ECR repository and ECS service names are derived",
     );

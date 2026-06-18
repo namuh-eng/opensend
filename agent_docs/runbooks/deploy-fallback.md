@@ -42,8 +42,8 @@ aws --version
 | `TRACKING_SECRET_SECRET_ARN` | unset | Optional ARN override for the same secret metadata when the ARN is already known. |
 | `INGESTER_JOB_TOKEN_SECRET_ID` | `opensend/ingester-job-token` | Required Secrets Manager identifier for ingester job token metadata. |
 | `INGESTER_JOB_TOKEN_SECRET_ARN` | unset | Optional ARN override for the same secret metadata when the ARN is already known. |
-| `INGESTER_INBOUND_TOKEN_SECRET_ID` | `opensend/ingester-inbound-token` | Optional inbound token metadata identifier; checked by preflight only when explicitly set. |
-| `INGESTER_INBOUND_TOKEN_SECRET_ARN` | unset | Optional ARN override for the inbound token metadata; checked by preflight only when explicitly set. |
+| `INGESTER_INBOUND_TOKEN_SECRET_ID` | `opensend/ingester-inbound-token` | Required Secrets Manager identifier for ingester inbound token metadata. |
+| `INGESTER_INBOUND_TOKEN_SECRET_ARN` | unset | Optional ARN override for the same secret metadata when the ARN is already known. |
 
 Do not run `env`, `printenv`, `aws secretsmanager get-secret-value`, or any command that prints credential material into logs, issues, PRs, terminals being recorded, or chat. The fallback deploy only needs secret name/ARN metadata through `aws secretsmanager describe-secret`; it must not fetch secret values.
 
@@ -64,8 +64,7 @@ The preflight is read-only. It verifies:
 - The optional `AWS_ACCOUNT_ID` matches the authenticated AWS account.
 - ECR repositories for the app and ingester are reachable.
 - ECS services in the configured cluster are reachable.
-- Required Secrets Manager secret name/ARN metadata for the webhook encryption key, tracking secret, and ingester job token is resolvable without fetching values.
-- Optional inbound token secret metadata is resolvable when explicitly configured.
+- Required Secrets Manager secret name/ARN metadata for the webhook encryption key, tracking secret, ingester job token, and ingester inbound token is resolvable without fetching values.
 
 If the preflight fails, do not deploy. Fix the failing tool, auth, account, network, repository, service, or secret-name issue first.
 
