@@ -40,7 +40,7 @@ OpenSend is source-available under the [Elastic License 2.0](./LICENSE): you can
 - **Own the data boundary**: keep API traffic, recipient data, delivery events, and webhook secrets inside infrastructure you control.
 - **Use your SES quota**: send through AWS SES with OpenSend's dashboard, API keys, SDKs, webhooks, audiences, broadcasts, and templates on top.
 - **Inspect the whole path**: app, API routes, database schema, ingester, scheduler, webhook signing, docs, and generated OpenAPI all live in this repo.
-- **Start with Compose**: `cp .env.example .env && docker compose up -d` brings up Postgres, migrations, app, ingester, and scheduler.
+- **Start with Compose**: `bun run setup && docker compose up -d` generates local secrets, then brings up Postgres, migrations, app, ingester, and scheduler.
 - **Stay telemetry-explicit**: self-hosted deployments make zero outbound calls to OpenSend-operated vendors unless you set the relevant env vars.
 
 ## Cloud or self-hosted
@@ -48,7 +48,7 @@ OpenSend is source-available under the [Elastic License 2.0](./LICENSE): you can
 |               | OpenSend Cloud                         | Self-host                                     |
 | ------------- | -------------------------------------- | --------------------------------------------- |
 | Where it runs | Managed at `opensend.namuh.co`         | Your infrastructure                           |
-| Fastest setup | Sign in with Google and add a domain   | `docker compose up -d`                        |
+| Fastest setup | Sign in with Google and add a domain   | `bun run setup && docker compose up -d`       |
 | Cost model    | Free tier, paid plans for hosted usage | Free software; you pay AWS SES/infrastructure |
 | Best for      | Teams that want zero ops               | Teams that want full control                  |
 
@@ -61,13 +61,13 @@ The fastest local path is Docker Compose:
 ```bash
 git clone https://github.com/namuh-eng/opensend.git
 cd opensend
-cp .env.example .env
+bun run setup
 docker compose up -d
 ```
 
 Open **http://localhost:3015**.
 
-The checked-in `BETTER_AUTH_SECRET`, `INGESTER_JOB_TOKEN`, and `WEBHOOK_SECRET_ENCRYPTION_KEY` values in `.env.example` are local-only placeholders so the stack can boot for localhost evaluation. Replace them with `openssl rand -hex 32` values before any shared, staging, or production deploy; the app and ingester refuse the local auth placeholder when the configured app URL is not localhost.
+`bun run setup` writes a complete `.env` with fresh local secrets for Better Auth, webhook/integration encryption, ingester and scheduler auth, tracking, unsubscribe, DKIM, cron auth, and the Compose Postgres password. It prompts only for external provider values such as AWS, Cloudflare, S3, and Google OAuth; you can leave those blank and fill them in later. Production deploys should inject these values from a secrets manager or platform secret store instead of baking `.env` into images.
 
 Compose starts:
 
@@ -93,7 +93,7 @@ For real email delivery, add AWS SES credentials and verify a sending domain. Fo
 For local development without the full app container:
 
 ```bash
-cp .env.example .env
+bun run setup
 make setup    # starts Postgres, installs deps, pushes schema, seeds data
 make dev      # http://localhost:3015
 ```
@@ -284,9 +284,8 @@ Full docs: [`packages/ruby-sdk/README.md`](./packages/ruby-sdk/README.md) and [`
 ```bash
 git clone https://github.com/namuh-eng/opensend.git
 cd opensend
-cp .env.example .env
-# Set BETTER_AUTH_SECRET, Google OAuth if you want dashboard login,
-# and AWS credentials when you want real sending.
+bun run setup
+# Fill in Google OAuth for dashboard login and AWS credentials for real sending.
 docker compose up -d
 ```
 
