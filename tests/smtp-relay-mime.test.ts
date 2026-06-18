@@ -122,7 +122,7 @@ describe("relayMessage — MIME field mapping", () => {
     mockEmailRepoCreate.mockResolvedValue([{ id: "email-1" }]);
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
-      reason: "queue_url_missing",
+      reason: "db_polling_fallback_enabled",
     });
   });
 
@@ -218,7 +218,7 @@ describe("relayMessage — suppression rejection", () => {
     mockEmailRepoCreate.mockResolvedValue([{ id: "email-2" }]);
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
-      reason: "queue_url_missing",
+      reason: "db_polling_fallback_enabled",
     });
   });
 
@@ -254,7 +254,7 @@ describe("relayMessage — domain restriction", () => {
     mockEmailRepoCreate.mockResolvedValue([{ id: "email-3" }]);
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
-      reason: "queue_url_missing",
+      reason: "db_polling_fallback_enabled",
     });
   });
 

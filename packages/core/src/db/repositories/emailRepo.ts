@@ -1,4 +1,15 @@
-import { type SQL, and, desc, eq, gt, gte, lt, lte } from "drizzle-orm";
+import {
+  type SQL,
+  and,
+  desc,
+  eq,
+  gt,
+  gte,
+  isNull,
+  lt,
+  lte,
+  or,
+} from "drizzle-orm";
 import { db } from "../client";
 import { emails } from "../schema";
 
@@ -77,6 +88,44 @@ export const emailRepo = {
       .from(emails)
       .where(and(eq(emails.status, "scheduled"), lte(emails.scheduledAt, now)))
       .limit(limit);
+  },
+
+  async findQueuedForDispatch(options: { limit?: number; now?: Date } = {}) {
+    const { limit = 50, now = new Date() } = options;
+    return await db
+      .select()
+      .from(emails)
+      .where(
+        and(
+          eq(emails.status, "queued"),
+          or(isNull(emails.scheduledAt), lte(emails.scheduledAt, now)),
+          or(
+            isNull(emails.providerNextRetryAt),
+            lte(emails.providerNextRetryAt, now),
+          ),
+        ),
+      )
+      .orderBy(emails.createdAt)
+      .limit(limit);
+  },
+
+  async claimForSending(id: string, options: { now?: Date } = {}) {
+    const { now = new Date() } = options;
+    return await db
+      .update(emails)
+      .set({ status: "processing" })
+      .where(
+        and(
+          eq(emails.id, id),
+          eq(emails.status, "queued"),
+          or(isNull(emails.scheduledAt), lte(emails.scheduledAt, now)),
+          or(
+            isNull(emails.providerNextRetryAt),
+            lte(emails.providerNextRetryAt, now),
+          ),
+        ),
+      )
+      .returning();
   },
 
   async deleteForUser(id: string, userId: string) {

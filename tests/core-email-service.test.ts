@@ -59,7 +59,7 @@ describe("EmailService", () => {
     mockCreateEmail.mockResolvedValue([{ id: "email-1" }]);
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
-      reason: "queue_url_missing",
+      reason: "db_polling_fallback_enabled",
     });
     mockEnqueueEmailWebhookEvent.mockResolvedValue({
       eventId: "event-1",

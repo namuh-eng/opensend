@@ -72,7 +72,7 @@ Production values to plan before real traffic:
 | Email | `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` or equivalent IAM role credentials |
 | Attachments | `S3_BUCKET_NAME` |
 | Domain DNS | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID` when using automatic DNS setup |
-| Background jobs | `BACKGROUND_JOBS_QUEUE_URL`, `BACKGROUND_JOBS_REQUIRE_QUEUE=true`, `BACKGROUND_WORKER_POLL=true` on the ingester |
+| Background jobs | Default: `BACKGROUND_JOBS_DB_POLLING_FALLBACK=true`, `BACKGROUND_WORKER_POLL=true` on the ingester. Production scale: `BACKGROUND_JOBS_QUEUE_URL`, `BACKGROUND_JOBS_REQUIRE_QUEUE=true`, `BACKGROUND_WORKER_POLL=true` |
 | Scheduler auth | `INGESTER_URL`, `INGESTER_JOB_TOKEN`, `INGESTER_SCHEDULER_INTERVAL_SECONDS` |
 | Inbound receiving | `INGESTER_INBOUND_TOKEN` when `/events/inbound` is exposed, plus `SES_INBOUND_SNS_TOPIC_ARN` and `S3_BUCKET_NAME` or `SES_INBOUND_BUCKET_NAME` for SES receipt-rule ingestion |
 | Rate limiting/cache | `RATE_LIMIT_BACKEND=redis`, `REDIS_URL`, `OPENSEND_APP_REPLICAS` |
@@ -103,15 +103,23 @@ Do not point SES/SNS events at the Next.js app URL. Keep the ingester reachable 
 
 ## Background jobs
 
-For production sends, configure the queue-backed path:
+The default Docker Compose path runs without SQS. When `BACKGROUND_JOBS_QUEUE_URL` is empty and `BACKGROUND_JOBS_DB_POLLING_FALLBACK=true`, the ingester started with `BACKGROUND_WORKER_POLL=true` polls Postgres for queued and retry-ready email rows, claims each row atomically, and sends through the same SES worker lifecycle as SQS jobs. Ingester logs include:
+
+```txt
+opensend-ingester running in DB-polling mode; configure SQS for production scale
+```
+
+If you intentionally disable the fallback with `BACKGROUND_JOBS_DB_POLLING_FALLBACK=false` and do not configure SQS, `POST /api/emails` fails with an actionable background-worker error instead of accepting rows that can never dispatch.
+
+For production scale, graduate to the queue-backed path:
 
 1. Create an SQS queue and dead-letter queue.
 2. Set `BACKGROUND_JOBS_QUEUE_URL` on the app and ingester.
 3. Set `BACKGROUND_JOBS_REQUIRE_QUEUE=true` on the app so missing queue wiring fails loudly.
-4. Set `BACKGROUND_WORKER_POLL=true` on the ingester.
+4. Keep `BACKGROUND_WORKER_POLL=true` on the ingester so it long-polls SQS.
 5. Keep the scheduler, EventBridge, or an equivalent trusted caller posting to `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify` with `Authorization: Bearer ${INGESTER_JOB_TOKEN}`.
 
-Local evaluation can run without SQS; rows are still persisted, but production delivery needs the worker path.
+The DB-polling fallback is intended for single-stack self-hosting and evaluation. SQS remains the recommended production path for high throughput, backpressure, visibility timeouts, and DLQ operations. When SQS is configured, DB polling is gated off so the same email is not dispatched by both workers.
 
 ## Rate limiting and cache
 
@@ -137,7 +145,7 @@ The SMTP relay is available in the reference Compose file but is not part of the
 docker compose --profile smtp up -d smtp-relay
 ```
 
-By default the relay publishes port `2587` and authenticates with OpenSend API keys as SMTP passwords. It requires the same Postgres database as the app. `BACKGROUND_JOBS_QUEUE_URL` is optional for local evaluation but should match the app/ingester queue in production. Accepted SMTP messages only enter the normal delivery worker path when `BACKGROUND_JOBS_QUEUE_URL` is configured; without a queue URL, rows can be accepted for local evaluation but delivery is skipped until the queue contract is wired. Configure `SMTP_RELAY_TLS_CERT_PATH` and `SMTP_RELAY_TLS_KEY_PATH` before advertising STARTTLS on a public relay.
+By default the relay publishes port `2587` and authenticates with OpenSend API keys as SMTP passwords. It requires the same Postgres database as the app. In default Compose, accepted SMTP rows are dispatched by the ingester DB-polling fallback when SQS is absent. For production scale, set `BACKGROUND_JOBS_QUEUE_URL` consistently on the app, ingester, and relay, and keep `BACKGROUND_WORKER_POLL=true` on the ingester. Configure `SMTP_RELAY_TLS_CERT_PATH` and `SMTP_RELAY_TLS_KEY_PATH` before advertising STARTTLS on a public relay.
 
 ## Privacy and telemetry
 
@@ -176,7 +184,7 @@ Run `docker compose --env-file .env.example config`. Missing interpolation error
 
 ### Emails stay queued
 
-Check `BACKGROUND_JOBS_QUEUE_URL`, `BACKGROUND_WORKER_POLL`, SQS IAM permissions, and ingester logs. In local evaluation without a queue, persisted rows are expected; production delivery needs the worker path.
+Check ingester logs first. Without SQS, you should see `running in DB-polling mode; configure SQS for production scale`; then verify `BACKGROUND_JOBS_DB_POLLING_FALLBACK=true`, `BACKGROUND_WORKER_POLL=true`, and SES credentials/sandbox status. With SQS, check `BACKGROUND_JOBS_QUEUE_URL`, `BACKGROUND_WORKER_POLL`, SQS IAM permissions, and DLQ redrive evidence.
 
 ### Domain verification does not update
 
