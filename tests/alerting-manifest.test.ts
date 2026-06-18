@@ -102,6 +102,69 @@ describe("production alerting manifest", () => {
     ]);
   });
 
+  it("includes cluster names when ECS services share the same service name", () => {
+    const plan = buildAlarmPlan({
+      environment: "prod",
+      snsTopicArn: "arn:aws:sns:us-east-1:123456789012:opensend-ops",
+      ecsServices: [
+        { clusterName: "blue", serviceName: "opensend-app", desiredCount: 1 },
+        { clusterName: "green", serviceName: "opensend-app", desiredCount: 2 },
+      ],
+    });
+
+    const ecsAlarms = renderPlan({ plan }).alarms.filter(
+      (alarm) => alarm.MetricName === "RunningTaskCount",
+    );
+
+    expect(ecsAlarms.map((alarm) => alarm.AlarmName).sort()).toEqual([
+      "opensend-prod-blue-opensend-app-running-tasks-low",
+      "opensend-prod-green-opensend-app-running-tasks-low",
+    ]);
+    expect(
+      ecsAlarms.map((alarm) => dimensionKey(alarm.Dimensions)).sort(),
+    ).toEqual([
+      "ClusterName=blue|ServiceName=opensend-app",
+      "ClusterName=green|ServiceName=opensend-app",
+    ]);
+  });
+
+  it("fails before rendering duplicate CloudWatch alarm names", () => {
+    const plan = buildAlarmPlan({
+      environment: "prod",
+      snsTopicArn: "arn:aws:sns:us-east-1:123456789012:opensend-ops",
+      ecsServices: [
+        { clusterName: "blue", serviceName: "opensend-app", desiredCount: 1 },
+        { clusterName: "blue", serviceName: "opensend-app", desiredCount: 2 },
+      ],
+    });
+
+    expect(() => renderPlan({ plan })).toThrow(
+      "Duplicate rendered CloudWatch alarm names: opensend-prod-blue-opensend-app-running-tasks-low",
+    );
+  });
+
+  it("preserves the existing ECS alarm name for a single service name", () => {
+    const plan = buildAlarmPlan({
+      environment: "prod",
+      snsTopicArn: "arn:aws:sns:us-east-1:123456789012:opensend-ops",
+      ecsServices: [
+        { clusterName: "namuh", serviceName: "opensend-app", desiredCount: 1 },
+      ],
+    });
+
+    const ecsAlarm = renderPlan({ plan }).alarms.find(
+      (alarm) => alarm.MetricName === "RunningTaskCount",
+    );
+
+    expect(ecsAlarm?.AlarmName).toBe(
+      "opensend-prod-opensend-app-running-tasks-low",
+    );
+    expect(ecsAlarm?.Dimensions).toEqual([
+      { Name: "ClusterName", Value: "namuh" },
+      { Name: "ServiceName", Value: "opensend-app" },
+    ]);
+  });
+
   it("keeps notification and mutation gates explicit", () => {
     const script = readRepoFile("scripts/create-cloudwatch-alarms.ts");
     const gitignore = readRepoFile(".gitignore");

@@ -177,6 +177,22 @@ function alarmName(input: {
   return `${normalizeSlug(input.prefix)}-${normalizeSlug(input.environment)}-${normalizeSlug(input.slug)}`;
 }
 
+function ecsRunningTasksAlarmSlug(
+  service: EcsServiceInput,
+  services: EcsServiceInput[],
+): string {
+  const serviceSlug = normalizeSlug(service.serviceName);
+  const clusterSlug = normalizeSlug(service.clusterName);
+  const hasDuplicateServiceName =
+    services.filter(
+      (candidate) => normalizeSlug(candidate.serviceName) === serviceSlug,
+    ).length > 1;
+
+  return hasDuplicateServiceName
+    ? `${clusterSlug}-${serviceSlug}-running-tasks-low`
+    : `${serviceSlug}-running-tasks-low`;
+}
+
 function description(input: {
   environment: string;
   family: string;
@@ -403,9 +419,10 @@ export function buildAlarmPlan(input: BuildPlanInput = {}): AlarmPlan {
     skipped.push("sqs-dlq-depth: pass --dlq-queue-name or --dlq-queue-url");
   }
 
-  for (const service of input.ecsServices ?? []) {
+  const ecsServices = input.ecsServices ?? [];
+  for (const service of ecsServices) {
     desiredAlarms.push({
-      slug: `${normalizeSlug(service.serviceName)}-running-tasks-low`,
+      slug: ecsRunningTasksAlarmSlug(service, ecsServices),
       family: "ecs-running-tasks",
       namespace: "ECS/ContainerInsights",
       metricName: "RunningTaskCount",
@@ -429,7 +446,7 @@ export function buildAlarmPlan(input: BuildPlanInput = {}): AlarmPlan {
       optional: true,
     });
   }
-  if ((input.ecsServices ?? []).length === 0) {
+  if (ecsServices.length === 0) {
     skipped.push(
       "ecs-running-tasks: pass --ecs-service cluster/service/desiredCount and enable Container Insights",
     );
@@ -549,6 +566,23 @@ export function toPutMetricAlarmPayload(input: {
   };
 }
 
+function assertUniqueAlarmNames(alarms: AwsMetricAlarmPayload[]): void {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const alarm of alarms) {
+    if (seen.has(alarm.AlarmName)) {
+      duplicates.add(alarm.AlarmName);
+    }
+    seen.add(alarm.AlarmName);
+  }
+
+  if (duplicates.size > 0) {
+    throw new Error(
+      `Duplicate rendered CloudWatch alarm names: ${Array.from(duplicates).join(", ")}`,
+    );
+  }
+}
+
 export function renderPlan(input: {
   plan: AlarmPlan;
   notifyOk?: boolean;
@@ -557,15 +591,18 @@ export function renderPlan(input: {
   skipped: string[];
   notification: AlarmPlan["notification"];
 } {
+  const alarms = input.plan.desiredAlarms.map((alarm) =>
+    toPutMetricAlarmPayload({
+      plan: input.plan,
+      alarm,
+      notifyOk: input.notifyOk,
+    }),
+  );
+  assertUniqueAlarmNames(alarms);
+
   return {
     notification: input.plan.notification,
-    alarms: input.plan.desiredAlarms.map((alarm) =>
-      toPutMetricAlarmPayload({
-        plan: input.plan,
-        alarm,
-        notifyOk: input.notifyOk,
-      }),
-    ),
+    alarms,
     skipped: input.plan.skipped,
   };
 }
