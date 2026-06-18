@@ -1,0 +1,30 @@
+# Local source-build override for OpenSend development/evaluation.
+#
+# Default `docker compose up -d` uses pinned release images for app, ingester,
+# and scheduler. Use this file only when you intentionally want to build the app
+# and ingester from the checked-out source tree:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#
+# The optional smtp-relay and one-shot migrator are already build-local in the
+# base Compose file because v1.0.0 does not publish separate relay or migrator
+# images.
+
+services:
+  app:
+    image: opensend:local
+    build:
+      context: .
+      target: runner
+
+  ingester:
+    image: opensend-ingester:local
+    build:
+      context: .
+      dockerfile: packages/ingester/Dockerfile
+
+  scheduler:
+    image: opensend-ingester:local
+    build:
+      context: .
+      dockerfile: packages/ingester/Dockerfile

@@ -1,6 +1,6 @@
 {
   "name": "opensend-monorepo",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "packageManager": "bun@1.3.8",
   "workspaces": ["packages/*", "services/*"],

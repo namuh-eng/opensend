@@ -7,6 +7,17 @@ import { describe, expect, it } from "vitest";
 
 const root = join(__dirname, "..");
 
+function serviceBlock(compose: string, serviceName: string): string {
+  const escapedServiceName = serviceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = compose.match(
+    new RegExp(
+      `\\n  ${escapedServiceName}:\\n[\\s\\S]*?(?=\\n  [a-zA-Z0-9_-]+:\\n|\\nvolumes:\\n|$)`,
+    ),
+  );
+  expect(match).not.toBeNull();
+  return match?.[0] ?? "";
+}
+
 describe("deploy-001: ECS Fargate deployment configuration", () => {
   it("next.config.js has standalone output for Docker deployment", () => {
     const config = readFileSync(join(root, "next.config.js"), "utf-8");
@@ -178,12 +189,41 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(ignore).toContain(".next");
   });
 
-  it("docker-compose includes a dedicated ingester service with a healthcheck", () => {
+  it("docker-compose pins release images for app, ingester, and scheduler by default", () => {
     const compose = readFileSync(join(root, "docker-compose.yml"), "utf-8");
-    expect(compose).toContain("ingester:");
-    expect(compose).toContain("dockerfile: packages/ingester/Dockerfile");
-    expect(compose).toContain("INGESTER_PORT:-3016");
-    expect(compose).toContain("http://127.0.0.1:3016/health");
+    const app = serviceBlock(compose, "app");
+    const ingester = serviceBlock(compose, "ingester");
+    const scheduler = serviceBlock(compose, "scheduler");
+
+    expect(app).toContain("image: ghcr.io/namuh-eng/opensend:v1.0.0");
+    expect(app).not.toContain("build:");
+    expect(ingester).toContain(
+      "image: ghcr.io/namuh-eng/opensend-ingester:v1.0.0",
+    );
+    expect(ingester).not.toContain("build:");
+    expect(ingester).toContain("INGESTER_PORT:-3016");
+    expect(ingester).toContain("http://127.0.0.1:3016/health");
+    expect(scheduler).toContain(
+      "image: ghcr.io/namuh-eng/opensend-ingester:v1.0.0",
+    );
+    expect(scheduler).toContain('command: ["bun", "/app/job-scheduler.js"]');
+  });
+
+  it("docker-compose local override builds the app and ingester from source", () => {
+    const override = readFileSync(
+      join(root, "docker-compose.local.yml"),
+      "utf-8",
+    );
+    const app = serviceBlock(override, "app");
+    const ingester = serviceBlock(override, "ingester");
+    const scheduler = serviceBlock(override, "scheduler");
+
+    expect(app).toContain("image: opensend:local");
+    expect(app).toContain("target: runner");
+    expect(ingester).toContain("image: opensend-ingester:local");
+    expect(ingester).toContain("dockerfile: packages/ingester/Dockerfile");
+    expect(scheduler).toContain("image: opensend-ingester:local");
+    expect(scheduler).toContain("dockerfile: packages/ingester/Dockerfile");
   });
 
   it("docker-compose wires Redis-backed rate limiting by default", () => {

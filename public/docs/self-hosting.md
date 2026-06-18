@@ -18,6 +18,20 @@ Docker Compose starts the same service boundaries used by production deployments
 
 Production deployments can run these as separate services on ECS, Fly, Railway, Cloud Run, Kubernetes, or a single VM. Keep app traffic pointed at the Next.js service, and point SES/SNS event webhooks at the ingester.
 
+## Release images and pinned deploys
+
+The default Compose file uses pinned release images for reproducible self-host deploys. The authorized v1.0.0 workflow publishes these exact GHCR tags instead of a moving tag:
+
+| Service | Release image | Notes |
+| --- | --- | --- |
+| App/API/dashboard | `ghcr.io/namuh-eng/opensend:v1.0.0` | Built from the root Dockerfile runner target. |
+| Ingester | `ghcr.io/namuh-eng/opensend-ingester:v1.0.0` | Handles SES/SNS, inbound events, workers, and job endpoints. |
+| Scheduler | `ghcr.io/namuh-eng/opensend-ingester:v1.0.0` | Same image, started with `bun /app/job-scheduler.js`. |
+
+The release workflow publishes the images; the ingester service consumes the published image and does not publish images itself. The workflow also publishes `:1.0.0` aliases and intentionally does not publish `:latest`.
+
+`docker-compose.yml` pins those app, ingester, and scheduler tags by default. Use `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build` when you intentionally want to build app and ingester from the checked-out source tree. The one-shot migrator and optional SMTP relay profile still build locally because v1.0.0 does not publish separate migrator or relay images. Run migrations before rolling app or ingester containers; if your platform requires a migrator image, build the root Dockerfile `migrator` target into your own registry.
+
 ## Quick start
 
 ```bash

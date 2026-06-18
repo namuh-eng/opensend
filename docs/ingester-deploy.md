@@ -39,34 +39,50 @@ and SQS:
 
 | Service | Image source | Public host (example) | Port |
 | --- | --- | --- | --- |
-| App | `Dockerfile` (default target) | `app.yourdomain.com` and `api.app.yourdomain.com` | `8080` |
-| Ingester | `packages/ingester/Dockerfile` | `events.app.yourdomain.com` | `3016` |
+| App | `ghcr.io/namuh-eng/opensend:v1.0.0`; use `docker-compose.local.yml` or your own registry tag when building from source | `app.yourdomain.com` and `api.app.yourdomain.com` | `8080` |
+| Ingester | `ghcr.io/namuh-eng/opensend-ingester:v1.0.0`; scheduler uses the same image with `bun /app/job-scheduler.js` | `events.app.yourdomain.com` | `3016` |
 
 If your platform has host-based routing (AWS ALB, GCP Load Balancer, Cloudflare
 Spectrum), point each hostname at its target service. The events host has to
 be reachable from the public internet so SES SNS can deliver to it.
 
-Build images for `linux/amd64` even from M-chip Macs:
+The GitHub release workflow publishes the official app and ingester images on
+`v*` tags. The default `docker-compose.yml` pins those app, ingester, and
+scheduler tags for reproducible self-host deploys. The ingester process only
+consumes the image at runtime; it does not publish Docker images. The workflow
+publishes `:v1.0.0` and `:1.0.0` tags and intentionally does not publish
+`:latest`, so production deployments should pin the exact release tag they have
+validated.
+
+For forks, private registries, or pre-release validation, build images yourself.
+Use `linux/amd64` for amd64 production targets even from M-chip Macs, or include
+both supported release platforms when you need a multi-arch manifest:
 
 ```bash
-docker buildx build --platform linux/amd64 \
-  -t yourorg/opensend-app:latest --push .
+docker buildx build --platform linux/amd64,linux/arm64 \
+  --target runner \
+  -t yourorg/opensend-app:v1.0.0 --push .
 
-docker buildx build --platform linux/amd64 \
+docker buildx build --platform linux/amd64,linux/arm64 \
   -f packages/ingester/Dockerfile \
-  -t yourorg/opensend-ingester:latest --push .
+  -t yourorg/opensend-ingester:v1.0.0 --push .
+
+docker buildx imagetools inspect yourorg/opensend-app:v1.0.0
+docker buildx imagetools inspect yourorg/opensend-ingester:v1.0.0
 ```
 
 Run a one-shot migrator container against the production `DATABASE_URL`
 **before** redeploying the app or ingester when the change includes schema
-migrations:
+migrations. The v1.0.0 release workflow does not publish a separate migrator
+image, so build the root Dockerfile `migrator` target into your registry when
+your platform needs an image-only migration job:
 
 ```bash
 docker buildx build --platform linux/amd64 --target migrator \
-  -t yourorg/opensend-migrator:latest --push .
+  -t yourorg/opensend-migrator:v1.0.0 --push .
 
 # Run once against production DB
-docker run --rm --env DATABASE_URL=... yourorg/opensend-migrator:latest
+docker run --rm --env DATABASE_URL=... yourorg/opensend-migrator:v1.0.0
 ```
 
 ## Background job worker
