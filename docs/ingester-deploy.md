@@ -166,7 +166,7 @@ INGESTER_SCHEDULER_INTERVAL_SECONDS=60
 
 ### Periodic scans
 
-Three scans need to run every minute: `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify`. The Docker Compose `scheduler` sidecar runs all three by default. For managed production, use one of these patterns:
+Four scans need to run every minute: `/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`, and `/jobs/billing-overage`. The Docker Compose `scheduler` sidecar runs all four by default. For managed production, use one of these patterns:
 
 **HTTP-driven** (e.g. AWS EventBridge schedule rule with HTTP target, or any
 cron driver that can issue authenticated POSTs):
@@ -179,11 +179,13 @@ curl -i -X POST "${INGESTER_URL}/jobs/webhooks" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 curl -i -X POST "${INGESTER_URL}/jobs/domain-verify" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
+curl -i -X POST "${INGESTER_URL}/jobs/billing-overage" \
+  -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 ```
 
 **Queue-driven**: publish `scheduled-email.scan` and `webhook-delivery.scan`
 SQS messages on the same minute cadence; the ingester picks them up via the
-normal long-poll loop. Domain verification is HTTP-only today, so keep an HTTP schedule for `/jobs/domain-verify`.
+normal long-poll loop. Domain verification and billing overage reporting are HTTP-only today, so keep an HTTP schedule for `/jobs/domain-verify` and `/jobs/billing-overage`.
 
 Manual probes during a deploy:
 
@@ -192,6 +194,8 @@ INGESTER_URL="https://events.yourdomain.com"
 curl -i -X POST "${INGESTER_URL}/jobs/poll" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 curl -i -X POST "${INGESTER_URL}/jobs/domain-verify" \
+  -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
+curl -i -X POST "${INGESTER_URL}/jobs/billing-overage" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 ```
 
@@ -305,9 +309,9 @@ Before pointing production SES SNS at a freshly stood-up ingester, verify:
   `/health`.
 - If hosted billing is enabled, Stripe Dashboard points to
   `https://events.<your-domain>/webhooks/stripe` and the ingester has
-  `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`.
+  `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and the configured Stripe overage meter event name. Overage reporting is skipped when billing is disabled; when enabled, the `/jobs/billing-overage` job uses the `billing_overage_reports` outbox table to retry/catch up reported deltas without double-counting. The automatic catch-up scan covers billing periods that ended within the last 30 days; older missed usage requires manual Stripe reconciliation before invoice close.
 - The SQS queue exists with a redrive policy + DLQ.
-- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}`.
+- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`, `/jobs/billing-overage`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}`.
 - Domain verification runbook passed: create/use a pending domain, confirm SES is verified, do not click **Verify DNS Records**, wait for the scheduler, and confirm the OpenSend DB/dashboard flips to `verified`.
 - Migrations ran successfully against the production database before the new
   image started.

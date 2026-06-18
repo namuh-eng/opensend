@@ -146,6 +146,7 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       BILLING_NOTIFICATION_FROM_EMAIL: ${BILLING_NOTIFICATION_FROM_EMAIL:-}
+      STRIPE_OVERAGE_METER_EVENT_NAME: ${STRIPE_OVERAGE_METER_EVENT_NAME:-}
       # Optional — required only for domain-cache invalidation. Uses the same
       # Redis instance as the app. Leave unset for a basic local stack.
       REDIS_URL: ${REDIS_URL:-}
@@ -172,6 +173,7 @@ services:
   #   - /jobs/scheduled-emails
   #   - /jobs/webhooks
   #   - /jobs/domain-verify
+  #   - /jobs/billing-overage
   # The scheduler sends Authorization: Bearer <INGESTER_JOB_TOKEN>.
   scheduler:
     image: opensend-ingester:local

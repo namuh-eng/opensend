@@ -20,9 +20,9 @@ import {
   webhookRepo,
 } from "@opensend/core";
 import { Hono } from "hono";
+import { reportBillingOverageUsage } from "./billing-overage-reporter";
 import { invalidateDomainCaches } from "./cache/domain-cache";
 
-const domainService = createDomainService({ invalidateDomainCaches });
 import { webhookDispatcher } from "./dispatcher";
 import { queueWorker } from "./queue-worker";
 import { Sentry } from "./sentry";
@@ -40,6 +40,7 @@ import {
   buildPaymentFailedEmail,
 } from "./stripe-webhook";
 
+const domainService = createDomainService({ invalidateDomainCaches });
 const app = new Hono();
 const inboundS3Client = new S3Client({
   region: process.env.AWS_REGION ?? "us-east-1",
@@ -287,6 +288,10 @@ app.post("/jobs/webhooks", async (c) =>
     c,
     async () => await webhookDispatcher.dispatchPendingDeliveries(),
   ),
+);
+
+app.post("/jobs/billing-overage", async (c) =>
+  runJobEndpoint(c, async () => await reportBillingOverageUsage()),
 );
 
 app.post("/jobs/domain-verify", async (c) =>

@@ -25,6 +25,7 @@ export interface PlanRow {
   name: string;
   monthly_price_cents: number;
   stripe_price_id: string | null;
+  stripe_overage_price_id: string | null;
   is_public: boolean;
 }
 
@@ -131,13 +132,14 @@ export function validatePlanRows(rows: PlanRow[]): ValidationIssue[] {
       service: "database",
       key: "plans.stripe_price_id",
       message:
-        "No paid public plans found. Stripe checkout cannot be validated until approved paid tiers and Price IDs are seeded.",
+        "No paid public plans found. Stripe checkout cannot be validated until approved paid tiers, base Price IDs, and metered overage Price IDs are seeded.",
     });
   }
 
   const seenPriceIds = new Map<string, string>();
   for (const row of publicRows) {
     const priceId = row.stripe_price_id?.trim() ?? "";
+    const overagePriceId = row.stripe_overage_price_id?.trim() ?? "";
     const label = `${row.slug} (${row.name})`;
 
     if (row.monthly_price_cents > 0 && !priceId) {
@@ -145,9 +147,17 @@ export function validatePlanRows(rows: PlanRow[]): ValidationIssue[] {
         level: "error",
         service: "database",
         key: `plans.${row.slug}.stripe_price_id`,
-        message: `${label} is a paid public plan but has no Stripe Price ID.`,
+        message: `${label} is a paid public plan but has no base Stripe Price ID.`,
       });
-      continue;
+    }
+
+    if (row.monthly_price_cents > 0 && !overagePriceId) {
+      issues.push({
+        level: "error",
+        service: "database",
+        key: `plans.${row.slug}.stripe_overage_price_id`,
+        message: `${label} is a paid public plan but has no metered overage Stripe Price ID.`,
+      });
     }
 
     if (priceId && !priceId.startsWith("price_")) {
@@ -159,12 +169,21 @@ export function validatePlanRows(rows: PlanRow[]): ValidationIssue[] {
       });
     }
 
-    if (row.monthly_price_cents === 0 && priceId) {
+    if (overagePriceId && !overagePriceId.startsWith("price_")) {
+      issues.push({
+        level: "error",
+        service: "database",
+        key: `plans.${row.slug}.stripe_overage_price_id`,
+        message: `${label} uses ${overagePriceId}, which does not look like a Stripe metered Price ID (price_...).`,
+      });
+    }
+
+    if (row.monthly_price_cents === 0 && (priceId || overagePriceId)) {
       issues.push({
         level: "warning",
         service: "database",
         key: `plans.${row.slug}.stripe_price_id`,
-        message: `${label} is free but has a Stripe Price ID. Free signup should not require Stripe Checkout.`,
+        message: `${label} is free but has Stripe Price IDs. Free signup should not require Stripe Checkout or overage billing.`,
       });
     }
 
@@ -175,7 +194,7 @@ export function validatePlanRows(rows: PlanRow[]): ValidationIssue[] {
           level: "error",
           service: "database",
           key: "plans.stripe_price_id",
-          message: `${row.slug} and ${firstSlug} both use ${priceId}; each paid tier should map to one approved Stripe Price ID.`,
+          message: `${row.slug} and ${firstSlug} both use ${priceId}; each paid tier should map to one approved base Stripe Price ID.`,
         });
       } else {
         seenPriceIds.set(priceId, row.slug);
@@ -218,7 +237,7 @@ Usage:
 
 Checks:
   - Hosted Stripe env intent: BILLING_BACKEND=stripe plus required STRIPE_* keys.
-  - Optional DB plan mapping: public paid plans must have unique price_... IDs.
+  - Optional DB plan mapping: public paid plans must have base and metered overage price_... IDs.
 
 Notes:
   - This script never prints Stripe secrets.
@@ -251,7 +270,7 @@ async function loadPublicPlans(connectionString: string): Promise<PlanRow[]> {
 
   try {
     const result = await pool.query(
-      `select id, slug, name, monthly_price_cents, stripe_price_id, is_public
+      `select id, slug, name, monthly_price_cents, stripe_price_id, stripe_overage_price_id, is_public
        from plans
        where is_public = true
        order by monthly_price_cents asc, slug asc`,
@@ -313,7 +332,7 @@ async function main(): Promise<void> {
       console.log(`  Loaded ${plans.length} public plan(s) from DATABASE_URL`);
       for (const plan of plans) {
         console.log(
-          `    - ${plan.slug}: $${(plan.monthly_price_cents / 100).toFixed(2)}/mo, stripe_price_id=${plan.stripe_price_id ?? "(none)"}`,
+          `    - ${plan.slug}: $${(plan.monthly_price_cents / 100).toFixed(2)}/mo, stripe_price_id=${plan.stripe_price_id ?? "(none)"}, stripe_overage_price_id=${plan.stripe_overage_price_id ?? "(none)"}`,
         );
       }
       issues.push(...validatePlanRows(plans));

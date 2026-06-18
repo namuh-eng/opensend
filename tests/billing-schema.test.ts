@@ -1,4 +1,5 @@
 import {
+  billingOverageReports,
   plans,
   stripeCustomers,
   stripeEventsProcessed,
@@ -14,6 +15,7 @@ describe("Billing schema", () => {
     expect(getTableName(subscriptions)).toBe("subscriptions");
     expect(getTableName(stripeCustomers)).toBe("stripe_customers");
     expect(getTableName(usagePeriods)).toBe("usage_periods");
+    expect(getTableName(billingOverageReports)).toBe("billing_overage_reports");
     expect(getTableName(stripeEventsProcessed)).toBe("stripe_events_processed");
   });
 
@@ -61,11 +63,29 @@ describe("Billing schema", () => {
     expect(cols.periodStart).toBeDefined();
     expect(cols.periodEnd).toBeDefined();
     expect(cols.emailsSent).toBeDefined();
+    expect(cols.includedEmailQuota).toBeDefined();
+    expect(cols.overageReportedEmails).toBeDefined();
+    expect(cols.overageClaimedEmails).toBeDefined();
+    expect(cols.overageLastReportedAt).toBeDefined();
+    expect(cols.usageWarning80NotifiedAt).toBeDefined();
+    expect(cols.usageWarning100NotifiedAt).toBeDefined();
     expect(cols.lastIncrementAt).toBeDefined();
     expect(cols.userId.notNull).toBe(true);
     expect(cols.periodStart.notNull).toBe(true);
     expect(cols.periodEnd.notNull).toBe(true);
     expect(cols.emailsSent.notNull).toBe(true);
+  });
+
+  it("billing_overage_reports stores durable Stripe meter outbox rows", () => {
+    const cols = getTableColumns(billingOverageReports);
+    expect(cols.usagePeriodId).toBeDefined();
+    expect(cols.reportKey).toBeDefined();
+    expect(cols.deltaEmails).toBeDefined();
+    expect(cols.status).toBeDefined();
+    expect(cols.stripeSubmissionStartedAt).toBeDefined();
+    expect(cols.stripeReportedAt).toBeDefined();
+    expect(cols.reportKey.notNull).toBe(true);
+    expect(cols.status.notNull).toBe(true);
   });
 
   it("stripe_events_processed stores webhook replay idempotency keys", () => {

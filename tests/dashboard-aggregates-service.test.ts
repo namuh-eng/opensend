@@ -291,7 +291,7 @@ describe("dashboard aggregate service", () => {
       plan: { name: "Free", slug: "free" },
       transactional: {
         monthlyUsed: 42,
-        monthlyLimit: 5000,
+        monthlyLimit: 500,
         dailyUsed: 3,
         dailyLimit: 100,
       },

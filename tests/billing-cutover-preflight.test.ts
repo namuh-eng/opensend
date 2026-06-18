@@ -12,6 +12,7 @@ const basePaidPlan: PlanRow = {
   name: "Pro",
   monthly_price_cents: 1900,
   stripe_price_id: "price_test_pro",
+  stripe_overage_price_id: "price_test_pro_overage",
   is_public: true,
 };
 
@@ -21,6 +22,7 @@ const freePlan: PlanRow = {
   name: "Free",
   monthly_price_cents: 0,
   stripe_price_id: null,
+  stripe_overage_price_id: null,
   is_public: true,
 };
 
@@ -64,9 +66,16 @@ describe("billing cutover preflight", () => {
       { ...basePaidPlan, stripe_price_id: null },
       {
         ...basePaidPlan,
+        id: "plan-lite",
+        slug: "lite",
+        stripe_overage_price_id: null,
+      },
+      {
+        ...basePaidPlan,
         id: "plan-scale",
         slug: "scale",
         stripe_price_id: "not_a_price",
+        stripe_overage_price_id: "not_an_overage_price",
       },
       {
         ...basePaidPlan,
@@ -84,6 +93,14 @@ describe("billing cutover preflight", () => {
         }),
         expect.objectContaining({
           key: "plans.scale.stripe_price_id",
+          level: "error",
+        }),
+        expect.objectContaining({
+          key: "plans.lite.stripe_overage_price_id",
+          level: "error",
+        }),
+        expect.objectContaining({
+          key: "plans.scale.stripe_overage_price_id",
           level: "error",
         }),
         expect.objectContaining({

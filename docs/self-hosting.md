@@ -137,7 +137,7 @@ contributor-facing set; the table below adds the production-only entries.
 | `SES_INBOUND_SNS_TOPIC_ARN` | SNS topic for SES receipt-rule S3 notifications. Required for hosted-style receiving provisioning. Subscribe it to `/events/inbound/ses-s3`. |
 | `SES_INBOUND_BUCKET_NAME` | Optional raw MIME bucket allowlist for SES receipt-rule ingestion. Defaults to `S3_BUCKET_NAME`. |
 | `SES_INBOUND_RULE_SET_NAME` | Optional SES receipt rule set managed by the dashboard receiving toggle. Defaults to `opensend-inbound`. |
-| `INGESTER_SCHEDULER_INTERVAL_SECONDS` | Compose scheduler cadence for `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify`. Default `60`; minimum `10`. |
+| `INGESTER_SCHEDULER_INTERVAL_SECONDS` | Compose scheduler cadence for `/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`, and `/jobs/billing-overage`. Default `60`; minimum `10`. |
 | `RATE_LIMIT_BACKEND` | `disabled` (single-process dev), or `redis` (production). |
 | `REDIS_URL` | TLS Redis endpoint, e.g. `rediss://default:<password>@<endpoint>:6379`. Used for rate limiting AND auth/domain metadata cache. |
 | `CLOUDWATCH_METRICS_NAMESPACE` | Override the default `OpenSend` EMF metrics namespace. |
@@ -166,6 +166,7 @@ secret manager instead of committing secrets.
 | `STRIPE_SECRET_KEY` | App + ingester | Stripe API key for hosted billing. Required before the app exposes Checkout/Portal behavior. |
 | `STRIPE_WEBHOOK_SECRET` | Ingester | Signing secret for the Stripe webhook endpoint at `/webhooks/stripe`. |
 | `BILLING_NOTIFICATION_FROM_EMAIL` | Ingester, optional | Sender used for payment-failed notifications. |
+| `STRIPE_OVERAGE_METER_EVENT_NAME` | Ingester, optional | Stripe meter event name for paid-plan overage reporting. Defaults to `opensend_email_overage`; ignored when billing is disabled. |
 
 Before enabling hosted billing, read the full cutover checklist in
 [`hosted-stripe-cutover.md`](hosted-stripe-cutover.md) and run:
@@ -380,7 +381,7 @@ Three periodic scans need to run every minute:
 - **Domain verification**: reconcile SES-verified domains and flip OpenSend
   domain/record status to `verified` without clicking **Verify DNS Records**.
 
-Docker Compose runs the durable `scheduler` sidecar by default. It posts to all three ingester job endpoints every `INGESTER_SCHEDULER_INTERVAL_SECONDS` seconds and includes `Authorization: Bearer ${INGESTER_JOB_TOKEN}`. `.env.example` includes a local-only placeholder; replace it with a generated 32+ character value before any shared, staging, or production deploy.
+Docker Compose runs the durable `scheduler` sidecar by default. It posts to all four ingester job endpoints every `INGESTER_SCHEDULER_INTERVAL_SECONDS` seconds and includes `Authorization: Bearer ${INGESTER_JOB_TOKEN}`. `.env.example` includes a local-only placeholder; replace it with a generated 32+ character value before any shared, staging, or production deploy.
 
 Two other production patterns can drive the same endpoints:
 
@@ -395,10 +396,12 @@ curl -i -X POST "${INGESTER_URL}/jobs/webhooks" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 curl -i -X POST "${INGESTER_URL}/jobs/domain-verify" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
+curl -i -X POST "${INGESTER_URL}/jobs/billing-overage" \
+  -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 ```
 
 **Option 2: SQS scan jobs**. Publish `scheduled-email.scan` and
-`webhook-delivery.scan` messages on a schedule. Domain verification is HTTP-only today, so keep an HTTP schedule for `/jobs/domain-verify` even if scheduled emails and webhook retries are queue-driven.
+`webhook-delivery.scan` messages on a schedule. Domain verification and billing overage reporting are HTTP-only today, so keep an HTTP schedule for `/jobs/domain-verify` and `/jobs/billing-overage` even if scheduled emails and webhook retries are queue-driven.
 
 
 ### Domain verification scheduler runbook
