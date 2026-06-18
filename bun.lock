@@ -64,7 +64,7 @@
     },
     "packages/core": {
       "name": "@opensend/core",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@aws-sdk/client-ses": "^3.1019.0",
         "lru-cache": "^11.0.0",
@@ -72,7 +72,7 @@
     },
     "packages/ingester": {
       "name": "@opensend/ingester",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@opensend/core": "workspace:*",
         "redis": "^5.12.1",

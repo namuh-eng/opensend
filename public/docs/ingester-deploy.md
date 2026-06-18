@@ -2,6 +2,19 @@
 
 Deploy the standalone ingester and queue worker. Provider callbacks should target the ingester service, not the Next.js app URL.
 
+## Release images
+
+After an authorized OpenSend release publishes images, production deployments should pin exact GHCR tags:
+
+- App/API/dashboard: `ghcr.io/namuh-eng/opensend:v1.0.0`
+- Ingester and scheduler: `ghcr.io/namuh-eng/opensend-ingester:v1.0.0`
+
+The release workflow publishes these images for `linux/amd64` and `linux/arm64` and also publishes `:1.0.0` aliases. It intentionally does not publish `:latest`. The ingester process consumes the image at runtime; it does not publish images.
+
+Forks and private deployments can build the same artifacts into their own registry with `docker buildx build --platform linux/amd64,linux/arm64 --target runner .` for the app and `docker buildx build --platform linux/amd64,linux/arm64 -f packages/ingester/Dockerfile .` for the ingester. Inspect pushed manifests before advertising a multi-arch image.
+
+Run migrations before rolling app or ingester containers. If your platform needs a migrator image, build the root Dockerfile `migrator` target into your own registry.
+
 ## Endpoints
 
 - `POST /events/ses` — SES/SNS sending lifecycle notifications for delivered, bounced, complained, opened, and clicked events.

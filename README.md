@@ -79,6 +79,15 @@ Compose starts:
 - `scheduler`: scheduled job trigger sidecar
 - optional `smtp-relay`: SMTP compatibility service, only with `docker compose --profile smtp up -d smtp-relay`
 
+### v1.0.0 release artifacts
+
+The repository defaults to source-built Docker Compose so local evaluation works before a release image exists. The authorized `v1.0.0` tag workflow publishes pinned multi-arch GHCR images for production operators:
+
+- `ghcr.io/namuh-eng/opensend:v1.0.0` — app/API/dashboard
+- `ghcr.io/namuh-eng/opensend-ingester:v1.0.0` — ingester and scheduler bundle
+
+The workflow also publishes `:1.0.0` aliases and intentionally does not publish `:latest`. Use pinned tags in production, and keep the default Compose build path for local source evaluation. The release notes and runbook live in [`docs/release-notes/v1.0.0.md`](docs/release-notes/v1.0.0.md).
+
 For real email delivery, add AWS SES credentials and verify a sending domain. For dashboard login, add Google OAuth credentials.
 
 For local development without the full app container:

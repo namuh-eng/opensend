@@ -41,6 +41,14 @@
 #
 # To wipe the local database and start fresh:
 #   docker compose down -v
+#
+# Release images:
+#   This file builds from source by default so local evaluation works from a fresh clone.
+#   After the authorized v1.0.0 release publishes images, production operators can
+#   replace the app build block with `image: ghcr.io/namuh-eng/opensend:v1.0.0`
+#   and use `image: ghcr.io/namuh-eng/opensend-ingester:v1.0.0` for ingester
+#   and scheduler while keeping the same environment, ports, health checks, and
+#   dependencies. Run migrations before rolling app or ingester containers.
 
 name: opensend-staging
 

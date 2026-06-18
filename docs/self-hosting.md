@@ -13,6 +13,7 @@ there. This document is for production deployments.
 - [Deployment options](#deployment-options)
 - [Requirements](#requirements)
 - [Quickstart: Docker Compose](#quickstart-docker-compose)
+- [Release images and pinned deploys](#release-images-and-pinned-deploys)
 - [Environment variables](#environment-variables)
 - [Database](#database)
 - [AWS SES](#aws-ses)
@@ -45,6 +46,34 @@ The Dockerfile in this repo is multi-stage and builds three artifacts:
 
 You can run all three on the same machine via Docker Compose, or split them
 across separate services on a container platform.
+
+## Release images and pinned deploys
+
+Local Docker Compose remains source-built by default so `docker compose up -d`
+works from a fresh clone before any release images exist. For production, prefer
+immutable image tags after an authorized release publishes them to GHCR:
+
+| Service | Release image | Notes |
+| --- | --- | --- |
+| App/API/dashboard | `ghcr.io/namuh-eng/opensend:v1.0.0` | Built from the root `Dockerfile` `runner` target. |
+| Ingester | `ghcr.io/namuh-eng/opensend-ingester:v1.0.0` | Built from `packages/ingester/Dockerfile`. |
+| Scheduler | `ghcr.io/namuh-eng/opensend-ingester:v1.0.0` | Same image as the ingester, with `command: ["bun", "/app/job-scheduler.js"]`. |
+
+The release workflow also publishes `:1.0.0` aliases and intentionally does not
+publish `:latest`. The workflow publishes images; the ingester service only
+consumes the image at runtime.
+
+To pin a Compose-style production deployment after the real release images are
+published, replace the `app` service `build:` block with
+`image: ghcr.io/namuh-eng/opensend:v1.0.0`, replace the `ingester` and
+`scheduler` image values with `ghcr.io/namuh-eng/opensend-ingester:v1.0.0`, and
+keep the same environment, ports, health checks, and dependencies. Run the
+migrator before rolling the app and ingester; build the root Dockerfile
+`migrator` target into your registry if your platform needs an image-only
+migration job.
+
+Forks and private deployments can still build their own images with `docker
+buildx` and pin those registry tags instead.
 
 ## Requirements
 
