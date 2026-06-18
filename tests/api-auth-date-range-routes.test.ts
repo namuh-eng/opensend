@@ -325,7 +325,7 @@ describe("route smoke coverage", () => {
               plan: { name: "Free", slug: "free" },
               transactional: {
                 monthlyUsed: Number(monthlyEmails),
-                monthlyLimit: 3000,
+                monthlyLimit: 5000,
                 dailyUsed: Number(dailyEmails),
                 dailyLimit: 100,
               },

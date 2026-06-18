@@ -84,6 +84,12 @@ function makeRepository(
     })),
     list: vi.fn(async () => ({ data: [customEvent], hasMore: false })),
     findByName: vi.fn(async () => customEvent),
+    findByIdentifierForUser: vi.fn(async () => customEvent),
+    updateForUser: vi.fn(async (_id, userId, input) => ({
+      ...customEvent,
+      ...input,
+      userId: userId ?? null,
+    })),
     deleteForUser: vi.fn(async (id) => [{ id }]),
     resolveContactId: vi.fn(async (input) => input.contactId ?? "contact_1"),
     recordDelivery: vi.fn(async (input) => ({
@@ -112,7 +118,7 @@ describe("custom event service boundary", () => {
     vi.clearAllMocks();
   });
 
-  it("creates, lists, and deletes custom events with caller scope and public response shapes", async () => {
+  it("creates, lists, gets, updates, and deletes custom events with caller scope and public response shapes", async () => {
     const repository = makeRepository();
     const service = createCustomEventService({ repository });
 
@@ -133,7 +139,26 @@ describe("custom event service boundary", () => {
     ).resolves.toMatchObject({ object: "list", data: [{ id: "evt_1" }] });
 
     await expect(
-      service.deleteCustomEvent({ userId: "user_1", id: "evt_1" }),
+      service.getCustomEvent({
+        userId: "user_1",
+        identifier: "user.signed_up",
+      }),
+    ).resolves.toMatchObject({ object: "event", id: "evt_1" });
+
+    await expect(
+      service.updateCustomEvent({
+        userId: "user_1",
+        identifier: "user.signed_up",
+        data: { name: "user.activated" },
+      }),
+    ).resolves.toMatchObject({
+      object: "event",
+      id: "evt_1",
+      name: "user.activated",
+    });
+
+    await expect(
+      service.deleteCustomEvent({ userId: "user_1", identifier: "evt_1" }),
     ).resolves.toEqual({ object: "event", id: "evt_1", deleted: true });
 
     expect(repository.create).toHaveBeenCalledWith({
@@ -146,16 +171,35 @@ describe("custom event service boundary", () => {
       after: "evt_0",
       userId: "user_1",
     });
+    expect(repository.findByIdentifierForUser).toHaveBeenCalledWith(
+      "user.signed_up",
+      "user_1",
+    );
+    expect(repository.updateForUser).toHaveBeenCalledWith("evt_1", "user_1", {
+      name: "user.activated",
+    });
     expect(repository.deleteForUser).toHaveBeenCalledWith("evt_1", "user_1");
   });
 
-  it("reports missing deletes without leaking cross-tenant existence", async () => {
+  it("reports missing detail/update/delete without leaking cross-tenant existence", async () => {
     const service = createCustomEventService({
-      repository: makeRepository({ deleteForUser: vi.fn(async () => []) }),
+      repository: makeRepository({
+        findByIdentifierForUser: vi.fn(async () => undefined),
+      }),
     });
 
     await expect(
-      service.deleteCustomEvent({ userId: "user_2", id: "evt_1" }),
+      service.getCustomEvent({ userId: "user_2", identifier: "evt_1" }),
+    ).rejects.toMatchObject({ code: "not_found", message: "Event not found" });
+    await expect(
+      service.updateCustomEvent({
+        userId: "user_2",
+        identifier: "evt_1",
+        data: { name: "user.activated" },
+      }),
+    ).rejects.toMatchObject({ code: "not_found", message: "Event not found" });
+    await expect(
+      service.deleteCustomEvent({ userId: "user_2", identifier: "evt_1" }),
     ).rejects.toMatchObject({ code: "not_found", message: "Event not found" });
   });
 

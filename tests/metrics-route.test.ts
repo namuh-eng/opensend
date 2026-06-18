@@ -31,7 +31,7 @@ vi.mock("@/lib/cache/dashboard-aggregates", () => ({
     tagName: string | null;
     tagValue: string | null;
   }) =>
-    `dashboard-aggregate:v1:metrics:${userId}:${range}:${domain ?? "all"}:${eventType ?? "all"}:${tagName ?? "all"}:${tagValue ?? "all"}`,
+    `dashboard-aggregate:v2:metrics:${userId}:${range}:${domain ?? "all"}:${eventType ?? "all"}:${tagName ?? "all"}:${tagValue ?? "all"}`,
   readDashboardAggregateCache: mockReadDashboardAggregateCache,
   writeDashboardAggregateCache: mockWriteDashboardAggregateCache,
 }));
@@ -82,6 +82,7 @@ const freshPayload = {
   complained: 1,
   domains: ["example.com"],
   tagOptions: [{ name: "campaign", values: ["launch"] }],
+  tagBreakdown: [{ name: "campaign", value: "launch", count: 10, rate: 70 }],
   dailyData: [{ date: "2026-04-23", count: 7 }],
   domainBreakdown: [{ domain: "example.com", count: 10, rate: 70 }],
   bounceBreakdown: {
@@ -132,7 +133,7 @@ describe("metrics route adapter", () => {
     expect(mockWriteDashboardAggregateCache).not.toHaveBeenCalled();
     await expect(response.json()).resolves.toMatchObject({ totalEmails: 99 });
     expect(mockReadDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:delivered:campaign:launch",
+      "dashboard-aggregate:v2:metrics:user-1:last_7_days:example.com:delivered:campaign:launch",
     );
   });
 
@@ -172,11 +173,31 @@ describe("metrics route adapter", () => {
       millisecond: 999,
     });
     expect(mockWriteDashboardAggregateCache).toHaveBeenCalledWith(
-      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:opened:campaign:all",
+      "dashboard-aggregate:v2:metrics:user-1:last_7_days:example.com:opened:campaign:all",
       freshPayload,
       60,
     );
     await expect(response.json()).resolves.toEqual(freshPayload);
+  });
+
+  it("returns validation_error envelopes for invalid tag query params", async () => {
+    const metricsRoute = await import("@/app/api/metrics/route");
+    const response = await metricsRoute.GET(
+      makeNextRequest("http://localhost/api/metrics?tag_value=launch") as never,
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toMatchObject({
+      name: "validation_error",
+      code: "validation_error",
+      statusCode: 422,
+      details: {
+        fieldErrors: {
+          tag_name: ["tag_name is required when tag_value is provided."],
+        },
+      },
+    });
+    expect(mockGetMetrics).not.toHaveBeenCalled();
   });
 
   it("matches Yesterday exactly instead of leaking into today", async () => {

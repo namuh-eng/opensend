@@ -1,6 +1,8 @@
-function isProd(): boolean {
-  return process.env.NODE_ENV === "production";
-}
+import {
+  type EnvValidationIssue,
+  OpenSendEnvValidationError,
+  validateOpenSendEnv,
+} from "@opensend/core/src/env";
 
 function logJson(
   level: "warn" | "error",
@@ -12,31 +14,36 @@ function logJson(
   else console.warn(line);
 }
 
+function issuePayload(issues: readonly EnvValidationIssue[]) {
+  return issues.map((issue) => ({
+    key: issue.key,
+    message: issue.message,
+  }));
+}
+
 export function runIngesterStartupChecks(): void {
-  const key = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
-  if (!key || key.length < 16) {
-    if (isProd()) {
-      logJson(
-        "error",
-        { event: "security.startup.missing_key" },
-        "WEBHOOK_SECRET_ENCRYPTION_KEY missing/too short — refusing to boot",
-      );
-      throw new Error(
-        "WEBHOOK_SECRET_ENCRYPTION_KEY missing/too short in production",
-      );
-    }
+  const result = validateOpenSendEnv(process.env, { service: "ingester" });
+
+  if (result.warnings.length > 0) {
     logJson(
       "warn",
-      { event: "security.startup.missing_key_dev" },
-      "WEBHOOK_SECRET_ENCRYPTION_KEY missing — encryption disabled (non-production)",
+      {
+        event: "security.startup.env_warning",
+        issues: issuePayload(result.warnings),
+      },
+      "OpenSend ingester environment preflight found non-fatal configuration warnings",
     );
   }
-  const jobToken = process.env.INGESTER_JOB_TOKEN?.trim();
-  if (isProd() && (!jobToken || jobToken.length < 32)) {
+
+  if (result.errors.length > 0) {
     logJson(
-      "warn",
-      { event: "security.startup.weak_job_token" },
-      "INGESTER_JOB_TOKEN missing or shorter than 32 chars in production",
+      "error",
+      {
+        event: "security.startup.env_invalid",
+        issues: issuePayload(result.errors),
+      },
+      "OpenSend ingester environment preflight failed — refusing to boot",
     );
+    throw new OpenSendEnvValidationError("ingester", result.errors);
   }
 }

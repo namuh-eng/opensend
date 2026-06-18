@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
+const mockRequireFullAccessForApiKeyCaller = vi.hoisted(() => vi.fn());
 const mockReadDashboardAggregateCache = vi.hoisted(() => vi.fn());
 const mockWriteDashboardAggregateCache = vi.hoisted(() => vi.fn());
 const mockBroadcastService = vi.hoisted(() => ({
@@ -38,6 +39,10 @@ vi.mock("@/lib/api-auth", () => ({
   getServerSession: mockGetServerSession,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
+}));
+
+vi.mock("@/lib/api-key-permissions", () => ({
+  requireFullAccessForApiKeyCaller: mockRequireFullAccessForApiKeyCaller,
 }));
 
 vi.mock("@/lib/cache/dashboard-aggregates", async () => {
@@ -83,6 +88,7 @@ beforeEach(() => {
     userId: "user-b",
   });
   mockGetServerSession.mockResolvedValue(null);
+  mockRequireFullAccessForApiKeyCaller.mockReturnValue(null);
   mockReadDashboardAggregateCache.mockResolvedValue(null);
   mockWriteDashboardAggregateCache.mockResolvedValue(undefined);
 });
@@ -176,6 +182,37 @@ describe("broadcast tenant isolation", () => {
       segmentId: "segment-1",
       after: "b0",
     });
+  });
+
+  it("rejects sending-only API keys before broadcast management", async () => {
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({
+      apiKeyId: "key-send",
+      permission: "sending_access",
+      domain: null,
+      userId: "user-b",
+    });
+    mockRequireFullAccessForApiKeyCaller.mockReturnValueOnce(
+      Response.json(
+        {
+          error:
+            "This API key does not have permission to access this resource.",
+        },
+        { status: 403 },
+      ),
+    );
+
+    const { POST } = await import("@/app/api/broadcasts/route");
+    const response = await POST(
+      jsonRequest("http://localhost:3015/api/broadcasts", {
+        name: "Launch",
+        from: "team@example.com",
+        subject: "Hello",
+        segment_id: "segment-1",
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockBroadcastService.createBroadcast).not.toHaveBeenCalled();
   });
 
   it("passes created broadcast payloads with the authenticated user id", async () => {
@@ -458,6 +495,25 @@ describe("broadcast tenant isolation", () => {
     expect(forbiddenResponse.status).toBe(400);
     await expect(forbiddenResponse.json()).resolves.toEqual({
       error: "Cannot send a broadcast in queued status",
+    });
+
+    mockBroadcastService.sendBroadcast.mockRejectedValueOnce(
+      new MockBroadcastServiceError(
+        "invalid_input",
+        "scheduled_at must be a future ISO 8601 date-time",
+      ),
+    );
+
+    const invalidResponse = await POST(
+      jsonRequest("http://localhost:3015/api/broadcasts/broadcast-1/send", {
+        scheduled_at: "tomorrow",
+      }),
+      { params: Promise.resolve({ id: "broadcast-1" }) },
+    );
+
+    expect(invalidResponse.status).toBe(422);
+    await expect(invalidResponse.json()).resolves.toEqual({
+      error: "scheduled_at must be a future ISO 8601 date-time",
     });
 
     mockBroadcastService.sendBroadcast.mockRejectedValueOnce(

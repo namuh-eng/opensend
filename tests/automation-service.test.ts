@@ -321,6 +321,44 @@ describe("automation CRUD service boundary", () => {
     });
   });
 
+  it("stops automations by idempotently disabling the tenant-scoped record", async () => {
+    const updates: UpdateData[] = [];
+    let stored = makeAutomation({ status: "enabled" });
+    const service = createAutomationService({
+      repository: makeRepository({
+        async findByIdForUser(id, userId) {
+          if (id !== "auto_1") return undefined;
+          if (userId && userId !== "user_1") return undefined;
+          return stored;
+        },
+        async update(_id, data) {
+          updates.push(data);
+          stored = makeAutomation({ ...stored, ...data });
+          return [stored];
+        },
+      }),
+    });
+
+    await expect(
+      service.stopAutomation("user_1", "auto_1"),
+    ).resolves.toMatchObject({
+      id: "auto_1",
+      status: "disabled",
+    });
+    await expect(
+      service.stopAutomation("user_1", "auto_1"),
+    ).resolves.toMatchObject({
+      id: "auto_1",
+      status: "disabled",
+    });
+    await expect(
+      service.stopAutomation("user_2", "auto_1"),
+    ).rejects.toMatchObject({
+      code: "not_found",
+    });
+    expect(updates).toEqual([{ status: "disabled" }]);
+  });
+
   it("rejects enabled deletes and preserves the delete response shape for disabled automations", async () => {
     const enabledService = createAutomationService({
       repository: makeRepository(),

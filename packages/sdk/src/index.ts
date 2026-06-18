@@ -55,7 +55,7 @@ export interface RequestOptions {
   idempotencyKey?: string;
 }
 
-export const DEFAULT_BASE_URL = "https://api.opensend.com";
+export const DEFAULT_BASE_URL = "https://opensend.namuh.co";
 
 interface ApiError {
   message: string;
@@ -80,6 +80,411 @@ interface CancelEmailResponse {
   object: "email";
   id: string;
 }
+
+export interface DeleteDomainResponse {
+  object: "domain";
+  id: string;
+  deleted: true;
+}
+
+// ---------------------------------------------------------------------------
+// Webhook types
+// ---------------------------------------------------------------------------
+
+export type WebhookStatus = "enabled" | "disabled";
+
+export interface CreateWebhookPayload {
+  /** Destination URL for webhook delivery */
+  endpoint?: string;
+  /** Svix-compatible alias */
+  url?: string;
+  events?: string[];
+  /** Svix-compatible alias */
+  event_types?: string[];
+}
+
+export interface UpdateWebhookPayload {
+  endpoint?: string;
+  url?: string;
+  events?: string[];
+  event_types?: string[];
+  status?: WebhookStatus;
+  active?: boolean;
+}
+
+export interface WebhookListOptions extends ListOptions {}
+
+export interface WebhookDeliveryItem {
+  id: string;
+  status: string;
+  attempt: number;
+  status_code: number | null;
+  response_body: string | null;
+  attempted_at: string | null;
+  next_retry_at: string | null;
+  created_at: string;
+}
+
+export interface WebhookListItem {
+  id: string;
+  endpoint: string;
+  events: string[];
+  status: WebhookStatus;
+  created_at: string;
+}
+
+export interface WebhookListResponse {
+  object: "list";
+  data: WebhookListItem[];
+  has_more: boolean;
+}
+
+export interface WebhookResponse extends WebhookListItem {
+  object: "webhook";
+}
+
+export interface WebhookCreateResponse extends WebhookResponse {
+  signing_secret: string;
+}
+
+export interface WebhookDetailResponse extends WebhookResponse {
+  recent_deliveries: WebhookDeliveryItem[];
+}
+
+export interface WebhookUpdateResponse extends WebhookListItem {
+  object: "webhook";
+}
+
+export interface DeleteWebhookResponse {
+  object: "webhook";
+  id: string;
+  deleted: true;
+}
+
+export interface WebhookDeliveryReplayResponse {
+  object: "webhook_delivery_replay";
+  original_delivery: WebhookDeliveryItem;
+  replay_delivery: WebhookDeliveryItem;
+}
+
+// ---------------------------------------------------------------------------
+// Topic types
+// ---------------------------------------------------------------------------
+
+export type TopicDefaultSubscription = "opt_in" | "opt_out";
+export type TopicVisibility = "public" | "private";
+
+export interface CreateTopicPayload {
+  name: string;
+  description?: string | null;
+  default_subscription?: TopicDefaultSubscription;
+  defaultSubscription?: TopicDefaultSubscription;
+  visibility?: TopicVisibility;
+}
+
+export interface UpdateTopicPayload {
+  name?: string;
+  description?: string | null;
+  defaultSubscription?: TopicDefaultSubscription;
+  visibility?: TopicVisibility;
+}
+
+export interface TopicListOptions extends ListOptions {
+  search?: string;
+}
+
+export interface TopicListItem {
+  id: string;
+  name: string;
+  description: string | null;
+  default_subscription: TopicDefaultSubscription;
+  visibility: TopicVisibility;
+  created_at: string;
+}
+
+export interface TopicListResponse {
+  object: "list";
+  data: TopicListItem[];
+  has_more: boolean;
+  total?: number;
+}
+
+export interface TopicResponse {
+  object: "topic";
+  id: string;
+  name: string;
+  description: string | null;
+  default_subscription: TopicDefaultSubscription;
+  visibility: TopicVisibility;
+  created_at: string;
+}
+
+export interface CreateTopicResponse {
+  object: "topic";
+  id: string;
+  name: string;
+  description: string | null;
+  defaultSubscription: TopicDefaultSubscription;
+  visibility: TopicVisibility;
+  createdAt: string;
+}
+
+export interface DeleteTopicResponse {
+  success: true;
+}
+
+// ---------------------------------------------------------------------------
+// Suppression types
+// ---------------------------------------------------------------------------
+
+export type SuppressionReason =
+  | "bounce"
+  | "complaint"
+  | "manual"
+  | "unsubscribe";
+
+export interface SuppressionPublicItem {
+  id: string;
+  object: "suppression";
+  email: string;
+  reason: SuppressionReason;
+  scope: "user";
+  source_event_id: string | null;
+  source_email_id: string | null;
+  source_message_id: string | null;
+  metadata: Record<string, unknown> | null;
+  suppressed_at: string;
+  updated_at: string;
+}
+
+export interface SuppressionListOptions extends ListOptions {}
+
+export interface SuppressionListResponse {
+  object: "list";
+  scope: "user";
+  data: SuppressionPublicItem[];
+  has_more: boolean;
+}
+
+export interface DeleteSuppressionResponse {
+  object: "suppression";
+  deleted: true;
+}
+
+export interface CreateSuppressionPayload {
+  email: string;
+  reason?: SuppressionReason;
+}
+
+// ---------------------------------------------------------------------------
+// Log types
+// ---------------------------------------------------------------------------
+
+export interface LogListOptions extends ListOptions {
+  status?: string;
+  method?: string;
+  api_key_id?: string;
+  apiKeyId?: string;
+  before?: string;
+  date_from?: string;
+  date_to?: string;
+  user_agent?: string;
+  search?: string;
+}
+
+export interface LogListItem {
+  id: string;
+  method: string | null;
+  endpoint: string | null;
+  response_status: number | null;
+  user_agent: string | null;
+  api_key_id: string | null;
+  created_at: string;
+}
+
+export interface LogListResponse {
+  object: "list";
+  data: LogListItem[];
+  has_more: boolean;
+}
+
+export interface LogDetailResponse {
+  object: "log";
+  id: string;
+  method: string | null;
+  endpoint: string | null;
+  status: number | null;
+  user_agent: string | null;
+  api_key_id: string | null;
+  request_body: unknown;
+  response_body: unknown;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Automation concrete response types (defined locally, not from core DTO)
+// ---------------------------------------------------------------------------
+
+export type AutomationStatus = "draft" | "enabled" | "disabled";
+export type AutomationRunStatus =
+  | "queued"
+  | "running"
+  | "waiting"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "skipped";
+
+export interface AutomationStepResponse {
+  id: string;
+  key: string;
+  type: string;
+  config: Record<string, unknown>;
+  position: number;
+}
+
+export interface AutomationDetailResponse {
+  object: "automation";
+  id: string;
+  name: string;
+  status: AutomationStatus;
+  trigger_event_name: string | null;
+  connections: AutomationConnectionPayload[];
+  steps: AutomationStepResponse[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationListItem {
+  object: "automation";
+  id: string;
+  name: string;
+  status: AutomationStatus;
+  trigger_event_name: string | null;
+  created_at: string;
+  updated_at: string;
+  step_count: number;
+  last_run: { status: string; created_at: string } | null;
+}
+
+export interface AutomationListResponse {
+  object: "list";
+  data: AutomationListItem[];
+  has_more: boolean;
+}
+
+export interface AutomationDeleteResponse {
+  object: "automation";
+  id: string;
+  deleted: true;
+}
+
+export interface AutomationRunStepState {
+  status:
+    | "pending"
+    | "running"
+    | "waiting"
+    | "completed"
+    | "failed"
+    | "skipped";
+  startedAt?: string;
+  completedAt?: string;
+  scheduledFor?: string;
+  error?: string;
+  output?: Record<string, unknown>;
+}
+
+export interface AutomationRunListItem {
+  object: "automation_run";
+  id: string;
+  automation_id: string;
+  status: AutomationRunStatus;
+  started_at: string | null;
+  completed_at: string | null;
+  duration_ms: number | null;
+  current_step_key: string | null;
+  failed_step_key: string | null;
+  failure_reason: string | null;
+  next_step_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AutomationRunDetailItem extends AutomationRunListItem {
+  trigger_event_id: string | null;
+  contact_id: string | null;
+  step_states: Record<string, AutomationRunStepState>;
+}
+
+export interface AutomationRunListResponse {
+  object: "list";
+  data: AutomationRunListItem[];
+  has_more: boolean;
+}
+
+export interface AutomationRunMetricsFailedStep {
+  step_key: string;
+  count: number;
+}
+
+export interface AutomationRunMetricsResponse {
+  object: "automation_run_metrics";
+  automation_id: string;
+  total_runs: number;
+  by_status: Record<AutomationRunStatus, number>;
+  completion_rate: number;
+  failure_rate: number;
+  average_duration_ms: number | null;
+  waiting_count: number;
+  failed_steps: AutomationRunMetricsFailedStep[];
+  range: { from: string | null; to: string | null };
+}
+
+// ---------------------------------------------------------------------------
+// Custom event concrete response types
+// ---------------------------------------------------------------------------
+
+export interface CustomEvent {
+  object: "event";
+  id: string;
+  name: string;
+  schema: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CustomEventListResponse {
+  object: "list";
+  data: CustomEvent[];
+  has_more: boolean;
+}
+
+export interface CustomEventDeleteResponse {
+  object: "event";
+  id: string;
+  deleted: true;
+}
+
+export interface CustomEventDelivery {
+  object: "event_delivery";
+  id: string;
+  event: string;
+  contact_id: string | null;
+  email: string | null;
+  payload: Record<string, unknown> | null;
+  received_at: string;
+}
+
+export interface SendCustomEventResponse {
+  object: "event_delivery";
+  delivery: CustomEventDelivery;
+  resumed_runs: AutomationRunListItem[];
+  automation_runs: AutomationRunListItem[];
+}
+
+// ---------------------------------------------------------------------------
+// Automations payload types
+// ---------------------------------------------------------------------------
 
 export interface AutomationStepPayload {
   key: string;
@@ -637,6 +1042,13 @@ class Domains {
       `/api/domains/${id}/verify`,
     );
   }
+
+  async delete(id: string): Promise<ApiResponse<DeleteDomainResponse>> {
+    return this.http.request<DeleteDomainResponse>(
+      "DELETE",
+      `/api/domains/${id}`,
+    );
+  }
 }
 
 class ApiKeys {
@@ -670,8 +1082,17 @@ class Contacts {
     );
   }
 
-  async list(): Promise<ApiResponse<ContactListResponse>> {
-    return this.http.request<ContactListResponse>("GET", "/contacts");
+  async list(
+    options: ListOptions = {},
+  ): Promise<ApiResponse<ContactListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    const query = params.toString();
+    return this.http.request<ContactListResponse>(
+      "GET",
+      query ? `/contacts?${query}` : "/contacts",
+    );
   }
 
   async get(id: string): Promise<ApiResponse<ContactResponse>> {
@@ -932,53 +1353,63 @@ class Automations {
 
   async create(
     payload: CreateAutomationPayload,
-  ): Promise<ApiResponse<unknown>> {
-    return this.http.request<unknown>("POST", "/api/automations", payload);
+  ): Promise<ApiResponse<AutomationDetailResponse>> {
+    return this.http.request<AutomationDetailResponse>(
+      "POST",
+      "/api/automations",
+      payload,
+    );
   }
 
   async list(
     options: ListOptions & { status?: string } = {},
-  ): Promise<ApiResponse<unknown>> {
+  ): Promise<ApiResponse<AutomationListResponse>> {
     const params = new URLSearchParams();
     if (options.limit !== undefined) params.set("limit", String(options.limit));
     if (options.after) params.set("after", options.after);
     if (options.status) params.set("status", options.status);
     const query = params.toString();
-    return this.http.request<unknown>(
+    return this.http.request<AutomationListResponse>(
       "GET",
       query ? `/api/automations?${query}` : "/api/automations",
     );
   }
 
-  async get(id: string): Promise<ApiResponse<unknown>> {
-    return this.http.request<unknown>("GET", `/api/automations/${id}`);
+  async get(id: string): Promise<ApiResponse<AutomationDetailResponse>> {
+    return this.http.request<AutomationDetailResponse>(
+      "GET",
+      `/api/automations/${id}`,
+    );
   }
 
   async update(
     id: string,
     payload: UpdateAutomationPayload,
-  ): Promise<ApiResponse<unknown>> {
-    return this.http.request<unknown>(
+  ): Promise<ApiResponse<AutomationDetailResponse>> {
+    return this.http.request<AutomationDetailResponse>(
       "PATCH",
       `/api/automations/${id}`,
       payload,
     );
   }
 
-  async delete(id: string): Promise<ApiResponse<unknown>> {
-    return this.http.request<unknown>("DELETE", `/api/automations/${id}`);
+  async delete(id: string): Promise<ApiResponse<AutomationDeleteResponse>> {
+    return this.http.request<AutomationDeleteResponse>(
+      "DELETE",
+      `/api/automations/${id}`,
+    );
   }
 
   async listRuns(
     id: string,
     options: AutomationRunListOptions = {},
-  ): Promise<ApiResponse<unknown>> {
+  ): Promise<ApiResponse<AutomationRunListResponse>> {
     const params = new URLSearchParams();
     if (options.limit !== undefined) params.set("limit", String(options.limit));
     if (options.after) params.set("after", options.after);
     if (options.status) params.set("status", options.status);
     const query = params.toString();
-    return this.http.request<unknown>(
+    return this.http.request<AutomationRunListResponse>(
       "GET",
       query
         ? `/api/automations/${id}/runs?${query}`
@@ -986,8 +1417,11 @@ class Automations {
     );
   }
 
-  async getRun(id: string, runId: string): Promise<ApiResponse<unknown>> {
-    return this.http.request<unknown>(
+  async getRun(
+    id: string,
+    runId: string,
+  ): Promise<ApiResponse<AutomationRunDetailItem>> {
+    return this.http.request<AutomationRunDetailItem>(
       "GET",
       `/api/automations/${id}/runs/${runId}`,
     );
@@ -997,8 +1431,8 @@ class Automations {
     id: string,
     runId: string,
     payload: CancelAutomationRunPayload = {},
-  ): Promise<ApiResponse<unknown>> {
-    return this.http.request<unknown>(
+  ): Promise<ApiResponse<AutomationRunDetailItem>> {
+    return this.http.request<AutomationRunDetailItem>(
       "POST",
       `/api/automations/${id}/runs/${runId}/cancel`,
       payload,
@@ -1008,12 +1442,12 @@ class Automations {
   async getRunMetrics(
     id: string,
     options: AutomationRunMetricsOptions = {},
-  ): Promise<ApiResponse<unknown>> {
+  ): Promise<ApiResponse<AutomationRunMetricsResponse>> {
     const params = new URLSearchParams();
     if (options.from) params.set("from", options.from);
     if (options.to) params.set("to", options.to);
     const query = params.toString();
-    return this.http.request<unknown>(
+    return this.http.request<AutomationRunMetricsResponse>(
       "GET",
       query
         ? `/api/automations/${id}/runs/metrics?${query}`
@@ -1025,23 +1459,244 @@ class Automations {
 class Events {
   constructor(private readonly http: HttpClient) {}
 
-  async create(payload: CreateEventPayload): Promise<ApiResponse<unknown>> {
-    return this.http.request<unknown>("POST", "/api/events", payload);
+  async create(payload: CreateEventPayload): Promise<ApiResponse<CustomEvent>> {
+    return this.http.request<CustomEvent>("POST", "/api/events", payload);
   }
 
-  async list(options: ListOptions = {}): Promise<ApiResponse<unknown>> {
+  async list(
+    options: ListOptions = {},
+  ): Promise<ApiResponse<CustomEventListResponse>> {
     const params = new URLSearchParams();
     if (options.limit !== undefined) params.set("limit", String(options.limit));
     if (options.after) params.set("after", options.after);
     const query = params.toString();
-    return this.http.request<unknown>(
+    return this.http.request<CustomEventListResponse>(
       "GET",
       query ? `/api/events?${query}` : "/api/events",
     );
   }
 
-  async send(payload: SendEventPayload): Promise<ApiResponse<unknown>> {
-    return this.http.request<unknown>("POST", "/api/events/send", payload);
+  async send(
+    payload: SendEventPayload,
+  ): Promise<ApiResponse<SendCustomEventResponse>> {
+    return this.http.request<SendCustomEventResponse>(
+      "POST",
+      "/api/events/send",
+      payload,
+    );
+  }
+}
+
+class Webhooks {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(
+    payload: CreateWebhookPayload,
+    options: RequestOptions = {},
+  ): Promise<ApiResponse<WebhookCreateResponse>> {
+    return this.http.request<WebhookCreateResponse>(
+      "POST",
+      "/api/webhooks",
+      payload,
+      options,
+    );
+  }
+
+  async list(
+    options: WebhookListOptions = {},
+  ): Promise<ApiResponse<WebhookListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    const query = params.toString();
+    return this.http.request<WebhookListResponse>(
+      "GET",
+      query ? `/api/webhooks?${query}` : "/api/webhooks",
+    );
+  }
+
+  async get(id: string): Promise<ApiResponse<WebhookDetailResponse>> {
+    return this.http.request<WebhookDetailResponse>(
+      "GET",
+      `/api/webhooks/${id}`,
+    );
+  }
+
+  async update(
+    id: string,
+    payload: UpdateWebhookPayload,
+  ): Promise<ApiResponse<WebhookUpdateResponse>> {
+    return this.http.request<WebhookUpdateResponse>(
+      "PATCH",
+      `/api/webhooks/${id}`,
+      payload,
+    );
+  }
+
+  async delete(id: string): Promise<ApiResponse<DeleteWebhookResponse>> {
+    return this.http.request<DeleteWebhookResponse>(
+      "DELETE",
+      `/api/webhooks/${id}`,
+    );
+  }
+
+  async listDeliveries(
+    id: string,
+    options: ListOptions = {},
+  ): Promise<
+    ApiResponse<{
+      object: "list";
+      data: WebhookDeliveryItem[];
+      has_more: boolean;
+    }>
+  > {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    const query = params.toString();
+    return this.http.request<{
+      object: "list";
+      data: WebhookDeliveryItem[];
+      has_more: boolean;
+    }>(
+      "GET",
+      query
+        ? `/api/webhooks/${id}/deliveries?${query}`
+        : `/api/webhooks/${id}/deliveries`,
+    );
+  }
+
+  async replayDelivery(
+    id: string,
+    deliveryId: string,
+  ): Promise<ApiResponse<WebhookDeliveryReplayResponse>> {
+    return this.http.request<WebhookDeliveryReplayResponse>(
+      "POST",
+      `/api/webhooks/${id}/deliveries/${deliveryId}/replay`,
+    );
+  }
+}
+
+class Topics {
+  constructor(private readonly http: HttpClient) {}
+
+  async create(
+    payload: CreateTopicPayload,
+  ): Promise<ApiResponse<CreateTopicResponse>> {
+    return this.http.request<CreateTopicResponse>(
+      "POST",
+      "/api/topics",
+      payload,
+    );
+  }
+
+  async list(
+    options: TopicListOptions = {},
+  ): Promise<ApiResponse<TopicListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.search) params.set("search", options.search);
+    const query = params.toString();
+    return this.http.request<TopicListResponse>(
+      "GET",
+      query ? `/api/topics?${query}` : "/api/topics",
+    );
+  }
+
+  async get(id: string): Promise<ApiResponse<TopicResponse>> {
+    return this.http.request<TopicResponse>("GET", `/api/topics/${id}`);
+  }
+
+  async update(
+    id: string,
+    payload: UpdateTopicPayload,
+  ): Promise<ApiResponse<TopicResponse>> {
+    return this.http.request<TopicResponse>(
+      "PATCH",
+      `/api/topics/${id}`,
+      payload,
+    );
+  }
+
+  async delete(id: string): Promise<ApiResponse<DeleteTopicResponse>> {
+    return this.http.request<DeleteTopicResponse>(
+      "DELETE",
+      `/api/topics/${id}`,
+    );
+  }
+}
+
+class Suppressions {
+  constructor(private readonly http: HttpClient) {}
+
+  async list(
+    options: SuppressionListOptions = {},
+  ): Promise<ApiResponse<SuppressionListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    const query = params.toString();
+    return this.http.request<SuppressionListResponse>(
+      "GET",
+      query ? `/api/suppressions?${query}` : "/api/suppressions",
+    );
+  }
+
+  async get(email: string): Promise<ApiResponse<SuppressionPublicItem>> {
+    return this.http.request<SuppressionPublicItem>(
+      "GET",
+      `/api/suppressions/${encodeURIComponent(email)}`,
+    );
+  }
+
+  async create(
+    payload: CreateSuppressionPayload,
+    options: RequestOptions = {},
+  ): Promise<ApiResponse<SuppressionPublicItem>> {
+    return this.http.request<SuppressionPublicItem>(
+      "POST",
+      "/api/suppressions",
+      payload,
+      options,
+    );
+  }
+
+  async delete(email: string): Promise<ApiResponse<DeleteSuppressionResponse>> {
+    return this.http.request<DeleteSuppressionResponse>(
+      "DELETE",
+      `/api/suppressions/${encodeURIComponent(email)}`,
+    );
+  }
+}
+
+class Logs {
+  constructor(private readonly http: HttpClient) {}
+
+  async list(
+    options: LogListOptions = {},
+  ): Promise<ApiResponse<LogListResponse>> {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.after) params.set("after", options.after);
+    if (options.before) params.set("before", options.before);
+    if (options.status) params.set("status", options.status);
+    if (options.method) params.set("method", options.method);
+    if (options.api_key_id) params.set("api_key_id", options.api_key_id);
+    else if (options.apiKeyId) params.set("apiKeyId", options.apiKeyId);
+    if (options.date_from) params.set("date_from", options.date_from);
+    if (options.date_to) params.set("date_to", options.date_to);
+    if (options.user_agent) params.set("user_agent", options.user_agent);
+    if (options.search) params.set("search", options.search);
+    const query = params.toString();
+    return this.http.request<LogListResponse>(
+      "GET",
+      query ? `/api/logs?${query}` : "/api/logs",
+    );
+  }
+
+  async get(id: string): Promise<ApiResponse<LogDetailResponse>> {
+    return this.http.request<LogDetailResponse>("GET", `/api/logs/${id}`);
   }
 }
 
@@ -1056,6 +1711,10 @@ class Opensend {
   public readonly templates: Templates;
   public readonly automations: Automations;
   public readonly events: Events;
+  public readonly webhooks: Webhooks;
+  public readonly topics: Topics;
+  public readonly suppressions: Suppressions;
+  public readonly logs: Logs;
 
   constructor(apiKey: string, options: SDKOptions = {}) {
     if (!apiKey) {
@@ -1074,6 +1733,10 @@ class Opensend {
     this.templates = new Templates(http);
     this.automations = new Automations(http);
     this.events = new Events(http);
+    this.webhooks = new Webhooks(http);
+    this.topics = new Topics(http);
+    this.suppressions = new Suppressions(http);
+    this.logs = new Logs(http);
   }
 }
 

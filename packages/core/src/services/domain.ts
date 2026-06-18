@@ -1,5 +1,7 @@
+import { dedicatedIpPoolRepo } from "../db/repositories/dedicatedIpPoolRepo";
 import { domainRepo } from "../db/repositories/domainRepo";
 import type { domains } from "../db/schema";
+import { configurationSetService } from "./configurationSet";
 import { domainIdentityProvider } from "./domain-providers";
 
 type DomainRow = typeof domains.$inferSelect;
@@ -55,6 +57,14 @@ export function getTrackingCnameTarget(): string {
     ) ||
     DEFAULT_TRACKING_CNAME_TARGET
   );
+}
+
+export function getSesEventsSnsTopicArn(): string | null {
+  const topicArn = process.env.SES_EVENTS_SNS_TOPIC_ARN?.trim();
+  if (!topicArn || topicArn === "undefined" || topicArn === "null") {
+    return null;
+  }
+  return topicArn;
 }
 
 export function buildTrackingSubdomainRecordName(
@@ -215,16 +225,35 @@ export type DomainServiceDependencies = {
   getDomainIdentity?: (
     domain: string,
     options?: { region?: string },
-  ) => Promise<{ verified?: boolean }>;
+  ) => Promise<{ verified?: boolean; mailFromDomain?: string | null }>;
   deleteDomainIdentity?: (
     domain: string,
     options?: { region?: string },
   ) => Promise<void>;
-  invalidateDomainCaches?: (domain: {
-    id: string;
-    name: string;
+  setMailFromDomain?: (
+    domain: string,
+    mailFromDomain: string,
+    options?: { region?: string },
+  ) => Promise<void>;
+  /**
+   * Invalidates dashboard caches after a domain mutation.
+   * REQUIRED at construction. The injected implementation MAY no-op when its
+   * backing cache is unconfigured (e.g., REDIS_URL unset on a self-host) —
+   * correctness is then guaranteed by cache TTL expiry and the manual Verify path.
+   */
+  invalidateDomainCaches: (params: {
+    id?: string | null;
+    name?: string | null;
     region?: string | null;
   }) => Promise<void>;
+  syncDomainConfigurationSet?: (input: {
+    domainId: string;
+    tls: string | null | undefined;
+    dedicatedIpPoolSesName?: string | null;
+    existingConfigSetName?: string | null;
+    eventDestinationTopicArn?: string | null;
+    region?: string;
+  }) => Promise<string>;
 };
 
 const defaultCapabilities: DomainCapability[] = [
@@ -346,8 +375,95 @@ export function createDomainService({
     domainIdentityProvider.getDomainIdentity(domain, options),
   deleteDomainIdentity = (domain: string, options?: { region?: string }) =>
     domainIdentityProvider.deleteDomainIdentity(domain, options),
-  invalidateDomainCaches = async () => {},
-}: DomainServiceDependencies = {}) {
+  setMailFromDomain = (
+    domain: string,
+    mailFromDomain: string,
+    options?: { region?: string },
+  ) =>
+    domainIdentityProvider.setMailFromDomain(domain, mailFromDomain, options),
+  invalidateDomainCaches,
+  syncDomainConfigurationSet = (input) =>
+    configurationSetService.syncDomainConfigurationSet(input),
+}: DomainServiceDependencies) {
+  if (!invalidateDomainCaches) {
+    throw new Error(
+      "createDomainService: invalidateDomainCaches is required — " +
+        "domain mutations without cache invalidation cause stale dashboard reads.",
+    );
+  }
+
+  async function resolveDedicatedIpPoolSesName(
+    domain: DomainRow,
+  ): Promise<string | null> {
+    if (!domain.dedicatedIpPoolId) return null;
+    const pool = await dedicatedIpPoolRepo.findById(domain.dedicatedIpPoolId);
+    return pool?.sesPoolName ?? null;
+  }
+
+  async function syncAndPersistDomainConfigurationSet(
+    domain: DomainRow,
+  ): Promise<DomainRow> {
+    try {
+      const configSetName = await syncDomainConfigurationSet({
+        domainId: domain.id,
+        tls: domain.tls,
+        dedicatedIpPoolSesName: await resolveDedicatedIpPoolSesName(domain),
+        existingConfigSetName: domain.sesConfigurationSetName ?? null,
+        eventDestinationTopicArn: getSesEventsSnsTopicArn(),
+        region: domain.region,
+      });
+
+      if (domain.sesConfigurationSetName === configSetName) {
+        return domain;
+      }
+
+      const [updated] = await repository.update(domain.id, {
+        sesConfigurationSetName: configSetName,
+      });
+      if (!updated) return domain;
+      return { ...domain, sesConfigurationSetName: configSetName };
+    } catch (configErr) {
+      // Config-set provisioning failure is non-fatal: callers may already have
+      // committed domain state. Log and proceed without claiming provider events.
+      console.warn(
+        `Failed to sync SES config set for domain ${domain.id}:`,
+        configErr,
+      );
+      return domain;
+    }
+  }
+
+  /**
+   * Point SES's MAIL FROM (envelope/bounce) domain at the return-path
+   * subdomain we already ask customers to add DNS records for, so SPF aligns
+   * with their domain. Without this call the records are decorative and every
+   * send goes out with MAIL FROM = amazonses.com (issue #650).
+   *
+   * Non-fatal by design: SES falls back to the default MAIL FROM on MX
+   * failure, so the worst case equals the previous behavior.
+   */
+  async function ensureMailFromAttributes(
+    domain: Pick<DomainRow, "id" | "name" | "region" | "customReturnPath">,
+    currentMailFromDomain?: string | null,
+  ): Promise<void> {
+    const desired = buildReturnPathRecordName(
+      domain.name,
+      domain.customReturnPath,
+    );
+    if (currentMailFromDomain === desired) return;
+
+    try {
+      await setMailFromDomain(domain.name, desired, {
+        region: domain.region ?? undefined,
+      });
+    } catch (mailFromErr) {
+      console.warn(
+        `Failed to set SES MAIL FROM for domain ${domain.id}:`,
+        mailFromErr,
+      );
+    }
+  }
+
   return {
     async listDomains(options: {
       limit?: number;
@@ -405,13 +521,20 @@ export function createDomainService({
         dkimPrivateKeyIv: identity.dkimPrivateKeyEnc?.iv ?? null,
       });
 
+      const domainWithConfigSet =
+        await syncAndPersistDomainConfigurationSet(row);
+
+      // Activate the custom MAIL FROM immediately so SES starts watching the
+      // return-path DNS records the customer is about to add.
+      await ensureMailFromAttributes(domainWithConfigSet);
+
       await invalidateDomainCaches({
-        id: row.id,
-        name: row.name,
-        region: row.region,
+        id: domainWithConfigSet.id,
+        name: domainWithConfigSet.name,
+        region: domainWithConfigSet.region,
       });
 
-      return toDomainDetail(row);
+      return toDomainDetail(domainWithConfigSet);
     },
 
     async reconcileVerification(id: string): Promise<DomainReconcileResult> {
@@ -440,8 +563,31 @@ export function createDomainService({
         );
       const statusChanged = domain.status !== nextStatus;
 
+      if (nextStatus === "verified") {
+        // Repair pass for identities that predate automatic MAIL FROM
+        // activation (or whose SES-side setting drifted).
+        await ensureMailFromAttributes(domain, identity.mailFromDomain);
+      }
+
       if (!statusChanged && !recordsChanged) {
-        return { status: "unchanged", domain };
+        const repairedDomain =
+          nextStatus === "verified"
+            ? await syncAndPersistDomainConfigurationSet(domain)
+            : domain;
+        console.log(
+          JSON.stringify({
+            level: "debug",
+            event: "domain.cache.repair_invalidate",
+            domain_id: id,
+            reason: "reconcile_unchanged_path",
+          }),
+        );
+        await invalidateDomainCaches({
+          id,
+          name: repairedDomain.name,
+          region: repairedDomain.region,
+        });
+        return { status: "unchanged", domain: repairedDomain };
       }
 
       const previousStatus = domain.status;
@@ -459,19 +605,24 @@ export function createDomainService({
         return { status: "not_found" };
       }
 
+      const repairedUpdated =
+        nextStatus === "verified"
+          ? await syncAndPersistDomainConfigurationSet(updated)
+          : updated;
+
       await invalidateDomainCaches({
-        id: updated.id,
-        name: updated.name,
-        region: updated.region,
+        id: repairedUpdated.id,
+        name: repairedUpdated.name,
+        region: repairedUpdated.region,
       });
 
       if (!statusChanged) {
-        return { status: "unchanged", domain: updated };
+        return { status: "unchanged", domain: repairedUpdated };
       }
 
       return {
         status: "updated",
-        domain: updated,
+        domain: repairedUpdated,
         previousStatus,
       };
     },
@@ -535,25 +686,3 @@ export function createDomainService({
     },
   };
 }
-
-export class DomainService {
-  private readonly service: ReturnType<typeof createDomainService>;
-
-  constructor(dependencies: DomainServiceDependencies = {}) {
-    this.service = createDomainService(dependencies);
-  }
-
-  async create(params: { name: string; region?: string }) {
-    return await this.service.createDomain(params);
-  }
-
-  async verify(id: string) {
-    return await this.service.verify(id);
-  }
-
-  async delete(id: string) {
-    return await this.service.delete(id);
-  }
-}
-
-export const domainService = createDomainService();

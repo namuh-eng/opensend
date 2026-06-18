@@ -30,7 +30,8 @@ export type TemplateRenderInput =
 
 export type TemplateRendererErrorCode =
   | "react_template_not_found"
-  | "react_render_failed";
+  | "react_render_failed"
+  | "react_required_variable_missing";
 
 export class TemplateRendererError extends Error {
   constructor(
@@ -110,17 +111,9 @@ function onboardingWelcomeTemplate(
   variables: TemplateRenderVariables,
 ): ReactElement {
   const recipientName = stringVariable(variables, "recipientName", "there");
-  const productName = stringVariable(variables, "productName", "Opensend");
-  const actionUrl = stringVariable(
-    variables,
-    "actionUrl",
-    "https://opensend.dev/docs",
-  );
-  const supportEmail = stringVariable(
-    variables,
-    "supportEmail",
-    "support@example.com",
-  );
+  const productName = stringVariable(variables, "productName", "");
+  const actionUrl = stringVariable(variables, "actionUrl", "");
+  const supportEmail = stringVariable(variables, "supportEmail", "");
 
   return React.createElement(
     "html",
@@ -349,12 +342,8 @@ function onboardingWelcomeTemplate(
 
 function demoWelcomeTemplate(variables: TemplateRenderVariables): ReactElement {
   const recipientName = stringVariable(variables, "recipientName", "there");
-  const productName = stringVariable(variables, "productName", "Opensend");
-  const actionUrl = stringVariable(
-    variables,
-    "actionUrl",
-    "https://opensend.dev",
-  );
+  const productName = stringVariable(variables, "productName", "your product");
+  const actionUrl = stringVariable(variables, "actionUrl", "#");
 
   return React.createElement(
     "html",
@@ -398,8 +387,8 @@ const REACT_EMAIL_TEMPLATES = {
         key: "productName",
         name: "Product name",
         type: "string",
-        required: false,
-        fallbackValue: "Opensend",
+        required: true,
+        fallbackValue: null,
         description: "Brand or workspace name shown in the hero.",
       },
       {
@@ -414,13 +403,13 @@ const REACT_EMAIL_TEMPLATES = {
         key: "supportEmail",
         name: "Support email",
         type: "string",
-        required: false,
-        fallbackValue: "support@example.com",
+        required: true,
+        fallbackValue: null,
         description: "Reply-to/support address shown in the footer.",
       },
     ],
     subject: (variables: TemplateRenderVariables) =>
-      `Welcome to ${stringVariable(variables, "productName", "Opensend")}`,
+      `Welcome to ${stringVariable(variables, "productName", "")}`,
     render: onboardingWelcomeTemplate,
   },
   "demo-welcome": {
@@ -441,7 +430,7 @@ const REACT_EMAIL_TEMPLATES = {
         name: "Product name",
         type: "string",
         required: false,
-        fallbackValue: "Opensend",
+        fallbackValue: "your product",
         description: "Product name used in the heading and subject.",
       },
       {
@@ -449,12 +438,12 @@ const REACT_EMAIL_TEMPLATES = {
         name: "Action URL",
         type: "string",
         required: false,
-        fallbackValue: "https://opensend.dev",
+        fallbackValue: "#",
         description: "CTA URL.",
       },
     ],
     subject: (variables: TemplateRenderVariables) =>
-      `Welcome to ${stringVariable(variables, "productName", "Opensend")}`,
+      `Welcome to ${stringVariable(variables, "productName", "your product")}`,
     render: demoWelcomeTemplate,
   },
 } satisfies Record<string, ReactEmailTemplateDefinition>;
@@ -535,6 +524,23 @@ export async function renderReactEmailTemplate(
 
   const definition = REACT_EMAIL_TEMPLATES[input.templateKey];
   const variables = input.variables ?? {};
+
+  const missingRequired = definition.variables
+    .filter((variable) => variable.required)
+    .filter((variable) => {
+      const value = variables[variable.key];
+      if (value === null || value === undefined) return true;
+      return typeof value === "string" && value.trim() === "";
+    })
+    .map((variable) => variable.key);
+
+  if (missingRequired.length > 0) {
+    throw new TemplateRendererError(
+      "react_required_variable_missing",
+      `Missing required variable(s) for template ${input.templateKey}: ${missingRequired.join(", ")}`,
+    );
+  }
+
   const element = definition.render(variables);
 
   try {

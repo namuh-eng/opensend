@@ -17,7 +17,7 @@ describe("dashboard aggregate cache keys", () => {
         tagValue: null,
       }),
     ).toBe(
-      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:delivered:all:all",
+      "dashboard-aggregate:v2:metrics:user-1:last_7_days:example.com:delivered:all:all",
     );
     expect(
       getMetricsAggregateCacheKey({
@@ -26,7 +26,7 @@ describe("dashboard aggregate cache keys", () => {
         tagValue: null,
       }),
     ).toBe(
-      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:delivered:campaign:all",
+      "dashboard-aggregate:v2:metrics:user-1:last_7_days:example.com:delivered:campaign:all",
     );
     expect(
       getMetricsAggregateCacheKey({
@@ -35,7 +35,7 @@ describe("dashboard aggregate cache keys", () => {
         tagValue: "launch",
       }),
     ).toBe(
-      "dashboard-aggregate:v1:metrics:user-1:last_7_days:example.com:delivered:campaign:launch",
+      "dashboard-aggregate:v2:metrics:user-1:last_7_days:example.com:delivered:campaign:launch",
     );
   });
 });

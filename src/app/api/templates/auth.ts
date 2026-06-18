@@ -10,7 +10,7 @@ type TemplateRouteAuth = NonNullable<
 >;
 
 type TemplateRouteAuthResult =
-  | { ok: true; userId?: string }
+  | { ok: true; userId: string }
   | { ok: false; response: Response };
 
 async function getRouteUserId(auth: TemplateRouteAuth): Promise<string | null> {
@@ -38,5 +38,7 @@ export async function authorizeTemplateRoute(
   }
 
   const userId = await getRouteUserId(auth);
-  return userId ? { ok: true, userId } : { ok: true };
+  return userId
+    ? { ok: true, userId }
+    : { ok: false, response: unauthorizedResponse() };
 }

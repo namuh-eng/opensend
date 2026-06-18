@@ -16,6 +16,42 @@ type PropertyRow = typeof contactProperties.$inferSelect;
 type PropertyInsert = typeof contactProperties.$inferInsert;
 type ContactRow = typeof contacts.$inferSelect;
 
+type ApiCompatibilityMode = "api" | "root";
+
+const validTopicDefaultSubscriptions = ["opt_in", "opt_out"] as const;
+const validTopicVisibilities = ["public", "private"] as const;
+const validPropertyTypes = ["string", "number", "boolean", "date"] as const;
+
+type TopicDefaultSubscription = (typeof validTopicDefaultSubscriptions)[number];
+type TopicVisibility = (typeof validTopicVisibilities)[number];
+type PropertyType = (typeof validPropertyTypes)[number];
+
+type CreateTopicInput = {
+  userId: string;
+  body: unknown;
+  mode?: ApiCompatibilityMode;
+};
+
+type CreatePropertyInput = {
+  userId: string;
+  body: unknown;
+  mode?: ApiCompatibilityMode;
+};
+
+type UpdateTopicInput = {
+  userId: string;
+  id: string;
+  body: unknown;
+  mode?: ApiCompatibilityMode;
+};
+
+type UpdatePropertyInput = {
+  userId: string;
+  id: string;
+  body: unknown;
+  mode?: ApiCompatibilityMode;
+};
+
 type SegmentListRow = Pick<SegmentRow, "id" | "name" | "createdAt">;
 type SegmentContactListRow = Pick<
   ContactRow,
@@ -177,6 +213,27 @@ function trimOptionalStringAsNull(
 function firstTruthyString(...values: unknown[]): string | null {
   const found = values.find(Boolean);
   return found === undefined || found === null ? null : String(found);
+}
+
+function assertStrictEnumValue<T extends readonly string[]>(
+  value: unknown,
+  allowed: T,
+  field: string,
+): T[number] {
+  if (typeof value !== "string") {
+    throw invalidInput(`${field} is required`);
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    throw invalidInput(`${field} is required`);
+  }
+
+  if (!allowed.includes(normalized as T[number])) {
+    throw invalidInput(`${field} must be one of: ${allowed.join(" | ")}`, 422);
+  }
+
+  return normalized as T[number];
 }
 
 function toSegmentListItem(row: SegmentListRow) {
@@ -360,7 +417,7 @@ export function createAudienceMetadataService({
       };
     },
 
-    async createTopic(input: { userId: string; body: unknown }) {
+    async createTopic(input: CreateTopicInput) {
       const body = asRecord(input.body);
       const name = trimRequiredString(body.name, "name");
       if (!name) throw invalidInput("Name is required");
@@ -373,11 +430,33 @@ export function createAudienceMetadataService({
         throw invalidInput("Description must be 200 characters or less", 422);
       }
 
-      const defaultSubscription =
-        (body.default_subscription || body.defaultSubscription) === "opt_in"
-          ? "opt_in"
-          : "opt_out";
-      const visibility = body.visibility === "private" ? "private" : "public";
+      const mode = input.mode === "root" ? "root" : "api";
+
+      const defaultSubscriptionRaw =
+        body.default_subscription ?? body.defaultSubscription;
+      const visibilityRaw = body.visibility;
+
+      const defaultSubscription: TopicDefaultSubscription =
+        mode === "root"
+          ? (assertStrictEnumValue(
+              defaultSubscriptionRaw,
+              validTopicDefaultSubscriptions,
+              "default_subscription",
+            ) as TopicDefaultSubscription)
+          : defaultSubscriptionRaw === "opt_in"
+            ? "opt_in"
+            : "opt_out";
+
+      const visibility: TopicVisibility =
+        mode === "root"
+          ? (assertStrictEnumValue(
+              visibilityRaw,
+              validTopicVisibilities,
+              "visibility",
+            ) as TopicVisibility)
+          : visibilityRaw === "private"
+            ? "private"
+            : "public";
 
       const [topic] = await repository.createTopic({
         name,
@@ -407,8 +486,9 @@ export function createAudienceMetadataService({
       return toTopicDetail(topic);
     },
 
-    async updateTopic(input: { userId: string; id: string; body: unknown }) {
+    async updateTopic(input: UpdateTopicInput) {
       const body = asRecord(input.body);
+      const mode = input.mode === "root" ? "root" : "api";
       const updateData: Partial<TopicInsert> = {};
 
       if (body.name !== undefined) {
@@ -420,13 +500,31 @@ export function createAudienceMetadataService({
           "description",
         );
       }
-      if (body.defaultSubscription !== undefined) {
+      const defaultSubscriptionInput =
+        body.default_subscription ?? body.defaultSubscription;
+      if (defaultSubscriptionInput !== undefined) {
         updateData.defaultSubscription =
-          body.defaultSubscription === "opt_in" ? "opt_in" : "opt_out";
+          mode === "root"
+            ? (assertStrictEnumValue(
+                defaultSubscriptionInput,
+                validTopicDefaultSubscriptions,
+                "default_subscription",
+              ) as TopicDefaultSubscription)
+            : defaultSubscriptionInput === "opt_in"
+              ? "opt_in"
+              : "opt_out";
       }
       if (body.visibility !== undefined) {
         updateData.visibility =
-          body.visibility === "private" ? "private" : "public";
+          mode === "root"
+            ? (assertStrictEnumValue(
+                body.visibility,
+                validTopicVisibilities,
+                "visibility",
+              ) as TopicVisibility)
+            : body.visibility === "private"
+              ? "private"
+              : "public";
       }
 
       if (Object.keys(updateData).length === 0) {
@@ -471,11 +569,27 @@ export function createAudienceMetadataService({
       };
     },
 
-    async createProperty(input: { userId: string; body: unknown }) {
+    async createProperty(input: CreatePropertyInput) {
       const body = asRecord(input.body);
-      const key = trimRequiredString(body.key, "key");
+      const mode = input.mode === "root" ? "root" : "api";
+
+      const key =
+        mode === "root"
+          ? trimRequiredString(body.key, "key")
+          : trimOptionalStringAsNull(body.key, "key") || "";
+
+      if (mode === "root" && !key) {
+        throw invalidInput("key is required");
+      }
       const name = trimRequiredString(body.name, "name");
-      const type = firstTruthyString(body.type) ?? "string";
+      const type =
+        mode === "root"
+          ? (assertStrictEnumValue(
+              body.type,
+              validPropertyTypes,
+              "type",
+            ) as PropertyType)
+          : (firstTruthyString(body.type) ?? "string");
       const fallbackValue = firstTruthyString(
         body.fallback_value,
         body.fallbackValue,
@@ -508,15 +622,23 @@ export function createAudienceMetadataService({
       return toPropertyPayload(property);
     },
 
-    async updateProperty(input: { userId: string; id: string; body: unknown }) {
+    async updateProperty(input: UpdatePropertyInput) {
       const body = asRecord(input.body);
+      const mode = input.mode === "root" ? "root" : "api";
       const updateData: Partial<PropertyInsert> = { updatedAt: now() };
 
       if (body.name !== undefined) {
         updateData.name = trimPresentString(body.name, "name");
       }
       if (body.type !== undefined) {
-        updateData.type = String(body.type);
+        updateData.type =
+          mode === "root"
+            ? (assertStrictEnumValue(
+                body.type,
+                validPropertyTypes,
+                "type",
+              ) as PropertyType)
+            : String(body.type);
       }
       if (body.fallback_value !== undefined) {
         updateData.fallbackValue =

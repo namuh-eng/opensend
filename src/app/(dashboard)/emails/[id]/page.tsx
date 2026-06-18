@@ -2,9 +2,15 @@ import { EmailDetail } from "@/components/email-detail";
 import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { emailEvents, emailSuppressions, emails, logs } from "@/lib/db/schema";
-import { toEmailEventTraceItem } from "@opensend/core";
+import {
+  createEmailTraceService,
+  getThreadForOutboundEmail,
+  toEmailEventTraceItem,
+} from "@opensend/core";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
+
+const emailTraceService = createEmailTraceService();
 
 export default async function EmailDetailPage({
   params,
@@ -52,14 +58,17 @@ export default async function EmailDetailPage({
     .limit(10);
 
   const primaryRecipient = emailResult.to[0]?.toLowerCase();
-  const suppression = primaryRecipient
-    ? await db.query.emailSuppressions.findFirst({
-        where: and(
-          eq(emailSuppressions.userId, userId),
-          eq(emailSuppressions.email, primaryRecipient),
-        ),
-      })
-    : null;
+  const [suppression, trace] = await Promise.all([
+    primaryRecipient
+      ? db.query.emailSuppressions.findFirst({
+          where: and(
+            eq(emailSuppressions.userId, userId),
+            eq(emailSuppressions.email, primaryRecipient),
+          ),
+        })
+      : null,
+    emailTraceService.getTrace(userId, id),
+  ]);
 
   const emailData = {
     id: emailResult.id,
@@ -68,6 +77,7 @@ export default async function EmailDetailPage({
     subject: emailResult.subject,
     html: emailResult.html,
     text: emailResult.text,
+    replyAddress: emailResult.replyAddress,
     createdAt: emailResult.createdAt.toISOString(),
     scheduledAt: emailResult.scheduledAt?.toISOString() || null,
     tags: (emailResult.tags as Array<{ name: string; value: string }>) ?? [],
@@ -95,6 +105,35 @@ export default async function EmailDetailPage({
       endpoint: log.endpoint ?? "",
       statusCode: log.status ?? 0,
       createdAt: log.createdAt.toISOString(),
+    })),
+    trace: trace.data.map((item) => ({
+      id: item.id,
+      source: item.source,
+      type: item.type,
+      timestamp: item.created_at.toISOString(),
+      summary: item.summary,
+      details: item.details,
+      relatedId: item.related_id,
+      relatedUrl: item.related_url,
+    })),
+    thread: await getThreadForOutboundEmail({
+      userId,
+      emailId: emailResult.id,
+    }).then((thread) => ({
+      threadId: thread.thread_id,
+      matchStatus: thread.match_status,
+      originalEmailId: thread.original_email_id,
+      contactId: thread.contact_id,
+      messages: thread.messages.map((message) => ({
+        id: message.id,
+        direction: message.direction,
+        subject: message.subject,
+        from: message.from,
+        to: message.to,
+        text: message.text,
+        html: message.html,
+        createdAt: message.created_at.toISOString(),
+      })),
     })),
   };
 

@@ -19,6 +19,7 @@ import {
   emailProvider,
   emailRepo,
   emitCloudWatchMetric,
+  enqueueEmailWebhookEvent,
   finishTelemetrySpan,
   getEmailAddressDomain,
   getEmailTrackingBaseUrl,
@@ -28,6 +29,7 @@ import {
   parseBackgroundJob,
   publishBackgroundJob,
   recordTelemetryError,
+  safeOutboundFetch,
   startTelemetrySpan,
   suppressionRepo,
   toWebhookEventType,
@@ -467,6 +469,9 @@ export class QueueWorker {
         headers: email.headers ?? undefined,
         attachments: await normalizeAttachmentsForSend(email.attachments),
         region: sesRegion,
+        configurationSetName:
+          deliveryDomain?.sesConfigurationSetName ?? undefined,
+        emailId: email.id,
       });
       const sendDurationMs = finishTelemetrySpan(sesSpan, { status: "ok" });
 
@@ -514,6 +519,22 @@ export class QueueWorker {
             reason: "provider_retries_exhausted",
             provider: "ses",
             attempt_count: attemptCount,
+            last_error: errorSummary,
+          },
+          receivedAt: attemptedAt,
+        });
+      } else if (email.userId) {
+        await enqueueEmailWebhookEvent({
+          type: "email.delayed",
+          userId: email.userId,
+          emailId: email.id,
+          sourceId: `provider-delayed:${email.id}:${attemptCount}`,
+          payload: {
+            email_id: email.id,
+            reason: "provider_retry_scheduled",
+            provider: "ses",
+            attempt_count: attemptCount,
+            next_retry_at: nextRetryAt?.toISOString() ?? null,
             last_error: errorSummary,
           },
           receivedAt: attemptedAt,
@@ -976,7 +997,14 @@ async function fetchAttachmentContent(path: string): Promise<Uint8Array> {
   );
 
   try {
-    const response = await fetch(path, { signal: controller.signal });
+    const response = await safeOutboundFetch(
+      path,
+      {
+        redirect: "error",
+        signal: controller.signal,
+      },
+      { context: "dispatch" },
+    );
     if (!response.ok) {
       throw new Error(
         `Attachment fetch failed for ${path}: ${response.status} ${response.statusText}`,

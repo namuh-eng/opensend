@@ -1,6 +1,6 @@
 import { getServerSession, unauthorizedResponse } from "@/lib/api-auth";
+import { filtersFromSearchParams } from "@/lib/dashboard-export-api";
 import {
-  type DashboardExportFilters,
   DashboardExportTooLargeError,
   createDashboardCsvExport,
 } from "@/lib/dashboard-export-service";
@@ -10,73 +10,6 @@ import {
   isDashboardExportResource,
 } from "@/lib/dashboard-export-types";
 import { type NextRequest, NextResponse } from "next/server";
-
-function parseDate(value: string | null, boundary: "start" | "end") {
-  if (!value) return undefined;
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    const suffix = boundary === "start" ? "T00:00:00.000" : "T23:59:59.999";
-    const parsed = new Date(`${value}${suffix}`);
-    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-}
-
-function searchParam(
-  params: URLSearchParams,
-  ...keys: string[]
-): string | undefined {
-  for (const key of keys) {
-    const value = params.get(key)?.trim();
-    if (value) return value;
-  }
-  return undefined;
-}
-
-function filtersFromSearchParams(
-  params: URLSearchParams,
-): DashboardExportFilters {
-  return {
-    search: searchParam(params, "search", "q"),
-    status: searchParam(params, "status", "statuses"),
-    start: parseDate(
-      searchParam(
-        params,
-        "start_date",
-        "startDate",
-        "date_from",
-        "created_after",
-        "after",
-      ) ?? null,
-      "start",
-    ),
-    end: parseDate(
-      searchParam(
-        params,
-        "end_date",
-        "endDate",
-        "date_to",
-        "created_before",
-        "before",
-      ) ?? null,
-      "end",
-    ),
-    apiKeyId: searchParam(params, "api_key_id", "apiKeyId"),
-    segmentId: searchParam(
-      params,
-      "segment_id",
-      "segmentId",
-      "audience_id",
-      "audienceId",
-    ),
-    region: searchParam(params, "region"),
-    permission: searchParam(params, "permission"),
-    method: searchParam(params, "method"),
-    userAgent: searchParam(params, "user_agent", "userAgent"),
-  };
-}
 
 function csvResponse(
   csv: string,

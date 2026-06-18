@@ -71,6 +71,7 @@ export type ParsedStripeSubscription = {
   currentPeriodEnd: Date | null;
   cancelAtPeriodEnd: boolean;
   stripePriceId: string | null;
+  stripePriceIds: string[];
   metadata: Record<string, string>;
 };
 
@@ -110,7 +111,14 @@ export function parseStripeSubscriptionObject(
   const currentPeriodStart = epochSecondsToDate(obj.current_period_start);
   const currentPeriodEnd = epochSecondsToDate(obj.current_period_end);
   const cancelAtPeriodEnd = Boolean(obj.cancel_at_period_end);
-  const stripePriceId = obj.items?.data?.[0]?.price?.id?.toString() ?? null;
+  const stripePriceIds = Array.from(
+    new Set(
+      (obj.items?.data ?? [])
+        .map((item) => item.price?.id?.toString() ?? "")
+        .filter((priceId) => priceId.trim() !== ""),
+    ),
+  );
+  const stripePriceId = stripePriceIds[0] ?? null;
   const metadata =
     obj.metadata && typeof obj.metadata === "object"
       ? (obj.metadata as Record<string, string>)
@@ -124,6 +132,7 @@ export function parseStripeSubscriptionObject(
     currentPeriodEnd,
     cancelAtPeriodEnd,
     stripePriceId,
+    stripePriceIds,
     metadata,
   };
 }

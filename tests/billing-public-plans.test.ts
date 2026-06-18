@@ -23,7 +23,10 @@ const basePlan = {
   maxBroadcasts: null,
   ratePerSecond: 10,
   stripePriceId: "price_test_123",
+  stripeOveragePriceId: "price_overage_test_123",
   isPublic: true,
+  dedicatedIpsEnabled: false,
+  maxDedicatedIps: 0,
   createdAt: new Date("2026-05-01T00:00:00.000Z"),
 } satisfies PlanRow;
 
@@ -40,18 +43,28 @@ describe("public billing plan approval", () => {
           name: "Free",
           monthlyPriceCents: 0,
           stripePriceId: null,
+          stripeOveragePriceId: null,
           isPublic: true,
         }),
       ),
     ).toBe(true);
   });
 
-  it.each([{ stripePriceId: "price_live_123" }])(
-    "allows public paid plans with a non-empty Stripe price ID %#",
+  it.each([
+    {
+      stripePriceId: "price_live_123",
+      stripeOveragePriceId: "price_overage_123",
+    },
+  ])(
+    "allows public paid plans with non-empty base and overage Stripe price IDs %#",
     (row) => {
       expect(
         isApprovedPublicPlan(
-          plan({ monthlyPriceCents: 2900, stripePriceId: row.stripePriceId }),
+          plan({
+            monthlyPriceCents: 2900,
+            stripePriceId: row.stripePriceId,
+            stripeOveragePriceId: row.stripeOveragePriceId,
+          }),
         ),
       ).toBe(true);
     },
@@ -77,6 +90,10 @@ describe("public billing plan approval", () => {
     { monthlyPriceCents: 2900, stripePriceId: "" },
     { monthlyPriceCents: 2900, stripePriceId: "   " },
     { monthlyPriceCents: 2900, stripePriceId: " price_live_123 " },
+    { monthlyPriceCents: 2900, stripeOveragePriceId: null },
+    { monthlyPriceCents: 2900, stripeOveragePriceId: "" },
+    { monthlyPriceCents: 2900, stripeOveragePriceId: "   " },
+    { monthlyPriceCents: 2900, stripeOveragePriceId: " price_overage_123 " },
     {
       monthlyPriceCents: 2900,
       stripePriceId: "price_live_123",

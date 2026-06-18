@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { openApiDocument } from "@/lib/openapi";
 import type { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -13,6 +14,113 @@ function makeRequest(url: string, init?: RequestInit): NextRequest {
   const request = new Request(url, init) as Request & { nextUrl: URL };
   request.nextUrl = new URL(url);
   return request as unknown as NextRequest;
+}
+
+const httpMethods = ["delete", "get", "patch", "post", "put"] as const;
+
+const supportedRootAliasOperations = [
+  "DELETE /api-keys/{id}",
+  "DELETE /audiences/{audience_id}",
+  "DELETE /automations/{automation_id}",
+  "DELETE /broadcasts/{id}",
+  "DELETE /contact-properties/{id}",
+  "DELETE /contacts/{contact_id}",
+  "DELETE /contacts/{contact_id}/segments/{segment_id}",
+  "DELETE /domains/{id}",
+  "DELETE /events/{identifier}",
+  "DELETE /segments/{id}",
+  "DELETE /templates/{id}",
+  "DELETE /topics/{id}",
+  "DELETE /webhooks/{id}",
+  "GET /api-keys",
+  "GET /audiences",
+  "GET /audiences/{audience_id}",
+  "GET /automations",
+  "GET /automations/{automation_id}",
+  "GET /automations/{automation_id}/runs",
+  "GET /automations/{automation_id}/runs/{run_id}",
+  "GET /broadcasts",
+  "GET /broadcasts/{id}",
+  "GET /contact-properties",
+  "GET /contact-properties/{id}",
+  "GET /contacts",
+  "GET /contacts/{contact_id}",
+  "GET /contacts/{contact_id}/segments",
+  "GET /contacts/{contact_id}/topics",
+  "GET /domains",
+  "GET /domains/{id}",
+  "GET /emails",
+  "GET /emails/receiving",
+  "GET /emails/receiving/{id}",
+  "GET /emails/receiving/{id}/attachments",
+  "GET /emails/receiving/{id}/attachments/{attachmentId}",
+  "GET /emails/{id}",
+  "GET /emails/{id}/attachments",
+  "GET /emails/{id}/attachments/{attachmentId}",
+  "GET /emails/{id}/events",
+  "GET /emails/{id}/trace",
+  "GET /events",
+  "GET /events/{identifier}",
+  "GET /logs",
+  "GET /logs/{id}",
+  "GET /segments",
+  "GET /segments/{id}",
+  "GET /segments/{id}/contacts",
+  "GET /templates",
+  "GET /templates/{id}",
+  "GET /topics",
+  "GET /topics/{id}",
+  "GET /webhooks",
+  "GET /webhooks/{id}",
+  "PATCH /automations/{automation_id}",
+  "PATCH /broadcasts/{id}",
+  "PATCH /contact-properties/{id}",
+  "PATCH /contacts/{contact_id}",
+  "PATCH /contacts/{contact_id}/topics",
+  "PATCH /domains/{id}",
+  "PATCH /emails/{id}",
+  "PATCH /events/{identifier}",
+  "PATCH /templates/{id}",
+  "PATCH /topics/{id}",
+  "PATCH /webhooks/{id}",
+  "POST /api-keys",
+  "POST /audiences",
+  "POST /automations",
+  "POST /automations/{automation_id}/stop",
+  "POST /broadcasts",
+  "POST /broadcasts/{id}/send",
+  "POST /contact-properties",
+  "POST /contacts",
+  "POST /contacts/{contact_id}/segments/{segment_id}",
+  "POST /domains",
+  "POST /domains/{id}/verify",
+  "POST /emails",
+  "POST /emails/batch",
+  "POST /emails/{email_id}/cancel",
+  "POST /events",
+  "POST /events/send",
+  "POST /segments",
+  "POST /templates",
+  "POST /templates/{id}/duplicate",
+  "POST /templates/{id}/publish",
+  "POST /topics",
+  "POST /webhooks",
+] as const;
+
+const unsupportedRootAliasPaths = [
+  "/broadcasts/{id}/metrics",
+  "/domains/{id}/auto-configure",
+] as const;
+
+function rootOperationAllowlist() {
+  return Object.entries(openApiDocument.paths)
+    .filter(([pathKey]) => !pathKey.startsWith("/api/"))
+    .flatMap(([pathKey, pathItem]) =>
+      httpMethods
+        .filter((method) => method in pathItem)
+        .map((method) => `${method.toUpperCase()} ${pathKey}`),
+    )
+    .sort();
 }
 
 describe("GET /openapi.json", () => {
@@ -58,6 +166,17 @@ describe("GET /openapi.json", () => {
     );
     expect(serialized).not.toMatch(/sk_(live|test)_[A-Za-z0-9]+/);
     expect(serialized).not.toMatch(/os_(?!xxx)[A-Za-z0-9]{12,}/);
+  });
+
+  it("documents exactly the implemented root-compatible alias operations", () => {
+    expect(rootOperationAllowlist()).toEqual(supportedRootAliasOperations);
+    expect(new Set(rootOperationAllowlist()).size).toBe(
+      supportedRootAliasOperations.length,
+    );
+
+    for (const unsupportedPath of unsupportedRootAliasPaths) {
+      expect(openApiDocument.paths).not.toHaveProperty(unsupportedPath);
+    }
   });
 
   it("is not redirected by middleware without a dashboard session", async () => {

@@ -55,18 +55,158 @@ function extractTitleAndSummary(markdown, relPath) {
   return { title, summary: cleanMarkdownText(summary) };
 }
 
+const SECTION_ORDER = [
+  "start-here",
+  "api-reference",
+  "guides",
+  "dashboard",
+  "webhooks",
+  "knowledge-base",
+  "operations",
+];
+
+const DOC_ORDER = [
+  "api-reference/introduction.md",
+  "api-reference/authentication.md",
+  "api-reference/pagination.md",
+  "api-reference/errors.md",
+  "api-reference/rate-limit.md",
+  "api-reference/receiving-routes.md",
+  "api-reference/forwarding-rules.md",
+  "sdks.md",
+  "examples.md",
+  "send-with-nodejs.md",
+  "send-with-bun.md",
+  "send-with-nextjs.md",
+  "send-with-express.md",
+  "send-with-hono.md",
+  "send-with-cloudflare-workers.md",
+  "send-with-aws-lambda.md",
+  "send-with-vercel.md",
+  "send-with-railway.md",
+  "send-with-python.md",
+  "send-with-fastapi.md",
+  "send-with-flask.md",
+  "send-with-django.md",
+  "send-with-go.md",
+  "send-with-java.md",
+  "send-with-ruby.md",
+  "send-with-rails.md",
+  "send-with-sinatra.md",
+  "send-with-smtp.md",
+  "integrations.md",
+  "cli.md",
+  "mcp-server.md",
+  "ai-onboarding.md",
+  "agent-email-inbox-skill.md",
+  "guides/batch-sending.md",
+  "guides/inline-images-cid.md",
+  "guides/send-test-emails.md",
+  "guides/transactional-unsubscribe.md",
+  "guides/deliverability-insights.md",
+  "guides/webhook-storage.md",
+  "guides/settings-team-unsubscribe-operator-guide.md",
+  "dashboard/api-keys/introduction.md",
+  "dashboard/teams/introduction.md",
+  "dashboard/emails/introduction.md",
+  "dashboard/emails/attachments.md",
+  "dashboard/emails/custom-headers.md",
+  "dashboard/emails/email-bounces.md",
+  "dashboard/emails/email-suppressions.md",
+  "dashboard/emails/idempotency-keys.md",
+  "dashboard/emails/schedule-email.md",
+  "dashboard/emails/tags.md",
+  "dashboard/broadcasts/introduction.md",
+  "dashboard/broadcasts/performance-tracking.md",
+  "dashboard/domains/introduction.md",
+  "dashboard/domains/dmarc.md",
+  "dashboard/domains/tracking.md",
+  "dashboard/audiences/contacts.md",
+  "dashboard/audiences/properties.md",
+  "dashboard/audiences/managing-unsubscribe-list.md",
+  "dashboard/segments/introduction.md",
+  "dashboard/topics/introduction.md",
+  "dashboard/templates/introduction.md",
+  "dashboard/templates/template-variables.md",
+  "dashboard/templates/version-history.md",
+  "dashboard/automations/introduction.md",
+  "dashboard/automations/trigger.md",
+  "dashboard/automations/delay.md",
+  "dashboard/automations/condition.md",
+  "dashboard/automations/send-email.md",
+  "dashboard/automations/wait-for-event.md",
+  "dashboard/automations/runs.md",
+  "dashboard/webhooks/introduction.md",
+  "dashboard/suppressions/introduction.md",
+  "dashboard/logs/introduction.md",
+  "dashboard/export-center.md",
+  "dashboard/receiving/introduction.md",
+  "dashboard/receiving/custom-domains.md",
+  "dashboard/receiving/routing.md",
+  "dashboard/receiving/get-email-content.md",
+  "dashboard/receiving/attachments.md",
+  "dashboard/receiving/forward-emails.md",
+  "dashboard/receiving/reply-to-emails.md",
+  "react-email-skill.md",
+  "email-best-practices-skill.md",
+  "custom-event-schemas.md",
+  "knowledge-base/spf-dkim-dmarc.md",
+  "knowledge-base/what-if-my-domain-is-not-verifying.md",
+  "knowledge-base/cloudflare.md",
+  "knowledge-base/route53.md",
+  "knowledge-base/namecheap.md",
+  "knowledge-base/godaddy.md",
+  "knowledge-base/mx-conflicts-receiving.md",
+  "knowledge-base/why-are-my-emails-going-to-spam.md",
+  "knowledge-base/warming-up.md",
+  "knowledge-base/what-counts-as-email-consent.md",
+  "knowledge-base/consent-unsubscribe-topics-suppressions.md",
+  "knowledge-base/quotas-rate-limits-production-access.md",
+  "knowledge-base/how-to-handle-api-keys.md",
+  "knowledge-base/what-sending-feature-to-use.md",
+  "knowledge-base/what-attachment-types-are-not-supported.md",
+  "self-hosting.md",
+  "ingester-deploy.md",
+  "security.md",
+  "privacy.md",
+  "observability.md",
+  "webhooks/introduction.md",
+  "webhooks/event-types.md",
+  "webhooks/verify-webhooks-requests.md",
+];
+
+function sectionIdForRelPath(relPath) {
+  if (relPath.startsWith("api-reference/")) return "api-reference";
+  if (relPath.startsWith("guides/")) return "guides";
+  if (relPath.startsWith("dashboard/")) return "dashboard";
+  if (relPath.startsWith("webhooks/")) return "webhooks";
+  if (relPath.startsWith("knowledge-base/")) return "knowledge-base";
+  if (
+    relPath === "self-hosting.md" ||
+    relPath === "ingester-deploy.md" ||
+    relPath === "observability.md" ||
+    relPath === "privacy.md" ||
+    relPath === "security.md"
+  ) {
+    return "operations";
+  }
+  return "start-here";
+}
+
+function orderIndex(relPath) {
+  const index = DOC_ORDER.indexOf(relPath);
+  return index === -1 ? 10_000 : index;
+}
+
 function sortDocs(a, b) {
-  const order = [
-    "api-reference/introduction.md",
-    "api-reference/authentication.md",
-    "api-reference/pagination.md",
-    "api-reference/errors.md",
-    "api-reference/rate-limit.md",
-  ];
-  const ai = order.indexOf(a.relPath);
-  const bi = order.indexOf(b.relPath);
-  if (ai !== -1 || bi !== -1)
-    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  const sectionDelta =
+    SECTION_ORDER.indexOf(sectionIdForRelPath(a.relPath)) -
+    SECTION_ORDER.indexOf(sectionIdForRelPath(b.relPath));
+  if (sectionDelta !== 0) return sectionDelta;
+
+  const orderDelta = orderIndex(a.relPath) - orderIndex(b.relPath);
+  if (orderDelta !== 0) return orderDelta;
+
   return a.relPath.localeCompare(b.relPath);
 }
 

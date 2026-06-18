@@ -109,10 +109,13 @@ describe("Domain DNS Records Tab (feature-025)", () => {
     expect(sendingToggle.getAttribute("data-state")).toBe("checked");
   });
 
-  it("renders DMARC as a separate policy section", () => {
+  it("renders DMARC nested under Sending with starter-policy guidance", () => {
     render(<DomainDetail domain={domainWithRecords} />);
     expect(screen.getByText("DMARC Policy")).toBeTruthy();
-    expect(screen.getByText(/evaluate SPF and DKIM alignment/)).toBeTruthy();
+    // Helper copy explains DMARC is send-side, not receive-side.
+    expect(
+      screen.getByText(/Tells other mail servers what to do/),
+    ).toBeTruthy();
     expect(screen.getByText("_dmarc.updates.foreverbrowsing.com")).toBeTruthy();
     expect(screen.getByText("v=DMARC1; p=none;")).toBeTruthy();
   });
@@ -210,5 +213,42 @@ describe("Domain DNS Records Tab (feature-025)", () => {
     render(<DomainDetail domain={domainReceivingOn} />);
     const receivingToggle = screen.getByTestId("receiving-toggle");
     expect(receivingToggle.getAttribute("data-state")).toBe("checked");
+  });
+
+  it("shows the SES inbound MX record when receiving is enabled", () => {
+    render(
+      <DomainDetail
+        domain={{ ...domainWithRecords, receivingEnabled: true }}
+      />,
+    );
+
+    expect(screen.getByText("Inbound MX")).toBeTruthy();
+    expect(
+      screen.getByText("inbound-smtp.us-east-1.amazonaws.com"),
+    ).toBeTruthy();
+    expect(screen.getAllByText("10").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Manual")).toBeTruthy();
+  });
+
+  it("warns users to use a receiving subdomain when root MX may host mailboxes", () => {
+    render(
+      <DomainDetail
+        domain={{ ...domainWithRecords, receivingEnabled: true }}
+      />,
+    );
+
+    expect(screen.getByText(/Changing MX on a domain/)).toBeTruthy();
+    expect(
+      screen.getByText("inbound.updates.foreverbrowsing.com"),
+    ).toBeTruthy();
+  });
+
+  it("does not show an inbound MX target before receiving is enabled", () => {
+    render(<DomainDetail domain={domainWithRecords} />);
+
+    expect(screen.getByText("Inbound MX")).toBeTruthy();
+    expect(
+      screen.queryByText("inbound-smtp.us-east-1.amazonaws.com"),
+    ).toBeNull();
   });
 });

@@ -27,7 +27,7 @@ const usagePayload = {
   plan: { name: "Free", slug: "free" },
   transactional: {
     monthlyUsed: 42,
-    monthlyLimit: 3000,
+    monthlyLimit: 500,
     dailyUsed: 3,
     dailyLimit: 100,
   },

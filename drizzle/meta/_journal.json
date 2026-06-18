@@ -145,8 +145,8 @@
     {
       "idx": 20,
       "version": "7",
-      "when": 1778982844528,
-      "tag": "0020_pink_vampiro",
+      "when": 1778970539716,
+      "tag": "0020_pricing_catalog_20260516",
       "breakpoints": true
     },
     {
@@ -154,6 +154,118 @@
       "version": "7",
       "when": 1778976000000,
       "tag": "0021_monthly_pricing_tiers_20260517",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1778982844528,
+      "tag": "0022_pink_vampiro",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1779463929955,
+      "tag": "0023_volatile_switch",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1779465733477,
+      "tag": "0024_melodic_serpent_society",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1779945013309,
+      "tag": "0025_fresh_strong_guy",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1779946068656,
+      "tag": "0026_early_kronos",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1779948010126,
+      "tag": "0027_ambitious_lucky_pierre",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1779949904271,
+      "tag": "0028_sweet_blue_blade",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1779953729008,
+      "tag": "0029_colossal_blackheart",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1779957000000,
+      "tag": "0030_inbound_reply_threading",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1780067958284,
+      "tag": "0031_youthful_cerebro",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1780938535028,
+      "tag": "0032_last_flatman",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1780939682056,
+      "tag": "0033_past_anita_blake",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1780943467774,
+      "tag": "0034_majestic_gertrude_yorkes",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1781248612743,
+      "tag": "0035_reconcile_api_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1781250501813,
+      "tag": "0036_schema_parity_reconciliation",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1781760814476,
+      "tag": "0037_real_hawkeye",
       "breakpoints": true
     }
   ]

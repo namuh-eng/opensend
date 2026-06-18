@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   getApiKeyAuthHeaderError,
   publicApiKeyUnauthorizedResponse,
@@ -32,11 +33,13 @@ import {
   createTelemetryContext,
   detectSandboxTestRecipient,
   emitCloudWatchMetric,
+  enqueueEmailWebhookEvent,
   getSandboxTestOutcomeForRecipients,
   getTelemetryCarrier,
   logTelemetry,
   normalizeEmailRecipient,
   normalizeScheduledAt,
+  prepareOutboundReplyTracking,
   publicApiError,
   publishBackgroundJob,
   recordTelemetryError,
@@ -133,6 +136,49 @@ function recordBatchMetric(
       Operation: "email.batch_accept",
       Outcome: input.outcome,
     },
+  });
+}
+
+async function emitSuppressedWebhook(input: {
+  userId: string;
+  recipients: Array<{ email: string; reason: string }>;
+}): Promise<void> {
+  if (input.recipients.length === 0) return;
+
+  const submittedAt = new Date();
+  await enqueueEmailWebhookEvent({
+    type: "email.suppressed",
+    userId: input.userId,
+    payload: {
+      reason: "recipient_suppressed",
+      recipients: input.recipients,
+      recipient_count: input.recipients.length,
+      submitted_at: submittedAt.toISOString(),
+    },
+    receivedAt: submittedAt,
+  });
+}
+
+async function emitScheduledWebhook(input: {
+  userId: string;
+  emailId: string;
+  scheduledAt: Date;
+  recipientCount: number;
+}): Promise<void> {
+  const acceptedAt = new Date();
+  await enqueueEmailWebhookEvent({
+    type: "email.scheduled",
+    userId: input.userId,
+    emailId: input.emailId,
+    sourceId: `scheduled:${input.emailId}`,
+    payload: {
+      email_id: input.emailId,
+      status: "scheduled",
+      scheduled_at: input.scheduledAt.toISOString(),
+      accepted_at: acceptedAt.toISOString(),
+      recipient_count: input.recipientCount,
+    },
+    receivedAt: acceptedAt,
   });
 }
 
@@ -500,6 +546,34 @@ export async function handlePostEmailBatchRequest(
     (entries, index) =>
       entries.length === 0 && sandboxSuppressedResults[index]?.length === 0,
   ).length;
+  const suppressedWebhookEvents = validatedItems.flatMap((_, index) => {
+    const sandboxSuppressed = sandboxSuppressedResults[index] ?? [];
+    if (sandboxSuppressed.length > 0) {
+      return [
+        {
+          userId,
+          recipients: sandboxSuppressed.map((email) => ({
+            email,
+            reason: "suppressed",
+          })),
+        },
+      ];
+    }
+
+    const suppressed = suppressedResults[index] ?? [];
+    if (suppressed.length === 0) return [];
+
+    return [
+      {
+        userId,
+        recipients: suppressed.map((entry) => ({
+          email: entry.email,
+          reason: entry.reason,
+        })),
+      },
+    ];
+  });
+  await Promise.all(suppressedWebhookEvents.map(emitSuppressedWebhook));
   let quotaReserved = false;
   const firstAcceptedIndex = suppressedResults.findIndex(
     (entries, index) =>
@@ -538,6 +612,8 @@ export async function handlePostEmailBatchRequest(
         index: number;
         id: string;
         shouldQueueNow: boolean;
+        scheduledAt: Date | null;
+        recipientCount: number;
       }> = [];
 
       for (const [index, item] of validatedItems.entries()) {
@@ -564,31 +640,56 @@ export async function handlePostEmailBatchRequest(
           headers: (item.headers as Record<string, string>) ?? {},
           baseUrl: getPublicBaseUrl(request),
         });
+        const emailId = randomUUID();
+        const replyTracking = await prepareOutboundReplyTracking({
+          userId,
+          emailId,
+          from: item.from,
+          providedReplyTo: replyTo,
+          headers: managedUnsubscribe.headers,
+        });
+        const finalHeaders = replyTracking.enabled
+          ? { ...managedUnsubscribe.headers, ...replyTracking.headers }
+          : managedUnsubscribe.headers;
 
         const [email] = await tx
           .insert(emails)
           .values({
+            id: emailId,
             from: item.from,
             to,
             cc: cc ?? [],
             bcc: bcc ?? [],
-            replyTo: replyTo ?? [],
+            replyTo: replyTracking.enabled
+              ? replyTracking.replyTo
+              : (replyTo ?? []),
             subject: item.subject,
             html: managedUnsubscribe.html,
             text: managedUnsubscribe.text,
             tags: item.tags ?? [],
-            headers: managedUnsubscribe.headers,
+            headers: finalHeaders,
             attachments: normalizeAttachmentsForStorage(item.attachments),
             status: shouldQueueNow ? "queued" : "scheduled",
             scheduledAt: scheduledAt,
             topicId: item.topic_id || null,
             idempotencyKey:
               index === firstAcceptedIndex ? idempotencyKey : null,
+            threadId: replyTracking.enabled ? replyTracking.threadId : null,
+            replyAddress: replyTracking.enabled
+              ? replyTracking.replyAddress
+              : null,
+            replyToken: replyTracking.enabled ? replyTracking.replyToken : null,
             userId: auth.userId,
           })
           .returning({ id: emails.id });
 
-        persisted.push({ index, id: email.id, shouldQueueNow });
+        persisted.push({
+          index,
+          id: email.id,
+          shouldQueueNow,
+          scheduledAt,
+          recipientCount: to.length,
+        });
       }
 
       const resultByIndex = new Map<number, { id: string }>();
@@ -698,6 +799,20 @@ export async function handlePostEmailBatchRequest(
       );
     }
 
+    quotaReserved = false;
+    await Promise.all(
+      reservation.emails
+        .filter((email) => !email.shouldQueueNow && email.scheduledAt)
+        .map((email) =>
+          emitScheduledWebhook({
+            userId,
+            emailId: email.id,
+            scheduledAt: email.scheduledAt as Date,
+            recipientCount: email.recipientCount,
+          }),
+        ),
+    );
+
     const durationMs = performance.now() - startedAt;
     logTelemetry("info", "email.batch_accepted", telemetry, {
       email_count: acceptedCount,
@@ -708,7 +823,6 @@ export async function handlePostEmailBatchRequest(
       outcome: "accepted",
       count: acceptedCount,
     });
-    quotaReserved = false;
     return await logResponse(
       jsonWithTelemetry(reservation.responseBody, telemetry),
       {

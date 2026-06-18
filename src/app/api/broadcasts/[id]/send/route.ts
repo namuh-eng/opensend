@@ -1,4 +1,3 @@
-import { unauthorizedResponse } from "@/lib/api-auth";
 import { BroadcastServiceError, createBroadcastService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 import { resolveBroadcastRouteUserId } from "../../auth";
@@ -13,10 +12,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = await resolveBroadcastRouteUserId(
+  const userIdOrResponse = await resolveBroadcastRouteUserId(
     request.headers.get("authorization"),
   );
-  if (!userId) return unauthorizedResponse();
+  if (userIdOrResponse instanceof Response) return userIdOrResponse;
+  const userId = userIdOrResponse;
 
   try {
     const { id } = await params;
@@ -32,6 +32,9 @@ export async function POST(
   } catch (error) {
     if (error instanceof BroadcastServiceError) {
       if (error.code === "not_found") return notFoundResponse();
+      if (error.code === "invalid_input") {
+        return NextResponse.json({ error: error.message }, { status: 422 });
+      }
       if (error.code === "send_forbidden") {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }

@@ -1,8 +1,8 @@
 # opensend
 
-TypeScript SDK for the OpenSend email API with a Resend-compatible client surface.
+TypeScript SDK for the OpenSend email API. OpenSend is an open-source Resend alternative with a hosted cloud service and a self-hostable deployment path.
 
-Use your OpenSend API key (`os_...`) with the Resend-compatible API surface.
+Use your OpenSend API key (`os_...`) with OpenSend Cloud or your own self-hosted OpenSend deployment.
 
 ## Installation
 
@@ -12,7 +12,7 @@ bun add opensend
 
 ## Getting Started
 
-Use the Resend-compatible export for the easiest migration path:
+Use the `Resend` export when you want a familiar send-first client shape:
 
 ```typescript
 import { Resend } from "opensend";
@@ -20,7 +20,7 @@ import { Resend } from "opensend";
 const resend = new Resend("os_your_api_key");
 ```
 
-By default the SDK targets OpenSend's hosted API origin, `https://api.opensend.com`.
+By default the SDK targets OpenSend Cloud, `https://opensend.namuh.co`.
 Self-hosted deployments can override the origin with `baseUrl`:
 
 ```typescript
@@ -31,7 +31,7 @@ const resend = new Resend("os_your_api_key", {
 });
 ```
 
-The existing `Opensend` export is still supported for backwards compatibility:
+The `Opensend` export is the first-party OpenSend client name:
 
 ```typescript
 import { Opensend } from "opensend";
@@ -58,7 +58,7 @@ if (error) {
 }
 ```
 
-`resend.emails.send()` posts to the Resend-compatible `/emails` endpoint and
+`resend.emails.send()` posts to OpenSend's `/emails` endpoint and
 returns after the API persists the row and queues background delivery work. Poll
 `resend.emails.get(id)` or list emails to observe the lifecycle: `queued` →
 `processing` → `sent`, followed by SES delivery events such as `delivered`,
@@ -67,7 +67,7 @@ returns after the API persists the row and queues background delivery work. Poll
 
 ### Multiple Reply-To addresses
 
-Use Resend-compatible `replyTo` for one or more Reply-To addresses. The SDK
+Use `replyTo` for one or more Reply-To addresses. The SDK
 serializes it to the REST `reply_to` field.
 
 ```typescript
@@ -153,21 +153,19 @@ const { data, error } = await resend.emails.sendBatch([
 ]);
 ```
 
-`resend.emails.sendBatch()` posts to the Resend-compatible `/emails/batch`
-endpoint.
+`resend.emails.sendBatch()` posts to OpenSend's `/emails/batch` endpoint.
 
 ## Scheduled Sends
 
 Pass `scheduled_at` as a string to defer delivery for `send` or `sendBatch`.
 The API reschedule endpoint accepts the same formats. Supported values are
 future ISO 8601 date-times with a timezone (for example `2026-05-08T00:00:00.000Z`) or the small
-Resend-compatible natural-language form `in <positive integer>
+natural-language form `in <positive integer>
 <minute|min|minutes|hour|hours|day|days>` such as `in 1 min`. Values must be
 within 30 days; unparseable, past, or out-of-policy values return
 `validation_error`.
 
-Cancel a scheduled email before it is sent with the Resend-compatible cancel
-surface:
+Cancel a scheduled email before it is sent with OpenSend's cancel surface:
 
 ```typescript
 const { data, error } = await resend.emails.cancel("email-id");

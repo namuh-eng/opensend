@@ -15,7 +15,7 @@ const plans: PricingPlan[] = [
     slug: "free",
     name: "Free",
     monthlyPriceCents: 0,
-    monthlyEmailQuota: 5000,
+    monthlyEmailQuota: 500,
     maxDomains: 1,
     maxApiKeys: 2,
   },
@@ -74,7 +74,7 @@ describe("PricingGrid", () => {
       "For tinkering and side projects.",
     );
     expect(screen.getByTestId("pricing-card-free").textContent).toContain(
-      "5,000 API + broadcast emails/mo",
+      "500 API + broadcast emails/mo",
     );
     expect(screen.getByTestId("pricing-card-starter").textContent).toContain(
       "Change to Starter ($19 / mo)",

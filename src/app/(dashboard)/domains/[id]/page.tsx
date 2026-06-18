@@ -3,12 +3,39 @@ import { getServerSession } from "@/lib/api-auth";
 import { db } from "@/lib/db";
 import { domains } from "@/lib/db/schema";
 import { domainRouteParamsSchema } from "@/lib/validation/domains";
+import {
+  domainDeliverabilityStatusRepo,
+  evaluateBimiReadiness,
+} from "@opensend/core";
 import { and, eq } from "drizzle-orm";
 import { notFound, redirect } from "next/navigation";
 
 interface DomainEvent {
   type: string;
   timestamp: string;
+}
+
+function txtValuesFromRecords(
+  recordName: string,
+  records:
+    | Array<{
+        type: string;
+        name: string;
+        value: string;
+        status: string;
+        ttl: string;
+      }>
+    | null
+    | undefined,
+): string[] {
+  const normalized = recordName.toLowerCase();
+  return (records ?? [])
+    .filter(
+      (record) =>
+        record.type.toUpperCase() === "TXT" &&
+        record.name.toLowerCase() === normalized,
+    )
+    .map((record) => record.value);
 }
 
 export default async function DomainDetailPage({
@@ -67,6 +94,26 @@ export default async function DomainDetailPage({
     });
   }
 
+  const deliverabilityStatus =
+    await domainDeliverabilityStatusRepo.ensureForDomain(domain.id, userId);
+  const bimiSelector = deliverabilityStatus.bimiSelector || "default";
+  const dmarcRecordName = `_dmarc.${domain.name}`;
+  const bimiRecordName = `${bimiSelector}._bimi.${domain.name}`;
+  const bimiReadiness = evaluateBimiReadiness({
+    domainName: domain.name,
+    selector: bimiSelector,
+    dmarcTxt: {
+      name: dmarcRecordName,
+      values: txtValuesFromRecords(dmarcRecordName, domain.records),
+    },
+    bimiTxt: {
+      name: bimiRecordName,
+      values: txtValuesFromRecords(bimiRecordName, domain.records),
+    },
+    configuredLogoUrl: deliverabilityStatus.bimiLogoUrl,
+    configuredCertificateUrl: deliverabilityStatus.bimiCertificateUrl,
+  });
+
   return (
     <DomainDetail
       domain={{
@@ -79,10 +126,36 @@ export default async function DomainDetailPage({
         openTracking: domain.trackOpens,
         trackingSubdomain: domain.trackingSubdomain,
         tls: domain.tls,
-        sendingEnabled: true,
-        receivingEnabled: false,
+        sendingEnabled: Boolean(
+          domain.capabilities?.some(
+            (capability) => capability.name === "sending" && capability.enabled,
+          ) ?? true,
+        ),
+        receivingEnabled: Boolean(
+          domain.capabilities?.some(
+            (capability) =>
+              capability.name === "receiving" && capability.enabled,
+          ),
+        ),
         records: domain.records ?? null,
         events,
+        deliverability: {
+          bimi: {
+            status: bimiReadiness.status,
+            selector: bimiReadiness.selector,
+            recordName: bimiReadiness.bimiRecordName,
+            logoUrl: bimiReadiness.logoUrl,
+            certificateUrl: bimiReadiness.certificateUrl,
+            checks: bimiReadiness.checks,
+            notes: deliverabilityStatus.bimiNotes,
+          },
+          appleBrandedMail: {
+            status: deliverabilityStatus.appleBrandedMailStatus,
+            notes: deliverabilityStatus.appleBrandedMailNotes,
+          },
+          lastCheckedAt:
+            deliverabilityStatus.lastCheckedAt?.toISOString() ?? null,
+        },
       }}
     />
   );

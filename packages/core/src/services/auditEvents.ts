@@ -18,16 +18,33 @@ export type AuditAction =
   | "domain.updated"
   | "domain.deleted"
   | "domain.verified"
+  | "receiving_route.created"
+  | "receiving_route.updated"
+  | "receiving_route.deleted"
+  | "forwarding_rule.created"
+  | "forwarding_rule.updated"
+  | "forwarding_rule.deleted"
   | "webhook.created"
   | "webhook.updated"
   | "webhook.deleted"
+  | "integration.connected"
+  | "integration.updated"
+  | "integration.disconnected"
   | "settings.updated"
-  | "team.updated";
+  | "team.updated"
+  | "team.invitation.created"
+  | "team.invitation.revoked"
+  | "team.invitation.accepted"
+  | "team.member.role_changed"
+  | "team.member.removed";
 
 export type AuditTargetType =
   | "api_key"
   | "domain"
+  | "receiving_route"
+  | "forwarding_rule"
   | "webhook"
+  | "integration"
   | "settings"
   | "team";
 

@@ -4,36 +4,21 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
-import {
-  type AuditContext,
-  auditContextForApiKey,
-  auditContextForDashboardSession,
-} from "@/lib/audit-events";
-import { ApiKeyServiceError } from "@opensend/core";
+import type { AuditContext } from "@/lib/audit-events";
+import { resolveWorkspaceRouteContext } from "@/lib/workspace-route-auth";
+import { ApiKeyServiceError, type WorkspaceContext } from "@opensend/core";
 
 type ApiKeyRouteAuth = NonNullable<
   Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
 >;
 
-async function resolveAuditContext(
-  auth: ApiKeyRouteAuth,
-): Promise<AuditContext | null> {
-  if ("userId" in auth) {
-    if (!auth.userId) return null;
-    return auditContextForApiKey({
-      userId: auth.userId,
-      apiKeyId: auth.apiKeyId,
-    });
-  }
-
-  const session = await getServerSession();
-  return auditContextForDashboardSession(session);
-}
-
-export async function authorizeApiKeyRoute(
-  request: Request,
-): Promise<
-  { userId: string; auditContext: AuditContext } | { response: Response }
+export async function authorizeApiKeyRoute(request: Request): Promise<
+  | {
+      userId: string;
+      auditContext: AuditContext;
+      workspace: WorkspaceContext;
+    }
+  | { response: Response }
 > {
   const auth = await authorizeDashboardOrApiKey(
     request.headers.get("authorization"),
@@ -43,10 +28,20 @@ export async function authorizeApiKeyRoute(
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return { response: permissionError };
 
-  const auditContext = await resolveAuditContext(auth);
-  if (!auditContext) return { response: unauthorizedResponse() };
+  const session = "dashboard" in auth ? await getServerSession() : undefined;
+  const workspace = await resolveWorkspaceRouteContext({
+    request,
+    auth: auth as ApiKeyRouteAuth,
+    action: "api_keys.manage",
+    session,
+  });
+  if ("response" in workspace) return workspace;
 
-  return { userId: auditContext.userId, auditContext };
+  return {
+    userId: workspace.tenantUserId,
+    auditContext: workspace.auditContext,
+    workspace: workspace.workspace,
+  };
 }
 
 export function mapApiKeyServiceError(

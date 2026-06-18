@@ -343,12 +343,12 @@ export class StripeWebhookProcessor {
         ? "canceled"
         : (parsed.status ?? "incomplete");
 
-    const planId = await this.resolvePlanId(parsed.stripePriceId);
+    const planId = await this.resolvePlanId(parsed.stripePriceIds);
     if (!planId) {
       return {
         skipped: true,
         reason: "no_plan_for_price",
-        stripe_price_id: parsed.stripePriceId,
+        stripe_price_ids: parsed.stripePriceIds,
       };
     }
 
@@ -488,12 +488,14 @@ export class StripeWebhookProcessor {
   }
 
   private async resolvePlanId(
-    stripePriceId: string | null,
+    stripePriceIds: readonly string[],
   ): Promise<string | null> {
-    if (stripePriceId) {
+    if (stripePriceIds.length > 0) {
+      const planPrices = new Set(stripePriceIds);
       const plans = await this.planStore.list();
       const matched = plans.find(
-        (plan) => plan.stripePriceId === stripePriceId,
+        (plan) =>
+          plan.stripePriceId !== null && planPrices.has(plan.stripePriceId),
       );
       if (matched) return matched.id;
       return null;

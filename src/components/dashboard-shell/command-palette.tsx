@@ -35,7 +35,7 @@ const COMMANDS: CommandItem[] = [
   {
     id: "emails",
     label: "Emails",
-    group: "Send",
+    group: "Messaging",
     icon: "emails",
     href: "/emails",
     keywords: ["sent", "messages"],
@@ -43,14 +43,14 @@ const COMMANDS: CommandItem[] = [
   {
     id: "broadcasts",
     label: "Broadcasts",
-    group: "Send",
+    group: "Messaging",
     icon: "broadcasts",
     href: "/broadcasts",
   },
   {
     id: "automations",
     label: "Automations",
-    group: "Send",
+    group: "Messaging",
     icon: "automations",
     href: "/automations",
     keywords: ["workflows", "triggers"],
@@ -58,7 +58,7 @@ const COMMANDS: CommandItem[] = [
   {
     id: "templates",
     label: "Templates",
-    group: "Send",
+    group: "Messaging",
     icon: "templates",
     href: "/templates",
   },
@@ -87,6 +87,14 @@ const COMMANDS: CommandItem[] = [
     keywords: ["events", "endpoints"],
   },
   {
+    id: "integrations",
+    label: "Integrations",
+    group: "Configure",
+    icon: "webhooks",
+    href: "/integrations",
+    keywords: ["zapier", "connector", "apps"],
+  },
+  {
     id: "api-keys",
     label: "API Keys",
     group: "Configure",
@@ -109,6 +117,14 @@ const COMMANDS: CommandItem[] = [
     icon: "logs",
     href: "/logs",
     keywords: ["activity", "events"],
+  },
+  {
+    id: "exports",
+    label: "Exports",
+    group: "Inspect",
+    icon: "logs",
+    href: "/exports",
+    keywords: ["csv", "download", "history"],
   },
   {
     id: "audit",

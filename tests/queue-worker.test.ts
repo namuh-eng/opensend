@@ -5,6 +5,7 @@ const mockFindDueScheduled = vi.hoisted(() => vi.fn());
 const mockFindDomainByNameForUser = vi.hoisted(() => vi.fn());
 const mockUpdateEmail = vi.hoisted(() => vi.fn());
 const mockCreateEmailEvent = vi.hoisted(() => vi.fn());
+const mockEnqueueEmailWebhookEvent = vi.hoisted(() => vi.fn());
 const mockSendEmail = vi.hoisted(() => vi.fn());
 const mockPublishBackgroundJob = vi.hoisted(() => vi.fn());
 const mockSuppress = vi.hoisted(() => vi.fn());
@@ -17,12 +18,14 @@ const mockLogTelemetry = vi.hoisted(() => vi.fn());
 const mockRecordTelemetryError = vi.hoisted(() => vi.fn());
 const mockApplyEmailTracking = vi.hoisted(() => vi.fn());
 const mockCreateEmailTrackingToken = vi.hoisted(() => vi.fn());
+const mockSafeOutboundFetch = vi.hoisted(() => vi.fn());
 
 vi.mock("@opensend/core", () => ({
   createBackgroundJob: (job: Record<string, unknown>) => ({
     ...job,
     requestedAt: "2026-04-28T00:00:00.000Z",
   }),
+  safeOutboundFetch: mockSafeOutboundFetch,
   createEmailTrackingToken: mockCreateEmailTrackingToken,
   createTelemetryContext: (input: {
     service: string;
@@ -49,6 +52,7 @@ vi.mock("@opensend/core", () => ({
   emailProvider: {
     sendEmail: mockSendEmail,
   },
+  enqueueEmailWebhookEvent: mockEnqueueEmailWebhookEvent,
   emailRepo: {
     findById: mockFindById,
     findDueScheduled: mockFindDueScheduled,
@@ -133,6 +137,10 @@ describe("QueueWorker", () => {
     mockListWebhooksForDispatch.mockResolvedValue({ data: [] });
     mockEnqueueWebhookDelivery.mockResolvedValue({ id: "delivery-1" });
     mockFindDomainByNameForUser.mockResolvedValue(null);
+    mockEnqueueEmailWebhookEvent.mockResolvedValue({
+      eventId: "event-delayed",
+      deliveryIds: ["delivery-delayed"],
+    });
     mockApplyEmailTracking.mockImplementation((input: { html: string }) => ({
       html: input.html,
       rewroteLinks: 0,
@@ -144,6 +152,7 @@ describe("QueueWorker", () => {
           ? `${payload.kind}:${payload.targetUrl}`
           : payload.kind,
     );
+    mockSafeOutboundFetch.mockResolvedValue(new Response("remote file"));
   });
 
   afterEach(() => {
@@ -191,6 +200,7 @@ describe("QueueWorker", () => {
         to: ["user@example.com"],
         attachments: [{ filename: "inline.txt", content: "aGVsbG8=" }],
         region: "us-east-1",
+        emailId: "email-1",
       }),
     );
     expect(mockUpdateEmail).toHaveBeenNthCalledWith(2, "email-1", {
@@ -271,6 +281,10 @@ describe("QueueWorker", () => {
       userId: "user-1",
     });
     mockFindDomainByNameForUser.mockResolvedValue(null);
+    mockEnqueueEmailWebhookEvent.mockResolvedValue({
+      eventId: "event-delayed",
+      deliveryIds: ["delivery-delayed"],
+    });
 
     const { QueueWorker } = await import(
       "../packages/ingester/src/queue-worker"
@@ -411,6 +425,60 @@ describe("QueueWorker", () => {
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({ html }),
     );
+  });
+
+  it("validates remote attachment URLs before fetching provider payloads", async () => {
+    const unsafeUrl = "http://169.254.169.254/latest/meta-data";
+    mockFindById.mockResolvedValue({
+      id: "email-unsafe-attachment",
+      from: "sender@example.com",
+      to: ["user@example.com"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "",
+      headers: {},
+      attachments: [{ filename: "secret.txt", path: unsafeUrl }],
+      status: "queued",
+      scheduledAt: null,
+      userId: "user-1",
+    });
+    mockSafeOutboundFetch.mockRejectedValueOnce(
+      new Error("Unsafe outbound URL"),
+    );
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({
+      providerMaxAttempts: 1,
+      queueUrl: null,
+    });
+
+    await expect(
+      worker.processJob({
+        id: "email.send:email-unsafe-attachment",
+        type: "email.send",
+        source: "api",
+        requestedAt: "2026-04-28T00:00:00.000Z",
+        emailId: "email-unsafe-attachment",
+      }),
+    ).resolves.toEqual({
+      status: "failed",
+      reason: "provider_retries_exhausted",
+    });
+
+    expect(mockSafeOutboundFetch).toHaveBeenCalledWith(
+      unsafeUrl,
+      {
+        redirect: "error",
+        signal: expect.any(AbortSignal),
+      },
+      { context: "dispatch" },
+    );
+    expect(mockSendEmail).not.toHaveBeenCalled();
   });
 
   it("simulates delivered resend.dev recipients without calling the provider", async () => {
@@ -611,14 +679,11 @@ describe("QueueWorker", () => {
   });
 
   it("resolves URL path attachments and preserves content_type and content_id", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response("remote file", {
-          status: 200,
-          headers: { "content-length": "11" },
-        }),
-      ),
+    mockSafeOutboundFetch.mockResolvedValueOnce(
+      new Response("remote file", {
+        status: 200,
+        headers: { "content-length": "11" },
+      }),
     );
     mockFindById.mockResolvedValue({
       id: "email-path",
@@ -658,11 +723,13 @@ describe("QueueWorker", () => {
       }),
     ).resolves.toEqual({ status: "sent" });
 
-    expect(fetch).toHaveBeenCalledWith(
+    expect(mockSafeOutboundFetch).toHaveBeenCalledWith(
       "https://cdn.example.com/remote-logo.png",
       {
+        redirect: "error",
         signal: expect.any(AbortSignal),
       },
+      { context: "dispatch" },
     );
     expect(mockSendEmail).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -679,14 +746,11 @@ describe("QueueWorker", () => {
   });
 
   it("fails queued delivery explicitly when fetched attachments exceed 40MB encoded", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response("", {
-          status: 200,
-          headers: { "content-length": String(30 * 1024 * 1024 + 1) },
-        }),
-      ),
+    mockSafeOutboundFetch.mockResolvedValueOnce(
+      new Response("", {
+        status: 200,
+        headers: { "content-length": String(30 * 1024 * 1024 + 1) },
+      }),
     );
     mockFindById.mockResolvedValue({
       id: "email-large-path",
@@ -800,6 +864,24 @@ describe("QueueWorker", () => {
       providerDeadLetteredAt: null,
     });
     expect(mockCreateEmailEvent).not.toHaveBeenCalled();
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenCalledWith({
+      type: "email.delayed",
+      userId: "user-1",
+      emailId: "email-retry",
+      sourceId: "provider-delayed:email-retry:2",
+      payload: {
+        email_id: "email-retry",
+        reason: "provider_retry_scheduled",
+        provider: "ses",
+        attempt_count: 2,
+        next_retry_at: expect.any(String),
+        last_error: {
+          code: "ThrottlingException",
+          message: "SES is throttling sends",
+        },
+      },
+      receivedAt: expect.any(Date),
+    });
   });
 
   it("dead-letters exhausted provider retries and records a failure event", async () => {
@@ -885,6 +967,7 @@ describe("QueueWorker", () => {
         },
       }),
     );
+    expect(mockEnqueueEmailWebhookEvent).not.toHaveBeenCalled();
   });
 
   it("publishes due scheduled emails and marks published rows queued", async () => {

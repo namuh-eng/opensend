@@ -15,6 +15,7 @@ export type DomainIdentityProvider = {
   ): CreateDomainIdentityReturn;
   getDomainIdentity: typeof emailProvider.getDomainIdentity;
   deleteDomainIdentity: typeof emailProvider.deleteDomainIdentity;
+  setMailFromDomain: typeof emailProvider.setMailFromDomain;
 };
 
 export type DomainDnsCleanupRecord = {
@@ -75,6 +76,8 @@ export const domainIdentityProvider: DomainIdentityProvider = {
     emailProvider.getDomainIdentity(domain, options),
   deleteDomainIdentity: (domain, options) =>
     emailProvider.deleteDomainIdentity(domain, options),
+  setMailFromDomain: (domain, mailFromDomain, options) =>
+    emailProvider.setMailFromDomain(domain, mailFromDomain, options),
 };
 
 export const cloudflareDnsCleanupProvider: DomainDnsCleanupProvider = {

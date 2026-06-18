@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -63,7 +64,198 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp("updated_at"),
 });
 
+// ── Workspace / Team Tables ────────────────────────────────────────
+
+export type WorkspaceRole = "owner" | "admin" | "member";
+export type WorkspaceInvitationStatus =
+  | "pending"
+  | "accepted"
+  | "revoked"
+  | "expired";
+export type WorkspaceEntitlementSource = "self_hosted" | "hosted" | "manual";
+
+export const workspaces = pgTable(
+  "workspaces",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: varchar("name", { length: 255 }).notNull(),
+    ownerUserId: text("owner_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspaces_owner_user_id_idx").on(t.ownerUserId),
+    index("workspaces_created_at_idx").on(t.createdAt),
+  ],
+);
+
+export const workspaceMemberships = pgTable(
+  "workspace_memberships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: varchar("role", { length: 20 }).$type<WorkspaceRole>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspace_memberships_workspace_user_idx").on(
+      t.workspaceId,
+      t.userId,
+    ),
+    index("workspace_memberships_user_id_idx").on(t.userId),
+    index("workspace_memberships_workspace_role_idx").on(t.workspaceId, t.role),
+  ],
+);
+
+export const workspaceInvitations = pgTable(
+  "workspace_invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    email: varchar("email", { length: 320 }).notNull(),
+    role: varchar("role", { length: 20 }).$type<WorkspaceRole>().notNull(),
+    tokenHash: text("token_hash").notNull(),
+    invitedByUserId: text("invited_by_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    status: varchar("status", { length: 20 })
+      .$type<WorkspaceInvitationStatus>()
+      .notNull()
+      .default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspace_invitations_token_hash_idx").on(t.tokenHash),
+    index("workspace_invitations_workspace_status_idx").on(
+      t.workspaceId,
+      t.status,
+    ),
+    index("workspace_invitations_email_status_idx").on(t.email, t.status),
+  ],
+);
+
+export const workspaceEntitlements = pgTable(
+  "workspace_entitlements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    key: varchar("key", { length: 100 }).notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    limit: integer("limit"),
+    source: varchar("source", { length: 20 })
+      .$type<WorkspaceEntitlementSource>()
+      .notNull()
+      .default("self_hosted"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("workspace_entitlements_workspace_key_idx").on(
+      t.workspaceId,
+      t.key,
+    ),
+    index("workspace_entitlements_key_idx").on(t.key),
+  ],
+);
+
 // ── Application Tables ──────────────────────────────────────────────
+
+export const dedicatedIpPools = pgTable(
+  "dedicated_ip_pools",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    sesPoolName: varchar("ses_pool_name", { length: 255 }).notNull(),
+    scalingMode: varchar("scaling_mode", { length: 20 })
+      .notNull()
+      .default("MANAGED"),
+    status: varchar("status", { length: 50 }).notNull().default("requested"),
+    provider: varchar("provider", { length: 50 }).notNull().default("manual"),
+    operatorNotes: text("operator_notes"),
+    provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
+    warmingStartedAt: timestamp("warming_started_at", { withTimezone: true }),
+    retiredAt: timestamp("retired_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("dedicated_ip_pools_ses_pool_name_idx").on(t.sesPoolName),
+    index("dedicated_ip_pools_user_id_idx").on(t.userId),
+  ],
+);
+
+export const unsubscribePageSettings = pgTable(
+  "unsubscribe_page_settings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    logoUrl: varchar("logo_url", { length: 2048 }),
+    brandColor: varchar("brand_color", { length: 9 })
+      .notNull()
+      .default("#10b981"),
+    headline: varchar("headline", { length: 200 })
+      .notNull()
+      .default("Unsubscribed successfully"),
+    message: varchar("message", { length: 1000 })
+      .notNull()
+      .default(
+        "You have been removed from this mailing list. You will no longer receive marketing emails from this sender.",
+      ),
+    footerText: varchar("footer_text", { length: 200 })
+      .notNull()
+      .default("Powered by OpenSend"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [uniqueIndex("unsubscribe_page_settings_user_id_idx").on(t.userId)],
+);
+
+export type UnsubscribePageSettings =
+  typeof unsubscribePageSettings.$inferSelect;
+export type UnsubscribePageSettingsInsert =
+  typeof unsubscribePageSettings.$inferInsert;
 
 export const domains = pgTable("domains", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -104,7 +296,51 @@ export const domains = pgTable("domains", {
   dkimPublicKey: text("dkim_public_key"),
   dkimPrivateKeyCt: text("dkim_private_key_ct"),
   dkimPrivateKeyIv: text("dkim_private_key_iv"),
+  // Dedicated IP pool assignment and SES configuration set lifecycle
+  dedicatedIpPoolId: uuid("dedicated_ip_pool_id"),
+  sesConfigurationSetName: varchar("ses_configuration_set_name", {
+    length: 255,
+  }),
 });
+
+export const domainDeliverabilityStatuses = pgTable(
+  "domain_deliverability_statuses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    domainId: uuid("domain_id").notNull(),
+    bimiSelector: varchar("bimi_selector", { length: 63 })
+      .notNull()
+      .default("default"),
+    bimiStatus: varchar("bimi_status", { length: 32 })
+      .notNull()
+      .default("not_configured"),
+    bimiLogoUrl: varchar("bimi_logo_url", { length: 2048 }),
+    bimiCertificateUrl: varchar("bimi_certificate_url", { length: 2048 }),
+    bimiNotes: text("bimi_notes"),
+    appleBrandedMailStatus: varchar("apple_branded_mail_status", {
+      length: 32,
+    })
+      .notNull()
+      .default("not_started"),
+    appleBrandedMailNotes: text("apple_branded_mail_notes"),
+    lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("domain_deliverability_statuses_domain_id_idx").on(t.domainId),
+    index("domain_deliverability_statuses_user_id_idx").on(t.userId),
+    index("domain_deliverability_statuses_user_domain_idx").on(
+      t.userId,
+      t.domainId,
+    ),
+  ],
+);
 
 export const apiKeys = pgTable(
   "api_keys",
@@ -173,15 +409,24 @@ export const emails = pgTable(
     userId: text("user_id"),
     topicId: uuid("topic_id"),
     idempotencyKey: varchar("idempotency_key", { length: 256 }),
+    threadId: uuid("thread_id"),
+    replyAddress: varchar("reply_address", { length: 512 }),
+    replyToken: varchar("reply_token", { length: 128 }),
   },
   (table) => [
     index("emails_status_idx").on(table.status),
     index("emails_created_at_idx").on(table.createdAt),
     index("emails_status_created_at_idx").on(table.status, table.createdAt),
     index("emails_user_created_at_idx").on(table.userId, table.createdAt),
+    index("emails_user_thread_idx").on(table.userId, table.threadId),
+    index("emails_tags_gin_idx").using("gin", table.tags),
     uniqueIndex("emails_user_id_idempotency_key_idx").on(
       table.userId,
       table.idempotencyKey,
+    ),
+    uniqueIndex("emails_user_id_reply_token_idx").on(
+      table.userId,
+      table.replyToken,
     ),
   ],
 );
@@ -213,15 +458,16 @@ export const topics = pgTable("topics", {
   userId: text("user_id"),
 });
 
-export type SuppressionReason = "bounced" | "complained";
+export type SuppressionReason = "bounced" | "complained" | "manual";
 
 export type SuppressionSourceMetadata = {
-  source?: "ses" | "operator";
+  source?: "ses" | "operator" | "manual";
   sourceEventId?: string;
   sourceEmailId?: string;
   sourceMessageId?: string;
   bounceType?: string;
   complaintFeedbackType?: string;
+  importRow?: number;
 };
 
 export const emailSuppressions = pgTable(
@@ -319,6 +565,67 @@ export const webhooks = pgTable("webhooks", {
   userId: text("user_id"),
 });
 
+export type IntegrationProvider = "webhook";
+export type IntegrationConnectionStatus = "connected" | "disconnected";
+export type IntegrationHealthStatus = "unknown" | "healthy" | "unhealthy";
+
+export type IntegrationConnectionConfig = {
+  webhook?: {
+    endpointHost?: string;
+    endpointPreview?: string;
+    hasSigningSecret?: boolean;
+  };
+};
+
+export const integrationConnections = pgTable(
+  "integration_connections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    provider: varchar("provider", { length: 64 })
+      .$type<IntegrationProvider>()
+      .notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    status: varchar("status", { length: 32 })
+      .$type<IntegrationConnectionStatus>()
+      .notNull()
+      .default("connected"),
+    scopes: jsonb("scopes").notNull().$type<string[]>(),
+    config: jsonb("config").notNull().$type<IntegrationConnectionConfig>(),
+    credentialsEnc: text("credentials_enc").notNull(),
+    healthStatus: varchar("health_status", { length: 32 })
+      .$type<IntegrationHealthStatus>()
+      .notNull()
+      .default("unknown"),
+    lastHealthCheckAt: timestamp("last_health_check_at", {
+      withTimezone: true,
+    }),
+    lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+    lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("integration_connections_user_provider_idx").on(
+      table.userId,
+      table.provider,
+    ),
+    index("integration_connections_user_status_idx").on(
+      table.userId,
+      table.status,
+    ),
+  ],
+);
+
+export type IntegrationConnection = typeof integrationConnections.$inferSelect;
+export type IntegrationConnectionInsert =
+  typeof integrationConnections.$inferInsert;
+
 export const templates = pgTable("templates", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull().default("Untitled Template"),
@@ -353,21 +660,28 @@ export const templates = pgTable("templates", {
   userId: text("user_id"),
 });
 
-export const logs = pgTable("logs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  endpoint: text("endpoint"),
-  status: integer("status"),
-  method: varchar("method", { length: 10 }),
-  userAgent: text("user_agent"),
-  requestBody: jsonb("request_body"),
-  responseBody: jsonb("response_body"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  document: jsonb("document"),
-  userId: text("user_id"),
-  apiKeyId: uuid("api_key_id"),
-});
+export const logs = pgTable(
+  "logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    endpoint: text("endpoint"),
+    status: integer("status"),
+    method: varchar("method", { length: 10 }),
+    userAgent: text("user_agent"),
+    requestBody: jsonb("request_body"),
+    responseBody: jsonb("response_body"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    document: jsonb("document"),
+    userId: text("user_id"),
+    apiKeyId: uuid("api_key_id"),
+  },
+  (table) => [
+    index("logs_user_created_at_idx").on(table.userId, table.createdAt),
+    index("logs_document_gin_idx").using("gin", table.document),
+  ],
+);
 
 export const auditEvents = pgTable(
   "audit_events",
@@ -414,6 +728,114 @@ export const contactProperties = pgTable(
   (table) => [uniqueIndex("contact_properties_key_idx").on(table.key)],
 );
 
+export const receivingRoutes = pgTable(
+  "receiving_routes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    domainId: uuid("domain_id")
+      .notNull()
+      .references(() => domains.id, { onDelete: "cascade" }),
+    type: varchar("type", { length: 20 }).notNull(),
+    localPart: varchar("local_part", { length: 320 }),
+    targetLocalPart: varchar("target_local_part", { length: 320 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("receiving_routes_user_id_idx").on(table.userId),
+    index("receiving_routes_domain_id_idx").on(table.domainId),
+    uniqueIndex("receiving_routes_domain_type_local_idx").on(
+      table.domainId,
+      table.type,
+      table.localPart,
+    ),
+  ],
+);
+
+export type ReceivingRoute = typeof receivingRoutes.$inferSelect;
+export type ReceivingRouteInsert = typeof receivingRoutes.$inferInsert;
+
+export const forwardingRules = pgTable(
+  "forwarding_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    domainId: uuid("domain_id")
+      .notNull()
+      .references(() => domains.id, { onDelete: "cascade" }),
+    routeId: uuid("route_id")
+      .notNull()
+      .references(() => receivingRoutes.id, { onDelete: "cascade" }),
+    destinations: jsonb("destinations").notNull().$type<string[]>(),
+    status: varchar("status", { length: 32 }).notNull().default("active"),
+    invalidReason: text("invalid_reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("forwarding_rules_user_id_idx").on(table.userId),
+    index("forwarding_rules_domain_id_idx").on(table.domainId),
+    uniqueIndex("forwarding_rules_route_id_idx").on(table.routeId),
+  ],
+);
+
+export type ForwardingRule = typeof forwardingRules.$inferSelect;
+export type ForwardingRuleInsert = typeof forwardingRules.$inferInsert;
+
+export const inboundProviderEvents = pgTable(
+  "inbound_provider_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: varchar("provider", { length: 50 }).notNull(),
+    providerEventId: varchar("provider_event_id", { length: 255 }).notNull(),
+    providerMessageId: varchar("provider_message_id", { length: 255 }),
+    status: varchar("status", { length: 50 }).notNull().default("processing"),
+    terminalReason: text("terminal_reason"),
+    rawMetadata: jsonb("raw_metadata")
+      .$type<Record<string, unknown>>()
+      .notNull(),
+    userId: text("user_id"),
+    receivedEmailId: uuid("received_email_id"),
+    duplicateOfEventId: uuid("duplicate_of_event_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("inbound_provider_events_provider_event_idx").on(
+      table.provider,
+      table.providerEventId,
+    ),
+    // Partial unique guard: at most one non-duplicate row per provider event.
+    // Mirrors the hand-authored index in the migration chain; declared here so
+    // push-provisioned databases get the same dedupe protection.
+    uniqueIndex("inbound_provider_events_primary_event_idx")
+      .on(table.provider, table.providerEventId)
+      .where(sql`status <> 'duplicate_provider_event'`),
+    index("inbound_provider_events_status_idx").on(table.status),
+    index("inbound_provider_events_user_created_at_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export type InboundProviderEvent = typeof inboundProviderEvents.$inferSelect;
+export type InboundProviderEventInsert =
+  typeof inboundProviderEvents.$inferInsert;
+
 export const receivedEmails = pgTable(
   "received_emails",
   {
@@ -424,6 +846,18 @@ export const receivedEmails = pgTable(
     html: text("html"),
     text: text("text"),
     status: varchar("status", { length: 50 }).notNull().default("received"),
+    routeDecisions:
+      jsonb("route_decisions").$type<
+        Array<{
+          recipient: string;
+          status: "exact" | "alias" | "catch_all" | "unrouteable";
+          domainId?: string;
+          routeId?: string;
+          routeType?: "exact" | "alias" | "catch_all";
+          localPart?: string;
+          targetAddress?: string;
+        }>
+      >(),
     attachments:
       jsonb("attachments").$type<
         Array<{
@@ -434,13 +868,75 @@ export const receivedEmails = pgTable(
           s3Key: string;
         }>
       >(),
+    headers: jsonb("headers").$type<Record<string, string>>(),
+    replyMatchStatus: varchar("reply_match_status", { length: 32 })
+      .notNull()
+      .default("unmatched"),
+    threadId: uuid("thread_id"),
+    replyToEmailId: uuid("reply_to_email_id").references(() => emails.id, {
+      onDelete: "set null",
+    }),
+    contactId: uuid("contact_id").references(() => contacts.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
     userId: text("user_id"),
   },
-  (table) => [index("received_emails_created_at_idx").on(table.createdAt)],
+  (table) => [
+    index("received_emails_created_at_idx").on(table.createdAt),
+    index("received_emails_user_thread_idx").on(table.userId, table.threadId),
+    index("received_emails_reply_to_email_idx").on(table.replyToEmailId),
+    index("received_emails_contact_id_idx").on(table.contactId),
+  ],
 );
+
+export const forwardingAttempts = pgTable(
+  "forwarding_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    ruleId: uuid("rule_id").references(() => forwardingRules.id, {
+      onDelete: "set null",
+    }),
+    receivedEmailId: uuid("received_email_id")
+      .notNull()
+      .references(() => receivedEmails.id, { onDelete: "cascade" }),
+    forwardedEmailId: uuid("forwarded_email_id").references(() => emails.id, {
+      onDelete: "set null",
+    }),
+    status: varchar("status", { length: 32 }).notNull(),
+    reason: varchar("reason", { length: 64 }).notNull(),
+    destinations: jsonb("destinations").notNull().$type<string[]>(),
+    providerMessageId: varchar("provider_message_id", { length: 255 }),
+    retryEligible: boolean("retry_eligible").notNull().default(false),
+    errorCode: varchar("error_code", { length: 255 }),
+    errorMessage: text("error_message"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("forwarding_attempts_user_created_at_idx").on(
+      table.userId,
+      table.createdAt,
+    ),
+    index("forwarding_attempts_received_email_id_idx").on(
+      table.receivedEmailId,
+    ),
+    index("forwarding_attempts_rule_id_idx").on(table.ruleId),
+    index("forwarding_attempts_forwarded_email_id_idx").on(
+      table.forwardedEmailId,
+    ),
+  ],
+);
+
+export type ForwardingAttempt = typeof forwardingAttempts.$inferSelect;
+export type ForwardingAttemptInsert = typeof forwardingAttempts.$inferInsert;
 
 export const emailEvents = pgTable(
   "email_events",
@@ -654,6 +1150,46 @@ export const automationRuns = pgTable(
   ],
 );
 
+export type DashboardExportJobFilters = Record<
+  string,
+  string | number | boolean | null
+>;
+
+export const dashboardExportJobs = pgTable(
+  "dashboard_export_jobs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id").notNull(),
+    createdByUserId: text("created_by_user_id").notNull(),
+    createdByEmail: text("created_by_email"),
+    resource: varchar("resource", { length: 64 }).notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("completed"),
+    format: varchar("format", { length: 16 }).notNull().default("csv"),
+    schemaVersion: integer("schema_version").notNull().default(1),
+    filters: jsonb("filters").$type<DashboardExportJobFilters>().notNull(),
+    filename: varchar("filename", { length: 255 }).notNull(),
+    content: text("content"),
+    rowCount: integer("row_count").notNull().default(0),
+    byteSize: integer("byte_size").notNull().default(0),
+    error: text("error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    downloadedAt: timestamp("downloaded_at", { withTimezone: true }),
+    downloadCount: integer("download_count").notNull().default(0),
+  },
+  (t) => [
+    index("dashboard_export_jobs_user_created_at_idx").on(
+      t.userId,
+      t.createdAt,
+    ),
+    index("dashboard_export_jobs_user_status_idx").on(t.userId, t.status),
+    index("dashboard_export_jobs_expires_at_idx").on(t.expiresAt),
+  ],
+);
+
 // ── Billing Tables (additive, gated by BILLING_BACKEND) ────────────
 
 export const plans = pgTable(
@@ -673,7 +1209,12 @@ export const plans = pgTable(
     maxBroadcasts: integer("max_broadcasts"),
     ratePerSecond: integer("rate_per_second").notNull().default(2),
     stripePriceId: varchar("stripe_price_id", { length: 255 }),
+    stripeOveragePriceId: varchar("stripe_overage_price_id", { length: 255 }),
     isPublic: boolean("is_public").notNull().default(true),
+    dedicatedIpsEnabled: boolean("dedicated_ips_enabled")
+      .notNull()
+      .default(false),
+    maxDedicatedIps: integer("max_dedicated_ips").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -738,11 +1279,67 @@ export const usagePeriods = pgTable(
     periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
     periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
     emailsSent: integer("emails_sent").notNull().default(0),
+    // Snapshot of the included emails for this period. Kept nullable so
+    // pre-existing rows fall back to the current plan quota during migration.
+    includedEmailQuota: integer("included_email_quota"),
+    overageReportedEmails: integer("overage_reported_emails")
+      .notNull()
+      .default(0),
+    overageClaimedEmails: integer("overage_claimed_emails")
+      .notNull()
+      .default(0),
+    overageLastReportedAt: timestamp("overage_last_reported_at", {
+      withTimezone: true,
+    }),
+    usageWarning80NotifiedAt: timestamp("usage_warning_80_notified_at", {
+      withTimezone: true,
+    }),
+    usageWarning100NotifiedAt: timestamp("usage_warning_100_notified_at", {
+      withTimezone: true,
+    }),
     lastIncrementAt: timestamp("last_increment_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("usage_periods_user_period_idx").on(t.userId, t.periodStart),
     index("usage_periods_user_id_idx").on(t.userId),
+    index("usage_periods_period_end_idx").on(t.periodEnd),
+  ],
+);
+
+export const billingOverageReports = pgTable(
+  "billing_overage_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    usagePeriodId: uuid("usage_period_id")
+      .notNull()
+      .references(() => usagePeriods.id),
+    reportKey: varchar("report_key", { length: 255 }).notNull(),
+    stripeCustomerId: varchar("stripe_customer_id", { length: 255 }).notNull(),
+    stripeSubscriptionId: varchar("stripe_subscription_id", {
+      length: 255,
+    }).notNull(),
+    meterEventName: varchar("meter_event_name", { length: 255 }).notNull(),
+    fromOverageEmails: integer("from_overage_emails").notNull(),
+    throughOverageEmails: integer("through_overage_emails").notNull(),
+    deltaEmails: integer("delta_emails").notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    stripeSubmissionStartedAt: timestamp("stripe_submission_started_at", {
+      withTimezone: true,
+    }),
+    stripeReportedAt: timestamp("stripe_reported_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("billing_overage_reports_report_key_idx").on(t.reportKey),
+    index("billing_overage_reports_usage_period_idx").on(t.usagePeriodId),
+    index("billing_overage_reports_status_idx").on(t.status),
   ],
 );
 
@@ -757,3 +1354,17 @@ export const stripeEventsProcessed = pgTable(
   },
   (t) => [index("stripe_events_processed_processed_at_idx").on(t.processedAt)],
 );
+
+// ── Scheduler Observability ─────────────────────────────────────────────────
+
+/**
+ * One row per scheduled job; upserted after every successful invocation.
+ * Used by /api/health/scheduler to report stale or missing jobs.
+ */
+export const schedulerHeartbeats = pgTable("scheduler_heartbeats", {
+  jobName: text("job_name").primaryKey(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastResult: jsonb("last_result"),
+});

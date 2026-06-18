@@ -166,8 +166,13 @@ describe("template variable metadata service", () => {
         }),
         expect.objectContaining({
           key: "productName",
-          required: false,
-          fallbackValue: "Opensend",
+          required: true,
+          fallbackValue: null,
+        }),
+        expect.objectContaining({
+          key: "supportEmail",
+          required: true,
+          fallbackValue: null,
         }),
       ]),
     });
@@ -306,6 +311,36 @@ describe("template variable metadata service", () => {
         fallback_value: "item",
       },
     ]);
+  });
+
+  it("converts React Email starters to editable HTML when custom HTML is saved", async () => {
+    const updates: Array<{ id: string; data: Partial<TemplateInsert> }> = [];
+    const repository = createRepository({
+      async findByIdOrAlias() {
+        return templateRow({
+          html: "<!-- React Email registry template: onboarding-welcome -->",
+          document: {
+            rendering: {
+              kind: "react_email",
+              templateKey: "onboarding-welcome",
+            },
+          },
+        });
+      },
+      async update(id, data) {
+        updates.push({ id, data });
+        return [templateRow({ id, ...data })];
+      },
+    });
+
+    await createTemplateService({ repository }).updateTemplate("tmpl-1", {
+      html: "<h1>Custom welcome</h1>",
+    });
+
+    expect(updates[0]?.data).toMatchObject({
+      html: "<h1>Custom welcome</h1>",
+      document: null,
+    });
   });
 
   it("preserves existing variable metadata during automatic extraction", async () => {

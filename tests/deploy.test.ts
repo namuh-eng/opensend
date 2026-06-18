@@ -7,10 +7,27 @@ import { describe, expect, it } from "vitest";
 
 const root = join(__dirname, "..");
 
+function serviceBlock(compose: string, serviceName: string): string {
+  const escapedServiceName = serviceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = compose.match(
+    new RegExp(
+      `\\n  ${escapedServiceName}:\\n[\\s\\S]*?(?=\\n  [a-zA-Z0-9_-]+:\\n|\\nvolumes:\\n|$)`,
+    ),
+  );
+  expect(match).not.toBeNull();
+  return match?.[0] ?? "";
+}
+
 describe("deploy-001: ECS Fargate deployment configuration", () => {
   it("next.config.js has standalone output for Docker deployment", () => {
     const config = readFileSync(join(root, "next.config.js"), "utf-8");
     expect(config).toContain('output: "standalone"');
+  });
+
+  it("allows PostHog browser assets in the production CSP", () => {
+    const config = readFileSync(join(root, "next.config.js"), "utf-8");
+    expect(config).toContain("https://us-assets.i.posthog.com");
+    expect(config).toContain("connect-src 'self' https:");
   });
 
   it("Dockerfile exists with multi-stage build", () => {
@@ -51,12 +68,69 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
   it("deploy script injects required production app secrets into ECS task definitions", () => {
     const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
     expect(script).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID");
+    expect(script).toContain("TRACKING_SECRET_SECRET_ID");
     expect(script).toContain("aws secretsmanager describe-secret");
     expect(script).toContain('"name": "WEBHOOK_SECRET_ENCRYPTION_KEY"');
+    expect(script).toContain('"name": "TRACKING_SECRET"');
     expect(script).toContain("register_app_task_definition");
     expect(script).toContain(
       'redeploy "${APP_SERVICE}" "${APP_TASK_DEFINITION}"',
     );
+  });
+
+  it("deploy script injects the SES events SNS topic ARN into the app task environment when configured", () => {
+    const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
+    expect(script).toContain(
+      'SES_EVENTS_SNS_TOPIC_ARN="${SES_EVENTS_SNS_TOPIC_ARN:-}"',
+    );
+    expect(script).toContain(
+      'SES_INBOUND_SNS_TOPIC_ARN="${SES_INBOUND_SNS_TOPIC_ARN:-}"',
+    );
+    expect(script).toContain(
+      'SES_INBOUND_SNS_TOPIC_ARNS="${SES_INBOUND_SNS_TOPIC_ARNS:-}"',
+    );
+    expect(script).toContain('"name": topic_name');
+    expect(script).toContain('"value": topic_value');
+    expect(script).toContain('"SES_EVENTS_SNS_TOPIC_ARN"');
+    expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARN"');
+    expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARNS"');
+    expect(script).toContain('"${SES_EVENTS_SNS_TOPIC_ARN}"');
+    expect(script).toContain('"${SES_INBOUND_SNS_TOPIC_ARN}"');
+    expect(script).toContain('"${SES_INBOUND_SNS_TOPIC_ARNS}"');
+    expect(script).toContain('"${task_file}"');
+  });
+
+  it("deploy script injects the SES events SNS topic ARN into the ingester task environment", () => {
+    const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
+    expect(script).toContain(
+      'write_ingester_task_definition \\\n    "${base_task_definition}" \\\n    "${ingester_image}"',
+    );
+    expect(script).toContain('"${SES_EVENTS_SNS_TOPIC_ARN}"');
+    expect(script).toContain('"${SES_INBOUND_SNS_TOPIC_ARN}"');
+    expect(script).toContain('"${SES_INBOUND_SNS_TOPIC_ARNS}"');
+    expect(script).toContain('"${task_file}"');
+    expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARN",');
+    expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARNS",');
+    expect(script).toContain(
+      'required_environment["SES_EVENTS_SNS_TOPIC_ARN"] = ses_events_sns_topic_arn',
+    );
+    expect(script).toContain(
+      'required_environment["SES_INBOUND_SNS_TOPIC_ARN"] = ses_inbound_sns_topic_arn',
+    );
+    expect(script).toContain(
+      'required_environment["SES_INBOUND_SNS_TOPIC_ARNS"] = ses_inbound_sns_topic_arns',
+    );
+  });
+
+  it("deploy script carries receiving storage config into the ingester task definition", () => {
+    const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
+    expect(script).toContain("INGESTER_INBOUND_TOKEN_SECRET_ID");
+    expect(script).toContain("ingester_inbound_token_secret_arn");
+    expect(script).toContain('"name": "INGESTER_INBOUND_TOKEN"');
+    expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARN",');
+    expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARNS",');
+    expect(script).toContain('"SES_INBOUND_BUCKET_NAME"');
+    expect(script).toContain("app_task_definition");
   });
 
   it("deploy script runs migrations before ECS service redeploys", () => {
@@ -115,12 +189,66 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(ignore).toContain(".next");
   });
 
-  it("docker-compose includes a dedicated ingester service with a healthcheck", () => {
+  it("docker-compose pins release images for app, ingester, and scheduler by default", () => {
     const compose = readFileSync(join(root, "docker-compose.yml"), "utf-8");
-    expect(compose).toContain("ingester:");
-    expect(compose).toContain("dockerfile: packages/ingester/Dockerfile");
-    expect(compose).toContain("INGESTER_PORT:-3016");
-    expect(compose).toContain("http://127.0.0.1:3016/health");
+    const app = serviceBlock(compose, "app");
+    const ingester = serviceBlock(compose, "ingester");
+    const scheduler = serviceBlock(compose, "scheduler");
+
+    expect(app).toContain("image: ghcr.io/namuh-eng/opensend:v1.0.0");
+    expect(app).not.toContain("build:");
+    expect(ingester).toContain(
+      "image: ghcr.io/namuh-eng/opensend-ingester:v1.0.0",
+    );
+    expect(ingester).not.toContain("build:");
+    expect(ingester).toContain("INGESTER_PORT:-3016");
+    expect(ingester).toContain("http://127.0.0.1:3016/health");
+    expect(scheduler).toContain(
+      "image: ghcr.io/namuh-eng/opensend-ingester:v1.0.0",
+    );
+    expect(scheduler).toContain('command: ["bun", "/app/job-scheduler.js"]');
+  });
+
+  it("docker-compose local override builds the app and ingester from source", () => {
+    const override = readFileSync(
+      join(root, "docker-compose.local.yml"),
+      "utf-8",
+    );
+    const app = serviceBlock(override, "app");
+    const ingester = serviceBlock(override, "ingester");
+    const scheduler = serviceBlock(override, "scheduler");
+
+    expect(app).toContain("image: opensend:local");
+    expect(app).toContain("target: runner");
+    expect(ingester).toContain("image: opensend-ingester:local");
+    expect(ingester).toContain("dockerfile: packages/ingester/Dockerfile");
+    expect(scheduler).toContain("image: opensend-ingester:local");
+    expect(scheduler).toContain("dockerfile: packages/ingester/Dockerfile");
+  });
+
+  it("docker-compose wires Redis-backed rate limiting by default", () => {
+    const compose = readFileSync(join(root, "docker-compose.yml"), "utf-8");
+    expect(compose).toContain("redis:");
+    expect(compose).toContain("image: redis:7-alpine");
+    expect(compose).toContain("REDIS_URL: ${REDIS_URL:-redis://redis:6379}");
+    expect(compose).toContain(
+      "RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-redis}",
+    );
+    expect(compose).toContain(
+      "OPENSEND_APP_REPLICAS: ${OPENSEND_APP_REPLICAS:-1}",
+    );
+    expect(compose).toContain("redisdata:");
+  });
+
+  it("docker-compose keeps the SMTP relay behind an explicit profile", () => {
+    const compose = readFileSync(join(root, "docker-compose.yml"), "utf-8");
+    expect(compose).toContain("smtp-relay:");
+    expect(compose).toContain('profiles: ["smtp"]');
+    expect(compose).toContain("dockerfile: packages/smtp-relay/Dockerfile");
+    expect(compose).toContain(
+      '"${SMTP_RELAY_PORT:-2587}:${SMTP_RELAY_PORT:-2587}"',
+    );
+    expect(compose).not.toContain("smtp-relay:\n    image:");
   });
 
   it("ingester Dockerfile builds a standalone server bundle", () => {

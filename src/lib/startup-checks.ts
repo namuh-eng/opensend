@@ -1,3 +1,9 @@
+import {
+  type EnvValidationIssue,
+  OpenSendEnvValidationError,
+  validateOpenSendEnv,
+} from "@opensend/core/src/env";
+
 type Logger = {
   warn: (data: Record<string, unknown>, msg: string) => void;
   error: (data: Record<string, unknown>, msg: string) => void;
@@ -14,37 +20,76 @@ function isProd(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
-function requireWebhookSecretKey(logger: Logger): void {
-  const key = process.env.WEBHOOK_SECRET_ENCRYPTION_KEY;
-  if (!key || key.length < 16) {
-    if (isProd()) {
-      logger.error(
-        { event: "security.startup.missing_key" },
-        "WEBHOOK_SECRET_ENCRYPTION_KEY missing or too short (>=16 chars required) — refusing to boot",
-      );
-      throw new Error(
-        "WEBHOOK_SECRET_ENCRYPTION_KEY missing/too short in production",
-      );
-    }
+function issuePayload(issues: readonly EnvValidationIssue[]) {
+  return issues.map((issue) => ({
+    key: issue.key,
+    message: issue.message,
+  }));
+}
+
+function validateRequiredEnv(logger: Logger): void {
+  const result = validateOpenSendEnv(process.env, { service: "app" });
+
+  if (result.warnings.length > 0) {
     logger.warn(
-      { event: "security.startup.missing_key_dev" },
-      "WEBHOOK_SECRET_ENCRYPTION_KEY missing or too short — webhook secret encryption disabled in non-production",
+      {
+        event: "security.startup.env_warning",
+        issues: issuePayload(result.warnings),
+      },
+      "OpenSend app environment preflight found non-fatal configuration warnings",
     );
+  }
+
+  if (result.errors.length > 0) {
+    logger.error(
+      {
+        event: "security.startup.env_invalid",
+        issues: issuePayload(result.errors),
+      },
+      "OpenSend app environment preflight failed — refusing to boot",
+    );
+    throw new OpenSendEnvValidationError("app", result.errors);
   }
 }
 
+function getConfiguredAppReplicas(): number {
+  const raw = process.env.OPENSEND_APP_REPLICAS?.trim();
+  if (!raw) return 1;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  return parsed;
+}
+
 function warnIfRateLimitDisabled(logger: Logger): void {
-  if (!isProd()) return;
-  const backend = (process.env.RATE_LIMIT_BACKEND ?? "").toLowerCase();
+  const backend = (process.env.RATE_LIMIT_BACKEND ?? "").trim().toLowerCase();
   if (backend === "redis") return;
-  if (backend === "" && process.env.REDIS_URL) return;
-  logger.warn(
-    {
-      event: "security.rate_limit.disabled_in_production",
-      backend: backend || "disabled",
-    },
-    "Rate limiting backend is disabled in production — set REDIS_URL or RATE_LIMIT_BACKEND=redis",
-  );
+
+  const appReplicas = getConfiguredAppReplicas();
+  const backendLabel = backend || "disabled";
+
+  if (isProd()) {
+    logger.warn(
+      {
+        event: "security.rate_limit.disabled_in_production",
+        backend: backendLabel,
+        appReplicas,
+      },
+      "Rate limiting backend is disabled in production — set RATE_LIMIT_BACKEND=redis and REDIS_URL to a shared Redis endpoint",
+    );
+    return;
+  }
+
+  if (appReplicas > 1) {
+    logger.warn(
+      {
+        event: "security.rate_limit.disabled_in_multi_instance",
+        backend: backendLabel,
+        appReplicas,
+      },
+      "Multiple app replicas are configured without Redis-backed rate limiting — set RATE_LIMIT_BACKEND=redis and REDIS_URL to a shared Redis endpoint",
+    );
+  }
 }
 
 function requirePostgresPassword(logger: Logger): void {
@@ -68,7 +113,7 @@ function requirePostgresPassword(logger: Logger): void {
 }
 
 export function runStartupChecks(logger: Logger = defaultLogger): void {
-  requireWebhookSecretKey(logger);
+  validateRequiredEnv(logger);
   warnIfRateLimitDisabled(logger);
   requirePostgresPassword(logger);
 }

@@ -5,6 +5,7 @@ import {
   createBackgroundJob,
   publishBackgroundJob,
 } from "../jobs/background-jobs";
+import { enqueueEmailWebhookEvent } from "./email-webhook-events";
 
 const IDEMPOTENCY_KEY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -70,7 +71,13 @@ export class EmailService {
     bcc?: string[];
     replyTo?: string[];
     headers?: Record<string, string>;
-    attachments?: Array<{ filename: string; content: string }>;
+    attachments?: Array<{
+      filename: string;
+      content?: string;
+      path?: string;
+      content_type?: string;
+      content_id?: string;
+    }>;
     tags?: Array<{ name: string; value: string }>;
     scheduledAt?: Date | null;
     topicId?: string | null;
@@ -94,12 +101,26 @@ export class EmailService {
       params.to,
     );
     if (suppressed.length > 0) {
-      throw new SuppressedRecipientError(
-        suppressed.map((entry) => ({
-          email: entry.email,
-          reason: entry.reason,
-        })),
-      );
+      const recipients = suppressed.map((entry) => ({
+        email: entry.email,
+        reason: entry.reason,
+      }));
+      if (params.userId) {
+        const suppressedAt = new Date();
+        await enqueueEmailWebhookEvent({
+          type: "email.suppressed",
+          userId: params.userId,
+          payload: {
+            reason: "recipient_suppressed",
+            recipients,
+            recipient_count: recipients.length,
+            submitted_at: suppressedAt.toISOString(),
+          },
+          receivedAt: suppressedAt,
+        });
+      }
+
+      throw new SuppressedRecipientError(recipients);
     }
 
     const shouldQueueNow =
@@ -131,6 +152,24 @@ export class EmailService {
       idempotencyKey: params.idempotencyKey,
       userId: params.userId,
     });
+
+    if (!shouldQueueNow && params.userId && params.scheduledAt) {
+      const scheduledEventAt = new Date();
+      await enqueueEmailWebhookEvent({
+        type: "email.scheduled",
+        userId: params.userId,
+        emailId: record.id,
+        sourceId: `scheduled:${record.id}`,
+        payload: {
+          email_id: record.id,
+          status: "scheduled",
+          scheduled_at: params.scheduledAt.toISOString(),
+          accepted_at: scheduledEventAt.toISOString(),
+          recipient_count: params.to.length,
+        },
+        receivedAt: scheduledEventAt,
+      });
+    }
 
     if (shouldQueueNow) {
       try {

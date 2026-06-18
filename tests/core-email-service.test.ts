@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockFindByIdempotencyKey = vi.hoisted(() => vi.fn());
 const mockExpireIdempotencyKeyBefore = vi.hoisted(() => vi.fn());
 const mockCreateEmail = vi.hoisted(() => vi.fn());
+const mockFindSuppressedRecipients = vi.hoisted(() => vi.fn());
 const mockUpdateEmail = vi.hoisted(() => vi.fn());
 const mockCreateEmailEvent = vi.hoisted(() => vi.fn());
+const mockEnqueueEmailWebhookEvent = vi.hoisted(() => vi.fn());
 const mockPublishBackgroundJob = vi.hoisted(() => vi.fn());
 const mockProviderSendEmail = vi.hoisted(() => vi.fn());
 
@@ -12,6 +14,10 @@ vi.mock("../packages/core/src/db/repositories/emailEventRepo", () => ({
   emailEventRepo: {
     create: mockCreateEmailEvent,
   },
+}));
+
+vi.mock("../packages/core/src/services/email-webhook-events", () => ({
+  enqueueEmailWebhookEvent: mockEnqueueEmailWebhookEvent,
 }));
 
 vi.mock("../packages/core/src/db/repositories/emailRepo", () => ({
@@ -25,7 +31,7 @@ vi.mock("../packages/core/src/db/repositories/emailRepo", () => ({
 
 vi.mock("../packages/core/src/db/repositories/suppressionRepo", () => ({
   suppressionRepo: {
-    findByUserAndEmails: vi.fn().mockResolvedValue([]),
+    findByUserAndEmails: mockFindSuppressedRecipients,
   },
 }));
 
@@ -48,11 +54,16 @@ describe("EmailService", () => {
     vi.resetModules();
     vi.clearAllMocks();
     mockFindByIdempotencyKey.mockResolvedValue(null);
+    mockFindSuppressedRecipients.mockResolvedValue([]);
     mockExpireIdempotencyKeyBefore.mockResolvedValue(undefined);
     mockCreateEmail.mockResolvedValue([{ id: "email-1" }]);
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
       reason: "queue_url_missing",
+    });
+    mockEnqueueEmailWebhookEvent.mockResolvedValue({
+      eventId: "event-1",
+      deliveryIds: [],
     });
   });
 
@@ -222,5 +233,72 @@ describe("EmailService", () => {
     );
     expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
     expect(mockProviderSendEmail).not.toHaveBeenCalled();
+    expect(mockEnqueueEmailWebhookEvent).not.toHaveBeenCalled();
+  });
+
+  it("emits a suppressed webhook event before returning recipient_suppressed", async () => {
+    mockFindSuppressedRecipients.mockResolvedValue([
+      { email: "blocked@example.com", reason: "bounced" },
+    ]);
+    const { EmailService, SuppressedRecipientError } = await import(
+      "../packages/core/src/services/email"
+    );
+    const service = new EmailService();
+
+    await expect(
+      service.send({
+        from: "sender@example.com",
+        to: ["blocked@example.com"],
+        subject: "Blocked",
+        userId: "user-1",
+      }),
+    ).rejects.toBeInstanceOf(SuppressedRecipientError);
+
+    expect(mockCreateEmail).not.toHaveBeenCalled();
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenCalledWith({
+      type: "email.suppressed",
+      userId: "user-1",
+      payload: {
+        reason: "recipient_suppressed",
+        recipients: [{ email: "blocked@example.com", reason: "bounced" }],
+        recipient_count: 1,
+        submitted_at: expect.any(String),
+      },
+      receivedAt: expect.any(Date),
+    });
+  });
+
+  it("emits a scheduled webhook event when accepting future delivery", async () => {
+    mockCreateEmail.mockResolvedValue([{ id: "email-scheduled" }]);
+    const { EmailService } = await import(
+      "../packages/core/src/services/email"
+    );
+    const service = new EmailService();
+    const scheduledAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await service.send({
+      from: "sender@example.com",
+      to: ["user@example.com", "second@example.com"],
+      subject: "Later",
+      scheduledAt,
+      userId: "user-1",
+    });
+
+    expect(mockEnqueueEmailWebhookEvent).toHaveBeenCalledWith({
+      type: "email.scheduled",
+      userId: "user-1",
+      emailId: "email-scheduled",
+      sourceId: "scheduled:email-scheduled",
+      payload: {
+        email_id: "email-scheduled",
+        status: "scheduled",
+        scheduled_at: scheduledAt.toISOString(),
+        accepted_at: expect.any(String),
+        recipient_count: 2,
+      },
+      receivedAt: expect.any(Date),
+    });
+    expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
   });
 });

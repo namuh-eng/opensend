@@ -93,6 +93,8 @@ describe("log read service", () => {
       dateTo: "2026-05-06",
       userAgent: "test",
       search: "  email-1  ",
+      tagName: "campaign",
+      tagValue: "launch",
     });
 
     expect(response).toEqual({
@@ -121,6 +123,8 @@ describe("log read service", () => {
       before: "log-0",
       userAgent: "test",
       search: "email-1",
+      tagName: "campaign",
+      tagValue: "launch",
     });
     expect(calls[0].dateFrom).toBeInstanceOf(Date);
     expect(calls[0].dateTo).toBeInstanceOf(Date);
@@ -219,7 +223,7 @@ describe("/api/logs routes", () => {
     const { GET } = await import("@/app/api/logs/route");
     const res = await GET(
       request(
-        "http://localhost:3015/api/logs?q=email-1&user_agent=test&date_from=2026-05-01&date_to=2026-05-06&api_key_id=api-key-a&after=log-z&before=log-0&method=post&status=200&limit=50",
+        "http://localhost:3015/api/logs?q=email-1&user_agent=test&date_from=2026-05-01&date_to=2026-05-06&api_key_id=api-key-a&after=log-z&before=log-0&method=post&status=200&limit=50&tag_name=campaign&tag_value=launch",
       ),
     );
 
@@ -251,6 +255,8 @@ describe("/api/logs routes", () => {
       dateTo: "2026-05-06",
       userAgent: "test",
       search: "email-1",
+      tagName: "campaign",
+      tagValue: "launch",
     });
   });
 
@@ -278,6 +284,29 @@ describe("/api/logs routes", () => {
         dateTo: "2026-05-06",
       }),
     );
+  });
+
+  it("returns validation_error envelopes for invalid tag filters", async () => {
+    const { GET } = await import("@/app/api/logs/route");
+    const res = await GET(
+      request(
+        "http://localhost:3015/api/logs?tag_name=bad.name&tag_value=bad value",
+      ),
+    );
+
+    expect(res.status).toBe(422);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "validation_error",
+      code: "validation_error",
+      statusCode: 422,
+      details: {
+        fieldErrors: {
+          tag_name: [expect.stringContaining("ASCII")],
+          tag_value: [expect.stringContaining("ASCII")],
+        },
+      },
+    });
+    expect(mockListLogs).not.toHaveBeenCalled();
   });
 
   it("requires full-access API keys for log reads", async () => {

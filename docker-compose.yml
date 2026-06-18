@@ -1,34 +1,54 @@
 # OpenSend self-host stack.
 #
 # Quick start:
-#   1. cp .env.example .env  (then fill in the required keys)
+#   1. bun run setup
 #   2. docker compose up -d
+#
+# `bun run setup` writes a complete .env with local secrets for app, ingester,
+# scheduler, tracking, unsubscribe, DKIM, cron auth, and Compose Postgres.
+# Move generated values into a secrets manager before shared/staging/production deploys.
 #
 # What this brings up:
 #   - postgres   : Postgres 16 with the OpenSend schema, persisted in the named volume `pgdata`.
+#   - redis      : Shared Redis for Compose rate limiting and hot-path cache coordination.
 #   - migrate    : One-shot job that runs Drizzle migrations and exits.
 #   - app        : Next.js dashboard + REST API on http://localhost:${PORT:-3015}.
 #   - ingester   : Production Bun/Hono service that handles SES/SNS, Stripe, and scheduled-email
 #                  webhooks on http://localhost:${INGESTER_PORT:-3016}.
 #   - scheduler  : Durable short-interval driver for ingester /jobs/* scans.
 #
-# The experimental Go shadow skeleton lives at services/ingester-go and defaults to 3027,
-# but is intentionally not wired into Compose.
+# Optional profile:
+#   - smtp-relay : `docker compose --profile smtp up -d smtp-relay` publishes SMTP on ${SMTP_RELAY_PORT:-2587}.
 #
 # Optional overrides (all read from .env):
 #   - PORT                        : host port for the app (default 3015)
 #   - INGESTER_PORT               : host port for the ingester (default 3016)
 #   - POSTGRES_PORT               : host port for Postgres (default 5432)
 #   - POSTGRES_PASSWORD           : Postgres password (REQUIRED; set in .env before `docker compose up`)
+#   - REDIS_URL                   : Redis URL for app/ingester (default redis://redis:6379 in Compose)
+#   - RATE_LIMIT_BACKEND          : app rate-limit backend (default redis in Compose)
+#   - OPENSEND_APP_REPLICAS       : expected app replica count for startup warnings (default 1)
+#   - SMTP_RELAY_PORT             : host/container port for the smtp profile (default 2587)
+#   - BETTER_AUTH_SECRET          : required Better Auth session secret for app/ingester.
 #   - AWS_*                       : SES + S3 credentials. If unset, email sending is disabled.
 #   - BACKGROUND_JOBS_*           : SQS/EventBridge wiring for async send pipeline.
-#   - INGESTER_JOB_TOKEN          : optional bearer token protecting ingester /jobs/* scans.
+#   - INGESTER_JOB_TOKEN          : required bearer token protecting ingester /jobs/* scans.
+#   - WEBHOOK_SECRET_ENCRYPTION_KEY: required encryption key for webhook signing secrets.
 #   - INGESTER_SCHEDULER_INTERVAL_SECONDS: scheduler cadence (default 60; minimum 10).
 #   - CLOUDFLARE_API_TOKEN/ZONE_ID: enables auto-DKIM/SPF/DMARC when adding a domain.
 #   - S3_BUCKET_NAME              : S3 bucket for email attachments.
 #
 # To wipe the local database and start fresh:
 #   docker compose down -v
+#
+# Release images:
+#   Default Compose pins the v1.0.0 app and ingester GHCR images so self-hosters
+#   get reproducible deploys instead of local source builds. For local source
+#   evaluation, use the explicit override:
+#     docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+#   The migrator and optional smtp-relay still build locally because the release
+#   workflow does not publish separate migrator or SMTP relay images. Run
+#   migrations before rolling app or ingester containers.
 
 name: opensend-staging
 
@@ -52,6 +72,21 @@ services:
       timeout: 5s
       retries: 5
 
+  # Redis coordinates rate limiting across app replicas and backs hot-path caches.
+  # Compose uses plain redis:// on the private Docker network; managed production
+  # Redis should use a private TLS endpoint (rediss://...).
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   # Runs Drizzle migrations once against Postgres and exits. The `app` and `ingester`
   # services wait for this to complete successfully before starting.
   migrate:
@@ -67,21 +102,35 @@ services:
 
   # Next.js dashboard and REST API. Container listens on 8080; published to ${PORT:-3015}
   # on the host. AWS_* and CLOUDFLARE_* are optional — leave unset for a basic local stack.
+  # Default self-host deploys use the pinned v1.0.0 GHCR image. Use
+  # docker-compose.local.yml when you intentionally want to build app code locally.
   app:
-    build:
-      context: .
-      target: runner
+    image: ghcr.io/namuh-eng/opensend:v1.0.0
     restart: unless-stopped
     ports:
       - "${PORT:-3015}:8080"
     environment:
       DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}@postgres:5432/opensend
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env (local placeholder ok only for dev; generate a real secret for production)}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3015}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3015}
+      BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-http://localhost:3015}
       AWS_REGION: ${AWS_REGION:-us-east-1}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       BACKGROUND_JOBS_QUEUE_URL: ${BACKGROUND_JOBS_QUEUE_URL:-}
       BACKGROUND_JOBS_EVENT_BUS_NAME: ${BACKGROUND_JOBS_EVENT_BUS_NAME:-}
       BACKGROUND_JOBS_REQUIRE_QUEUE: ${BACKGROUND_JOBS_REQUIRE_QUEUE:-false}
+      RATE_LIMIT_BACKEND: ${RATE_LIMIT_BACKEND:-redis}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      OPENSEND_APP_REPLICAS: ${OPENSEND_APP_REPLICAS:-1}
+      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?Set WEBHOOK_SECRET_ENCRYPTION_KEY in .env (local placeholder ok only for dev; generate a real secret for production)}
+      INTEGRATION_SECRET_ENCRYPTION_KEY: ${INTEGRATION_SECRET_ENCRYPTION_KEY:-}
+      TRACKING_SECRET: ${TRACKING_SECRET:?Set TRACKING_SECRET in .env (generated by bun run setup)}
+      UNSUBSCRIBE_SECRET: ${UNSUBSCRIBE_SECRET:?Set UNSUBSCRIBE_SECRET in .env (generated by bun run setup)}
+      DKIM_ENCRYPTION_KEY: ${DKIM_ENCRYPTION_KEY:?Set DKIM_ENCRYPTION_KEY in .env (generated by bun run setup)}
+      DKIM_KEY_VERSION: ${DKIM_KEY_VERSION:-1}
+      CRON_AUTH_TOKEN: ${CRON_AUTH_TOKEN:-}
       INGESTER_HEALTH_URL: ${INGESTER_HEALTH_URL:-http://ingester:3016/health}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME:-}
       CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN:-}
@@ -93,6 +142,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     healthcheck:
@@ -103,16 +154,12 @@ services:
       start_period: 10s
 
   # Production Bun/Hono service for inbound webhooks (SES bounces/complaints, Stripe billing
-  # events, scheduled-email worker). The Go ingester skeleton under services/ingester-go
-  # is experimental/shadow-only and must not receive production traffic yet. Point your SES SNS topic and Stripe webhook at:
+  # events, scheduled-email worker). Point your SES SNS topic and Stripe webhook at:
   #   http://<host>:${INGESTER_PORT:-3016}/events/ses
   #   http://<host>:${INGESTER_PORT:-3016}/webhooks/stripe
   # Set BACKGROUND_WORKER_POLL=true to enable the SQS long-poll loop in this container.
   ingester:
-    image: opensend-ingester:local
-    build:
-      context: .
-      dockerfile: packages/ingester/Dockerfile
+    image: ghcr.io/namuh-eng/opensend-ingester:v1.0.0
     restart: unless-stopped
     ports:
       - "${INGESTER_PORT:-3016}:3016"
@@ -126,15 +173,30 @@ services:
       BACKGROUND_JOBS_EVENT_BUS_NAME: ${BACKGROUND_JOBS_EVENT_BUS_NAME:-}
       BACKGROUND_JOBS_REQUIRE_QUEUE: ${BACKGROUND_JOBS_REQUIRE_QUEUE:-false}
       BACKGROUND_WORKER_POLL: ${BACKGROUND_WORKER_POLL:-false}
-      INGESTER_JOB_TOKEN: ${INGESTER_JOB_TOKEN:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env (local placeholder ok only for dev; generate a real secret for production)}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3015}
+      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3015}
+      WEBHOOK_SECRET_ENCRYPTION_KEY: ${WEBHOOK_SECRET_ENCRYPTION_KEY:?Set WEBHOOK_SECRET_ENCRYPTION_KEY in .env (local placeholder ok only for dev; generate a real secret for production)}
+      INTEGRATION_SECRET_ENCRYPTION_KEY: ${INTEGRATION_SECRET_ENCRYPTION_KEY:-}
+      TRACKING_SECRET: ${TRACKING_SECRET:?Set TRACKING_SECRET in .env (generated by bun run setup)}
+      UNSUBSCRIBE_SECRET: ${UNSUBSCRIBE_SECRET:?Set UNSUBSCRIBE_SECRET in .env (generated by bun run setup)}
+      DKIM_ENCRYPTION_KEY: ${DKIM_ENCRYPTION_KEY:?Set DKIM_ENCRYPTION_KEY in .env (generated by bun run setup)}
+      DKIM_KEY_VERSION: ${DKIM_KEY_VERSION:-1}
+      INGESTER_JOB_TOKEN: ${INGESTER_JOB_TOKEN:?Set INGESTER_JOB_TOKEN in .env (32+ chars)}
+      INGESTER_INBOUND_TOKEN: ${INGESTER_INBOUND_TOKEN:?Set INGESTER_INBOUND_TOKEN in .env (generated by bun run setup)}
       # Stripe billing webhook cutover. STRIPE_SECRET_KEY is passed for hosted
       # parity with the app even though webhook verification only uses STRIPE_WEBHOOK_SECRET today.
       BILLING_BACKEND: ${BILLING_BACKEND:-disabled}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       BILLING_NOTIFICATION_FROM_EMAIL: ${BILLING_NOTIFICATION_FROM_EMAIL:-}
+      STRIPE_OVERAGE_METER_EVENT_NAME: ${STRIPE_OVERAGE_METER_EVENT_NAME:-}
+      # Uses the same Compose Redis as the app for domain-cache invalidation.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
@@ -151,19 +213,50 @@ services:
       retries: 3
       start_period: 10s
 
+  # Optional SMTP compatibility relay. It is profile-gated so the default
+  # Compose footprint remains app + ingester + scheduler + data services.
+  # Enable with: docker compose --profile smtp up -d smtp-relay
+  # No official SMTP relay image is published in v1.0.0, so this profile remains
+  # build-local until a future release workflow publishes a relay image.
+  smtp-relay:
+    profiles: ["smtp"]
+    image: opensend-smtp-relay:local
+    build:
+      context: .
+      dockerfile: packages/smtp-relay/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${SMTP_RELAY_PORT:-2587}:${SMTP_RELAY_PORT:-2587}"
+    environment:
+      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}@postgres:5432/opensend
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      BACKGROUND_JOBS_QUEUE_URL: ${BACKGROUND_JOBS_QUEUE_URL:-}
+      SMTP_RELAY_HOST: ${SMTP_RELAY_HOST:-0.0.0.0}
+      SMTP_RELAY_PORT: ${SMTP_RELAY_PORT:-2587}
+      SMTP_RELAY_TLS_CERT_PATH: ${SMTP_RELAY_TLS_CERT_PATH:-}
+      SMTP_RELAY_TLS_KEY_PATH: ${SMTP_RELAY_TLS_KEY_PATH:-}
+      SMTP_RELAY_MAX_MESSAGE_SIZE_BYTES: ${SMTP_RELAY_MAX_MESSAGE_SIZE_BYTES:-41943040}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   # Durable local/self-host scheduler for ingester background scan endpoints.
   # It posts every ${INGESTER_SCHEDULER_INTERVAL_SECONDS:-60}s to:
   #   - /jobs/scheduled-emails
   #   - /jobs/webhooks
   #   - /jobs/domain-verify
-  # If INGESTER_JOB_TOKEN is set, the scheduler sends Authorization: Bearer <token>.
+  #   - /jobs/billing-overage
+  # The scheduler sends Authorization: Bearer <INGESTER_JOB_TOKEN>.
   scheduler:
-    image: opensend-ingester:local
+    image: ghcr.io/namuh-eng/opensend-ingester:v1.0.0
     restart: unless-stopped
     command: ["bun", "/app/job-scheduler.js"]
     environment:
-      INGESTER_URL: http://ingester:3016
-      INGESTER_JOB_TOKEN: ${INGESTER_JOB_TOKEN:-}
+      DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}@postgres:5432/opensend
+      INGESTER_URL: ${INGESTER_URL:-http://ingester:3016}
+      INGESTER_JOB_TOKEN: ${INGESTER_JOB_TOKEN:?Set INGESTER_JOB_TOKEN in .env (32+ chars)}
       INGESTER_SCHEDULER_INTERVAL_SECONDS: ${INGESTER_SCHEDULER_INTERVAL_SECONDS:-60}
     depends_on:
       ingester:
@@ -171,3 +264,4 @@ services:
 
 volumes:
   pgdata:
+  redisdata:

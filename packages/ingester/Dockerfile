@@ -1,5 +1,6 @@
 FROM oven/bun:1.3.8-alpine AS build
 
+ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY packages ./packages
