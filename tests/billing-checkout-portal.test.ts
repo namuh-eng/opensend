@@ -173,6 +173,7 @@ describe("billing checkout and portal routes", () => {
       id: "plan_pro",
       isPublic: true,
       stripePriceId: "price_123",
+      stripeOveragePriceId: "price_overage_123",
     });
     mockFindCustomerByUserId.mockResolvedValue(undefined);
     mockStripeCustomerCreate.mockResolvedValue({ id: "cus_new" });
@@ -204,7 +205,10 @@ describe("billing checkout and portal routes", () => {
     );
     expect(mockCheckoutCreate).toHaveBeenCalledWith({
       customer: "cus_new",
-      line_items: [{ price: "price_123", quantity: 1 }],
+      line_items: [
+        { price: "price_123", quantity: 1 },
+        { price: "price_overage_123" },
+      ],
       mode: "subscription",
       success_url: "https://app.opensend.test/settings/billing?status=success",
       cancel_url: "https://app.opensend.test/settings/billing?status=cancelled",
@@ -226,6 +230,7 @@ describe("billing checkout and portal routes", () => {
       id: "plan_pro",
       isPublic: true,
       stripePriceId: "price_123",
+      stripeOveragePriceId: "price_overage_123",
     });
     mockFindCustomerByUserId.mockResolvedValue({
       userId: "user_123",
@@ -255,6 +260,7 @@ describe("billing checkout and portal routes", () => {
       id: "plan_pro",
       isPublic: true,
       stripePriceId: "price_123",
+      stripeOveragePriceId: "price_overage_123",
     });
     mockFindCustomerByUserId.mockResolvedValue({
       stripeCustomerId: "cus_existing",

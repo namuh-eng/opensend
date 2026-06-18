@@ -8,6 +8,7 @@ export interface BillingPlanForCheckout {
   id: string;
   isPublic: boolean;
   stripePriceId?: string | null;
+  stripeOveragePriceId?: string | null;
 }
 
 export interface StripeCustomerForBilling {
@@ -30,7 +31,7 @@ export interface StripeCustomerCreateInput {
 export interface StripeCheckoutCreateInput {
   mode: "subscription";
   customer: string;
-  line_items: Array<{ price: string; quantity: 1 }>;
+  line_items: Array<{ price: string; quantity?: 1 }>;
   success_url: string;
   cancel_url: string;
   metadata: {
@@ -140,16 +141,28 @@ export function createBillingSessionService(deps: BillingSessionServiceDeps) {
         return { ok: false, error: "plan_not_found" };
       }
 
-      if (!plan.stripePriceId) {
+      const stripePriceId = plan.stripePriceId ?? "";
+      const stripeOveragePriceId = plan.stripeOveragePriceId ?? "";
+      if (
+        stripePriceId === "" ||
+        stripePriceId !== stripePriceId.trim() ||
+        stripeOveragePriceId === "" ||
+        stripeOveragePriceId !== stripeOveragePriceId.trim()
+      ) {
         return { ok: false, error: "stripe_price_missing" };
       }
 
       const stripe = getStripeClient();
       const customer = await ensureStripeCustomer(params.user, stripe);
+      const lineItems: StripeCheckoutCreateInput["line_items"] = [
+        { price: stripePriceId, quantity: 1 },
+      ];
+      lineItems.push({ price: stripeOveragePriceId });
+
       const checkoutSession = await stripe.checkout.sessions.create({
         mode: "subscription",
         customer: customer.stripeCustomerId,
-        line_items: [{ price: plan.stripePriceId, quantity: 1 }],
+        line_items: lineItems,
         success_url: `${params.origin}/settings/billing?status=success`,
         cancel_url: `${params.origin}/settings/billing?status=cancelled`,
         metadata: {

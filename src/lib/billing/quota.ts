@@ -35,6 +35,7 @@ export type QuotaResult =
 interface PlanLike {
   slug: string;
   monthlyEmailQuota: number;
+  monthlyPriceCents: number;
   maxDomains: number;
   maxApiKeys: number;
 }
@@ -143,6 +144,7 @@ async function ensureUsagePeriod(
   userId: string,
   periodStart: Date,
   periodEnd: Date,
+  includedEmailQuota: number,
   database: BillingDb,
 ): Promise<{ id: string; emailsSent: number }> {
   const existing = await database.query.usagePeriods.findFirst({
@@ -155,7 +157,13 @@ async function ensureUsagePeriod(
 
   const [created] = await database
     .insert(usagePeriods)
-    .values({ userId, periodStart, periodEnd, emailsSent: 0 })
+    .values({
+      userId,
+      periodStart,
+      periodEnd,
+      emailsSent: 0,
+      includedEmailQuota,
+    })
     .onConflictDoNothing({
       target: [usagePeriods.userId, usagePeriods.periodStart],
     })
@@ -175,10 +183,10 @@ async function ensureUsagePeriod(
 /**
  * Atomically reserve `delta` units of monthly email quota for `userId`.
  *
- * Implementation note: a single SQL `UPDATE ... WHERE emails_sent + delta <= quota`
- * is the source of truth for atomicity. Concurrent workers race on the same row
- * and at most one transaction commits an over-quota state — Postgres row locking
- * prevents the read-then-write window that mutex-style approaches leave open.
+ * Implementation note: a single SQL `UPDATE` remains the source of truth for
+ * atomicity. Free plans keep the `emails_sent + delta <= quota` hard cap;
+ * paid plans increment past the included quota so overage can be reported
+ * asynchronously from the committed usage period.
  *
  * Pass a Drizzle transaction as `database` when the reservation must commit with
  * the accepted email rows. Test doubles may omit true row locking; the SQL shape
@@ -200,19 +208,50 @@ export async function reserveEmailQuota(
     return { ok: false, info: blockedInfo("emails") };
   }
 
-  await ensureUsagePeriod(userId, ctx.periodStart, ctx.periodEnd, database);
+  await ensureUsagePeriod(
+    userId,
+    ctx.periodStart,
+    ctx.periodEnd,
+    ctx.plan.monthlyEmailQuota,
+    database,
+  );
+
+  const hardCapEmails = ctx.plan.slug === FREE_PLAN_SLUG;
+  const limit = ctx.plan.monthlyEmailQuota;
+  const warn80Threshold = Math.ceil(limit * 0.8);
+  const cap100Threshold = limit;
+  const quotaPredicate = hardCapEmails
+    ? sql`${usagePeriods.emailsSent} + ${delta} <= ${limit}`
+    : sql`true`;
 
   const updated = await database
     .update(usagePeriods)
     .set({
       emailsSent: sql`${usagePeriods.emailsSent} + ${delta}`,
+      includedEmailQuota: sql`COALESCE(${usagePeriods.includedEmailQuota}, ${limit})`,
+      usageWarning80NotifiedAt: sql`CASE
+        WHEN ${warn80Threshold} > 0
+          AND ${usagePeriods.usageWarning80NotifiedAt} IS NULL
+          AND ${usagePeriods.emailsSent} < ${warn80Threshold}
+          AND ${usagePeriods.emailsSent} + ${delta} >= ${warn80Threshold}
+        THEN ${now}
+        ELSE ${usagePeriods.usageWarning80NotifiedAt}
+      END`,
+      usageWarning100NotifiedAt: sql`CASE
+        WHEN ${cap100Threshold} > 0
+          AND ${usagePeriods.usageWarning100NotifiedAt} IS NULL
+          AND ${usagePeriods.emailsSent} < ${cap100Threshold}
+          AND ${usagePeriods.emailsSent} + ${delta} >= ${cap100Threshold}
+        THEN ${now}
+        ELSE ${usagePeriods.usageWarning100NotifiedAt}
+      END`,
       lastIncrementAt: now,
     })
     .where(
       and(
         eq(usagePeriods.userId, userId),
         eq(usagePeriods.periodStart, ctx.periodStart),
-        sql`${usagePeriods.emailsSent} + ${delta} <= ${ctx.plan.monthlyEmailQuota}`,
+        quotaPredicate,
       ),
     )
     .returning({ emailsSent: usagePeriods.emailsSent });

@@ -11,6 +11,7 @@ const JOB_PATHS: Record<(typeof SCHEDULED_JOB_NAMES)[number], string> = {
   "scheduled-emails": "/jobs/scheduled-emails",
   webhooks: "/jobs/webhooks",
   "domain-verify": "/jobs/domain-verify",
+  "billing-overage": "/jobs/billing-overage",
 };
 
 type ScheduledJob = {

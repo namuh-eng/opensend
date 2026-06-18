@@ -105,6 +105,7 @@ async function ensureUsagePeriod(input: {
   userId: string;
   periodStart: Date;
   periodEnd: Date;
+  includedEmailQuota: number;
   database: BillingDb;
 }) {
   const existing = await input.database.query.usagePeriods.findFirst({
@@ -122,6 +123,7 @@ async function ensureUsagePeriod(input: {
       periodStart: input.periodStart,
       periodEnd: input.periodEnd,
       emailsSent: 0,
+      includedEmailQuota: input.includedEmailQuota,
     })
     .onConflictDoNothing({
       target: [usagePeriods.userId, usagePeriods.periodStart],
@@ -162,20 +164,46 @@ export async function reserveTransactionalEmailQuota(
     userId,
     periodStart: ctx.periodStart,
     periodEnd: ctx.periodEnd,
+    includedEmailQuota: ctx.plan.monthlyEmailQuota,
     database,
   });
+
+  const hardCapEmails = ctx.plan.slug === FREE_PLAN_SLUG;
+  const limit = ctx.plan.monthlyEmailQuota;
+  const warn80Threshold = Math.ceil(limit * 0.8);
+  const cap100Threshold = limit;
+  const quotaPredicate = hardCapEmails
+    ? sql`${usagePeriods.emailsSent} + ${delta} <= ${limit}`
+    : sql`true`;
 
   const updated = await database
     .update(usagePeriods)
     .set({
       emailsSent: sql`${usagePeriods.emailsSent} + ${delta}`,
+      includedEmailQuota: sql`COALESCE(${usagePeriods.includedEmailQuota}, ${limit})`,
+      usageWarning80NotifiedAt: sql`CASE
+        WHEN ${warn80Threshold} > 0
+          AND ${usagePeriods.usageWarning80NotifiedAt} IS NULL
+          AND ${usagePeriods.emailsSent} < ${warn80Threshold}
+          AND ${usagePeriods.emailsSent} + ${delta} >= ${warn80Threshold}
+        THEN ${now}
+        ELSE ${usagePeriods.usageWarning80NotifiedAt}
+      END`,
+      usageWarning100NotifiedAt: sql`CASE
+        WHEN ${cap100Threshold} > 0
+          AND ${usagePeriods.usageWarning100NotifiedAt} IS NULL
+          AND ${usagePeriods.emailsSent} < ${cap100Threshold}
+          AND ${usagePeriods.emailsSent} + ${delta} >= ${cap100Threshold}
+        THEN ${now}
+        ELSE ${usagePeriods.usageWarning100NotifiedAt}
+      END`,
       lastIncrementAt: now,
     })
     .where(
       and(
         eq(usagePeriods.userId, userId),
         eq(usagePeriods.periodStart, ctx.periodStart),
-        sql`${usagePeriods.emailsSent} + ${delta} <= ${ctx.plan.monthlyEmailQuota}`,
+        quotaPredicate,
       ),
     )
     .returning({ emailsSent: usagePeriods.emailsSent });

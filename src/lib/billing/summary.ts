@@ -142,11 +142,15 @@ export function isApprovedPublicPlan(row: BillingPlanRow): boolean {
   if (!row.isPublic) return false;
   if (row.slug === FREE_PLAN_SLUG) return row.monthlyPriceCents === 0;
   const stripePriceId = row.stripePriceId;
+  const stripeOveragePriceId = row.stripeOveragePriceId;
   return (
     row.monthlyPriceCents > 0 &&
     stripePriceId !== null &&
     stripePriceId !== "" &&
-    stripePriceId === stripePriceId.trim()
+    stripePriceId === stripePriceId.trim() &&
+    stripeOveragePriceId !== null &&
+    stripeOveragePriceId !== "" &&
+    stripeOveragePriceId === stripeOveragePriceId.trim()
   );
 }
 

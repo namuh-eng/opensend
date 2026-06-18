@@ -139,9 +139,14 @@ describe("billing checkout and portal session service", () => {
     expect(calls.stripeFactoryCalls).toBe(0);
   });
 
-  it("creates a customer and subscription checkout session with current metadata and URLs", async () => {
+  it("creates a customer and subscription checkout session with base and overage prices", async () => {
     const { calls, service } = fakeDeps({
-      plan: { id: "plan_pro", isPublic: true, stripePriceId: "price_123" },
+      plan: {
+        id: "plan_pro",
+        isPublic: true,
+        stripePriceId: "price_123",
+        stripeOveragePriceId: "price_overage_123",
+      },
       customer: null,
       createdCustomerId: "cus_new",
       checkoutUrl: "https://checkout.stripe.com/c/pay/cs_test_123",
@@ -172,7 +177,10 @@ describe("billing checkout and portal session service", () => {
       {
         mode: "subscription",
         customer: "cus_new",
-        line_items: [{ price: "price_123", quantity: 1 }],
+        line_items: [
+          { price: "price_123", quantity: 1 },
+          { price: "price_overage_123" },
+        ],
         success_url:
           "https://app.opensend.test/settings/billing?status=success",
         cancel_url:
@@ -185,9 +193,62 @@ describe("billing checkout and portal session service", () => {
     ]);
   });
 
-  it("reuses an existing customer and reports a missing checkout URL", async () => {
+  it("returns stripe_price_missing when a paid checkout plan has no overage price", async () => {
     const { calls, service } = fakeDeps({
       plan: { id: "plan_pro", isPublic: true, stripePriceId: "price_123" },
+      customer: { stripeCustomerId: "cus_existing" },
+    });
+
+    await expect(
+      service.createCheckoutSession({
+        planId: "plan_pro",
+        user: testUser,
+        origin: "https://app.opensend.test",
+      }),
+    ).resolves.toEqual({ ok: false, error: "stripe_price_missing" });
+
+    expect(calls.checkoutCreates).toEqual([]);
+    expect(calls.stripeFactoryCalls).toBe(0);
+  });
+
+  it("returns stripe_price_missing for checkout plans with unapproved price formatting", async () => {
+    for (const plan of [
+      {
+        id: "plan_pro",
+        isPublic: true,
+        stripePriceId: " price_123 ",
+        stripeOveragePriceId: "price_overage_123",
+      },
+      {
+        id: "plan_pro",
+        isPublic: true,
+        stripePriceId: "price_123",
+        stripeOveragePriceId: " price_overage_123 ",
+      },
+    ]) {
+      const { calls, service } = fakeDeps({ plan });
+
+      await expect(
+        service.createCheckoutSession({
+          planId: "plan_pro",
+          user: testUser,
+          origin: "https://app.opensend.test",
+        }),
+      ).resolves.toEqual({ ok: false, error: "stripe_price_missing" });
+
+      expect(calls.checkoutCreates).toEqual([]);
+      expect(calls.stripeFactoryCalls).toBe(0);
+    }
+  });
+
+  it("reuses an existing customer and reports a missing checkout URL", async () => {
+    const { calls, service } = fakeDeps({
+      plan: {
+        id: "plan_pro",
+        isPublic: true,
+        stripePriceId: "price_123",
+        stripeOveragePriceId: "price_overage_123",
+      },
       customer: { stripeCustomerId: "cus_existing" },
       checkoutUrl: null,
     });

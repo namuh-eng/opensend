@@ -1209,6 +1209,7 @@ export const plans = pgTable(
     maxBroadcasts: integer("max_broadcasts"),
     ratePerSecond: integer("rate_per_second").notNull().default(2),
     stripePriceId: varchar("stripe_price_id", { length: 255 }),
+    stripeOveragePriceId: varchar("stripe_overage_price_id", { length: 255 }),
     isPublic: boolean("is_public").notNull().default(true),
     dedicatedIpsEnabled: boolean("dedicated_ips_enabled")
       .notNull()
@@ -1278,11 +1279,67 @@ export const usagePeriods = pgTable(
     periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
     periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
     emailsSent: integer("emails_sent").notNull().default(0),
+    // Snapshot of the included emails for this period. Kept nullable so
+    // pre-existing rows fall back to the current plan quota during migration.
+    includedEmailQuota: integer("included_email_quota"),
+    overageReportedEmails: integer("overage_reported_emails")
+      .notNull()
+      .default(0),
+    overageClaimedEmails: integer("overage_claimed_emails")
+      .notNull()
+      .default(0),
+    overageLastReportedAt: timestamp("overage_last_reported_at", {
+      withTimezone: true,
+    }),
+    usageWarning80NotifiedAt: timestamp("usage_warning_80_notified_at", {
+      withTimezone: true,
+    }),
+    usageWarning100NotifiedAt: timestamp("usage_warning_100_notified_at", {
+      withTimezone: true,
+    }),
     lastIncrementAt: timestamp("last_increment_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("usage_periods_user_period_idx").on(t.userId, t.periodStart),
     index("usage_periods_user_id_idx").on(t.userId),
+    index("usage_periods_period_end_idx").on(t.periodEnd),
+  ],
+);
+
+export const billingOverageReports = pgTable(
+  "billing_overage_reports",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    usagePeriodId: uuid("usage_period_id")
+      .notNull()
+      .references(() => usagePeriods.id),
+    reportKey: varchar("report_key", { length: 255 }).notNull(),
+    stripeCustomerId: varchar("stripe_customer_id", { length: 255 }).notNull(),
+    stripeSubscriptionId: varchar("stripe_subscription_id", {
+      length: 255,
+    }).notNull(),
+    meterEventName: varchar("meter_event_name", { length: 255 }).notNull(),
+    fromOverageEmails: integer("from_overage_emails").notNull(),
+    throughOverageEmails: integer("through_overage_emails").notNull(),
+    deltaEmails: integer("delta_emails").notNull(),
+    status: varchar("status", { length: 32 }).notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    stripeSubmissionStartedAt: timestamp("stripe_submission_started_at", {
+      withTimezone: true,
+    }),
+    stripeReportedAt: timestamp("stripe_reported_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("billing_overage_reports_report_key_idx").on(t.reportKey),
+    index("billing_overage_reports_usage_period_idx").on(t.usagePeriodId),
+    index("billing_overage_reports_status_idx").on(t.status),
   ],
 );
 
