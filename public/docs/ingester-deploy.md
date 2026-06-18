@@ -9,7 +9,7 @@ After an authorized OpenSend release publishes images, production deployments sh
 - App/API/dashboard: `ghcr.io/namuh-eng/opensend:v1.0.0`
 - Ingester and scheduler: `ghcr.io/namuh-eng/opensend-ingester:v1.0.0`
 
-The release workflow publishes these images for `linux/amd64` and `linux/arm64` and also publishes `:1.0.0` aliases. It intentionally does not publish `:latest`. The ingester process consumes the image at runtime; it does not publish images.
+The release workflow publishes these images for `linux/amd64` and `linux/arm64` and also publishes `:1.0.0` aliases. It intentionally does not publish `:latest`. The default `docker-compose.yml` pins the app, ingester, and scheduler tags for reproducible self-host deploys. The ingester process consumes the image at runtime; it does not publish images.
 
 Forks and private deployments can build the same artifacts into their own registry with `docker buildx build --platform linux/amd64,linux/arm64 --target runner .` for the app and `docker buildx build --platform linux/amd64,linux/arm64 -f packages/ingester/Dockerfile .` for the ingester. Inspect pushed manifests before advertising a multi-arch image.
 

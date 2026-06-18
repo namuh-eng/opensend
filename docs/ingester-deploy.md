@@ -39,18 +39,20 @@ and SQS:
 
 | Service | Image source | Public host (example) | Port |
 | --- | --- | --- | --- |
-| App | `ghcr.io/namuh-eng/opensend:v1.0.0` after the authorized v1.0.0 release; otherwise build the root `Dockerfile` `runner` target into your registry | `app.yourdomain.com` and `api.app.yourdomain.com` | `8080` |
-| Ingester | `ghcr.io/namuh-eng/opensend-ingester:v1.0.0` after the authorized v1.0.0 release; otherwise build `packages/ingester/Dockerfile` into your registry | `events.app.yourdomain.com` | `3016` |
+| App | `ghcr.io/namuh-eng/opensend:v1.0.0`; use `docker-compose.local.yml` or your own registry tag when building from source | `app.yourdomain.com` and `api.app.yourdomain.com` | `8080` |
+| Ingester | `ghcr.io/namuh-eng/opensend-ingester:v1.0.0`; scheduler uses the same image with `bun /app/job-scheduler.js` | `events.app.yourdomain.com` | `3016` |
 
 If your platform has host-based routing (AWS ALB, GCP Load Balancer, Cloudflare
 Spectrum), point each hostname at its target service. The events host has to
 be reachable from the public internet so SES SNS can deliver to it.
 
 The GitHub release workflow publishes the official app and ingester images on
-`v*` tags. The ingester process only consumes the image at runtime; it does not
-publish Docker images. The workflow publishes `:v1.0.0` and `:1.0.0` tags and
-intentionally does not publish `:latest`, so production deployments should pin
-the exact release tag they have validated.
+`v*` tags. The default `docker-compose.yml` pins those app, ingester, and
+scheduler tags for reproducible self-host deploys. The ingester process only
+consumes the image at runtime; it does not publish Docker images. The workflow
+publishes `:v1.0.0` and `:1.0.0` tags and intentionally does not publish
+`:latest`, so production deployments should pin the exact release tag they have
+validated.
 
 For forks, private registries, or pre-release validation, build images yourself.
 Use `linux/amd64` for amd64 production targets even from M-chip Macs, or include

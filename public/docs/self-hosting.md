@@ -20,7 +20,7 @@ Production deployments can run these as separate services on ECS, Fly, Railway, 
 
 ## Release images and pinned deploys
 
-The default Compose file builds from source so local evaluation works from a fresh clone. After an authorized OpenSend release publishes images, production operators should pin exact GHCR tags instead of using a moving tag:
+The default Compose file uses pinned release images for reproducible self-host deploys. The authorized v1.0.0 workflow publishes these exact GHCR tags instead of a moving tag:
 
 | Service | Release image | Notes |
 | --- | --- | --- |
@@ -30,7 +30,7 @@ The default Compose file builds from source so local evaluation works from a fre
 
 The release workflow publishes the images; the ingester service consumes the published image and does not publish images itself. The workflow also publishes `:1.0.0` aliases and intentionally does not publish `:latest`.
 
-For Compose-style production deployments, replace the source `build:` block on `app` with `image: ghcr.io/namuh-eng/opensend:v1.0.0`, use `image: ghcr.io/namuh-eng/opensend-ingester:v1.0.0` for `ingester` and `scheduler`, and keep the same environment, ports, dependencies, and health checks. Run migrations before rolling app or ingester containers; if your platform requires a migrator image, build the root Dockerfile `migrator` target into your own registry.
+`docker-compose.yml` pins those app, ingester, and scheduler tags by default. Use `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build` when you intentionally want to build app and ingester from the checked-out source tree. The one-shot migrator and optional SMTP relay profile still build locally because v1.0.0 does not publish separate migrator or relay images. Run migrations before rolling app or ingester containers; if your platform requires a migrator image, build the root Dockerfile `migrator` target into your own registry.
 
 ## Quick start
 

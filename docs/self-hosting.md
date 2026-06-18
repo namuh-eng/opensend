@@ -49,9 +49,8 @@ across separate services on a container platform.
 
 ## Release images and pinned deploys
 
-Local Docker Compose remains source-built by default so `docker compose up -d`
-works from a fresh clone before any release images exist. For production, prefer
-immutable image tags after an authorized release publishes them to GHCR:
+Default Docker Compose uses pinned release images for reproducible self-host
+deploys. The authorized `v1.0.0` workflow publishes these immutable GHCR tags:
 
 | Service | Release image | Notes |
 | --- | --- | --- |
@@ -63,17 +62,20 @@ The release workflow also publishes `:1.0.0` aliases and intentionally does not
 publish `:latest`. The workflow publishes images; the ingester service only
 consumes the image at runtime.
 
-To pin a Compose-style production deployment after the real release images are
-published, replace the `app` service `build:` block with
-`image: ghcr.io/namuh-eng/opensend:v1.0.0`, replace the `ingester` and
-`scheduler` image values with `ghcr.io/namuh-eng/opensend-ingester:v1.0.0`, and
-keep the same environment, ports, health checks, and dependencies. Run the
-migrator before rolling the app and ingester; build the root Dockerfile
-`migrator` target into your registry if your platform needs an image-only
-migration job.
+`docker-compose.yml` pins those app, ingester, and scheduler tags by default.
+Use the explicit local override when you intentionally want to build from the
+checked-out source tree:
 
-Forks and private deployments can still build their own images with `docker
-buildx` and pin those registry tags instead.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build
+```
+
+The one-shot `migrate` job and optional `smtp-relay` profile still build from
+source because v1.0.0 does not publish separate migrator or SMTP relay images.
+Run the migrator before rolling the app and ingester; build the root Dockerfile
+`migrator` target into your registry if your platform needs an image-only
+migration job. Forks and private deployments can still build their own images
+with `docker buildx` and pin those registry tags instead.
 
 ## Requirements
 
