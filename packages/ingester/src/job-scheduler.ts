@@ -1,4 +1,33 @@
-import { SCHEDULED_JOB_NAMES, schedulerHeartbeatRepo } from "@opensend/core";
+import {
+  OpenSendEnvValidationError,
+  assertValidOpenSendEnv,
+} from "@opensend/core/src/env";
+
+function runSchedulerStartupChecks(): void {
+  try {
+    assertValidOpenSendEnv(process.env, { service: "scheduler" });
+  } catch (error) {
+    if (error instanceof OpenSendEnvValidationError) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "scheduler.startup.env_invalid",
+          issues: error.issues.map((issue) => ({
+            key: issue.key,
+            message: issue.message,
+          })),
+        }),
+      );
+    }
+    throw error;
+  }
+}
+
+runSchedulerStartupChecks();
+
+const { SCHEDULED_JOB_NAMES, schedulerHeartbeatRepo } = await import(
+  "@opensend/core"
+);
 
 const DEFAULT_INGESTER_URL = "http://ingester:3016";
 const DEFAULT_INTERVAL_SECONDS = 60;

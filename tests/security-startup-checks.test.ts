@@ -30,12 +30,28 @@ const ENV_KEYS = [
   "BETTER_AUTH_URL",
   "NEXT_PUBLIC_APP_URL",
   "WEBHOOK_SECRET_ENCRYPTION_KEY",
+  "TRACKING_SECRET",
+  "UNSUBSCRIBE_SECRET",
+  "DKIM_ENCRYPTION_KEY",
+  "BETTER_AUTH_TRUSTED_ORIGINS",
   "RATE_LIMIT_BACKEND",
   "REDIS_URL",
   "OPENSEND_APP_REPLICAS",
   "DATABASE_URL",
   "POSTGRES_PASSWORD_ENFORCE_CHANGE",
 ];
+
+function setProductionRequiredEnv(): void {
+  process.env.DATABASE_URL = "postgres://app:strong-password@db/app";
+  process.env.BETTER_AUTH_SECRET = "x".repeat(32);
+  process.env.BETTER_AUTH_URL = "https://mail.example.com";
+  process.env.NEXT_PUBLIC_APP_URL = "https://mail.example.com";
+  process.env.BETTER_AUTH_TRUSTED_ORIGINS = "https://mail.example.com";
+  process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+  process.env.TRACKING_SECRET = "t".repeat(32);
+  process.env.UNSUBSCRIBE_SECRET = "u".repeat(32);
+  process.env.DKIM_ENCRYPTION_KEY = Buffer.alloc(32, 1).toString("base64");
+}
 
 describe("startup-checks", () => {
   const snapshot: Record<string, string | undefined> = {};
@@ -56,8 +72,9 @@ describe("startup-checks", () => {
 
   it("throws in production when WEBHOOK_SECRET_ENCRYPTION_KEY is missing", () => {
     vi.stubEnv("NODE_ENV", "production");
-    process.env.BETTER_AUTH_SECRET = "x".repeat(32);
+    setProductionRequiredEnv();
     process.env.RATE_LIMIT_BACKEND = "redis";
+    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = undefined;
     const { logger } = makeLogger();
     expect(() => runStartupChecks(logger)).toThrow();
   });
@@ -67,14 +84,13 @@ describe("startup-checks", () => {
     const { logs, logger } = makeLogger();
     expect(() => runStartupChecks(logger)).not.toThrow();
     expect(
-      logs.some((l) => l.data.event === "security.startup.missing_key_dev"),
+      logs.some((l) => l.data.event === "security.startup.env_warning"),
     ).toBe(true);
   });
 
   it("warns when rate limit disabled in production", () => {
     vi.stubEnv("NODE_ENV", "production");
-    process.env.BETTER_AUTH_SECRET = "x".repeat(32);
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+    setProductionRequiredEnv();
     const { logs, logger } = makeLogger();
     runStartupChecks(logger);
     expect(
@@ -86,8 +102,7 @@ describe("startup-checks", () => {
 
   it("warns in production when only REDIS_URL is set without redis backend", () => {
     vi.stubEnv("NODE_ENV", "production");
-    process.env.BETTER_AUTH_SECRET = "x".repeat(32);
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+    setProductionRequiredEnv();
     process.env.REDIS_URL = "redis://localhost:6379";
     const { logs, logger } = makeLogger();
     runStartupChecks(logger);
@@ -143,8 +158,7 @@ describe("startup-checks", () => {
 
   it("warns on default postgres password in production", () => {
     vi.stubEnv("NODE_ENV", "production");
-    process.env.BETTER_AUTH_SECRET = "x".repeat(32);
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+    setProductionRequiredEnv();
     process.env.RATE_LIMIT_BACKEND = "redis";
     process.env.DATABASE_URL = "postgres://app:opensend@db/app";
     const { logs, logger } = makeLogger();
@@ -156,8 +170,7 @@ describe("startup-checks", () => {
 
   it("hard-fails on weak password when enforce flag set", () => {
     vi.stubEnv("NODE_ENV", "production");
-    process.env.BETTER_AUTH_SECRET = "x".repeat(32);
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+    setProductionRequiredEnv();
     process.env.RATE_LIMIT_BACKEND = "redis";
     process.env.DATABASE_URL = "postgres://app:opensend@db/app";
     process.env.POSTGRES_PASSWORD_ENFORCE_CHANGE = "true";
@@ -167,20 +180,21 @@ describe("startup-checks", () => {
 
   it("throws in production when BETTER_AUTH_SECRET is missing or too short", () => {
     vi.stubEnv("NODE_ENV", "production");
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+    setProductionRequiredEnv();
+    process.env.BETTER_AUTH_SECRET = undefined;
     process.env.RATE_LIMIT_BACKEND = "redis";
     const { logger } = makeLogger();
-    expect(() => runStartupChecks(logger)).toThrow(
-      "BETTER_AUTH_SECRET missing/too short in production",
-    );
+    expect(() => runStartupChecks(logger)).toThrow("BETTER_AUTH_SECRET");
   });
 
   it("allows the local BETTER_AUTH_SECRET placeholder only for localhost", () => {
     vi.stubEnv("NODE_ENV", "production");
+    setProductionRequiredEnv();
     process.env.BETTER_AUTH_SECRET =
       "local-dev-better-auth-secret-replace-before-production";
     process.env.BETTER_AUTH_URL = "http://localhost:3015";
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+    process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3015";
+    process.env.BETTER_AUTH_TRUSTED_ORIGINS = "http://localhost:3015";
     process.env.RATE_LIMIT_BACKEND = "redis";
     const { logger } = makeLogger();
     expect(() => runStartupChecks(logger)).not.toThrow();
@@ -188,28 +202,23 @@ describe("startup-checks", () => {
 
   it("throws when the local BETTER_AUTH_SECRET placeholder is used outside localhost", () => {
     vi.stubEnv("NODE_ENV", "production");
+    setProductionRequiredEnv();
     process.env.BETTER_AUTH_SECRET =
       "local-dev-better-auth-secret-replace-before-production";
-    process.env.BETTER_AUTH_URL = "https://mail.example.com";
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
     process.env.RATE_LIMIT_BACKEND = "redis";
     const { logger } = makeLogger();
-    expect(() => runStartupChecks(logger)).toThrow(
-      "Local BETTER_AUTH_SECRET placeholder is forbidden",
-    );
+    expect(() => runStartupChecks(logger)).toThrow("BETTER_AUTH_SECRET");
   });
 
   it("throws when any configured app URL is public with the local BETTER_AUTH_SECRET placeholder", () => {
     vi.stubEnv("NODE_ENV", "production");
+    setProductionRequiredEnv();
     process.env.BETTER_AUTH_SECRET =
       "local-dev-better-auth-secret-replace-before-production";
     process.env.BETTER_AUTH_URL = "http://localhost:3015";
     process.env.NEXT_PUBLIC_APP_URL = "https://mail.example.com";
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
     process.env.RATE_LIMIT_BACKEND = "redis";
     const { logger } = makeLogger();
-    expect(() => runStartupChecks(logger)).toThrow(
-      "Local BETTER_AUTH_SECRET placeholder is forbidden",
-    );
+    expect(() => runStartupChecks(logger)).toThrow("BETTER_AUTH_SECRET");
   });
 });

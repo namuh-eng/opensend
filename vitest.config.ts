@@ -13,6 +13,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: "@opensend/core/src/env",
+        replacement: path.resolve(__dirname, "./packages/core/src/env.ts"),
+      },
+      {
         find: "@opensend/core/src/webhook-events",
         replacement: path.resolve(
           __dirname,
