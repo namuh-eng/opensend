@@ -301,7 +301,19 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(preflight).toContain("describe-services");
     expect(preflight).toContain("describe-secret");
     expect(preflight).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID");
+    expect(preflight).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN");
+    expect(preflight).toContain("TRACKING_SECRET_SECRET_ID");
+    expect(preflight).toContain("TRACKING_SECRET_SECRET_ARN");
+    expect(preflight).toContain("INGESTER_JOB_TOKEN_SECRET_ID");
+    expect(preflight).toContain("INGESTER_JOB_TOKEN_SECRET_ARN");
+    expect(preflight).toContain("INGESTER_INBOUND_TOKEN_SECRET_ID");
+    expect(preflight).toContain("INGESTER_INBOUND_TOKEN_SECRET_ARN");
+    expect(preflight).toContain("Optional Secrets Manager metadata");
     expect(preflight).toContain("Secret values are not fetched or printed");
+    expect(preflight).not.toContain("env.APP_REPO");
+    expect(preflight).not.toContain("env.ING_REPO");
+    expect(preflight).not.toContain("env.APP_SERVICE");
+    expect(preflight).not.toContain("env.ING_SERVICE");
 
     expect(preflight).not.toContain("get-secret-value");
     expect(preflight).not.toContain("update-service");
@@ -309,6 +321,20 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(preflight).not.toContain("run-task");
     expect(preflight).not.toContain("buildx build");
     expect(preflight).not.toContain("--push");
+
+    const runbook = readFileSync(
+      join(root, "agent_docs", "runbooks", "deploy-fallback.md"),
+      "utf-8",
+    );
+    expect(runbook).toContain("TRACKING_SECRET_SECRET_ID");
+    expect(runbook).toContain("INGESTER_JOB_TOKEN_SECRET_ID");
+    expect(runbook).toContain(
+      "ECR repository and ECS service names are derived",
+    );
+    expect(runbook).not.toContain("APP_REPO");
+    expect(runbook).not.toContain("ING_REPO");
+    expect(runbook).not.toContain("APP_SERVICE");
+    expect(runbook).not.toContain("ING_SERVICE");
   });
 
   it("ingester runbook captures the split deploy and operational steps", () => {

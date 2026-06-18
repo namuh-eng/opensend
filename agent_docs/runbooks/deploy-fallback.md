@@ -36,11 +36,18 @@ aws --version
 | `ECS_CLUSTER` | `namuh` | ECS cluster name. |
 | `IMAGE_TAG` | `latest` | Image tag pushed to ECR. |
 | `PLATFORM` | `linux/amd64` | Docker build target platform. |
-| `APP_REPO` / `ING_REPO` | `opensend-app` / `opensend-ingester` | ECR repositories. |
-| `APP_SERVICE` / `ING_SERVICE` | `opensend-app` / `opensend-ingester` | ECS services. |
-| `WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID` | `opensend/webhook/secret-encryption-key` | Secrets Manager identifier only; never print or fetch the secret value. |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID` | `opensend/webhook/secret-encryption-key` | Required Secrets Manager identifier for webhook secret encryption key metadata. |
+| `WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN` | unset | Optional ARN override for the same secret metadata when the ARN is already known. |
+| `TRACKING_SECRET_SECRET_ID` | `opensend/tracking-secret` | Required Secrets Manager identifier for tracking secret metadata. |
+| `TRACKING_SECRET_SECRET_ARN` | unset | Optional ARN override for the same secret metadata when the ARN is already known. |
+| `INGESTER_JOB_TOKEN_SECRET_ID` | `opensend/ingester-job-token` | Required Secrets Manager identifier for ingester job token metadata. |
+| `INGESTER_JOB_TOKEN_SECRET_ARN` | unset | Optional ARN override for the same secret metadata when the ARN is already known. |
+| `INGESTER_INBOUND_TOKEN_SECRET_ID` | `opensend/ingester-inbound-token` | Optional inbound token metadata identifier; checked by preflight only when explicitly set. |
+| `INGESTER_INBOUND_TOKEN_SECRET_ARN` | unset | Optional ARN override for the inbound token metadata; checked by preflight only when explicitly set. |
 
-Do not run `env`, `printenv`, `aws secretsmanager get-secret-value`, or any command that prints credential material into logs, issues, PRs, terminals being recorded, or chat. The fallback deploy only needs secret names/ARN metadata; `scripts/deploy.sh` must not fetch secret values.
+Do not run `env`, `printenv`, `aws secretsmanager get-secret-value`, or any command that prints credential material into logs, issues, PRs, terminals being recorded, or chat. The fallback deploy only needs secret name/ARN metadata through `aws secretsmanager describe-secret`; it must not fetch secret values.
+
+ECR repository and ECS service names are derived by `scripts/deploy.sh` from `PRODUCT` as `${PRODUCT}-app` and `${PRODUCT}-ingester`. Do not set separate app/ingester repository or service override names for the fallback path unless `scripts/deploy.sh` is changed to honor them first.
 
 ## Non-mutating preflight
 
@@ -57,7 +64,8 @@ The preflight is read-only. It verifies:
 - The optional `AWS_ACCOUNT_ID` matches the authenticated AWS account.
 - ECR repositories for the app and ingester are reachable.
 - ECS services in the configured cluster are reachable.
-- The required Secrets Manager secret name is resolvable without fetching its value.
+- Required Secrets Manager secret name/ARN metadata for the webhook encryption key, tracking secret, and ingester job token is resolvable without fetching values.
+- Optional inbound token secret metadata is resolvable when explicitly configured.
 
 If the preflight fails, do not deploy. Fix the failing tool, auth, account, network, repository, service, or secret-name issue first.
 
@@ -105,7 +113,7 @@ After `bash scripts/deploy.sh all` finishes, verify:
 aws ecs describe-services \
   --region "${AWS_REGION:-us-east-1}" \
   --cluster "${ECS_CLUSTER:-namuh}" \
-  --services "${APP_SERVICE:-opensend-app}" "${ING_SERVICE:-opensend-ingester}" \
+  --services "${PRODUCT:-opensend}-app" "${PRODUCT:-opensend}-ingester" \
   --query 'services[].{service:serviceName,status:status,desired:desiredCount,running:runningCount,taskDefinition:taskDefinition}' \
   --output table
 ```

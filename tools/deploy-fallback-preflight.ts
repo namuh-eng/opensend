@@ -20,13 +20,38 @@ const env = process.env;
 const region = env.AWS_REGION || env.AWS_DEFAULT_REGION || "us-east-1";
 const product = env.PRODUCT || "opensend";
 const cluster = env.ECS_CLUSTER || "namuh";
-const appRepo = env.APP_REPO || `${product}-app`;
-const ingesterRepo = env.ING_REPO || `${product}-ingester`;
-const appService = env.APP_SERVICE || `${product}-app`;
-const ingesterService = env.ING_SERVICE || `${product}-ingester`;
-const webhookSecretId =
-  env.WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID ||
-  `${product}/webhook/secret-encryption-key`;
+const appRepo = `${product}-app`;
+const ingesterRepo = `${product}-ingester`;
+const appService = `${product}-app`;
+const ingesterService = `${product}-ingester`;
+const requiredSecretRefs = [
+  {
+    label: "Webhook secret encryption key",
+    idEnvName: "WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID",
+    arnEnvName: "WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN",
+    defaultId: `${product}/webhook/secret-encryption-key`,
+  },
+  {
+    label: "Tracking secret",
+    idEnvName: "TRACKING_SECRET_SECRET_ID",
+    arnEnvName: "TRACKING_SECRET_SECRET_ARN",
+    defaultId: `${product}/tracking-secret`,
+  },
+  {
+    label: "Ingester job token",
+    idEnvName: "INGESTER_JOB_TOKEN_SECRET_ID",
+    arnEnvName: "INGESTER_JOB_TOKEN_SECRET_ARN",
+    defaultId: `${product}/ingester-job-token`,
+  },
+];
+const optionalSecretRefs = [
+  {
+    label: "Ingester inbound token",
+    idEnvName: "INGESTER_INBOUND_TOKEN_SECRET_ID",
+    arnEnvName: "INGESTER_INBOUND_TOKEN_SECRET_ARN",
+    defaultId: `${product}/ingester-inbound-token`,
+  },
+];
 
 function run(command: string, args: string[]): CommandResult {
   const result = spawnSync(command, args, {
@@ -59,19 +84,6 @@ function commandCheck(
   return { label, ok: true, detail: successDetail(result.stdout) };
 }
 
-function awsCheck(
-  label: string,
-  args: string[],
-  successDetail: (stdout: string) => string,
-): CheckResult {
-  return commandCheck(
-    label,
-    "aws",
-    [...args, "--region", region],
-    successDetail,
-  );
-}
-
 function awsGlobalCheck(
   label: string,
   args: string[],
@@ -101,6 +113,65 @@ function awsNameListCheck(
   }
 
   return { label, ok: true, detail: `found ${names.join(", ")}` };
+}
+
+interface SecretRef {
+  label: string;
+  idEnvName: string;
+  arnEnvName: string;
+  defaultId: string;
+}
+
+function secretIdentifier(secretRef: SecretRef): string {
+  return (
+    env[secretRef.arnEnvName] || env[secretRef.idEnvName] || secretRef.defaultId
+  );
+}
+
+function isOptionalSecretConfigured(secretRef: SecretRef): boolean {
+  return Boolean(env[secretRef.arnEnvName] || env[secretRef.idEnvName]);
+}
+
+function secretMetadataCheck(
+  secretRef: SecretRef,
+  required: boolean,
+): CheckResult {
+  const identifier = secretIdentifier(secretRef);
+  const source = env[secretRef.arnEnvName]
+    ? secretRef.arnEnvName
+    : env[secretRef.idEnvName]
+      ? secretRef.idEnvName
+      : `${secretRef.idEnvName} default`;
+
+  const result = run("aws", [
+    "secretsmanager",
+    "describe-secret",
+    "--secret-id",
+    identifier,
+    "--query",
+    "{Name:Name,ARN:ARN}",
+    "--output",
+    "json",
+    "--region",
+    region,
+  ]);
+  if (result.status !== 0) {
+    return {
+      label: required
+        ? `Secrets Manager metadata: ${secretRef.label}`
+        : `Optional Secrets Manager metadata: ${secretRef.label}`,
+      ok: false,
+      detail: `${source}: ${summarizeFailure(result)}`,
+    };
+  }
+
+  return {
+    label: required
+      ? `Secrets Manager metadata: ${secretRef.label}`
+      : `Optional Secrets Manager metadata: ${secretRef.label}`,
+    ok: true,
+    detail: `${source} is resolvable`,
+  };
 }
 
 function identityCheck(): CheckResult {
@@ -183,31 +254,35 @@ function main(): void {
       ],
       [appService, ingesterService],
     ),
-    awsCheck(
-      "Secrets Manager secret name",
-      [
-        "secretsmanager",
-        "describe-secret",
-        "--secret-id",
-        webhookSecretId,
-        "--query",
-        "Name",
-        "--output",
-        "text",
-      ],
-      (stdout) => `found ${stdout}`,
+    ...requiredSecretRefs.map((secretRef) =>
+      secretMetadataCheck(secretRef, true),
     ),
+    ...optionalSecretRefs
+      .filter(isOptionalSecretConfigured)
+      .map((secretRef) => secretMetadataCheck(secretRef, false)),
   ];
 
   console.log("OpenSend deploy fallback preflight (non-mutating)");
   console.log(`AWS_REGION=${region}`);
   console.log(`ECS_CLUSTER=${cluster}`);
   console.log(`PRODUCT=${product}`);
-  console.log(`APP_REPO=${appRepo}`);
-  console.log(`ING_REPO=${ingesterRepo}`);
-  console.log(`APP_SERVICE=${appService}`);
-  console.log(`ING_SERVICE=${ingesterService}`);
-  console.log(`WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID=${webhookSecretId}`);
+  console.log(`ECR repositories=${appRepo}, ${ingesterRepo}`);
+  console.log(`ECS services=${appService}, ${ingesterService}`);
+  console.log(
+    `Required secret metadata=${requiredSecretRefs
+      .map((secretRef) => secretRef.idEnvName)
+      .join(", ")}`,
+  );
+  const configuredOptionalSecretRefs = optionalSecretRefs.filter(
+    isOptionalSecretConfigured,
+  );
+  if (configuredOptionalSecretRefs.length > 0) {
+    console.log(
+      `Optional configured secret metadata=${configuredOptionalSecretRefs
+        .map((secretRef) => secretRef.idEnvName)
+        .join(", ")}`,
+    );
+  }
   console.log("Secret values are not fetched or printed.\n");
 
   for (const check of checks) {
