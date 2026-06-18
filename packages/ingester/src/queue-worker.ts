@@ -439,8 +439,8 @@ export class QueueWorker {
 
     for (const email of due) {
       if (!this.queueUrl) {
-        await emailRepo.update(email.id, { status: "queued" });
-        enqueued++;
+        const queuedRows = await emailRepo.markDueScheduledQueued(email.id);
+        if (queuedRows.length > 0) enqueued++;
         continue;
       }
 
@@ -459,8 +459,14 @@ export class QueueWorker {
       );
 
       if (result.status === "published") {
-        await emailRepo.update(email.id, { status: "queued" });
+        const queuedRows = await emailRepo.markDueScheduledQueued(email.id);
         enqueued++;
+        if (queuedRows.length === 0) {
+          logTelemetry("info", "scheduled_email.promote_skipped", telemetry, {
+            reason: "already_claimed_or_not_due",
+            email_id: email.id,
+          });
+        }
       }
     }
 

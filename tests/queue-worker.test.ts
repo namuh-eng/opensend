@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mockFindById = vi.hoisted(() => vi.fn());
 const mockFindDueScheduled = vi.hoisted(() => vi.fn());
 const mockFindQueuedForDispatch = vi.hoisted(() => vi.fn());
+const mockMarkDueScheduledQueued = vi.hoisted(() => vi.fn());
 const mockClaimForSending = vi.hoisted(() => vi.fn());
 const mockFindDomainByNameForUser = vi.hoisted(() => vi.fn());
 const mockUpdateEmail = vi.hoisted(() => vi.fn());
@@ -59,6 +60,7 @@ vi.mock("@opensend/core", () => ({
     findById: mockFindById,
     findDueScheduled: mockFindDueScheduled,
     findQueuedForDispatch: mockFindQueuedForDispatch,
+    markDueScheduledQueued: mockMarkDueScheduledQueued,
     claimForSending: mockClaimForSending,
     update: mockUpdateEmail,
   },
@@ -141,9 +143,18 @@ describe("QueueWorker", () => {
     mockListWebhooksForDispatch.mockResolvedValue({ data: [] });
     mockFindDueScheduled.mockResolvedValue([]);
     mockFindQueuedForDispatch.mockResolvedValue([]);
+    mockMarkDueScheduledQueued.mockImplementation(async (id: string) => [
+      { id, status: "queued" },
+    ]);
     mockClaimForSending.mockImplementation(async (id: string) => {
       const email = await mockFindById(id);
-      if (!email || email.status !== "queued") return [];
+      if (!email) return [];
+      const scheduledAt = email.scheduledAt as Date | null | undefined;
+      const scheduledIsDue = scheduledAt ? scheduledAt <= new Date() : true;
+      const claimableStatus =
+        email.status === "queued" ||
+        (email.status === "scheduled" && scheduledIsDue);
+      if (!claimableStatus || !scheduledIsDue) return [];
       await mockUpdateEmail(id, { status: "processing" });
       return [{ ...email, status: "processing" }];
     });
@@ -1006,11 +1017,62 @@ describe("QueueWorker", () => {
       }),
       expect.any(Object),
     );
-    expect(mockUpdateEmail).toHaveBeenCalledWith("email-1", {
+    expect(mockMarkDueScheduledQueued).toHaveBeenCalledWith("email-1");
+    expect(mockMarkDueScheduledQueued).not.toHaveBeenCalledWith("email-2");
+    expect(mockUpdateEmail).not.toHaveBeenCalledWith("email-1", {
       status: "queued",
     });
-    expect(mockUpdateEmail).not.toHaveBeenCalledWith("email-2", {
-      status: "queued",
+  });
+
+  it("claims a due scheduled SQS job that arrives before the scanner marks it queued", async () => {
+    const dueScheduledEmail = {
+      id: "email-due-scheduled",
+      from: "sender@example.com",
+      to: ["user@example.com"],
+      cc: [],
+      bcc: [],
+      replyTo: [],
+      subject: "Hello",
+      html: "<p>Hello</p>",
+      text: "",
+      headers: {},
+      attachments: [],
+      status: "scheduled",
+      scheduledAt: new Date("2026-04-27T00:00:00.000Z"),
+      providerRetryCount: 0,
+      providerNextRetryAt: null,
+      userId: "user-1",
+    };
+    mockFindById.mockResolvedValue(dueScheduledEmail);
+    mockSendEmail.mockResolvedValue({ id: "ses-due-scheduled" });
+
+    const { QueueWorker } = await import(
+      "../packages/ingester/src/queue-worker"
+    );
+    const worker = new QueueWorker({ queueUrl: "https://sqs.example/queue" });
+
+    await expect(
+      worker.processJob({
+        id: "email.send:email-due-scheduled",
+        type: "email.send",
+        source: "scheduled-scan",
+        requestedAt: "2026-04-28T00:00:00.000Z",
+        emailId: "email-due-scheduled",
+      }),
+    ).resolves.toEqual({ status: "sent" });
+
+    expect(mockClaimForSending).toHaveBeenCalledWith("email-due-scheduled");
+    expect(mockSendEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ emailId: "email-due-scheduled" }),
+    );
+    expect(mockUpdateEmail).toHaveBeenCalledWith("email-due-scheduled", {
+      status: "processing",
+    });
+    expect(mockUpdateEmail).toHaveBeenCalledWith("email-due-scheduled", {
+      status: "sent",
+      sentAt: expect.any(Date),
+      providerNextRetryAt: null,
+      providerDeadLetteredAt: null,
     });
   });
 
@@ -1031,12 +1093,12 @@ describe("QueueWorker", () => {
     });
 
     expect(mockPublishBackgroundJob).not.toHaveBeenCalled();
-    expect(mockUpdateEmail).toHaveBeenCalledWith("email-scheduled-1", {
-      status: "queued",
-    });
-    expect(mockUpdateEmail).toHaveBeenCalledWith("email-scheduled-2", {
-      status: "queued",
-    });
+    expect(mockMarkDueScheduledQueued).toHaveBeenCalledWith(
+      "email-scheduled-1",
+    );
+    expect(mockMarkDueScheduledQueued).toHaveBeenCalledWith(
+      "email-scheduled-2",
+    );
   });
 
   it("polls queued database rows in fallback mode and sends through existing worker pipeline", async () => {

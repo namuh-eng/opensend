@@ -90,6 +90,21 @@ export const emailRepo = {
       .limit(limit);
   },
 
+  async markDueScheduledQueued(id: string, options: { now?: Date } = {}) {
+    const { now = new Date() } = options;
+    return await db
+      .update(emails)
+      .set({ status: "queued" })
+      .where(
+        and(
+          eq(emails.id, id),
+          eq(emails.status, "scheduled"),
+          lte(emails.scheduledAt, now),
+        ),
+      )
+      .returning();
+  },
+
   async findQueuedForDispatch(options: { limit?: number; now?: Date } = {}) {
     const { limit = 50, now = new Date() } = options;
     return await db
@@ -117,7 +132,10 @@ export const emailRepo = {
       .where(
         and(
           eq(emails.id, id),
-          eq(emails.status, "queued"),
+          or(
+            eq(emails.status, "queued"),
+            and(eq(emails.status, "scheduled"), lte(emails.scheduledAt, now)),
+          ),
           or(isNull(emails.scheduledAt), lte(emails.scheduledAt, now)),
           or(
             isNull(emails.providerNextRetryAt),
