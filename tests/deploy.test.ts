@@ -304,6 +304,12 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     );
     expect(preflight).toContain("describe-repositories");
     expect(preflight).toContain("describe-services");
+    expect(preflight).toContain("describe-task-definition");
+    expect(preflight).toContain("ecsTaskDefinitionMetadataCheck");
+    expect(preflight).toContain("taskDefinition.family");
+    expect(preflight).toContain("containerDefinitions[].name");
+    expect(preflight).toContain("appContainerName");
+    expect(preflight).toContain("ingesterContainerName");
     expect(preflight).toContain("describe-secret");
     expect(preflight).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID");
     expect(preflight).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN");
@@ -338,6 +344,8 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(runbook).toContain("docker login --password-stdin");
     expect(runbook).toContain("does not print the password");
     expect(runbook).toContain("does not push images");
+    expect(runbook).toContain("current task definitions");
+    expect(runbook).toContain("expected app and ingester containers");
     expect(runbook).toContain("does write/refresh the local Docker ECR login");
     expect(runbook).toContain("TRACKING_SECRET_SECRET_ID");
     expect(runbook).toContain("INGESTER_JOB_TOKEN_SECRET_ID");

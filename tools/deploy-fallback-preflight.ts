@@ -24,6 +24,8 @@ const appRepo = `${product}-app`;
 const ingesterRepo = `${product}-ingester`;
 const appService = `${product}-app`;
 const ingesterService = `${product}-ingester`;
+const appContainerName = env.APP_CONTAINER_NAME || `${product}-app`;
+const ingesterContainerName = env.ING_CONTAINER_NAME || `${product}-ingester`;
 const requiredSecretRefs = [
   {
     label: "Webhook secret encryption key",
@@ -129,6 +131,108 @@ function awsNameListCheck(
   }
 
   return { label, ok: true, detail: `found ${names.join(", ")}` };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseJsonObject(value: string): Record<string, unknown> | undefined {
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return isRecord(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function ecsTaskDefinitionMetadataCheck(
+  serviceName: string,
+  expectedContainerName: string,
+): CheckResult {
+  const serviceResult = run("aws", [
+    "ecs",
+    "describe-services",
+    "--cluster",
+    cluster,
+    "--services",
+    serviceName,
+    "--query",
+    "{serviceName:services[0].serviceName,taskDefinition:services[0].taskDefinition}",
+    "--output",
+    "json",
+    "--region",
+    region,
+  ]);
+  const label = `ECS task definition metadata: ${serviceName}`;
+  if (serviceResult.status !== 0) {
+    return { label, ok: false, detail: summarizeFailure(serviceResult) };
+  }
+
+  const serviceMetadata = parseJsonObject(serviceResult.stdout);
+  const taskDefinition =
+    typeof serviceMetadata?.taskDefinition === "string"
+      ? serviceMetadata.taskDefinition
+      : "";
+  if (!taskDefinition || taskDefinition === "None") {
+    return {
+      label,
+      ok: false,
+      detail: `${serviceName} did not return a current task definition`,
+    };
+  }
+
+  const taskDefinitionResult = run("aws", [
+    "ecs",
+    "describe-task-definition",
+    "--task-definition",
+    taskDefinition,
+    "--query",
+    "{family:taskDefinition.family,containers:taskDefinition.containerDefinitions[].name}",
+    "--output",
+    "json",
+    "--region",
+    region,
+  ]);
+  if (taskDefinitionResult.status !== 0) {
+    return {
+      label,
+      ok: false,
+      detail: `${taskDefinition}: ${summarizeFailure(taskDefinitionResult)}`,
+    };
+  }
+
+  const taskMetadata = parseJsonObject(taskDefinitionResult.stdout);
+  const family =
+    typeof taskMetadata?.family === "string" ? taskMetadata.family : "";
+  const containers = Array.isArray(taskMetadata?.containers)
+    ? taskMetadata.containers.filter(
+        (containerName): containerName is string =>
+          typeof containerName === "string" && containerName.length > 0,
+      )
+    : [];
+
+  if (!family) {
+    return {
+      label,
+      ok: false,
+      detail: `${taskDefinition} did not return taskDefinition.family`,
+    };
+  }
+
+  if (!containers.includes(expectedContainerName)) {
+    return {
+      label,
+      ok: false,
+      detail: `${taskDefinition} missing expected container ${expectedContainerName}; found ${containers.join(", ") || "none"}`,
+    };
+  }
+
+  return {
+    label,
+    ok: true,
+    detail: `${taskDefinition} family=${family} container=${expectedContainerName}`,
+  };
 }
 
 interface SecretRef {
@@ -311,6 +415,8 @@ function main(): void {
       ],
       [appService, ingesterService],
     ),
+    ecsTaskDefinitionMetadataCheck(appService, appContainerName),
+    ecsTaskDefinitionMetadataCheck(ingesterService, ingesterContainerName),
     ...requiredSecretRefs.map((secretRef) => secretMetadataCheck(secretRef)),
   ];
 
@@ -320,6 +426,7 @@ function main(): void {
   console.log(`PRODUCT=${product}`);
   console.log(`ECR repositories=${appRepo}, ${ingesterRepo}`);
   console.log(`ECS services=${appService}, ${ingesterService}`);
+  console.log(`ECS containers=${appContainerName}, ${ingesterContainerName}`);
   console.log(
     `Required secret metadata=${requiredSecretRefs
       .map((secretRef) => secretRef.idEnvName)

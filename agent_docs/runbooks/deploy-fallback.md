@@ -66,6 +66,7 @@ The preflight does not push images, update ECS, run tasks, register task definit
 - Docker can authenticate to the resolved ECR registry using `aws ecr get-login-password` piped to `docker login --password-stdin`; the password is not printed.
 - ECR repositories for the app and ingester are reachable.
 - ECS services in the configured cluster are reachable.
+- The current task definitions for the app and ingester services are readable and include the expected app and ingester containers.
 - Required Secrets Manager secret name/ARN metadata for the webhook encryption key, tracking secret, ingester job token, and ingester inbound token is resolvable without fetching values.
 
 If the preflight fails, do not deploy. Fix the failing tool, auth, account, network, repository, service, or secret-name issue first.
