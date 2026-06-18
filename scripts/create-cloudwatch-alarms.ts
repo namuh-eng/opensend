@@ -111,6 +111,8 @@ interface AwsCommandResult {
   stderr: string;
 }
 
+type AwsTag = AwsMetricAlarmPayload["Tags"][number];
+
 const QUEUE_PUBLISH_SERVICES = ["api", "ingester", "worker"] as const;
 const DEFAULT_SCHEDULER_INTERVAL_SECONDS = 60;
 
@@ -739,6 +741,23 @@ function withTopicArn(plan: AlarmPlan, snsTopicArn: string): AlarmPlan {
   };
 }
 
+export function toTagResourceArgs(input: {
+  region: string;
+  alarmArn: string;
+  tags: AwsTag[];
+}): string[] {
+  return [
+    "cloudwatch",
+    "tag-resource",
+    "--region",
+    input.region,
+    "--resource-arn",
+    input.alarmArn,
+    "--tags",
+    JSON.stringify(input.tags),
+  ];
+}
+
 function hasManagedTags(alarmArn: string, region: string): boolean {
   const result = runAws([
     "cloudwatch",
@@ -762,6 +781,63 @@ function hasManagedTags(alarmArn: string, region: string): boolean {
       if (!isRecord(tag)) return false;
       return tag.Key === "Issue" && tag.Value === ISSUE;
     })
+  );
+}
+
+function readAlarmArnByName(alarmNameValue: string, region: string): string {
+  const result = runAws([
+    "cloudwatch",
+    "describe-alarms",
+    "--region",
+    region,
+    "--alarm-names",
+    alarmNameValue,
+    "--output",
+    "json",
+  ]);
+  const parsed = JSON.parse(result.stdout) as unknown;
+  const alarms =
+    isRecord(parsed) && Array.isArray(parsed.MetricAlarms)
+      ? parsed.MetricAlarms
+      : [];
+  const alarm = alarms
+    .filter((candidate): candidate is Record<string, unknown> =>
+      isRecord(candidate),
+    )
+    .find((candidate) => candidate.AlarmName === alarmNameValue);
+  const alarmArn = readStringField(alarm, "AlarmArn");
+  if (!alarmArn) {
+    throw new Error(
+      `aws cloudwatch describe-alarms did not return AlarmArn for ${alarmNameValue}`,
+    );
+  }
+  return alarmArn;
+}
+
+function tagAlarmResource(
+  region: string,
+  alarmArn: string,
+  tags: AwsTag[],
+): void {
+  runAws(toTagResourceArgs({ region, alarmArn, tags }));
+}
+
+function applyMetricAlarm(
+  region: string,
+  payload: AwsMetricAlarmPayload,
+): void {
+  runAws([
+    "cloudwatch",
+    "put-metric-alarm",
+    "--region",
+    region,
+    "--cli-input-json",
+    JSON.stringify(payload),
+  ]);
+  tagAlarmResource(
+    region,
+    readAlarmArnByName(payload.AlarmName, region),
+    payload.Tags,
   );
 }
 
@@ -870,14 +946,7 @@ function main(): void {
   if (!options.apply) return;
 
   for (const payload of rendered.alarms) {
-    runAws([
-      "cloudwatch",
-      "put-metric-alarm",
-      "--region",
-      plan.region,
-      "--cli-input-json",
-      JSON.stringify(payload),
-    ]);
+    applyMetricAlarm(plan.region, payload);
   }
 
   if (options.deleteStaleManagedAlarms && staleManagedAlarms.length > 0) {

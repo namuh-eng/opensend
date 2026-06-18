@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildAlarmPlan,
   renderPlan,
+  toTagResourceArgs,
 } from "../scripts/create-cloudwatch-alarms";
 
 function readRepoFile(path: string): string {
@@ -112,9 +113,43 @@ describe("production alerting manifest", () => {
       "subscribeEmailIfRequested(options, plan, topicArn)",
     );
     expect(script).toContain("list-tags-for-resource");
+    expect(script).toContain("tag-resource");
+    expect(script).toContain("applyMetricAlarm(plan.region, payload)");
+    expect(script).toContain("readAlarmArnByName(payload.AlarmName, region)");
     expect(script).toContain("protocol");
     expect(script).toContain("email");
     expect(script).toContain("SNS confirmation required");
+  });
+
+  it("builds a post-apply tag-resource command to repair existing alarm tags", () => {
+    const plan = buildAlarmPlan({
+      environment: "prod",
+      snsTopicArn: "arn:aws:sns:us-east-1:123456789012:opensend-ops",
+    });
+    const [alarm] = renderPlan({ plan }).alarms;
+
+    expect(
+      toTagResourceArgs({
+        region: plan.region,
+        alarmArn:
+          "arn:aws:cloudwatch:us-east-1:123456789012:alarm:opensend-prod-send-failures-present",
+        tags: alarm.Tags,
+      }),
+    ).toEqual([
+      "cloudwatch",
+      "tag-resource",
+      "--region",
+      "us-east-1",
+      "--resource-arn",
+      "arn:aws:cloudwatch:us-east-1:123456789012:alarm:opensend-prod-send-failures-present",
+      "--tags",
+      JSON.stringify([
+        { Key: "Project", Value: "opensend" },
+        { Key: "Environment", Value: "prod" },
+        { Key: "ManagedBy", Value: "opensend-alerting-script" },
+        { Key: "Issue", Value: "639" },
+      ]),
+    ]);
   });
 
   it("guards aggregate metric emission shape in source", () => {
