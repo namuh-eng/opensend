@@ -4,7 +4,7 @@ import { CopyToClipboard } from "@/components/copy-to-clipboard";
 import { StatusBadge } from "@/components/status-badge";
 import { clsx } from "clsx";
 import Link from "next/link";
-import { useCallback, useRef, useState } from "react";
+import { type ReactNode, useCallback, useRef, useState } from "react";
 
 interface InsightItem {
   id: string;
@@ -248,18 +248,55 @@ function formatDetailValue(
  * The HTML comes from our own DB (stored when we sent the email via SES),
  * so it is trusted first-party content — not user-supplied input.
  */
-function EmailPreview({ html }: { html: string }) {
+function EmptyContentMessage({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-h-[260px] items-center justify-center rounded-lg border border-dashed border-line bg-bg-2 px-6 text-center text-[13px] text-fg-3">
+      {children}
+    </div>
+  );
+}
+
+function EmailPreview({
+  html,
+  text,
+}: { html: string | null; text: string | null }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const trimmedHtml = html?.trim() ?? "";
+  const trimmedText = text?.trim() ?? "";
+
+  if (trimmedHtml) {
+    return (
+      <iframe
+        ref={iframeRef}
+        data-testid="email-preview"
+        title="Email preview"
+        sandbox=""
+        srcDoc={html ?? ""}
+        className="min-h-[360px] w-full rounded-md border-0 bg-white"
+      />
+    );
+  }
+
+  if (trimmedText) {
+    return (
+      <div
+        data-testid="email-preview"
+        className="min-h-[360px] rounded-md bg-white p-6 text-black"
+      >
+        <p className="mb-4 text-[12px] font-medium uppercase tracking-[0.12em] text-neutral-500">
+          Plain text email
+        </p>
+        <pre className="whitespace-pre-wrap font-sans text-[14px] leading-6 text-black">
+          {text}
+        </pre>
+      </div>
+    );
+  }
 
   return (
-    <iframe
-      ref={iframeRef}
-      data-testid="email-preview"
-      title="Email preview"
-      sandbox=""
-      srcDoc={html}
-      className="w-full min-h-[300px] border-0"
-    />
+    <EmptyContentMessage>
+      No message body was stored for this email.
+    </EmptyContentMessage>
   );
 }
 
@@ -342,7 +379,9 @@ export function EmailDetail({ email }: EmailDetailProps) {
 
   const handleCopyTabContent = useCallback(() => {
     let content = "";
-    if (activeTab === "preview" || activeTab === "html") {
+    if (activeTab === "preview") {
+      content = email.html || email.text || "";
+    } else if (activeTab === "html") {
       content = email.html || "";
     } else if (activeTab === "plaintext") {
       content = email.text || "";
@@ -355,47 +394,39 @@ export function EmailDetail({ email }: EmailDetailProps) {
   return (
     <div className="p-6">
       {/* Header */}
-      <div className="flex items-start gap-4 mb-8">
-        <div
-          data-testid="email-envelope-icon"
-          className="w-14 h-14 rounded-xl bg-bg-3 border border-line flex items-center justify-center shrink-0"
-        >
-          <svg
-            aria-hidden="true"
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#4ade80"
-            strokeWidth="1.5"
-          >
-            <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-          </svg>
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[13px] text-fg-2 mb-0.5">Email</p>
-          <h1 className="text-[22px] font-semibold text-fg truncate">
-            {primaryTo}
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            aria-label="More actions"
-            className="p-2 rounded-lg hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
+      <div className="mb-8 rounded-2xl border border-line bg-bg-card p-5">
+        <div className="flex items-start gap-4">
+          <div
+            data-testid="email-envelope-icon"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-bg-3"
           >
             <svg
               aria-hidden="true"
-              width="16"
-              height="16"
+              width="22"
+              height="22"
               viewBox="0 0 24 24"
-              fill="currentColor"
+              fill="none"
+              stroke="#4ade80"
+              strokeWidth="1.5"
             >
-              <circle cx="12" cy="5" r="1.5" />
-              <circle cx="12" cy="12" r="1.5" />
-              <circle cx="12" cy="19" r="1.5" />
+              <path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
-          </button>
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="mb-1 text-[12px] font-medium uppercase tracking-[0.14em] text-fg-3">
+              Email details
+            </p>
+            <h1 className="truncate text-[22px] font-semibold text-fg">
+              {email.subject}
+            </h1>
+            <p className="mt-1 truncate text-[13px] text-fg-2">
+              <span className="font-mono">{email.from}</span> →{" "}
+              <span className="font-mono text-fg">{primaryTo}</span>
+            </p>
+          </div>
+          <div className="hidden max-w-[260px] shrink-0 sm:block">
+            <CopyToClipboard value={email.id} />
+          </div>
         </div>
       </div>
 
@@ -818,24 +849,36 @@ export function EmailDetail({ email }: EmailDetailProps) {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-lg min-h-[300px] p-6">
-          {activeTab === "preview" && <EmailPreview html={email.html || ""} />}
-          {activeTab === "plaintext" && (
-            <pre
-              data-testid="email-plaintext"
-              className="text-black text-[14px] whitespace-pre-wrap font-mono"
-            >
-              {email.text || ""}
-            </pre>
+        <div className="min-h-[300px] rounded-xl border border-line bg-bg-card p-3">
+          {activeTab === "preview" && (
+            <EmailPreview html={email.html} text={email.text} />
           )}
-          {activeTab === "html" && (
-            <pre
-              data-testid="email-html"
-              className="text-black text-[14px] whitespace-pre-wrap font-mono"
-            >
-              {email.html || ""}
-            </pre>
-          )}
+          {activeTab === "plaintext" &&
+            (email.text?.trim() ? (
+              <pre
+                data-testid="email-plaintext"
+                className="min-h-[360px] whitespace-pre-wrap rounded-md bg-white p-6 font-sans text-[14px] leading-6 text-black"
+              >
+                {email.text}
+              </pre>
+            ) : (
+              <EmptyContentMessage>
+                No plain text body was provided for this email.
+              </EmptyContentMessage>
+            ))}
+          {activeTab === "html" &&
+            (email.html?.trim() ? (
+              <pre
+                data-testid="email-html"
+                className="min-h-[360px] overflow-auto whitespace-pre-wrap rounded-md bg-white p-6 font-mono text-[13px] leading-6 text-black"
+              >
+                {email.html}
+              </pre>
+            ) : (
+              <EmptyContentMessage>
+                No HTML body was provided for this email.
+              </EmptyContentMessage>
+            ))}
         </div>
       )}
     </div>

@@ -113,7 +113,7 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
           onChange={setSelectedTierSlug}
         />
       </div>
-      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-5">
         {getPricingCardsForSelection(selectedTierSlug).map((displayPlan) => {
           const dbPlan = plansBySlug.get(displayPlan.slug);
           const current = dbPlan?.id === currentPlanId;
