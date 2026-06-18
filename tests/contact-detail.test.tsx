@@ -156,9 +156,7 @@ describe("ContactDetail", () => {
     fireEvent.click(screen.getByText("Edit contact"));
 
     await waitFor(() => {
-      expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "Close" }),
-      );
+      expect(document.activeElement).toBe(screen.getByLabelText("First name"));
     });
 
     fireEvent.keyDown(document, { key: "Escape" });

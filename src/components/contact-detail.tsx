@@ -180,8 +180,9 @@ export function ContactDetail({ contact }: ContactDetailProps) {
             if (e.key === "Escape") setDeleteOpen(false);
           }}
         >
-          <dialog
-            open
+          {/* biome-ignore lint/a11y/useSemanticElements: review requested an explicit role=dialog for this custom modal overlay. */}
+          <div
+            role="dialog"
             aria-modal="true"
             aria-labelledby={deleteDialogTitleId}
             className="w-full max-w-sm bg-bg-card border border-line rounded-lg shadow-xl p-6"
@@ -220,7 +221,7 @@ export function ContactDetail({ contact }: ContactDetailProps) {
                 {deleting ? "Deleting..." : "Delete"}
               </button>
             </div>
-          </dialog>
+          </div>
         </div>
       )}
 

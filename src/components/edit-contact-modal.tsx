@@ -27,6 +27,7 @@ export function EditContactModal({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const firstNameInputRef = useRef<HTMLInputElement>(null);
   const dialogTitleId = useId();
 
   // Seed the form from the contact whenever the modal opens.
@@ -36,7 +37,7 @@ export function EditContactModal({
       setLastName(contact.lastName ?? "");
       setUnsubscribed(contact.status === "unsubscribed");
       setSubmitError(null);
-      queueMicrotask(() => closeButtonRef.current?.focus());
+      queueMicrotask(() => firstNameInputRef.current?.focus());
     }
   }, [open, contact]);
 
@@ -90,8 +91,9 @@ export function EditContactModal({
         if (e.key === "Escape") onClose();
       }}
     >
-      <dialog
-        open
+      {/* biome-ignore lint/a11y/useSemanticElements: review requested an explicit role=dialog for this custom modal overlay. */}
+      <div
+        role="dialog"
         aria-modal="true"
         aria-labelledby={dialogTitleId}
         className="w-full max-w-md bg-bg-card border border-line rounded-lg shadow-xl"
@@ -134,6 +136,7 @@ export function EditContactModal({
                 First name
               </label>
               <input
+                ref={firstNameInputRef}
                 id="edit-contact-first"
                 type="text"
                 value={firstName}
@@ -192,7 +195,7 @@ export function EditContactModal({
             {submitting ? "Saving..." : "Save"}
           </button>
         </div>
-      </dialog>
+      </div>
     </div>
   );
 }

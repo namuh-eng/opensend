@@ -71,6 +71,7 @@ describe("RowActionsMenu", () => {
 
     const trigger = screen.getByRole("button", { name: "More actions" });
     expect(trigger.className).toContain("focus:opacity-100");
+    expect(trigger.className).toContain("group-focus-within:opacity-100");
 
     fireEvent.click(trigger);
     fireEvent.click(screen.getByText("Delete segment"));

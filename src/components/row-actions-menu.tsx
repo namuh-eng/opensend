@@ -80,7 +80,7 @@ export function RowActionsMenu({
         type="button"
         aria-label={ariaLabel}
         onClick={() => setOpen((v) => !v)}
-        className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 data-[open=true]:opacity-100"
+        className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 data-[open=true]:opacity-100"
         data-open={open}
       >
         <svg
@@ -142,8 +142,9 @@ export function RowActionsMenu({
             if (e.key === "Escape") setConfirming(false);
           }}
         >
-          <dialog
-            open
+          {/* biome-ignore lint/a11y/useSemanticElements: review requested an explicit role=dialog for this custom modal overlay. */}
+          <div
+            role="dialog"
             aria-modal="true"
             aria-labelledby={dialogTitleId}
             className="w-full max-w-sm bg-bg-card border border-line rounded-lg shadow-xl p-6"
@@ -180,7 +181,7 @@ export function RowActionsMenu({
                 {deleting ? "Deleting..." : "Delete"}
               </button>
             </div>
-          </dialog>
+          </div>
         </div>
       )}
     </div>
