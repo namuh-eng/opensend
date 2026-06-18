@@ -262,6 +262,55 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(dockerfile).toContain('CMD ["bun", "/app/server.js"]');
   });
 
+  it("deploy fallback runbook documents the Mac mini outage break-glass path", () => {
+    const runbookPath = join(
+      root,
+      "agent_docs",
+      "runbooks",
+      "deploy-fallback.md",
+    );
+    expect(existsSync(runbookPath)).toBe(true);
+    const runbook = readFileSync(runbookPath, "utf-8");
+
+    expect(runbook).toContain(".github/workflows/deploy.yml");
+    expect(runbook).toContain("scripts/deploy.sh");
+    expect(runbook).toContain("Mac mini runner outage");
+    expect(runbook).toContain("self-hosted runner unavailability");
+    expect(runbook).toContain("bun run deploy:fallback:preflight");
+    expect(runbook).toContain("bash scripts/deploy.sh all");
+    expect(runbook).toContain("no-op fallback deploy exercise");
+    expect(runbook).toContain("not the Mac mini runner");
+    expect(runbook).toContain("not proven fully closed");
+  });
+
+  it("deploy fallback preflight checks production reachability without mutating it", () => {
+    const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf-8"));
+    expect(pkg.scripts["deploy:fallback:preflight"]).toBe(
+      "bun tools/deploy-fallback-preflight.ts",
+    );
+
+    const preflight = readFileSync(
+      join(root, "tools", "deploy-fallback-preflight.ts"),
+      "utf-8",
+    );
+
+    expect(preflight).toContain("docker");
+    expect(preflight).toContain("buildx");
+    expect(preflight).toContain("get-caller-identity");
+    expect(preflight).toContain("describe-repositories");
+    expect(preflight).toContain("describe-services");
+    expect(preflight).toContain("describe-secret");
+    expect(preflight).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID");
+    expect(preflight).toContain("Secret values are not fetched or printed");
+
+    expect(preflight).not.toContain("get-secret-value");
+    expect(preflight).not.toContain("update-service");
+    expect(preflight).not.toContain("register-task-definition");
+    expect(preflight).not.toContain("run-task");
+    expect(preflight).not.toContain("buildx build");
+    expect(preflight).not.toContain("--push");
+  });
+
   it("ingester runbook captures the split deploy and operational steps", () => {
     const runbookPath = join(root, "docs", "ingester-deploy.md");
     expect(existsSync(runbookPath)).toBe(true);
