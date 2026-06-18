@@ -223,12 +223,19 @@ export class QueueWorker {
         );
         result.deleted++;
         const durationMs = finishTelemetrySpan(jobSpan, { status: "ok" });
+        const terminalProviderFailure = isTerminalProviderFailure(jobResult);
         emitWorkerJobMetric(jobSpan.context, {
           durationMs,
           jobType: job.type,
-          outcome: isTerminalProviderFailure(jobResult) ? "failed" : "success",
+          outcome: terminalProviderFailure ? "failed" : "success",
           receiveCount,
         });
+        if (terminalProviderFailure) {
+          emitWorkerJobFailedMetric(jobSpan.context, {
+            jobType: job.type,
+            reason: "terminal_provider_failure",
+          });
+        }
       } catch (error) {
         result.errors++;
         const delaySeconds = getRetryDelaySeconds(message.Attributes);
@@ -262,6 +269,10 @@ export class QueueWorker {
             ...(failureJobType ? { JobType: failureJobType } : {}),
             Outcome: "failed",
           },
+        });
+        emitWorkerJobFailedMetric(failureTelemetry, {
+          jobType: failureJobType,
+          reason: "thrown_job_failure",
         });
       }
     }
@@ -835,6 +846,23 @@ function emitWorkerJobMetric(
   });
 }
 
+function emitWorkerJobFailedMetric(
+  telemetry: TelemetryContext,
+  input: { jobType: string | null; reason: string },
+): void {
+  emitCloudWatchMetric(telemetry, {
+    metrics: [{ name: "WorkerJobFailed", value: 1, unit: "Count" }],
+    dimensions: {
+      Service: "worker",
+      Operation: "job.process",
+    },
+    fields: {
+      ...(input.jobType ? { job_type: input.jobType } : {}),
+      reason: input.reason,
+    },
+  });
+}
+
 function emitSendMetric(
   telemetry: TelemetryContext,
   input: { durationMs: number; outcome: "sent" | "failed"; sesRegion?: string },
@@ -855,6 +883,19 @@ function emitSendMetric(
       ...(input.sesRegion ? { SesRegion: input.sesRegion } : {}),
     },
   });
+
+  if (input.outcome === "failed") {
+    emitCloudWatchMetric(telemetry, {
+      metrics: [{ name: "SendFailed", value: 1, unit: "Count" }],
+      dimensions: {
+        Service: "worker",
+        Operation: "ses.send",
+      },
+      fields: {
+        ...(input.sesRegion ? { ses_region: input.sesRegion } : {}),
+      },
+    });
+  }
 }
 
 function getProviderMaxAttempts(): number {

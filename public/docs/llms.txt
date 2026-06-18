@@ -127,7 +127,7 @@
 - [What Sending Feature Should I Use?](https://opensend.namuh.co/docs/knowledge-base/what-sending-feature-to-use.md): Choose emails, broadcasts, or automations.
 - [Why Are My Emails Going to Spam?](https://opensend.namuh.co/docs/knowledge-base/why-are-my-emails-going-to-spam.md): Deliverability troubleshooting.
 - [MCP Server](https://opensend.namuh.co/docs/mcp-server.md): Use OpenSend from MCP-compatible AI clients.
-- [Observability](https://opensend.namuh.co/docs/observability.md): Operate OpenSend in production.
+- [Observability](https://opensend.namuh.co/docs/observability.md): Operate OpenSend in production with health checks, structured logs, API request logs, CloudWatch EMF metrics, and committed CloudWatch alarm definitions.
 - [React Email Skill](https://opensend.namuh.co/docs/react-email-skill.md): Build HTML email with React components.
 - [Official SDKs](https://opensend.namuh.co/docs/sdks.md): OpenSend SDKs and packages.
 - [Security](https://opensend.namuh.co/docs/security.md): Security model overview.

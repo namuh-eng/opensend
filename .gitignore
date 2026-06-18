@@ -20,6 +20,7 @@ scripts/*
 !scripts/install-git-hooks.mjs
 !scripts/check-changed-files.mjs
 !scripts/deploy.sh
+!scripts/create-cloudwatch-alarms.ts
 
 # Playwright test artifacts
 test-results/

@@ -273,6 +273,8 @@ function emitQueuePublishMetric(
   job: BackgroundJob,
   outcome: "published" | "skipped" | "failed",
 ): void {
+  const service = serviceForJobSource(job.source);
+
   emitCloudWatchMetric(context, {
     metrics: [
       { name: "QueuePublish", value: 1, unit: "Count" },
@@ -283,12 +285,32 @@ function emitQueuePublishMetric(
       },
     ],
     dimensions: {
-      Service: serviceForJobSource(job.source),
+      Service: service,
       Operation: "queue.publish",
       JobType: job.type,
       Outcome: outcome,
     },
   });
+
+  if (outcome === "failed" || outcome === "skipped") {
+    emitCloudWatchMetric(context, {
+      metrics: [
+        {
+          name:
+            outcome === "failed" ? "QueuePublishFailed" : "QueuePublishSkipped",
+          value: 1,
+          unit: "Count",
+        },
+      ],
+      dimensions: {
+        Service: service,
+        Operation: "queue.publish",
+      },
+      fields: {
+        job_type: job.type,
+      },
+    });
+  }
 }
 
 async function publishBackgroundJobEvent(

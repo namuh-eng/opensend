@@ -460,7 +460,8 @@ The app and ingester emit:
   worker retries, and SES ingest results. Set `CLOUDWATCH_METRICS_NAMESPACE`
   to override the namespace.
 
-See [`observability.md`](observability.md) for the metric catalog, alarm
+See [`observability.md`](observability.md) for the metric catalog, the
+`bun run scripts/create-cloudwatch-alarms.ts` dry-run/apply workflow, alarm
 recommendations, and the API-to-provider tracing runbook.
 
 A simple `/api/health` endpoint is exposed for uptime probes; the ingester has

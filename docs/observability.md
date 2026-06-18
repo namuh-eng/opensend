@@ -33,16 +33,65 @@ Metrics are emitted as EMF JSON log records in the `Opensend` namespace by defau
 | Queue publish | `QueuePublish`, `QueuePublishLatency` | `Service=api|ingester|worker`, `Operation=queue.publish`, `JobType`, `Outcome=published|skipped|failed` |
 | Queue depth | `QueueDepthVisible`, `QueueDepthInFlight` | `Service=worker`, `Operation=queue.depth` |
 | Worker jobs | `WorkerJobLatency`, `WorkerJobProcessed`, `WorkerFailures`, `RetryCount` | `Service=worker`, `Operation=job.process`, `JobType`, `Outcome` |
+| Alert aggregates | `SendFailed`, `QueuePublishFailed`, `QueuePublishSkipped`, `WorkerJobFailed`, `SchedulerHeartbeat`, `SchedulerJobFailed` | Low-cardinality alarm dimensions documented below |
 | SES send | `SendLatency`, `SendOutcome` | `Service=worker`, `Operation=ses.send`, `Outcome=sent|failed` |
 | SES ingest | `SesEventIngested`, `SesEventIngestFailed` | `Service=ingester`, `Operation=ses.ingest`, `EventType`, `Outcome` |
 
-Recommended alarms for staging/production:
+## Production alert setup
 
-- `WorkerFailures > 0` for 5 minutes.
-- `SendOutcome` with `Outcome=failed` above the expected baseline.
-- `QueueDepthVisible` increasing for 10 minutes while `WorkerJobProcessed` stays flat.
-- `QueueDepthInFlight` near the SQS visibility/in-flight limit.
-- `EmailAcceptLatency` p95 above the request-path target.
+Use the committed reconciler to preview and apply the CloudWatch alarm set:
+
+```bash
+bun run scripts/create-cloudwatch-alarms.ts \
+  --env production \
+  --region us-east-1 \
+  --sns-topic-arn arn:aws:sns:us-east-1:123456789012:opensend-ops-alerts \
+  --dlq-queue-name opensend-production-dlq \
+  --scheduler-interval-seconds 60 \
+  --ecs-service namuh/opensend-app/1 \
+  --ecs-service namuh/opensend-ingester/1 \
+  --json
+```
+
+The command is dry-run by default. Add `--apply` only after reviewing the plan.
+CloudWatch alarm actions target SNS topic ARNs. Email alerts are SNS email
+subscriptions and require the recipient to confirm the AWS SNS subscription.
+The default single-topic routing is intentional; use SNS fanout, AWS Chatbot, or
+an SNS-to-Lambda bridge if your operation needs Discord delivery or severity-based
+channel separation.
+
+The reconciler manages alarms with a stable `ManagedBy=opensend-alerting-script`
+tag and reports stale managed alarms by reading CloudWatch alarm tags. Deletion
+is separately gated behind `--apply --delete-stale-managed-alarms`.
+
+### Alarmable metrics and exact dimensions
+
+CloudWatch EMF custom metrics require an exact namespace/name/dimension match.
+Do not create partial-dimension alarms against detailed metrics such as
+`SendOutcome`, `QueuePublish`, or `WorkerFailures`; those metrics intentionally
+carry detail dimensions like `SesRegion` and `JobType`. OpenSend emits the
+following alarm-friendly aggregate metrics in separate EMF calls:
+
+| Alarm metric | Dimensions | Intent |
+| --- | --- | --- |
+| `SendFailed` | `Service=worker`, `Operation=ses.send` | Any provider send failure or exhausted retry path. |
+| `QueuePublishFailed` | `Service=api|ingester|worker`, `Operation=queue.publish` | One alarm per service that publishes SQS jobs. |
+| `QueuePublishSkipped` | `Service=api|ingester|worker`, `Operation=queue.publish` | Queue publish skipped because no queue URL is configured; production should set `BACKGROUND_JOBS_REQUIRE_QUEUE=true` and treat this as drift. |
+| `WorkerJobFailed` | `Service=worker`, `Operation=job.process` | Thrown worker failures and terminal provider failures. |
+| `SchedulerHeartbeat` | `Service=scheduler`, `Operation=scheduler.batch` | Missing scheduler batch heartbeat. Pass `--scheduler-interval-seconds` when production changes `INGESTER_SCHEDULER_INTERVAL_SECONDS`; the alarm period is rounded up to a standard CloudWatch period. |
+| `SchedulerJobFailed` | `Service=scheduler`, `Operation=scheduler.job` | Scheduler job non-2xx, timeout, or fetch failure. |
+| `SesEventIngestFailed` | `Service=ingester`, `Operation=ses.ingest`, `Outcome=failed` | SES/SNS ingest exceptions. |
+
+Platform alarms are optional because they require deployment-specific dimensions:
+SQS DLQ `QueueName`, ECS Container Insights `ClusterName`/`ServiceName`, and ALB
+`LoadBalancer`/`TargetGroup`.
+
+See `agent_docs/runbooks/alerts.md` for first-response steps, false-positive
+notes from the 2026-06-11 alarm audit, and the stale-alarm workflow.
+
+Send failure rate alerting remains a follow-up until it can be expressed with an
+exact-dimension metric-math query and a minimum-volume guard. The default
+production closure for this issue is failed-count alerting through `SendFailed`.
 
 ## Trace a send from API accept to provider result
 

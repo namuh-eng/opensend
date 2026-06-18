@@ -1,3 +1,5 @@
+import { createTelemetryContext, emitCloudWatchMetric } from "@opensend/core";
+
 const DEFAULT_INGESTER_URL = "http://ingester:3016";
 const DEFAULT_INTERVAL_SECONDS = 60;
 const REQUEST_TIMEOUT_MS = 20_000;
@@ -41,6 +43,43 @@ function buildHeaders(): HeadersInit {
   return token ? { authorization: `Bearer ${token}` } : {};
 }
 
+function emitSchedulerHeartbeat(): void {
+  const telemetry = createTelemetryContext({
+    service: "scheduler",
+    operation: "scheduler.batch",
+  });
+
+  emitCloudWatchMetric(telemetry, {
+    metrics: [{ name: "SchedulerHeartbeat", value: 1, unit: "Count" }],
+    dimensions: {
+      Service: "scheduler",
+      Operation: "scheduler.batch",
+    },
+  });
+}
+
+function emitSchedulerJobFailed(
+  job: ScheduledJob,
+  fields: { status?: number; error?: string },
+): void {
+  const telemetry = createTelemetryContext({
+    service: "scheduler",
+    operation: "scheduler.job",
+  });
+
+  emitCloudWatchMetric(telemetry, {
+    metrics: [{ name: "SchedulerJobFailed", value: 1, unit: "Count" }],
+    dimensions: {
+      Service: "scheduler",
+      Operation: "scheduler.job",
+    },
+    fields: {
+      job: job.name,
+      ...fields,
+    },
+  });
+}
+
 async function runJob(baseUrl: string, job: ScheduledJob): Promise<void> {
   const url = new URL(job.path, baseUrl);
   const startedAt = Date.now();
@@ -64,17 +103,23 @@ async function runJob(baseUrl: string, job: ScheduledJob): Promise<void> {
         body: body.slice(0, 500),
       }),
     );
+
+    if (!response.ok) {
+      emitSchedulerJobFailed(job, { status: response.status });
+    }
   } catch (error) {
     const durationMs = Date.now() - startedAt;
+    const message = error instanceof Error ? error.message : String(error);
     console.error(
       JSON.stringify({
         level: "error",
         event: "scheduler.job_failed",
         job: job.name,
         duration_ms: durationMs,
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       }),
     );
+    emitSchedulerJobFailed(job, { error: message });
   }
 }
 
@@ -101,6 +146,7 @@ async function runScheduledBatch(): Promise<void> {
   }
 
   isRunning = true;
+  emitSchedulerHeartbeat();
   try {
     await runAllJobs(ingesterUrl);
   } finally {
@@ -123,5 +169,3 @@ await runScheduledBatch();
 setInterval(() => {
   void runScheduledBatch();
 }, intervalMs);
-
-export {};

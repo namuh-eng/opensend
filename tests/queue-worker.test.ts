@@ -875,6 +875,16 @@ describe("QueueWorker", () => {
       },
       receivedAt: expect.any(Date),
     });
+    expect(mockEmitCloudWatchMetric).toHaveBeenCalledWith(
+      expect.objectContaining({ service: "worker" }),
+      expect.objectContaining({
+        metrics: [{ name: "SendFailed", value: 1, unit: "Count" }],
+        dimensions: {
+          Service: "worker",
+          Operation: "ses.send",
+        },
+      }),
+    );
   });
 
   it("publishes due scheduled emails and marks published rows queued", async () => {
