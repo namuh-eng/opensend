@@ -13,6 +13,7 @@ Use a trusted operator machine with:
 - A clean checkout of `namuh-eng/opensend` at the intended production SHA.
 - Docker with `buildx` available and able to build `linux/amd64` images.
 - AWS CLI authenticated to the production AWS account with permissions for STS, ECR, ECS, CloudWatch Logs, and Secrets Manager metadata lookups.
+- Docker authenticated to the production ECR registry; the preflight performs this with `aws ecr get-login-password | docker login --password-stdin` and does not print the password.
 - Network access to AWS ECR/ECS/Secrets Manager in the deploy region.
 - No copied GitHub Actions secrets and no dumped runner environment. Authenticate through an operator AWS profile, SSO session, or equivalent approved AWS credential source.
 
@@ -49,7 +50,7 @@ Do not run `env`, `printenv`, `aws secretsmanager get-secret-value`, or any comm
 
 ECR repository and ECS service names are derived by `scripts/deploy.sh` from `PRODUCT` as `${PRODUCT}-app` and `${PRODUCT}-ingester`. Do not set separate app/ingester repository or service override names for the fallback path unless `scripts/deploy.sh` is changed to honor them first.
 
-## Non-mutating preflight
+## Preflight
 
 Run the preflight before any fallback deploy attempt:
 
@@ -57,11 +58,12 @@ Run the preflight before any fallback deploy attempt:
 bun run deploy:fallback:preflight
 ```
 
-The preflight is read-only. It verifies:
+The preflight does not push images, update ECS, run tasks, register task definitions, or fetch secret values. It does write/refresh the local Docker ECR login entry for the resolved registry so `docker buildx build --push` can authenticate before any image build starts. It verifies:
 
 - Docker CLI and Docker `buildx` are available.
 - AWS CLI can resolve the caller identity.
 - The optional `AWS_ACCOUNT_ID` matches the authenticated AWS account.
+- Docker can authenticate to the resolved ECR registry using `aws ecr get-login-password` piped to `docker login --password-stdin`; the password is not printed.
 - ECR repositories for the app and ingester are reachable.
 - ECS services in the configured cluster are reachable.
 - Required Secrets Manager secret name/ARN metadata for the webhook encryption key, tracking secret, ingester job token, and ingester inbound token is resolvable without fetching values.
@@ -90,7 +92,7 @@ If the preflight fails, do not deploy. Fix the failing tool, auth, account, netw
    export PLATFORM=linux/amd64
    ```
 
-4. Run the non-mutating preflight:
+4. Run the preflight:
 
    ```bash
    bun run deploy:fallback:preflight

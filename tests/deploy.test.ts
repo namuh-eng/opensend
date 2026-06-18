@@ -283,7 +283,7 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(runbook).toContain("not proven fully closed");
   });
 
-  it("deploy fallback preflight checks production reachability without mutating it", () => {
+  it("deploy fallback preflight checks production reachability and Docker ECR auth without pushing", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf-8"));
     expect(pkg.scripts["deploy:fallback:preflight"]).toBe(
       "bun tools/deploy-fallback-preflight.ts",
@@ -297,6 +297,11 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(preflight).toContain("docker");
     expect(preflight).toContain("buildx");
     expect(preflight).toContain("get-caller-identity");
+    expect(preflight).toContain("get-login-password");
+    expect(preflight).toContain("dockerEcrLoginCheck");
+    expect(preflight).toContain(
+      '"login", "--username", "AWS", "--password-stdin"',
+    );
     expect(preflight).toContain("describe-repositories");
     expect(preflight).toContain("describe-services");
     expect(preflight).toContain("describe-secret");
@@ -309,6 +314,7 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(preflight).toContain("INGESTER_INBOUND_TOKEN_SECRET_ID");
     expect(preflight).toContain("INGESTER_INBOUND_TOKEN_SECRET_ARN");
     expect(preflight).toContain("Required secret metadata");
+    expect(preflight).toContain("the password is not printed");
     expect(preflight).not.toContain("Optional Secrets Manager metadata");
     expect(preflight).toContain("Secret values are not fetched or printed");
     expect(preflight).not.toContain("env.APP_REPO");
@@ -322,11 +328,17 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(preflight).not.toContain("run-task");
     expect(preflight).not.toContain("buildx build");
     expect(preflight).not.toContain("--push");
+    expect(preflight).not.toContain("get-secret-value");
 
     const runbook = readFileSync(
       join(root, "agent_docs", "runbooks", "deploy-fallback.md"),
       "utf-8",
     );
+    expect(runbook).toContain("aws ecr get-login-password");
+    expect(runbook).toContain("docker login --password-stdin");
+    expect(runbook).toContain("does not print the password");
+    expect(runbook).toContain("does not push images");
+    expect(runbook).toContain("does write/refresh the local Docker ECR login");
     expect(runbook).toContain("TRACKING_SECRET_SECRET_ID");
     expect(runbook).toContain("INGESTER_JOB_TOKEN_SECRET_ID");
     expect(runbook).toContain("INGESTER_INBOUND_TOKEN_SECRET_ID");

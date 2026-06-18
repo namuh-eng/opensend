@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// ABOUTME: Non-mutating preflight for the manual ECS deploy fallback path.
+// ABOUTME: Safe preflight for the manual ECS deploy fallback path.
 // ABOUTME: Verifies local Docker/AWS reachability before running scripts/deploy.sh.
 
 import { spawnSync } from "node:child_process";
@@ -55,6 +55,24 @@ function run(command: string, args: string[]): CommandResult {
   const result = spawnSync(command, args, {
     encoding: "utf8",
     env: { ...env, AWS_REGION: region },
+  });
+
+  return {
+    status: result.status ?? (result.error ? 127 : 1),
+    stdout: (result.stdout ?? "").trim(),
+    stderr: (result.stderr ?? result.error?.message ?? "").trim(),
+  };
+}
+
+function runWithInput(
+  command: string,
+  args: string[],
+  input: string,
+): CommandResult {
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    env: { ...env, AWS_REGION: region },
+    input,
   });
 
   return {
@@ -161,7 +179,7 @@ function secretMetadataCheck(secretRef: SecretRef): CheckResult {
   };
 }
 
-function identityCheck(): CheckResult {
+function callerIdentity(): { check: CheckResult; account?: string } {
   const result = run("aws", [
     "sts",
     "get-caller-identity",
@@ -174,31 +192,76 @@ function identityCheck(): CheckResult {
   ]);
   if (result.status !== 0) {
     return {
-      label: "AWS caller identity",
-      ok: false,
-      detail: summarizeFailure(result),
+      check: {
+        label: "AWS caller identity",
+        ok: false,
+        detail: summarizeFailure(result),
+      },
     };
   }
 
   const account = result.stdout.trim();
   if (env.AWS_ACCOUNT_ID && env.AWS_ACCOUNT_ID !== account) {
     return {
-      label: "AWS caller identity",
-      ok: false,
-      detail: `authenticated to account ${account}, expected AWS_ACCOUNT_ID=${env.AWS_ACCOUNT_ID}`,
+      check: {
+        label: "AWS caller identity",
+        ok: false,
+        detail: `authenticated to account ${account}, expected AWS_ACCOUNT_ID=${env.AWS_ACCOUNT_ID}`,
+      },
+      account,
     };
   }
 
   return {
-    label: "AWS caller identity",
+    check: {
+      label: "AWS caller identity",
+      ok: true,
+      detail: env.AWS_ACCOUNT_ID
+        ? `account ${account} matches AWS_ACCOUNT_ID`
+        : `account ${account}`,
+    },
+    account,
+  };
+}
+
+function dockerEcrLoginCheck(account: string): CheckResult {
+  const registry = `${account}.dkr.ecr.${region}.amazonaws.com`;
+  const passwordResult = run("aws", [
+    "ecr",
+    "get-login-password",
+    "--region",
+    region,
+  ]);
+  if (passwordResult.status !== 0) {
+    return {
+      label: "Docker ECR login",
+      ok: false,
+      detail: summarizeFailure(passwordResult),
+    };
+  }
+
+  const loginResult = runWithInput(
+    "docker",
+    ["login", "--username", "AWS", "--password-stdin", registry],
+    passwordResult.stdout,
+  );
+  if (loginResult.status !== 0) {
+    return {
+      label: "Docker ECR login",
+      ok: false,
+      detail: summarizeFailure(loginResult),
+    };
+  }
+
+  return {
+    label: "Docker ECR login",
     ok: true,
-    detail: env.AWS_ACCOUNT_ID
-      ? `account ${account} matches AWS_ACCOUNT_ID`
-      : `account ${account}`,
+    detail: `authenticated Docker to ${registry}`,
   };
 }
 
 function main(): void {
+  const identity = callerIdentity();
   const checks: CheckResult[] = [
     commandCheck("Docker CLI", "docker", ["--version"], (stdout) => stdout),
     commandCheck(
@@ -208,7 +271,14 @@ function main(): void {
       (stdout) => stdout,
     ),
     awsGlobalCheck("AWS CLI", ["--version"], (stdout) => stdout),
-    identityCheck(),
+    identity.check,
+    identity.check.ok && identity.account
+      ? dockerEcrLoginCheck(identity.account)
+      : {
+          label: "Docker ECR login",
+          ok: false,
+          detail: "skipped because AWS caller identity failed",
+        },
     awsNameListCheck(
       "ECR repositories",
       [
@@ -244,7 +314,7 @@ function main(): void {
     ...requiredSecretRefs.map((secretRef) => secretMetadataCheck(secretRef)),
   ];
 
-  console.log("OpenSend deploy fallback preflight (non-mutating)");
+  console.log("OpenSend deploy fallback preflight (no push/deploy)");
   console.log(`AWS_REGION=${region}`);
   console.log(`ECS_CLUSTER=${cluster}`);
   console.log(`PRODUCT=${product}`);
@@ -254,6 +324,9 @@ function main(): void {
     `Required secret metadata=${requiredSecretRefs
       .map((secretRef) => secretRef.idEnvName)
       .join(", ")}`,
+  );
+  console.log(
+    "Docker ECR login uses aws ecr get-login-password with docker --password-stdin; the password is not printed.",
   );
   console.log("Secret values are not fetched or printed.\n");
 
