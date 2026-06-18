@@ -213,7 +213,9 @@ Disabled/self-host path:
 - Checkout return: pass/fail, Checkout Session ID:
 - Webhook processing: pass/fail, Stripe event IDs:
 - Customer Portal return: pass/fail
-- Quota exceeded 402: pass/fail
+- Paid overage accepted past included quota: pass/fail
+- Paid overage reported to Stripe meter: pass/fail, meter event/report ID:
+- Free quota exceeded 402: pass/fail
 - Disabled billing bypass: pass/fail
 - Blockers / residual risk:
 ```

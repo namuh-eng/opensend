@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   type ClaimedOverageReport,
   type ReportableUsagePeriod,
+  canReportOverageForSubscriptionPeriod,
   reportBillingOverageUsage,
 } from "../packages/ingester/src/billing-overage-reporter";
 
@@ -204,5 +205,80 @@ describe("billing overage reporter", () => {
       report: secondReport,
       now,
     });
+  });
+});
+
+describe("billing overage subscription status eligibility", () => {
+  const cutoff = new Date("2026-05-19T12:00:00.000Z");
+  const endedPeriod = new Date("2026-06-01T00:00:00.000Z");
+  const openPeriod = new Date("2026-07-01T00:00:00.000Z");
+
+  it.each(["active", "past_due"])(
+    "allows %s subscriptions to catch up recent ended periods and current periods",
+    (subscriptionStatus) => {
+      expect(
+        canReportOverageForSubscriptionPeriod({
+          subscriptionStatus,
+          subscriptionCurrentPeriodEnd: openPeriod,
+          usagePeriodEnd: endedPeriod,
+          now,
+          cutoff,
+        }),
+      ).toBe(true);
+      expect(
+        canReportOverageForSubscriptionPeriod({
+          subscriptionStatus,
+          subscriptionCurrentPeriodEnd: openPeriod,
+          usagePeriodEnd: openPeriod,
+          now,
+          cutoff,
+        }),
+      ).toBe(true);
+    },
+  );
+
+  it.each(["canceled", "unpaid"])(
+    "only allows %s subscriptions as final catch-up for a fully ended billing period",
+    (subscriptionStatus) => {
+      expect(
+        canReportOverageForSubscriptionPeriod({
+          subscriptionStatus,
+          subscriptionCurrentPeriodEnd: endedPeriod,
+          usagePeriodEnd: endedPeriod,
+          now,
+          cutoff,
+        }),
+      ).toBe(true);
+      expect(
+        canReportOverageForSubscriptionPeriod({
+          subscriptionStatus,
+          subscriptionCurrentPeriodEnd: endedPeriod,
+          usagePeriodEnd: openPeriod,
+          now,
+          cutoff,
+        }),
+      ).toBe(false);
+      expect(
+        canReportOverageForSubscriptionPeriod({
+          subscriptionStatus,
+          subscriptionCurrentPeriodEnd: null,
+          usagePeriodEnd: endedPeriod,
+          now,
+          cutoff,
+        }),
+      ).toBe(false);
+    },
+  );
+
+  it("does not report stale ended periods outside the catch-up window", () => {
+    expect(
+      canReportOverageForSubscriptionPeriod({
+        subscriptionStatus: "active",
+        subscriptionCurrentPeriodEnd: openPeriod,
+        usagePeriodEnd: cutoff,
+        now,
+        cutoff,
+      }),
+    ).toBe(false);
   });
 });

@@ -6,16 +6,26 @@ import {
   subscriptions,
   usagePeriods,
 } from "@opensend/core";
-import { and, asc, eq, gt, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  gt,
+  inArray,
+  isNotNull,
+  lt,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import Stripe from "stripe";
 
-const REPORTABLE_BILLING_STATUSES = [
+const OPEN_REPORTABLE_BILLING_STATUSES = [
   "active",
   "trialing",
   "past_due",
-  "canceled",
-  "unpaid",
 ] as const;
+const FINAL_CATCHUP_BILLING_STATUSES = ["canceled", "unpaid"] as const;
 const DEFAULT_METER_EVENT_NAME = "opensend_email_overage";
 const STRIPE_API_VERSION = "2026-04-22.dahlia" as const;
 const ENDED_PERIOD_CATCHUP_MS = 30 * 24 * 60 * 60 * 1000;
@@ -66,6 +76,38 @@ export interface ClaimedOverageReport {
   deltaEmails: number;
   throughOverageEmails: number;
   periodEnd: Date;
+}
+
+export function canReportOverageForSubscriptionPeriod(input: {
+  subscriptionStatus: string;
+  subscriptionCurrentPeriodEnd: Date | null;
+  usagePeriodEnd: Date;
+  now: Date;
+  cutoff: Date;
+}) {
+  if (input.usagePeriodEnd <= input.cutoff) return false;
+
+  if (
+    OPEN_REPORTABLE_BILLING_STATUSES.includes(
+      input.subscriptionStatus as (typeof OPEN_REPORTABLE_BILLING_STATUSES)[number],
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    !FINAL_CATCHUP_BILLING_STATUSES.includes(
+      input.subscriptionStatus as (typeof FINAL_CATCHUP_BILLING_STATUSES)[number],
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    input.subscriptionCurrentPeriodEnd !== null &&
+    input.usagePeriodEnd <= input.now &&
+    input.usagePeriodEnd <= input.subscriptionCurrentPeriodEnd
+  );
 }
 
 function getBillingBackend(
@@ -131,8 +173,16 @@ async function loadDefaultReportableUsagePeriods(
     .innerJoin(stripeCustomers, eq(stripeCustomers.userId, usagePeriods.userId))
     .where(
       and(
-        inArray(subscriptions.status, [...REPORTABLE_BILLING_STATUSES]),
         gt(usagePeriods.periodEnd, reportablePeriodCutoff(now)),
+        or(
+          inArray(subscriptions.status, [...OPEN_REPORTABLE_BILLING_STATUSES]),
+          and(
+            inArray(subscriptions.status, [...FINAL_CATCHUP_BILLING_STATUSES]),
+            lte(usagePeriods.periodEnd, now),
+            isNotNull(subscriptions.currentPeriodEnd),
+            lte(usagePeriods.periodEnd, subscriptions.currentPeriodEnd),
+          ),
+        ),
         isNotNull(subscriptions.stripeSubscriptionId),
         isNotNull(plans.stripeOveragePriceId),
         gt(

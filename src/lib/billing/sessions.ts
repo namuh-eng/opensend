@@ -1,3 +1,5 @@
+import type Stripe from "stripe";
+
 export interface BillingSessionUser {
   id: string;
   email?: string | null;
@@ -28,21 +30,62 @@ export interface StripeCustomerCreateInput {
   };
 }
 
-export interface StripeCheckoutCreateInput {
-  mode: "subscription";
-  customer: string;
-  line_items: Array<{ price: string; quantity?: 1 }>;
-  success_url: string;
-  cancel_url: string;
-  metadata: {
-    user_id: string;
-    plan_id: string;
+type StripeCheckoutSessionCreateParams = NonNullable<
+  Parameters<InstanceType<typeof Stripe>["checkout"]["sessions"]["create"]>[0]
+>;
+type StripeCheckoutLineItem = NonNullable<
+  StripeCheckoutSessionCreateParams["line_items"]
+>[number];
+
+export type StripeCheckoutCreateInput = Pick<
+  StripeCheckoutSessionCreateParams,
+  | "mode"
+  | "customer"
+  | "line_items"
+  | "success_url"
+  | "cancel_url"
+  | "metadata"
+  | "subscription_data"
+>;
+
+function buildSubscriptionCheckoutLineItems(input: {
+  basePriceId: string;
+  meteredOveragePriceId: string;
+}): StripeCheckoutLineItem[] {
+  return [
+    { price: input.basePriceId, quantity: 1 },
+    // Stripe Checkout creates subscription items from subscription-mode
+    // recurring line_items. Metered recurring Prices must not send quantity;
+    // usage is reported later through Meter Events.
+    { price: input.meteredOveragePriceId },
+  ];
+}
+
+export function buildSubscriptionCheckoutCreateInput(input: {
+  customerId: string;
+  basePriceId: string;
+  meteredOveragePriceId: string;
+  successUrl: string;
+  cancelUrl: string;
+  userId: string;
+  planId: string;
+}): StripeCheckoutCreateInput {
+  const metadata = {
+    user_id: input.userId,
+    plan_id: input.planId,
   };
-  subscription_data: {
-    metadata: {
-      user_id: string;
-      plan_id: string;
-    };
+
+  return {
+    mode: "subscription",
+    customer: input.customerId,
+    line_items: buildSubscriptionCheckoutLineItems({
+      basePriceId: input.basePriceId,
+      meteredOveragePriceId: input.meteredOveragePriceId,
+    }),
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+    metadata,
+    subscription_data: { metadata },
   };
 }
 
@@ -154,28 +197,17 @@ export function createBillingSessionService(deps: BillingSessionServiceDeps) {
 
       const stripe = getStripeClient();
       const customer = await ensureStripeCustomer(params.user, stripe);
-      const lineItems: StripeCheckoutCreateInput["line_items"] = [
-        { price: stripePriceId, quantity: 1 },
-      ];
-      lineItems.push({ price: stripeOveragePriceId });
-
-      const checkoutSession = await stripe.checkout.sessions.create({
-        mode: "subscription",
-        customer: customer.stripeCustomerId,
-        line_items: lineItems,
-        success_url: `${params.origin}/settings/billing?status=success`,
-        cancel_url: `${params.origin}/settings/billing?status=cancelled`,
-        metadata: {
-          user_id: params.user.id,
-          plan_id: plan.id,
-        },
-        subscription_data: {
-          metadata: {
-            user_id: params.user.id,
-            plan_id: plan.id,
-          },
-        },
-      });
+      const checkoutSession = await stripe.checkout.sessions.create(
+        buildSubscriptionCheckoutCreateInput({
+          customerId: customer.stripeCustomerId,
+          basePriceId: stripePriceId,
+          meteredOveragePriceId: stripeOveragePriceId,
+          successUrl: `${params.origin}/settings/billing?status=success`,
+          cancelUrl: `${params.origin}/settings/billing?status=cancelled`,
+          userId: params.user.id,
+          planId: plan.id,
+        }),
+      );
 
       if (!checkoutSession.url) {
         return { ok: false, error: "checkout_url_missing" };

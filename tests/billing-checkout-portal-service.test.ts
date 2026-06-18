@@ -4,6 +4,7 @@ import {
   type StripeCheckoutCreateInput,
   type StripeCustomerCreateInput,
   type StripePortalCreateInput,
+  buildSubscriptionCheckoutCreateInput,
   createBillingSessionService,
   normalizeCheckoutPlanId,
 } from "@/lib/billing/sessions";
@@ -87,6 +88,37 @@ function fakeDeps(state: FakeState = {}) {
 
   return { calls, service: createBillingSessionService(deps) };
 }
+
+describe("Stripe subscription Checkout payload", () => {
+  it("adds base and metered recurring prices as Checkout line items without a metered quantity", () => {
+    const payload = buildSubscriptionCheckoutCreateInput({
+      customerId: "cus_123",
+      basePriceId: "price_base_123",
+      meteredOveragePriceId: "price_metered_overage_123",
+      successUrl: "https://app.opensend.test/settings/billing?status=success",
+      cancelUrl: "https://app.opensend.test/settings/billing?status=cancelled",
+      userId: "user_123",
+      planId: "plan_pro",
+    });
+
+    expect(payload).toEqual({
+      mode: "subscription",
+      customer: "cus_123",
+      line_items: [
+        { price: "price_base_123", quantity: 1 },
+        { price: "price_metered_overage_123" },
+      ],
+      success_url: "https://app.opensend.test/settings/billing?status=success",
+      cancel_url: "https://app.opensend.test/settings/billing?status=cancelled",
+      metadata: { user_id: "user_123", plan_id: "plan_pro" },
+      subscription_data: {
+        metadata: { user_id: "user_123", plan_id: "plan_pro" },
+      },
+    });
+    expect(payload.line_items?.[1]).not.toHaveProperty("quantity");
+    expect(payload.subscription_data).not.toHaveProperty("items");
+  });
+});
 
 describe("billing checkout and portal session service", () => {
   it("normalizes the checkout plan ID with the existing plan_id precedence", () => {
