@@ -60,7 +60,9 @@ test("default no-SQS path dispatches queued email through DB-polling fallback", 
     [body.id, e2eTenant.user.id],
   );
 
-  expect(delivered.rows[0]?.status).toBe("sent");
+  // The resend.dev sandbox recipient simulates the provider delivery callback,
+  // so the final persisted status advances past sent to delivered.
+  expect(delivered.rows[0]?.status).toBe("delivered");
   expect(delivered.rows[0]?.sent_at).not.toBeNull();
   expect(delivered.rows[0]?.event_types).toEqual(
     expect.arrayContaining(["delivered", "sent"]),
