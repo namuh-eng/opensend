@@ -454,6 +454,7 @@ export function createGeneratedOpenSendEnv(
     BACKGROUND_JOBS_REQUIRE_QUEUE: "false",
     BACKGROUND_WORKER_POLL: "false",
     INGESTER_HEALTH_URL: "http://localhost:3016/health",
+    INGESTER_URL: "http://ingester:3016",
     INGESTER_JOB_TOKEN: randomHex(32),
     INGESTER_INBOUND_TOKEN: randomHex(32),
     INGESTER_SCHEDULER_INTERVAL_SECONDS: "60",
@@ -507,6 +508,7 @@ export function renderOpenSendEnvFile(values: Record<string, string>): string {
         "BACKGROUND_JOBS_REQUIRE_QUEUE",
         "BACKGROUND_WORKER_POLL",
         "INGESTER_HEALTH_URL",
+        "INGESTER_URL",
       ],
     ],
     [

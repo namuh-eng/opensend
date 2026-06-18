@@ -131,12 +131,7 @@ async function main(): Promise<void> {
     { service: "ingester", production: true },
   );
   const schedulerValidation = validateOpenSendEnv(
-    {
-      ...env,
-      NODE_ENV: "production",
-      INGESTER_URL: "http://ingester:3016",
-      DATABASE_URL: "postgresql://opensend:generated@postgres:5432/opensend",
-    },
+    { ...env, NODE_ENV: "production" },
     { service: "scheduler", production: true },
   );
   const errors = [

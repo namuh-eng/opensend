@@ -21,6 +21,7 @@ describe("OpenSend env bootstrap", () => {
     expect(env.BETTER_AUTH_SECRET).toMatch(/^[a-f0-9]{64}$/);
     expect(env.WEBHOOK_SECRET_ENCRYPTION_KEY).toMatch(/^[a-f0-9]{64}$/);
     expect(env.INGESTER_JOB_TOKEN).toMatch(/^[a-f0-9]{64}$/);
+    expect(env.INGESTER_URL).toBe("http://ingester:3016");
     expect(Buffer.from(env.DKIM_ENCRYPTION_KEY, "base64")).toHaveLength(32);
 
     expect(
@@ -37,11 +38,7 @@ describe("OpenSend env bootstrap", () => {
     ).toEqual([]);
     expect(
       validateOpenSendEnv(
-        {
-          ...env,
-          NODE_ENV: "production",
-          INGESTER_URL: "https://events.example.com",
-        },
+        { ...env, NODE_ENV: "production" },
         { service: "scheduler", production: true },
       ).errors,
     ).toEqual([]);
@@ -59,6 +56,7 @@ describe("OpenSend env bootstrap", () => {
     expect(rendered).toContain(
       "DATABASE_URL=postgresql://opensend:test-postgres-password@localhost:5432/opensend",
     );
+    expect(rendered).toContain("INGESTER_URL=http://ingester:3016");
     expect(rendered).toContain(
       `DKIM_ENCRYPTION_KEY=${env.DKIM_ENCRYPTION_KEY}`,
     );

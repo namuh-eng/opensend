@@ -255,7 +255,7 @@ services:
     command: ["bun", "/app/job-scheduler.js"]
     environment:
       DATABASE_URL: postgresql://opensend:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}@postgres:5432/opensend
-      INGESTER_URL: http://ingester:3016
+      INGESTER_URL: ${INGESTER_URL:-http://ingester:3016}
       INGESTER_JOB_TOKEN: ${INGESTER_JOB_TOKEN:?Set INGESTER_JOB_TOKEN in .env (32+ chars)}
       INGESTER_SCHEDULER_INTERVAL_SECONDS: ${INGESTER_SCHEDULER_INTERVAL_SECONDS:-60}
     depends_on:
