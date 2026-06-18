@@ -101,18 +101,44 @@ function requireIntegrationSecretKey(logger: Logger): void {
   }
 }
 
+function getConfiguredAppReplicas(): number {
+  const raw = process.env.OPENSEND_APP_REPLICAS?.trim();
+  if (!raw) return 1;
+
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  return parsed;
+}
+
 function warnIfRateLimitDisabled(logger: Logger): void {
-  if (!isProd()) return;
-  const backend = (process.env.RATE_LIMIT_BACKEND ?? "").toLowerCase();
+  const backend = (process.env.RATE_LIMIT_BACKEND ?? "").trim().toLowerCase();
   if (backend === "redis") return;
-  if (backend === "" && process.env.REDIS_URL) return;
-  logger.warn(
-    {
-      event: "security.rate_limit.disabled_in_production",
-      backend: backend || "disabled",
-    },
-    "Rate limiting backend is disabled in production — set REDIS_URL or RATE_LIMIT_BACKEND=redis",
-  );
+
+  const appReplicas = getConfiguredAppReplicas();
+  const backendLabel = backend || "disabled";
+
+  if (isProd()) {
+    logger.warn(
+      {
+        event: "security.rate_limit.disabled_in_production",
+        backend: backendLabel,
+        appReplicas,
+      },
+      "Rate limiting backend is disabled in production — set RATE_LIMIT_BACKEND=redis and REDIS_URL to a shared Redis endpoint",
+    );
+    return;
+  }
+
+  if (appReplicas > 1) {
+    logger.warn(
+      {
+        event: "security.rate_limit.disabled_in_multi_instance",
+        backend: backendLabel,
+        appReplicas,
+      },
+      "Multiple app replicas are configured without Redis-backed rate limiting — set RATE_LIMIT_BACKEND=redis and REDIS_URL to a shared Redis endpoint",
+    );
+  }
 }
 
 function requirePostgresPassword(logger: Logger): void {

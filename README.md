@@ -73,9 +73,11 @@ Compose starts:
 
 - `app`: Next.js dashboard and public API on `:3015`
 - `postgres`: local database
+- `redis`: shared rate limiting and cache coordination
 - `migrate`: one-shot schema migration runner
 - `ingester`: SES/SNS ingestion and workers on `:3016`
 - `scheduler`: scheduled job trigger sidecar
+- optional `smtp-relay`: SMTP compatibility service, only with `docker compose --profile smtp up -d smtp-relay`
 
 For real email delivery, add AWS SES credentials and verify a sending domain. For dashboard login, add Google OAuth credentials.
 
@@ -266,7 +268,7 @@ Full docs: [`packages/ruby-sdk/README.md`](./packages/ruby-sdk/README.md) and [`
 - Docker and Docker Compose
 - AWS account with SES access for real email delivery
 - Optional Cloudflare account for automatic DNS records
-- Optional Redis/SQS/EventBridge for production-grade rate limiting and background jobs
+- Redis (included in Docker Compose) plus optional SQS/EventBridge for production-grade background jobs
 
 ### Docker Compose
 
@@ -279,7 +281,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-The dashboard/API runs at **http://localhost:3015**. The ingester health endpoint is **http://localhost:3016/health**.
+The dashboard/API runs at **http://localhost:3015**. The ingester health endpoint is **http://localhost:3016/health**. Compose also starts Redis for shared rate limiting/cache coordination; the SMTP relay is available only when explicitly enabled with `docker compose --profile smtp up -d smtp-relay`.
 
 ### Production deployments
 
@@ -312,6 +314,7 @@ src/                 # Next.js app and public API routes
 packages/
 ├── core/            # Shared DB client, repositories, DTOs, webhook helpers
 ├── ingester/        # Production Hono ingester and workers, port 3016
+├── smtp-relay/      # Optional SMTP compatibility relay, profile-gated in Compose
 ├── sdk/             # TypeScript SDK
 ├── python-sdk/      # Python SDK
 ├── go-sdk/          # Go SDK
@@ -343,7 +346,7 @@ docs/                # Deployment, SDK, and operations docs
 | Billing for hosted cloud | Stripe                                          |
 | Ingester                 | Hono on Bun                                     |
 | Background jobs          | AWS SQS, EventBridge, scheduler sidecar         |
-| Cache/rate limit         | Redis                                           |
+| Cache/rate limit         | Redis (default in Docker Compose)              |
 | Tests                    | Vitest, Playwright                              |
 | Lint/format              | Biome                                           |
 
@@ -382,7 +385,7 @@ This repo is designed to be understandable to coding agents, but agent setup is 
 - [x] Built-in open/click analytics
 - [x] Additional webhook event types: opened, clicked, complained, delivery delayed
 - [x] Familiar audiences/contact API slices
-- [ ] SMTP relay support without AWS SES
+- [x] SMTP relay compatibility service for self-hosted deployments
 
 ## Contributing
 

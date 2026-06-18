@@ -10,9 +10,11 @@ Docker Compose starts the same service boundaries used by production deployments
 
 - `app`: Next.js dashboard and public API on port `3015`.
 - `postgres`: OpenSend application database.
+- `redis`: shared rate limiting and cache coordination for the Compose stack.
 - `migrate`: one-shot Drizzle migration runner.
 - `ingester`: SES/SNS event receiver and background worker on port `3016`.
 - `scheduler`: sidecar that triggers ingester `/jobs/*` scans.
+- `smtp-relay`: optional SMTP compatibility service, started only with the `smtp` profile.
 
 Production deployments can run these as separate services on ECS, Fly, Railway, Cloud Run, Kubernetes, or a single VM. Keep app traffic pointed at the Next.js service, and point SES/SNS event webhooks at the ingester.
 
@@ -65,7 +67,7 @@ Production values to plan before real traffic:
 | Background jobs | `BACKGROUND_JOBS_QUEUE_URL`, `BACKGROUND_JOBS_REQUIRE_QUEUE=true`, `BACKGROUND_WORKER_POLL=true` on the ingester |
 | Scheduler auth | `INGESTER_JOB_TOKEN`, `INGESTER_SCHEDULER_INTERVAL_SECONDS` |
 | Inbound receiving | `INGESTER_INBOUND_TOKEN` when `/events/inbound` is exposed, plus `SES_INBOUND_SNS_TOPIC_ARN` and `S3_BUCKET_NAME` or `SES_INBOUND_BUCKET_NAME` for SES receipt-rule ingestion |
-| Rate limiting/cache | `RATE_LIMIT_BACKEND=redis`, `REDIS_URL` |
+| Rate limiting/cache | `RATE_LIMIT_BACKEND=redis`, `REDIS_URL`, `OPENSEND_APP_REPLICAS` |
 | Secret encryption | `WEBHOOK_SECRET_ENCRYPTION_KEY`, optional `INTEGRATION_SECRET_ENCRYPTION_KEY`, optional DKIM encryption key variables |
 | Observability | Sentry, PostHog, CloudWatch, or OTel variables you explicitly configure |
 
@@ -105,14 +107,29 @@ Local evaluation can run without SQS; rows are still persisted, but production d
 
 ## Rate limiting and cache
 
-Single-process local evaluation can use the default memory behavior. Shared or production deployments should use Redis:
+The Docker Compose stack starts Redis and sets the app to use Redis-backed rate limiting by default:
 
 ```env
 RATE_LIMIT_BACKEND=redis
-REDIS_URL=rediss://default:<password>@your-cache-endpoint:6379
+REDIS_URL=redis://redis:6379
+OPENSEND_APP_REPLICAS=1
 ```
 
-Redis backs API rate limiting plus hot-path auth and domain metadata caches. Use a TLS endpoint and keep it private to your runtime network.
+Outside Compose, an unset `RATE_LIMIT_BACKEND` is treated as `disabled` so single-process local development does not unexpectedly require Redis. Any shared, staging, production, or multi-replica deployment should set `RATE_LIMIT_BACKEND=redis` and point `REDIS_URL` at a shared Redis endpoint. Use `rediss://...` for managed production Redis and keep it private to your runtime network.
+
+Set `OPENSEND_APP_REPLICAS` to the number of app containers you expect to run. Startup checks warn when this value is greater than `1` and Redis-backed rate limiting is not enabled. `REDIS_URL` alone does not enable rate limiting; `RATE_LIMIT_BACKEND=redis` is required.
+
+Redis backs API rate limiting plus hot-path auth/domain metadata caches and ingester domain-cache invalidation. If Redis is selected for rate limiting but unavailable, API requests fail closed with HTTP 503 instead of silently downgrading to a per-process limiter.
+
+## SMTP relay profile
+
+The SMTP relay is available in the reference Compose file but is not part of the default footprint. Enable it only when an application must submit mail over SMTP:
+
+```bash
+docker compose --profile smtp up -d smtp-relay
+```
+
+By default the relay publishes port `2587` and authenticates with OpenSend API keys as SMTP passwords. It requires the same Postgres database as the app. `BACKGROUND_JOBS_QUEUE_URL` is optional for local evaluation but should match the app/ingester queue in production. Accepted SMTP messages only enter the normal delivery worker path when `BACKGROUND_JOBS_QUEUE_URL` is configured; without a queue URL, rows can be accepted for local evaluation but delivery is skipped until the queue contract is wired. Configure `SMTP_RELAY_TLS_CERT_PATH` and `SMTP_RELAY_TLS_KEY_PATH` before advertising STARTTLS on a public relay.
 
 ## Privacy and telemetry
 
@@ -130,6 +147,8 @@ Before sending real production traffic:
 6. If using receiving, confirm the inbound SNS topic reaches `/events/inbound/ses-s3` and SES can write raw MIME to the configured bucket.
 7. Confirm scheduled jobs run with the same `INGESTER_JOB_TOKEN` configured on the scheduler and ingester.
 8. Confirm rate limiting, queue, integration encryption, and secret-manager variables are set for shared deployments.
+9. If scaling app containers beyond one, set `OPENSEND_APP_REPLICAS` and verify all replicas share the same Redis.
+10. If enabling SMTP, start the `smtp` profile and send a message through port `2587` with an OpenSend API key as the password.
 
 Useful local checks:
 

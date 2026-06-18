@@ -39,14 +39,15 @@ Use unique 32+ character secrets for `INGESTER_JOB_TOKEN` and `INGESTER_INBOUND_
 
 ## Rate limiting
 
-API rate limiting is enforced in Next.js middleware. Local single-process evaluation can use the default memory behavior. Shared and production deployments should use Redis:
+API rate limiting is enforced in Next.js middleware. Outside Docker Compose, an unset backend is treated as `disabled` for single-process local development. Shared, production, and multi-replica deployments should use Redis:
 
 ```env
 RATE_LIMIT_BACKEND=redis
 REDIS_URL=rediss://default:<password>@your-cache-endpoint:6379
+OPENSEND_APP_REPLICAS=2
 ```
 
-When Redis-backed rate limiting is selected, keep Redis private to the runtime network and use TLS endpoints.
+The reference Docker Compose stack starts Redis and defaults the app to `RATE_LIMIT_BACKEND=redis`. For other deployments, `REDIS_URL` alone does not enable rate limiting; set `RATE_LIMIT_BACKEND=redis` explicitly. Keep Redis private to the runtime network and use TLS endpoints for managed production Redis.
 
 ## Secret management
 

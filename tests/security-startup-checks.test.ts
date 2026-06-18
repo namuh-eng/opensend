@@ -32,6 +32,7 @@ const ENV_KEYS = [
   "WEBHOOK_SECRET_ENCRYPTION_KEY",
   "RATE_LIMIT_BACKEND",
   "REDIS_URL",
+  "OPENSEND_APP_REPLICAS",
   "DATABASE_URL",
   "POSTGRES_PASSWORD_ENFORCE_CHANGE",
 ];
@@ -83,7 +84,7 @@ describe("startup-checks", () => {
     ).toBe(true);
   });
 
-  it("does not warn about rate limit when REDIS_URL set", () => {
+  it("warns in production when only REDIS_URL is set without redis backend", () => {
     vi.stubEnv("NODE_ENV", "production");
     process.env.BETTER_AUTH_SECRET = "x".repeat(32);
     process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
@@ -93,6 +94,49 @@ describe("startup-checks", () => {
     expect(
       logs.some(
         (l) => l.data.event === "security.rate_limit.disabled_in_production",
+      ),
+    ).toBe(true);
+  });
+
+  it("warns for multiple app replicas outside production when redis backend is disabled", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+    process.env.OPENSEND_APP_REPLICAS = "2";
+    const { logs, logger } = makeLogger();
+    runStartupChecks(logger);
+    expect(
+      logs.some(
+        (l) =>
+          l.data.event === "security.rate_limit.disabled_in_multi_instance" &&
+          l.data.appReplicas === 2,
+      ),
+    ).toBe(true);
+  });
+
+  it("does not warn for multiple app replicas when redis backend is selected", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+    process.env.OPENSEND_APP_REPLICAS = "2";
+    process.env.RATE_LIMIT_BACKEND = "redis";
+    process.env.REDIS_URL = "redis://localhost:6379";
+    const { logs, logger } = makeLogger();
+    runStartupChecks(logger);
+    expect(
+      logs.some((l) =>
+        String(l.data.event ?? "").startsWith("security.rate_limit."),
+      ),
+    ).toBe(false);
+  });
+
+  it("treats malformed OPENSEND_APP_REPLICAS as a single local app", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+    process.env.OPENSEND_APP_REPLICAS = "not-a-number";
+    const { logs, logger } = makeLogger();
+    runStartupChecks(logger);
+    expect(
+      logs.some((l) =>
+        String(l.data.event ?? "").startsWith("security.rate_limit."),
       ),
     ).toBe(false);
   });
