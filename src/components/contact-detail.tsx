@@ -5,7 +5,7 @@ import { EditContactModal } from "@/components/edit-contact-modal";
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
 import { StatusBadge } from "@/components/status-badge";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 export interface ContactDetailData {
   id: string;
@@ -48,7 +48,7 @@ function ActionsDropdown({
       <button
         type="button"
         aria-label="More actions"
-        className="p-2 rounded-lg hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
+        className="p-2 rounded-lg hover:bg-white/[0.14] text-fg-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 transition-colors"
         onClick={() => setOpen(!open)}
       >
         <svg
@@ -99,6 +99,20 @@ export function ContactDetail({ contact }: ContactDetailProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
+  const deleteDialogTitleId = useId();
+
+  useEffect(() => {
+    if (!deleteOpen) return;
+    deleteCancelRef.current?.focus();
+
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") setDeleteOpen(false);
+    }
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [deleteOpen]);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -162,10 +176,20 @@ export function ContactDetail({ contact }: ContactDetailProps) {
           onClick={(e) => {
             if (e.target === e.currentTarget) setDeleteOpen(false);
           }}
-          onKeyDown={() => {}}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setDeleteOpen(false);
+          }}
         >
-          <div className="w-full max-w-sm bg-bg-card border border-line rounded-lg shadow-xl p-6">
-            <h2 className="text-[16px] font-semibold text-fg mb-2">
+          <dialog
+            open
+            aria-modal="true"
+            aria-labelledby={deleteDialogTitleId}
+            className="w-full max-w-sm bg-bg-card border border-line rounded-lg shadow-xl p-6"
+          >
+            <h2
+              id={deleteDialogTitleId}
+              className="text-[16px] font-semibold text-fg mb-2"
+            >
               Delete contact
             </h2>
             <p className="text-[13px] text-fg-2 mb-4">
@@ -180,9 +204,10 @@ export function ContactDetail({ contact }: ContactDetailProps) {
             )}
             <div className="flex items-center justify-end gap-2">
               <button
+                ref={deleteCancelRef}
                 type="button"
                 onClick={() => setDeleteOpen(false)}
-                className="px-3 py-1.5 text-[13px] font-medium text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 transition-colors"
+                className="px-3 py-1.5 text-[13px] font-medium text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 transition-colors"
               >
                 Cancel
               </button>
@@ -190,12 +215,12 @@ export function ContactDetail({ contact }: ContactDetailProps) {
                 type="button"
                 onClick={handleDelete}
                 disabled={deleting}
-                className="px-3 py-1.5 text-[13px] font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 text-[13px] font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 transition-colors disabled:opacity-50"
               >
                 {deleting ? "Deleting..." : "Delete"}
               </button>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 interface EditContactModalProps {
   open: boolean;
@@ -26,6 +26,8 @@ export function EditContactModal({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogTitleId = useId();
 
   // Seed the form from the contact whenever the modal opens.
   useEffect(() => {
@@ -34,6 +36,7 @@ export function EditContactModal({
       setLastName(contact.lastName ?? "");
       setUnsubscribed(contact.status === "unsubscribed");
       setSubmitError(null);
+      queueMicrotask(() => closeButtonRef.current?.focus());
     }
   }, [open, contact]);
 
@@ -83,16 +86,26 @@ export function EditContactModal({
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
-      onKeyDown={() => {}}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
     >
-      <div className="w-full max-w-md bg-bg-card border border-line rounded-lg shadow-xl">
+      <dialog
+        open
+        aria-modal="true"
+        aria-labelledby={dialogTitleId}
+        className="w-full max-w-md bg-bg-card border border-line rounded-lg shadow-xl"
+      >
         <div className="flex items-center justify-between px-6 py-4 border-b border-line">
-          <h2 className="text-[16px] font-semibold text-fg">Edit contact</h2>
+          <h2 id={dialogTitleId} className="text-[16px] font-semibold text-fg">
+            Edit contact
+          </h2>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
+            className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 transition-colors"
           >
             <svg
               width="16"
@@ -125,7 +138,7 @@ export function EditContactModal({
                 type="text"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                className="w-full h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
+                className="w-full h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3 focus-visible:ring-2 focus-visible:ring-white/30"
               />
             </div>
             <div>
@@ -140,7 +153,7 @@ export function EditContactModal({
                 type="text"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
-                className="w-full h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
+                className="w-full h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3 focus-visible:ring-2 focus-visible:ring-white/30"
               />
             </div>
           </div>
@@ -150,7 +163,7 @@ export function EditContactModal({
               type="checkbox"
               checked={unsubscribed}
               onChange={(e) => setUnsubscribed(e.target.checked)}
-              className="accent-white rounded cursor-pointer"
+              className="accent-white rounded cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
             />
             Unsubscribed from all mail
           </label>
@@ -166,7 +179,7 @@ export function EditContactModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-[13px] font-medium text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 transition-colors"
+            className="px-3 py-1.5 text-[13px] font-medium text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 transition-colors"
           >
             Cancel
           </button>
@@ -174,12 +187,12 @@ export function EditContactModal({
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="btn btn-primary btn-sm disabled:opacity-50"
+            className="btn btn-primary btn-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 disabled:opacity-50"
           >
             {submitting ? "Saving..." : "Save"}
           </button>
         </div>
-      </div>
+      </dialog>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 export interface RowMenuAction {
   label: string;
@@ -35,6 +35,8 @@ export function RowActionsMenu({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogTitleId = useId();
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -45,6 +47,18 @@ export function RowActionsMenu({
     if (open) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
+
+  useEffect(() => {
+    if (!confirming) return;
+    cancelButtonRef.current?.focus();
+
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") setConfirming(false);
+    }
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [confirming]);
 
   const handleConfirmDelete = async () => {
     if (!deleteAction) return;
@@ -66,7 +80,7 @@ export function RowActionsMenu({
         type="button"
         aria-label={ariaLabel}
         onClick={() => setOpen((v) => !v)}
-        className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100 data-[open=true]:opacity-100"
+        className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 data-[open=true]:opacity-100"
         data-open={open}
       >
         <svg
@@ -124,10 +138,20 @@ export function RowActionsMenu({
           onClick={(e) => {
             if (e.target === e.currentTarget) setConfirming(false);
           }}
-          onKeyDown={() => {}}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setConfirming(false);
+          }}
         >
-          <div className="w-full max-w-sm bg-bg-card border border-line rounded-lg shadow-xl p-6">
-            <h2 className="text-[16px] font-semibold text-fg mb-2">
+          <dialog
+            open
+            aria-modal="true"
+            aria-labelledby={dialogTitleId}
+            className="w-full max-w-sm bg-bg-card border border-line rounded-lg shadow-xl p-6"
+          >
+            <h2
+              id={dialogTitleId}
+              className="text-[16px] font-semibold text-fg mb-2"
+            >
               {deleteAction.label}
             </h2>
             <p className="text-[13px] text-fg-2 mb-4">
@@ -140,9 +164,10 @@ export function RowActionsMenu({
             )}
             <div className="flex items-center justify-end gap-2">
               <button
+                ref={cancelButtonRef}
                 type="button"
                 onClick={() => setConfirming(false)}
-                className="px-3 py-1.5 text-[13px] font-medium text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 transition-colors"
+                className="px-3 py-1.5 text-[13px] font-medium text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 transition-colors"
               >
                 Cancel
               </button>
@@ -150,12 +175,12 @@ export function RowActionsMenu({
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={deleting}
-                className="px-3 py-1.5 text-[13px] font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 text-[13px] font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 transition-colors disabled:opacity-50"
               >
                 {deleting ? "Deleting..." : "Delete"}
               </button>
             </div>
-          </div>
+          </dialog>
         </div>
       )}
     </div>

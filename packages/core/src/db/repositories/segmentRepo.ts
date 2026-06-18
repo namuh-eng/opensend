@@ -67,12 +67,15 @@ export const segmentRepo = {
         // Membership is tracked in the contacts_to_segments join table.
         contactsCount: sql<number>`(
           select count(*) from ${contactsToSegments}
+          inner join ${contacts} on ${contacts.id} = ${contactsToSegments.contactId}
           where ${contactsToSegments.segmentId} = ${segments.id}
+          and ${contacts.userId} = ${options.userId}
         )`.mapWith(Number),
         unsubscribedCount: sql<number>`(
           select count(*) from ${contactsToSegments}
           inner join ${contacts} on ${contacts.id} = ${contactsToSegments.contactId}
           where ${contactsToSegments.segmentId} = ${segments.id}
+          and ${contacts.userId} = ${options.userId}
           and ${contacts.unsubscribed} = true
         )`.mapWith(Number),
       })

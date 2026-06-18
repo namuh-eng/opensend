@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
@@ -129,6 +135,11 @@ describe("ContactDetail", () => {
     fireEvent.click(screen.getByText("Edit contact"));
 
     // Edit modal heading + seeded fields appear
+    expect(
+      screen
+        .getByRole("dialog", { name: "Edit contact" })
+        .getAttribute("aria-modal"),
+    ).toBe("true");
     expect(screen.getByRole("heading", { name: "Edit contact" })).toBeDefined();
     expect(
       (screen.getByLabelText("First name") as HTMLInputElement).value,
@@ -136,6 +147,45 @@ describe("ContactDetail", () => {
     expect((screen.getByLabelText("Last name") as HTMLInputElement).value).toBe(
       "Doe",
     );
+  });
+
+  it("focuses safe dialog actions and closes dialogs with Escape", async () => {
+    render(<ContactDetail contact={mockContact} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByText("Edit contact"));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Close" }),
+      );
+    });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Edit contact" })).toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByText("Delete contact"));
+
+    expect(
+      screen
+        .getByRole("dialog", { name: "Delete contact" })
+        .getAttribute("aria-modal"),
+    ).toBe("true");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Cancel" }),
+      );
+    });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "Delete contact" }),
+      ).toBeNull();
+    });
   });
 
   it("calls the delete API when deletion is confirmed", async () => {
@@ -150,6 +200,9 @@ describe("ContactDetail", () => {
     fireEvent.click(screen.getByText("Delete contact"));
 
     // Confirm dialog, then confirm
+    expect(
+      screen.getByRole("dialog", { name: "Delete contact" }),
+    ).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 
     expect(fetchMock).toHaveBeenCalledWith(

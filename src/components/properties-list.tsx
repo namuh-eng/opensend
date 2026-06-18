@@ -10,6 +10,45 @@ interface Property {
   type: "string" | "number";
   fallbackValue: string | null;
   createdAt: string;
+  updatedAt?: string;
+}
+
+type PropertyApiPayload = {
+  id?: unknown;
+  name?: unknown;
+  type?: unknown;
+  fallback_value?: unknown;
+  fallbackValue?: unknown;
+  created_at?: unknown;
+  createdAt?: unknown;
+  updated_at?: unknown;
+  updatedAt?: unknown;
+};
+
+function normalizeProperty(property: PropertyApiPayload): Property {
+  const type = property.type === "number" ? "number" : "string";
+  const fallback = property.fallback_value ?? property.fallbackValue ?? null;
+  const createdAt =
+    typeof property.created_at === "string"
+      ? property.created_at
+      : typeof property.createdAt === "string"
+        ? property.createdAt
+        : new Date(0).toISOString();
+  const updatedAt =
+    typeof property.updated_at === "string"
+      ? property.updated_at
+      : typeof property.updatedAt === "string"
+        ? property.updatedAt
+        : undefined;
+
+  return {
+    id: String(property.id ?? ""),
+    name: String(property.name ?? ""),
+    type,
+    fallbackValue: fallback === null ? null : String(fallback),
+    createdAt,
+    updatedAt,
+  };
 }
 
 export function PropertiesList() {
@@ -34,8 +73,11 @@ export function PropertiesList() {
       if (typeFilter) params.set("type", typeFilter);
 
       const res = await fetch(`/api/properties?${params.toString()}`);
-      const data = await res.json();
-      setProperties(data.data || []);
+      const data = (await res.json()) as {
+        data?: PropertyApiPayload[];
+        total?: number;
+      };
+      setProperties((data.data ?? []).map(normalizeProperty));
       setTotal(data.total || 0);
     } catch {
       setProperties([]);

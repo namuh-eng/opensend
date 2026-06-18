@@ -12,6 +12,55 @@ interface Topic {
   defaultSubscription: "opt_in" | "opt_out";
   visibility: "private" | "public";
   createdAt: string;
+  updatedAt?: string;
+}
+
+type TopicApiPayload = {
+  id?: unknown;
+  name?: unknown;
+  description?: unknown;
+  default_subscription?: unknown;
+  defaultSubscription?: unknown;
+  visibility?: unknown;
+  created_at?: unknown;
+  createdAt?: unknown;
+  updated_at?: unknown;
+  updatedAt?: unknown;
+};
+
+function normalizeTopic(topic: TopicApiPayload): Topic {
+  const defaultSubscription =
+    topic.default_subscription === "opt_in" ||
+    topic.defaultSubscription === "opt_in"
+      ? "opt_in"
+      : "opt_out";
+  const visibility =
+    topic.visibility === "private" || topic.visibility === "public"
+      ? topic.visibility
+      : "private";
+  const createdAt =
+    typeof topic.created_at === "string"
+      ? topic.created_at
+      : typeof topic.createdAt === "string"
+        ? topic.createdAt
+        : new Date(0).toISOString();
+  const updatedAt =
+    typeof topic.updated_at === "string"
+      ? topic.updated_at
+      : typeof topic.updatedAt === "string"
+        ? topic.updatedAt
+        : undefined;
+
+  return {
+    id: String(topic.id ?? ""),
+    name: String(topic.name ?? ""),
+    description:
+      typeof topic.description === "string" ? topic.description : null,
+    defaultSubscription,
+    visibility,
+    createdAt,
+    updatedAt,
+  };
 }
 
 export function TopicsList() {
@@ -36,8 +85,11 @@ export function TopicsList() {
       if (defaultFilter) params.set("default", defaultFilter);
 
       const res = await fetch(`/api/topics?${params.toString()}`);
-      const data = await res.json();
-      setTopics(data.data || []);
+      const data = (await res.json()) as {
+        data?: TopicApiPayload[];
+        total?: number;
+      };
+      setTopics((data.data ?? []).map(normalizeTopic));
       setTotal(data.total || 0);
     } catch {
       setTopics([]);
