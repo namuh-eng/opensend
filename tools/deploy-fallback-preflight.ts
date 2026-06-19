@@ -26,6 +26,20 @@ const appService = `${product}-app`;
 const ingesterService = `${product}-ingester`;
 const appContainerName = env.APP_CONTAINER_NAME || `${product}-app`;
 const ingesterContainerName = env.ING_CONTAINER_NAME || `${product}-ingester`;
+// Mirrors the production app boot requirements enforced by
+// src/lib/startup-checks.ts via packages/core/src/env.ts.
+// The preflight validates metadata names only; it never reads secret values.
+const appStartupRequiredEnvironmentOrSecretNames = [
+  "DATABASE_URL",
+  "BETTER_AUTH_URL",
+  "NEXT_PUBLIC_APP_URL",
+  "BETTER_AUTH_SECRET",
+  "BETTER_AUTH_TRUSTED_ORIGINS",
+  "WEBHOOK_SECRET_ENCRYPTION_KEY",
+  "TRACKING_SECRET",
+  "UNSUBSCRIBE_SECRET",
+  "DKIM_ENCRYPTION_KEY",
+];
 // Mirrors the production ingester boot requirements enforced by
 // packages/ingester/src/startup-checks.ts via packages/core/src/env.ts.
 // The preflight validates metadata names only; it never reads secret values.
@@ -491,7 +505,7 @@ function main(): void {
       appService,
       appContainerName,
       [],
-      ["DATABASE_URL"],
+      appStartupRequiredEnvironmentOrSecretNames,
     ),
     ecsTaskDefinitionMetadataCheck(
       ingesterService,
@@ -510,7 +524,9 @@ function main(): void {
   console.log(`ECS services=${appService}, ${ingesterService}`);
   console.log(`ECS containers=${appContainerName}, ${ingesterContainerName}`);
   console.log(
-    "App base task required database metadata=DATABASE_URL as an environment or secret name on the app container",
+    `App startup required environment/secret metadata=${appStartupRequiredEnvironmentOrSecretNames.join(
+      ", ",
+    )} on the app container`,
   );
   console.log(
     "Scheduler base task required secret metadata=DATABASE_URL, BETTER_AUTH_SECRET on the ingester container",

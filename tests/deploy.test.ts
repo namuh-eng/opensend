@@ -318,11 +318,12 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(preflight).toContain("ingesterContainerName");
     expect(preflight).toContain("requiredContainerSecretNames");
     expect(preflight).toContain("requiredContainerEnvironmentOrSecretNames");
+    expect(preflight).toContain("appStartupRequiredEnvironmentOrSecretNames");
     expect(preflight).toContain(`ecsTaskDefinitionMetadataCheck(
       appService,
       appContainerName,
       [],
-      ["DATABASE_URL"],
+      appStartupRequiredEnvironmentOrSecretNames,
     )`);
     expect(preflight).toContain("environmentNames.has(name)");
     expect(preflight).toContain("secretNames.has(name)");
@@ -339,11 +340,14 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(preflight).toContain("TRACKING_SECRET");
     expect(preflight).toContain("UNSUBSCRIBE_SECRET");
     expect(preflight).toContain("DKIM_ENCRYPTION_KEY");
+    expect(preflight).toContain("BETTER_AUTH_TRUSTED_ORIGINS");
     expect(preflight).toContain("missing required secret metadata");
     expect(preflight).toContain(
       "missing required environment or secret metadata",
     );
-    expect(preflight).toContain("App base task required database metadata");
+    expect(preflight).toContain(
+      "App startup required environment/secret metadata",
+    );
     expect(preflight).toContain("Scheduler base task required secret metadata");
     expect(preflight).toContain(
       "Ingester startup required environment/secret metadata",
@@ -389,12 +393,13 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(runbook).toContain("current task definitions");
     expect(runbook).toContain("expected app and ingester containers");
     expect(runbook).toContain(
-      "app task definition includes `DATABASE_URL` as an environment variable or secret name",
+      "app task definition includes the production app startup-required environment or secret metadata names",
     );
     expect(runbook).toContain("DATABASE_URL");
     expect(runbook).toContain("BETTER_AUTH_URL");
     expect(runbook).toContain("NEXT_PUBLIC_APP_URL");
     expect(runbook).toContain("BETTER_AUTH_SECRET");
+    expect(runbook).toContain("BETTER_AUTH_TRUSTED_ORIGINS");
     expect(runbook).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY");
     expect(runbook).toContain("INGESTER_JOB_TOKEN");
     expect(runbook).toContain("INGESTER_INBOUND_TOKEN");
