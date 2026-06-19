@@ -1,10 +1,12 @@
 import {
+  type AuthResult,
   authorizeDashboardOrApiKey,
   getServerSession,
   unauthorizedResponse,
+  validateApiKey,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
-import { getRootApiAlias } from "@/lib/root-api-compatibility";
+import { getRootApiAlias, isRootApiAlias } from "@/lib/root-api-compatibility";
 import {
   AudienceMetadataServiceError,
   createAudienceMetadataService,
@@ -44,13 +46,21 @@ function inputMode(request: NextRequest) {
   return alias === "contact-properties" ? "root" : "api";
 }
 
+async function authorizePropertyRequest(
+  request: NextRequest,
+): Promise<RouteAuth | AuthResult | null> {
+  if (isRootApiAlias(request.headers, "contact-properties")) {
+    return validateApiKey(request.headers.get("authorization"));
+  }
+
+  return authorizeDashboardOrApiKey(request.headers.get("authorization"));
+}
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeDashboardOrApiKey(
-    _request.headers.get("authorization"),
-  );
+  const auth = await authorizePropertyRequest(request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
@@ -74,9 +84,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
+  const auth = await authorizePropertyRequest(request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
@@ -100,12 +108,10 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeDashboardOrApiKey(
-    _request.headers.get("authorization"),
-  );
+  const auth = await authorizePropertyRequest(request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;

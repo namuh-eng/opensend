@@ -64,19 +64,34 @@ export const segmentRepo = {
         id: segments.id,
         name: segments.name,
         createdAt: segments.createdAt,
-        // Membership is tracked in the contacts_to_segments join table.
+        // Membership can come from the newer contacts_to_segments join table
+        // or the persisted contacts.segments JSONB names used by existing
+        // contacts. Count each tenant-owned contact once even when both
+        // sources record the same membership.
         contactsCount: sql<number>`(
-          select count(*) from ${contactsToSegments}
-          inner join ${contacts} on ${contacts.id} = ${contactsToSegments.contactId}
-          where ${contactsToSegments.segmentId} = ${segments.id}
-          and ${contacts.userId} = ${options.userId}
+          select count(distinct ${contacts.id})
+          from ${contacts}
+          left join ${contactsToSegments}
+            on ${contactsToSegments.contactId} = ${contacts.id}
+            and ${contactsToSegments.segmentId} = ${segments.id}
+          where ${contacts.userId} = ${options.userId}
+          and (
+            ${contactsToSegments.segmentId} is not null
+            or coalesce(${contacts.segments}, '[]'::jsonb) ? ${segments.name}
+          )
         )`.mapWith(Number),
         unsubscribedCount: sql<number>`(
-          select count(*) from ${contactsToSegments}
-          inner join ${contacts} on ${contacts.id} = ${contactsToSegments.contactId}
-          where ${contactsToSegments.segmentId} = ${segments.id}
-          and ${contacts.userId} = ${options.userId}
+          select count(distinct ${contacts.id})
+          from ${contacts}
+          left join ${contactsToSegments}
+            on ${contactsToSegments.contactId} = ${contacts.id}
+            and ${contactsToSegments.segmentId} = ${segments.id}
+          where ${contacts.userId} = ${options.userId}
           and ${contacts.unsubscribed} = true
+          and (
+            ${contactsToSegments.segmentId} is not null
+            or coalesce(${contacts.segments}, '[]'::jsonb) ? ${segments.name}
+          )
         )`.mapWith(Number),
       })
       .from(segments)

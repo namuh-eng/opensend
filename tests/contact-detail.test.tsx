@@ -210,4 +210,36 @@ describe("ContactDetail", () => {
 
     vi.unstubAllGlobals();
   });
+
+  it("saves edits through the persisted UUID contact detail endpoint", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ContactDetail contact={mockContact} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByText("Edit contact"));
+    fireEvent.change(screen.getByLabelText("First name"), {
+      target: { value: "Jane" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/contacts/${mockContact.id}`,
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({
+            first_name: "Jane",
+            last_name: "Doe",
+            unsubscribed: false,
+          }),
+        }),
+      );
+    });
+
+    vi.unstubAllGlobals();
+  });
 });

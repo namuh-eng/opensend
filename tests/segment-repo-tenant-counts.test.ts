@@ -7,7 +7,7 @@ const source = readFileSync(
 );
 
 describe("segmentRepo listForApi tenant-scoped aggregates", () => {
-  it("counts only joined contacts that belong to the requested user", () => {
+  it("counts joined and persisted JSONB segment memberships for only the requested user", () => {
     const contactsCountQuery = source.match(
       /contactsCount:[\s\S]*?`([\s\S]*?)`\.mapWith\(Number\)/,
     )?.[1];
@@ -15,15 +15,23 @@ describe("segmentRepo listForApi tenant-scoped aggregates", () => {
       /unsubscribedCount:[\s\S]*?`([\s\S]*?)`\.mapWith\(Number\)/,
     )?.[1];
 
-    expect(contactsCountQuery).toContain("inner join ${contacts}");
+    expect(contactsCountQuery).toContain("count(distinct ${contacts.id})");
+    expect(contactsCountQuery).toContain("left join ${contactsToSegments}");
     expect(contactsCountQuery).toContain(
-      "and ${contacts.userId} = ${options.userId}",
+      "where ${contacts.userId} = ${options.userId}",
     );
+    expect(contactsCountQuery).toContain(
+      "coalesce(${contacts.segments}, '[]'::jsonb) ? ${segments.name}",
+    );
+    expect(unsubscribedCountQuery).toContain("count(distinct ${contacts.id})");
     expect(unsubscribedCountQuery).toContain(
-      "and ${contacts.userId} = ${options.userId}",
+      "where ${contacts.userId} = ${options.userId}",
     );
     expect(unsubscribedCountQuery).toContain(
       "and ${contacts.unsubscribed} = true",
+    );
+    expect(unsubscribedCountQuery).toContain(
+      "coalesce(${contacts.segments}, '[]'::jsonb) ? ${segments.name}",
     );
   });
 });
