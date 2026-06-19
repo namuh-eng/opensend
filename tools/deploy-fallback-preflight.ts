@@ -17,7 +17,7 @@ interface CheckResult {
 }
 
 const env = process.env;
-const region = env.AWS_REGION || env.AWS_DEFAULT_REGION || "us-east-1";
+const region = env.AWS_REGION || "us-east-1";
 const product = env.PRODUCT || "opensend";
 const cluster = env.ECS_CLUSTER || "namuh";
 const appRepo = `${product}-app`;
@@ -374,6 +374,7 @@ function main(): void {
       ["buildx", "version"],
       (stdout) => stdout,
     ),
+    commandCheck("Python 3", "python3", ["--version"], (stdout) => stdout),
     awsGlobalCheck("AWS CLI", ["--version"], (stdout) => stdout),
     identity.check,
     identity.check.ok && identity.account

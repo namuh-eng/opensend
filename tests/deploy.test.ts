@@ -296,6 +296,9 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
 
     expect(preflight).toContain("docker");
     expect(preflight).toContain("buildx");
+    expect(preflight).toContain('const region = env.AWS_REGION || "us-east-1"');
+    expect(preflight).not.toContain("AWS_DEFAULT_REGION");
+    expect(preflight).toContain('"python3", ["--version"]');
     expect(preflight).toContain("get-caller-identity");
     expect(preflight).toContain("get-login-password");
     expect(preflight).toContain("dockerEcrLoginCheck");
@@ -341,6 +344,7 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
       "utf-8",
     );
     expect(runbook).toContain("aws ecr get-login-password");
+    expect(runbook).toContain("python3 --version");
     expect(runbook).toContain("docker login --password-stdin");
     expect(runbook).toContain("does not print the password");
     expect(runbook).toContain("does not push images");

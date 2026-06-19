@@ -22,6 +22,7 @@ Required tools:
 ```bash
 docker --version
 docker buildx version
+python3 --version
 aws --version
 ```
 
