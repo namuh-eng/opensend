@@ -1,3 +1,4 @@
+import { createTelemetryContext, emitCloudWatchMetric } from "@opensend/core";
 import {
   OpenSendEnvValidationError,
   assertValidOpenSendEnv,
@@ -81,6 +82,43 @@ function buildHeaders(): HeadersInit {
   return token ? { authorization: `Bearer ${token}` } : {};
 }
 
+function emitSchedulerHeartbeat(): void {
+  const telemetry = createTelemetryContext({
+    service: "scheduler",
+    operation: "scheduler.batch",
+  });
+
+  emitCloudWatchMetric(telemetry, {
+    metrics: [{ name: "SchedulerHeartbeat", value: 1, unit: "Count" }],
+    dimensions: {
+      Service: "scheduler",
+      Operation: "scheduler.batch",
+    },
+  });
+}
+
+function emitSchedulerJobFailed(
+  job: ScheduledJob,
+  fields: { status?: number; error?: string },
+): void {
+  const telemetry = createTelemetryContext({
+    service: "scheduler",
+    operation: "scheduler.job",
+  });
+
+  emitCloudWatchMetric(telemetry, {
+    metrics: [{ name: "SchedulerJobFailed", value: 1, unit: "Count" }],
+    dimensions: {
+      Service: "scheduler",
+      Operation: "scheduler.job",
+    },
+    fields: {
+      job: job.name,
+      ...fields,
+    },
+  });
+}
+
 async function runJob(
   baseUrl: string,
   job: ScheduledJob,
@@ -114,17 +152,23 @@ async function runJob(
         body: body.slice(0, 500),
       }),
     );
+
+    if (!response.ok) {
+      emitSchedulerJobFailed(job, { status: response.status });
+    }
   } catch (error) {
     const durationMs = Date.now() - startedAt;
+    const message = error instanceof Error ? error.message : String(error);
     console.error(
       JSON.stringify({
         level: "error",
         event: "scheduler.job_failed",
         job: job.name,
         duration_ms: durationMs,
-        error: error instanceof Error ? error.message : String(error),
+        error: message,
       }),
     );
+    emitSchedulerJobFailed(job, { error: message });
   }
 
   // Upsert a heartbeat so /api/health/scheduler can detect stale jobs.
@@ -186,6 +230,7 @@ async function runScheduledBatch(): Promise<void> {
   }
 
   isRunning = true;
+  emitSchedulerHeartbeat();
   try {
     await runAllJobs(ingesterUrl, intervalMs);
   } finally {

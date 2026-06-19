@@ -58,6 +58,18 @@ const MockEmailReadServiceError = vi.hoisted(
       }
     },
 );
+const MockBackgroundJobDeliveryUnavailableError = vi.hoisted(
+  () =>
+    class BackgroundJobDeliveryUnavailableError extends Error {
+      readonly code = "background_worker_unavailable";
+      readonly statusCode = 503;
+
+      constructor(message = "No background delivery worker is configured.") {
+        super(message);
+        this.name = "BackgroundJobDeliveryUnavailableError";
+      }
+    },
+);
 const MockEmailLifecycleServiceError = vi.hoisted(
   () =>
     class EmailLifecycleServiceError extends Error {
@@ -111,6 +123,8 @@ vi.mock("@opensend/core", async () => {
   return {
     ...contracts,
     ...templateRenderer,
+    BackgroundJobDeliveryUnavailableError:
+      MockBackgroundJobDeliveryUnavailableError,
     EmailDetailServiceError: MockEmailDetailServiceError,
     EmailReadServiceError: MockEmailReadServiceError,
     EmailLifecycleServiceError: MockEmailLifecycleServiceError,
@@ -419,7 +433,7 @@ describe("POST /api/emails", () => {
     );
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
-      reason: "queue_url_missing",
+      reason: "db_polling_fallback_enabled",
     });
     mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
   });
@@ -557,6 +571,52 @@ describe("POST /api/emails", () => {
         groupId: "email.send",
       }),
     );
+  });
+
+  it("returns an actionable error when no queue or fallback worker is configured", async () => {
+    const emailId = "no-worker-email-uuid";
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: false });
+    const returning = vi.fn().mockResolvedValue([{ id: emailId }]);
+    const valuesMock = vi.fn().mockReturnValue({ returning });
+    mockDb.insert = vi.fn().mockReturnValue({ values: valuesMock });
+
+    const updateWhere = vi.fn().mockResolvedValue(undefined);
+    const updateSet = vi.fn().mockReturnValue({ where: updateWhere });
+    mockDb.update = vi.fn().mockReturnValue({ set: updateSet });
+    mockPublishBackgroundJob.mockRejectedValue(
+      new MockBackgroundJobDeliveryUnavailableError(
+        "No background delivery worker is configured. Set BACKGROUND_JOBS_QUEUE_URL or enable DB polling.",
+      ),
+    );
+
+    const { POST } = await import("@/app/api/emails/route");
+    const res = await POST(
+      makeRequest(
+        "POST",
+        {
+          from: "sender@domain.com",
+          to: ["user@test.com"],
+          subject: "Test Email",
+          html: "<p>Hello</p>",
+        },
+        { Authorization: "Bearer os_test123" },
+      ),
+    );
+
+    expect(res.status).toBe(503);
+    await expect(res.json()).resolves.toMatchObject({
+      name: "background_worker_unavailable",
+      code: "background_worker_unavailable",
+      statusCode: 503,
+      message: expect.stringContaining("BACKGROUND_JOBS_QUEUE_URL"),
+    });
+    expect(updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "failed",
+        providerLastErrorCode: "BackgroundJobDeliveryUnavailableError",
+      }),
+    );
+    expect(mockReleaseEmailQuota).toHaveBeenCalledWith(AUTH_RESULT.userId, 1);
   });
 
   it("renders template triple-brace placeholders with fallback values", async () => {
@@ -1767,7 +1827,7 @@ describe("POST /api/emails/batch", () => {
     );
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
-      reason: "queue_url_missing",
+      reason: "db_polling_fallback_enabled",
     });
     mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
   });
@@ -2609,7 +2669,7 @@ describe("services/api transactional email routes", () => {
     );
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
-      reason: "queue_url_missing",
+      reason: "db_polling_fallback_enabled",
     });
     mockValidateApiKey.mockResolvedValue(AUTH_RESULT);
   });
@@ -3448,7 +3508,7 @@ describe("API key sending permissions", () => {
     mockPublishBackgroundJob.mockReset();
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
-      reason: "queue_url_missing",
+      reason: "db_polling_fallback_enabled",
     });
     mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
     mockReleaseEmailQuota.mockResolvedValue(undefined);

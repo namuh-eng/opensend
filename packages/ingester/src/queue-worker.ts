@@ -41,6 +41,7 @@ const DEFAULT_MAX_MESSAGES = 5;
 const DEFAULT_WAIT_TIME_SECONDS = 20;
 const DEFAULT_VISIBILITY_TIMEOUT_SECONDS = 60;
 const DEFAULT_IDLE_SLEEP_MS = 1_000;
+const DEFAULT_DB_POLL_LIMIT = 10;
 const MAX_SQS_DELAY_SECONDS = 900;
 const DEFAULT_PROVIDER_MAX_ATTEMPTS = 3;
 const MAX_EMAIL_ATTACHMENT_BASE64_BYTES = 40 * 1024 * 1024;
@@ -58,6 +59,7 @@ type QueueWorkerOptions = {
   visibilityTimeoutSeconds?: number;
   idleSleepMs?: number;
   providerMaxAttempts?: number;
+  dbPollingBatchSize?: number;
 };
 
 type ProcessJobOptions = {
@@ -92,6 +94,12 @@ type PollResult = {
   errors: number;
 };
 
+type DbPollResult = {
+  scanned: number;
+  processed: number;
+  errors: number;
+};
+
 function getQueueUrl(): string | null {
   const value = process.env.BACKGROUND_JOBS_QUEUE_URL?.trim();
   return value ? value : null;
@@ -113,6 +121,7 @@ export class QueueWorker {
   private readonly visibilityTimeoutSeconds: number;
   private readonly idleSleepMs: number;
   private readonly providerMaxAttempts: number;
+  private readonly dbPollingBatchSize: number;
   private started = false;
 
   constructor(options: QueueWorkerOptions = {}) {
@@ -126,16 +135,25 @@ export class QueueWorker {
     this.idleSleepMs = options.idleSleepMs ?? DEFAULT_IDLE_SLEEP_MS;
     this.providerMaxAttempts =
       options.providerMaxAttempts ?? getProviderMaxAttempts();
+    this.dbPollingBatchSize =
+      options.dbPollingBatchSize ?? DEFAULT_DB_POLL_LIMIT;
   }
 
   start(): void {
     if (this.started) return;
     this.started = true;
-    this.pollForever().catch((error) => {
+
+    const loop = this.queueUrl
+      ? this.pollForever()
+      : this.pollDatabaseForever();
+
+    loop.catch((error) => {
       this.started = false;
       const telemetry = createTelemetryContext({
         service: "worker",
-        operation: "queue.poll_forever",
+        operation: this.queueUrl
+          ? "queue.poll_forever"
+          : "db_queue.poll_forever",
       });
       recordTelemetryError(telemetry, "queue.worker.stopped", error);
     });
@@ -148,6 +166,73 @@ export class QueueWorker {
         await sleep(this.idleSleepMs);
       }
     }
+  }
+
+  async pollDatabaseForever(signal?: AbortSignal): Promise<void> {
+    console.log(
+      "opensend-ingester running in DB-polling mode; configure SQS for production scale",
+    );
+    while (!signal?.aborted) {
+      const result = await this.pollDatabaseOnce();
+      if (result.scanned === 0) {
+        await sleep(this.idleSleepMs);
+      }
+    }
+  }
+
+  async pollDatabaseOnce(
+    limit = this.dbPollingBatchSize,
+  ): Promise<DbPollResult> {
+    const telemetry = createTelemetryContext({
+      service: "worker",
+      operation: "db_queue.poll",
+    });
+
+    if (this.queueUrl) {
+      logTelemetry("info", "db_queue.poll.skipped", telemetry, {
+        reason: "sqs_queue_configured",
+      });
+      return { scanned: 0, processed: 0, errors: 0 };
+    }
+
+    await this.processDueScheduledEmails(limit, telemetry);
+
+    const queued = await emailRepo.findQueuedForDispatch({ limit });
+    const result: DbPollResult = {
+      scanned: queued.length,
+      processed: 0,
+      errors: 0,
+    };
+
+    for (const email of queued) {
+      try {
+        await this.processJob(
+          {
+            id: `email.send:${email.id}`,
+            type: "email.send",
+            source: "manual",
+            requestedAt: new Date().toISOString(),
+            emailId: email.id,
+            trace: getTelemetryCarrier(telemetry),
+          },
+          telemetry,
+          {
+            receiveCount: (email.providerRetryCount ?? 0) + 1,
+            retryDelaySeconds: getDbRetryDelaySeconds(
+              (email.providerRetryCount ?? 0) + 1,
+            ),
+          },
+        );
+        result.processed++;
+      } catch (error) {
+        result.errors++;
+        recordTelemetryError(telemetry, "db_queue.email_send_failed", error, {
+          email_id: email.id,
+        });
+      }
+    }
+
+    return result;
   }
 
   async pollOnce(): Promise<PollResult> {
@@ -225,12 +310,19 @@ export class QueueWorker {
         );
         result.deleted++;
         const durationMs = finishTelemetrySpan(jobSpan, { status: "ok" });
+        const terminalProviderFailure = isTerminalProviderFailure(jobResult);
         emitWorkerJobMetric(jobSpan.context, {
           durationMs,
           jobType: job.type,
-          outcome: isTerminalProviderFailure(jobResult) ? "failed" : "success",
+          outcome: terminalProviderFailure ? "failed" : "success",
           receiveCount,
         });
+        if (terminalProviderFailure) {
+          emitWorkerJobFailedMetric(jobSpan.context, {
+            jobType: job.type,
+            reason: "terminal_provider_failure",
+          });
+        }
       } catch (error) {
         result.errors++;
         const delaySeconds = getRetryDelaySeconds(message.Attributes);
@@ -264,6 +356,10 @@ export class QueueWorker {
             ...(failureJobType ? { JobType: failureJobType } : {}),
             Outcome: "failed",
           },
+        });
+        emitWorkerJobFailedMetric(failureTelemetry, {
+          jobType: failureJobType,
+          reason: "thrown_job_failure",
         });
       }
     }
@@ -353,6 +449,12 @@ export class QueueWorker {
     let enqueued = 0;
 
     for (const email of due) {
+      if (!this.queueUrl) {
+        const queuedRows = await emailRepo.markDueScheduledQueued(email.id);
+        if (queuedRows.length > 0) enqueued++;
+        continue;
+      }
+
       const result = await publishBackgroundJob(
         createBackgroundJob({
           id: `email.send:${email.id}`,
@@ -368,8 +470,14 @@ export class QueueWorker {
       );
 
       if (result.status === "published") {
-        await emailRepo.update(email.id, { status: "queued" });
+        const queuedRows = await emailRepo.markDueScheduledQueued(email.id);
         enqueued++;
+        if (queuedRows.length === 0) {
+          logTelemetry("info", "scheduled_email.promote_skipped", telemetry, {
+            reason: "already_claimed_or_not_due",
+            email_id: email.id,
+          });
+        }
       }
     }
 
@@ -415,26 +523,35 @@ export class QueueWorker {
       return { status: "skipped", reason: "scheduled_for_future" };
     }
 
-    await emailRepo.update(email.id, { status: "processing" });
+    const [claimedEmail] = await emailRepo.claimForSending(email.id);
+    if (!claimedEmail) {
+      logTelemetry("info", "email.send.skipped", telemetry, {
+        reason: "not_claimed",
+        email_id: email.id,
+      });
+      return { status: "skipped", reason: "not_claimed" };
+    }
+
+    const dispatchEmail = claimedEmail;
 
     const sandboxOutcome = getSandboxTestOutcomeForRecipients([
-      ...email.to,
-      ...(email.cc ?? []),
-      ...(email.bcc ?? []),
+      ...dispatchEmail.to,
+      ...(dispatchEmail.cc ?? []),
+      ...(dispatchEmail.bcc ?? []),
     ]);
     if (sandboxOutcome) {
       return await simulateSandboxTestOutcome({
-        email,
+        email: dispatchEmail,
         outcome: sandboxOutcome,
         telemetry,
       });
     }
 
-    const deliveryDomain = await resolveDeliveryDomainForEmail(email);
+    const deliveryDomain = await resolveDeliveryDomainForEmail(dispatchEmail);
     const sesRegion = deliveryDomain?.region ?? DEFAULT_SES_REGION;
     const sesSpan = startTelemetrySpan(telemetry, {
       operation: "ses.send",
-      attributes: { email_id: email.id, ses_region: sesRegion },
+      attributes: { email_id: dispatchEmail.id, ses_region: sesRegion },
     });
     try {
       // Tracking is intentionally rendered at worker-time: validation, template,
@@ -442,29 +559,31 @@ export class QueueWorker {
       // accepted, while stored bodies remain unchanged for disabled parity and
       // auditability. The provider payload is the only mutated boundary.
       const trackedHtml = await renderTrackedHtmlForDelivery(
-        email,
+        dispatchEmail,
         deliveryDomain,
       );
 
       await emailProvider.sendEmail({
-        from: email.from,
-        to: email.to,
-        subject: email.subject,
+        from: dispatchEmail.from,
+        to: dispatchEmail.to,
+        subject: dispatchEmail.subject,
         html: trackedHtml ?? undefined,
-        text: email.text ?? undefined,
-        cc: email.cc ?? undefined,
-        bcc: email.bcc ?? undefined,
-        replyTo: email.replyTo ?? undefined,
-        headers: email.headers ?? undefined,
-        attachments: await normalizeAttachmentsForSend(email.attachments),
+        text: dispatchEmail.text ?? undefined,
+        cc: dispatchEmail.cc ?? undefined,
+        bcc: dispatchEmail.bcc ?? undefined,
+        replyTo: dispatchEmail.replyTo ?? undefined,
+        headers: dispatchEmail.headers ?? undefined,
+        attachments: await normalizeAttachmentsForSend(
+          dispatchEmail.attachments,
+        ),
         region: sesRegion,
         configurationSetName:
           deliveryDomain?.sesConfigurationSetName ?? undefined,
-        emailId: email.id,
+        emailId: dispatchEmail.id,
       });
       const sendDurationMs = finishTelemetrySpan(sesSpan, { status: "ok" });
 
-      await emailRepo.update(email.id, {
+      await emailRepo.update(dispatchEmail.id, {
         status: "sent",
         sentAt: new Date(),
         providerNextRetryAt: null,
@@ -478,7 +597,10 @@ export class QueueWorker {
       return { status: "sent" };
     } catch (error) {
       finishTelemetrySpan(sesSpan, { status: "error" });
-      const attemptCount = Math.max(1, options.receiveCount ?? 1);
+      const attemptCount = Math.max(
+        1,
+        options.receiveCount ?? (dispatchEmail.providerRetryCount ?? 0) + 1,
+      );
       const errorSummary = summarizeProviderError(error);
       const attemptedAt = new Date();
       const retryDelaySeconds = options.retryDelaySeconds ?? null;
@@ -488,7 +610,7 @@ export class QueueWorker {
           : new Date(attemptedAt.getTime() + retryDelaySeconds * 1000);
       const exhausted = attemptCount >= this.providerMaxAttempts;
 
-      await emailRepo.update(email.id, {
+      await emailRepo.update(dispatchEmail.id, {
         status: exhausted ? "failed" : "queued",
         providerRetryCount: attemptCount,
         providerLastAttemptedAt: attemptedAt,
@@ -500,9 +622,9 @@ export class QueueWorker {
 
       if (exhausted) {
         await emailEventRepo.create({
-          emailId: email.id,
-          userId: email.userId,
-          sourceId: `provider-dead-letter:${email.id}:${attemptCount}`,
+          emailId: dispatchEmail.id,
+          userId: dispatchEmail.userId,
+          sourceId: `provider-dead-letter:${dispatchEmail.id}:${attemptCount}`,
           type: "failed",
           payload: {
             reason: "provider_retries_exhausted",
@@ -512,14 +634,14 @@ export class QueueWorker {
           },
           receivedAt: attemptedAt,
         });
-      } else if (email.userId) {
+      } else if (dispatchEmail.userId) {
         await enqueueEmailWebhookEvent({
           type: "email.delayed",
-          userId: email.userId,
-          emailId: email.id,
-          sourceId: `provider-delayed:${email.id}:${attemptCount}`,
+          userId: dispatchEmail.userId,
+          emailId: dispatchEmail.id,
+          sourceId: `provider-delayed:${dispatchEmail.id}:${attemptCount}`,
           payload: {
-            email_id: email.id,
+            email_id: dispatchEmail.id,
             reason: "provider_retry_scheduled",
             provider: "ses",
             attempt_count: attemptCount,
@@ -531,7 +653,7 @@ export class QueueWorker {
       }
 
       recordTelemetryError(telemetry, "email.send.failed", error, {
-        email_id: email.id,
+        email_id: dispatchEmail.id,
         provider_attempt_count: attemptCount,
         provider_retries_exhausted: exhausted,
         ses_region: sesRegion,
@@ -856,6 +978,23 @@ function emitWorkerJobMetric(
   });
 }
 
+function emitWorkerJobFailedMetric(
+  telemetry: TelemetryContext,
+  input: { jobType: string | null; reason: string },
+): void {
+  emitCloudWatchMetric(telemetry, {
+    metrics: [{ name: "WorkerJobFailed", value: 1, unit: "Count" }],
+    dimensions: {
+      Service: "worker",
+      Operation: "job.process",
+    },
+    fields: {
+      ...(input.jobType ? { job_type: input.jobType } : {}),
+      reason: input.reason,
+    },
+  });
+}
+
 function emitSendMetric(
   telemetry: TelemetryContext,
   input: { durationMs: number; outcome: "sent" | "failed"; sesRegion?: string },
@@ -876,6 +1015,19 @@ function emitSendMetric(
       ...(input.sesRegion ? { SesRegion: input.sesRegion } : {}),
     },
   });
+
+  if (input.outcome === "failed") {
+    emitCloudWatchMetric(telemetry, {
+      metrics: [{ name: "SendFailed", value: 1, unit: "Count" }],
+      dimensions: {
+        Service: "worker",
+        Operation: "ses.send",
+      },
+      fields: {
+        ...(input.sesRegion ? { ses_region: input.sesRegion } : {}),
+      },
+    });
+  }
 }
 
 function getProviderMaxAttempts(): number {
@@ -1036,6 +1188,10 @@ function getRetryDelaySeconds(
   const receiveCount = getReceiveCount(attributes);
   if (receiveCount <= 1) return null;
   return Math.min(MAX_SQS_DELAY_SECONDS, 2 ** Math.min(receiveCount, 6));
+}
+
+function getDbRetryDelaySeconds(attemptCount: number): number {
+  return Math.min(MAX_SQS_DELAY_SECONDS, 2 ** Math.min(attemptCount + 1, 6));
 }
 
 export const queueWorker = new QueueWorker();

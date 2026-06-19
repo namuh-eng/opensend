@@ -30,7 +30,8 @@
     "build:api": "bun run --cwd services/api build",
     "docs:generate": "node tools/generate-docs-index.mjs",
     "docs:check": "node tools/check-docs-quality.mjs",
-    "setup": "bun src/lib/env/setup.ts"
+    "setup": "bun src/lib/env/setup.ts",
+    "deploy:fallback:preflight": "bun tools/deploy-fallback-preflight.ts"
   },
   "dependencies": {
     "@aws-sdk/client-eventbridge": "^3.1038.0",

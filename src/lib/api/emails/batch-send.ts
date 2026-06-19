@@ -27,6 +27,7 @@ import {
   replaceUnsubscribePlaceholder,
 } from "@/lib/unsubscribe";
 import {
+  BackgroundJobDeliveryUnavailableError,
   type PublicApiErrorEnvelope,
   batchSendEmailSchema,
   createBackgroundJob,
@@ -849,6 +850,17 @@ export async function handlePostEmailBatchRequest(
         Outcome: "failed",
       },
     });
+
+    if (err instanceof BackgroundJobDeliveryUnavailableError) {
+      return await logResponse(
+        jsonWithTelemetry(
+          publicApiError(err.code, err.message, err.statusCode),
+          telemetry,
+          { status: err.statusCode },
+        ),
+      );
+    }
+
     return await logResponse(
       jsonWithTelemetry(
         publicApiError(

@@ -116,7 +116,7 @@ docker run --rm \
   opensend-smtp-relay
 ```
 
-The Compose profile uses the same Postgres database as the app, publishes `SMTP_RELAY_PORT` (default `2587`), and is not started by default. Accepted SMTP messages only enter the normal delivery worker path when `BACKGROUND_JOBS_QUEUE_URL` is configured; without a queue URL, rows can be accepted for local evaluation but delivery is skipped until the queue contract is wired. See `packages/smtp-relay/README.md` for the full list of environment variables and STARTTLS configuration.
+The Compose profile uses the same Postgres database as the app, publishes `SMTP_RELAY_PORT` (default `2587`), and is not started by default. In default self-host Compose, accepted SMTP messages can be dispatched by the ingester DB-polling fallback when SQS is not configured. Configure `BACKGROUND_JOBS_QUEUE_URL` and keep `BACKGROUND_WORKER_POLL=true` when you graduate to SQS-backed production delivery. See `packages/smtp-relay/README.md` for the full list of environment variables and STARTTLS configuration.
 
 ## Limitations
 
