@@ -24,8 +24,10 @@ const appRepo = `${product}-app`;
 const ingesterRepo = `${product}-ingester`;
 const appService = `${product}-app`;
 const ingesterService = `${product}-ingester`;
+const schedulerService = env.SCHED_SERVICE || `${product}-scheduler`;
 const appContainerName = env.APP_CONTAINER_NAME || `${product}-app`;
 const ingesterContainerName = env.ING_CONTAINER_NAME || `${product}-ingester`;
+const platform = env.PLATFORM || "linux/amd64";
 // Mirrors the production app boot requirements enforced by
 // src/lib/startup-checks.ts via packages/core/src/env.ts.
 // The preflight validates metadata names only; it never reads secret values.
@@ -162,6 +164,23 @@ function awsNameListCheck(
   return { label, ok: true, detail: `found ${names.join(", ")}` };
 }
 
+function platformCheck(): CheckResult {
+  const label = "Docker build platform";
+  if (platform !== "linux/amd64") {
+    return {
+      label,
+      ok: false,
+      detail: `PLATFORM must be linux/amd64 for production fallback deploys; got ${platform}`,
+    };
+  }
+
+  return {
+    label,
+    ok: true,
+    detail: "PLATFORM=linux/amd64",
+  };
+}
+
 function ecsServicesActiveCheck(serviceNames: string[]): CheckResult {
   const label = "ECS services";
   const result = run("aws", [
@@ -239,6 +258,89 @@ function ecsServicesActiveCheck(serviceNames: string[]): CheckResult {
     label,
     ok: true,
     detail: `found ACTIVE services: ${serviceNames.join(", ")}`,
+  };
+}
+
+function ecsSchedulerServiceActiveOrAbsentCheck(
+  serviceName: string,
+): CheckResult {
+  const label = "ECS scheduler service";
+  const result = run("aws", [
+    "ecs",
+    "describe-services",
+    "--cluster",
+    cluster,
+    "--services",
+    serviceName,
+    "--query",
+    "{services:services[].{serviceName:serviceName,status:status},failures:failures[].{arn:arn,reason:reason}}",
+    "--output",
+    "json",
+    "--region",
+    region,
+  ]);
+  if (result.status !== 0) {
+    return { label, ok: false, detail: summarizeFailure(result) };
+  }
+
+  const parsed = parseJsonObject(result.stdout);
+  if (!parsed) {
+    return {
+      label,
+      ok: false,
+      detail:
+        "describe-services did not return JSON scheduler service metadata",
+    };
+  }
+
+  const services = Array.isArray(parsed.services)
+    ? parsed.services.filter(isRecord)
+    : [];
+  const failures = Array.isArray(parsed.failures)
+    ? parsed.failures.filter(isRecord)
+    : [];
+  const unexpectedFailures = failures.filter(
+    (failure) => failure.reason !== "MISSING",
+  );
+  if (unexpectedFailures.length > 0) {
+    return {
+      label,
+      ok: false,
+      detail: `describe-services returned scheduler lookup failures: ${unexpectedFailures
+        .map((failure) =>
+          typeof failure.reason === "string" ? failure.reason : "UNKNOWN",
+        )
+        .join(", ")}`,
+    };
+  }
+
+  const scheduler = services.find(
+    (service) => service.serviceName === serviceName,
+  );
+  if (!scheduler) {
+    return {
+      label,
+      ok: true,
+      detail: `${serviceName} is absent; deploy will create it`,
+    };
+  }
+
+  const status =
+    typeof scheduler.status === "string" && scheduler.status.length > 0
+      ? scheduler.status
+      : "UNKNOWN";
+  if (status !== "ACTIVE") {
+    return {
+      label,
+      ok: false,
+      detail: `${serviceName} must be ACTIVE or absent before fallback deploy; status ${status}`,
+    };
+  }
+
+  return {
+    label,
+    ok: true,
+    detail: `${serviceName} status ACTIVE`,
   };
 }
 
@@ -539,6 +641,7 @@ function main(): void {
       ["buildx", "version"],
       (stdout) => stdout,
     ),
+    platformCheck(),
     commandCheck("Python 3", "python3", ["--version"], (stdout) => stdout),
     awsGlobalCheck("AWS CLI", ["--version"], (stdout) => stdout),
     identity.check,
@@ -565,6 +668,7 @@ function main(): void {
       [appRepo, ingesterRepo],
     ),
     ecsServicesActiveCheck([appService, ingesterService]),
+    ecsSchedulerServiceActiveOrAbsentCheck(schedulerService),
     ecsTaskDefinitionMetadataCheck(
       appService,
       appContainerName,
@@ -586,7 +690,9 @@ function main(): void {
   console.log(`PRODUCT=${product}`);
   console.log(`ECR repositories=${appRepo}, ${ingesterRepo}`);
   console.log(`ECS services=${appService}, ${ingesterService}`);
+  console.log(`ECS scheduler service=${schedulerService}`);
   console.log(`ECS containers=${appContainerName}, ${ingesterContainerName}`);
+  console.log(`PLATFORM=${platform}`);
   console.log(
     `App startup required environment/secret metadata=${appStartupRequiredEnvironmentOrSecretNames.join(
       ", ",

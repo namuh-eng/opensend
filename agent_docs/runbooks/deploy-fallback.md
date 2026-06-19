@@ -40,7 +40,7 @@ If Bun is missing, install it through the workstation's approved package manager
 | `PRODUCT` | `opensend` | Prefix for repositories and services. |
 | `ECS_CLUSTER` | `namuh` | ECS cluster name. |
 | `IMAGE_TAG` | `latest` | Image tag pushed to ECR. |
-| `PLATFORM` | `linux/amd64` | Docker build target platform. |
+| `PLATFORM` | `linux/amd64` | Docker build target platform. The fallback contract only permits `linux/amd64` for production Fargate images. |
 | `WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID` | `opensend/webhook/secret-encryption-key` | Required Secrets Manager identifier for webhook secret encryption key metadata. |
 | `WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN` | unset | Optional ARN override for the same secret metadata when the ARN is already known. |
 | `TRACKING_SECRET_SECRET_ID` | `opensend/tracking-secret` | Required Secrets Manager identifier for tracking secret metadata. |
@@ -52,7 +52,7 @@ If Bun is missing, install it through the workstation's approved package manager
 
 Do not run `env`, `printenv`, `aws secretsmanager get-secret-value`, or any command that prints credential material into logs, issues, PRs, terminals being recorded, or chat. The fallback deploy only needs secret name/ARN metadata through `aws secretsmanager describe-secret`; it must not fetch secret values.
 
-ECR repository and ECS service names are derived by `scripts/deploy.sh` from `PRODUCT` as `${PRODUCT}-app` and `${PRODUCT}-ingester`. Do not set separate app/ingester repository or service override names for the fallback path unless `scripts/deploy.sh` is changed to honor them first.
+ECR repository and ECS service names are derived by `scripts/deploy.sh` from `PRODUCT` as `${PRODUCT}-app` and `${PRODUCT}-ingester`. The scheduler service defaults to `${PRODUCT}-scheduler`; if `SCHED_SERVICE` is set, the preflight validates that same scheduler service name before deploy. Do not set separate app/ingester repository or service override names for the fallback path unless `scripts/deploy.sh` is changed to honor them first.
 
 ## Preflight
 
@@ -66,11 +66,13 @@ The preflight does not push images, update ECS, run tasks, register task definit
 
 - Bun is available to run the repository preflight command.
 - Docker CLI and Docker `buildx` are available.
+- `PLATFORM` is exactly `linux/amd64`; inherited Apple Silicon values such as `linux/arm64` fail preflight before fallback deploy approval.
 - AWS CLI can resolve the caller identity.
 - The optional `AWS_ACCOUNT_ID` matches the authenticated AWS account.
 - Docker can authenticate to the resolved ECR registry using `aws ecr get-login-password` piped to `docker login --password-stdin`; the password is not printed.
 - ECR repositories for the app and ingester are reachable.
 - ECS services in the configured cluster are reachable and both the app and ingester services report `ACTIVE` status. If a service is `DRAINING`, `INACTIVE`, or otherwise not active, the preflight fails with the affected service/status before any image push or ECS mutation.
+- The scheduler service is either absent or reports `ACTIVE` status. If the scheduler service is `DRAINING` or `INACTIVE`, the preflight fails before any image push or ECS mutation because `scripts/deploy.sh all` would otherwise treat a draining scheduler as redeployable and fail late.
 - The current task definitions for the app and ingester services are readable and include the expected app and ingester containers.
 - The current app task definition includes the production app startup-required environment or secret metadata names enforced at boot by `src/lib/startup-checks.ts`: `DATABASE_URL`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_TRUSTED_ORIGINS`, `WEBHOOK_SECRET_ENCRYPTION_KEY`, `TRACKING_SECRET`, `UNSUBSCRIBE_SECRET`, and `DKIM_ENCRYPTION_KEY`. This checks names only; it does not fetch, print, or compare secret values. The check fails before any image push or ECS task-definition mutation if the cloned app base task lacks metadata needed for production boot.
 - The current ingester task definition includes the scheduler base task secret metadata required by `bash scripts/deploy.sh all`: `DATABASE_URL` and `BETTER_AUTH_SECRET` on the ingester container. This validates secret names only; it does not fetch or print secret values.
@@ -100,6 +102,8 @@ If the preflight fails, do not deploy. Fix the failing tool, auth, account, netw
    export PRODUCT=opensend
    export PLATFORM=linux/amd64
    ```
+
+   `PLATFORM` must be `linux/amd64`; do not use an inherited `linux/arm64` or other local-architecture override for production fallback deploys.
 
 4. Run the preflight:
 

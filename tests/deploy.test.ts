@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 const root = join(__dirname, "..");
 
 type ServiceStatus = "ACTIVE" | "DRAINING" | "INACTIVE";
+type SchedulerServiceStatus = ServiceStatus | "ABSENT";
 
 function writeExecutable(path: string, contents: string): void {
   writeFileSync(path, contents);
@@ -27,6 +28,10 @@ function writeExecutable(path: string, contents: string): void {
 function runPreflightWithServiceStatuses(
   appStatus: ServiceStatus,
   ingesterStatus: ServiceStatus,
+  options: {
+    schedulerStatus?: SchedulerServiceStatus;
+    platform?: string;
+  } = {},
 ): { status: number | null; stdout: string; stderr: string } {
   const tempDir = mkdtempSync(join(tmpdir(), "opensend-deploy-preflight-"));
   const binDir = join(tempDir, "bin");
@@ -96,6 +101,14 @@ if [ "$1 $2" = "ecr describe-repositories" ]; then
   exit 0
 fi
 if [ "$1 $2" = "ecs describe-services" ]; then
+  if [[ "$args" == *"{services:services[].{serviceName:serviceName,status:status},failures:failures[].{arn:arn,reason:reason}}"* ]]; then
+    if [ "\${SCHEDULER_SERVICE_STATUS}" = "ABSENT" ]; then
+      printf '{"services":[],"failures":[{"arn":"arn:aws:ecs:us-east-1:123456789012:service/namuh/opensend-scheduler","reason":"MISSING"}]}\n'
+      exit 0
+    fi
+    printf '{"services":[{"serviceName":"opensend-scheduler","status":"%s"}],"failures":[]}\n' "\${SCHEDULER_SERVICE_STATUS}"
+    exit 0
+  fi
   if [[ "$args" == *"services[].{serviceName:serviceName,status:status}"* ]]; then
     printf '[{"serviceName":"opensend-app","status":"%s"},{"serviceName":"opensend-ingester","status":"%s"}]\n' "\${APP_SERVICE_STATUS}" "\${INGESTER_SERVICE_STATUS}"
     exit 0
@@ -137,6 +150,8 @@ exit 1
           ...process.env,
           APP_SERVICE_STATUS: appStatus,
           INGESTER_SERVICE_STATUS: ingesterStatus,
+          PLATFORM: options.platform ?? "linux/amd64",
+          SCHEDULER_SERVICE_STATUS: options.schedulerStatus ?? "ACTIVE",
           PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`,
           SECRET_VALUE_DO_NOT_PRINT: "this-secret-value-must-not-appear",
         },
@@ -438,6 +453,12 @@ ${result.stderr}`;
     expect(output).toContain(
       "[PASS] ECS services: found ACTIVE services: opensend-app, opensend-ingester",
     );
+    expect(output).toContain(
+      "[PASS] ECS scheduler service: opensend-scheduler status ACTIVE",
+    );
+    expect(output).toContain(
+      "[PASS] Docker build platform: PLATFORM=linux/amd64",
+    );
     expect(output).not.toContain("this-secret-value-must-not-appear");
   });
 
@@ -469,6 +490,73 @@ ${result.stderr}`;
     },
   );
 
+  it.each([
+    {
+      schedulerStatus: "ACTIVE" as const,
+      expected: "opensend-scheduler status ACTIVE",
+    },
+    {
+      schedulerStatus: "ABSENT" as const,
+      expected: "opensend-scheduler is absent; deploy will create it",
+    },
+  ])(
+    "deploy fallback preflight passes when the scheduler service is $schedulerStatus",
+    ({ schedulerStatus, expected }) => {
+      const result = runPreflightWithServiceStatuses("ACTIVE", "ACTIVE", {
+        schedulerStatus,
+      });
+      const output = `${result.stdout}
+${result.stderr}`;
+
+      expect(result.status).toBe(0);
+      expect(output).toContain("[PASS] ECS scheduler service");
+      expect(output).toContain(expected);
+      expect(output).not.toContain("this-secret-value-must-not-appear");
+    },
+  );
+
+  it.each([
+    {
+      schedulerStatus: "DRAINING" as const,
+      expected:
+        "opensend-scheduler must be ACTIVE or absent before fallback deploy; status DRAINING",
+    },
+    {
+      schedulerStatus: "INACTIVE" as const,
+      expected:
+        "opensend-scheduler must be ACTIVE or absent before fallback deploy; status INACTIVE",
+    },
+  ])(
+    "deploy fallback preflight fails when the scheduler service is $schedulerStatus",
+    ({ schedulerStatus, expected }) => {
+      const result = runPreflightWithServiceStatuses("ACTIVE", "ACTIVE", {
+        schedulerStatus,
+      });
+      const output = `${result.stdout}
+${result.stderr}`;
+
+      expect(result.status).toBe(1);
+      expect(output).toContain("[FAIL] ECS scheduler service");
+      expect(output).toContain(expected);
+      expect(output).not.toContain("this-secret-value-must-not-appear");
+    },
+  );
+
+  it("deploy fallback preflight fails when PLATFORM is not linux/amd64", () => {
+    const result = runPreflightWithServiceStatuses("ACTIVE", "ACTIVE", {
+      platform: "linux/arm64",
+    });
+    const output = `${result.stdout}
+${result.stderr}`;
+
+    expect(result.status).toBe(1);
+    expect(output).toContain("[FAIL] Docker build platform");
+    expect(output).toContain(
+      "PLATFORM must be linux/amd64 for production fallback deploys; got linux/arm64",
+    );
+    expect(output).not.toContain("this-secret-value-must-not-appear");
+  });
+
   it("deploy fallback preflight checks production reachability and Docker ECR auth without pushing", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf-8"));
     expect(pkg.scripts["deploy:fallback:preflight"]).toBe(
@@ -486,6 +574,13 @@ ${result.stderr}`;
     expect(preflight).not.toContain("AWS_DEFAULT_REGION");
     expect(preflight).toContain('"bun", ["--version"]');
     expect(preflight).toContain('"python3", ["--version"]');
+    expect(preflight).toContain(
+      'const platform = env.PLATFORM || "linux/amd64"',
+    );
+    expect(preflight).toContain("platformCheck");
+    expect(preflight).toContain(
+      "PLATFORM must be linux/amd64 for production fallback deploys",
+    );
     expect(preflight).toContain("get-caller-identity");
     expect(preflight).toContain("get-login-password");
     expect(preflight).toContain("dockerEcrLoginCheck");
@@ -495,8 +590,16 @@ ${result.stderr}`;
     expect(preflight).toContain("describe-repositories");
     expect(preflight).toContain("describe-services");
     expect(preflight).toContain("ecsServicesActiveCheck");
+    expect(preflight).toContain("ecsSchedulerServiceActiveOrAbsentCheck");
+    expect(preflight).toContain("schedulerService");
     expect(preflight).toContain(
       "services[].{serviceName:serviceName,status:status}",
+    );
+    expect(preflight).toContain(
+      "{services:services[].{serviceName:serviceName,status:status},failures:failures[].{arn:arn,reason:reason}}",
+    );
+    expect(preflight).toContain(
+      "must be ACTIVE or absent before fallback deploy",
     );
     expect(preflight).toContain(
       "services must be ACTIVE before fallback deploy",
@@ -586,6 +689,10 @@ ${result.stderr}`;
     expect(runbook).toContain("does not push images");
     expect(runbook).toContain("current task definitions");
     expect(runbook).toContain("services report `ACTIVE` status");
+    expect(runbook).toContain(
+      "scheduler service is either absent or reports `ACTIVE` status",
+    );
+    expect(runbook).toContain("`DRAINING` or `INACTIVE`");
     expect(runbook).toContain("service/status");
     expect(runbook).toContain("expected app and ingester containers");
     expect(runbook).toContain(
@@ -612,6 +719,7 @@ ${result.stderr}`;
       "Bun is available to run the repository preflight command",
     );
     expect(runbook).toContain("does write/refresh the local Docker ECR login");
+    expect(runbook).toContain("`PLATFORM` must be `linux/amd64`");
     expect(runbook).toContain("TRACKING_SECRET_SECRET_ID");
     expect(runbook).toContain("INGESTER_JOB_TOKEN_SECRET_ID");
     expect(runbook).toContain("INGESTER_INBOUND_TOKEN_SECRET_ID");
