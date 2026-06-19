@@ -1,0 +1,1 @@
+await resend.emails.send({}); await resend.someSameLineFutureResource.create({});
