@@ -48,13 +48,37 @@ describe("background job publisher", () => {
     process.env.BACKGROUND_JOBS_QUEUE_URL = "";
     process.env.BACKGROUND_JOBS_EVENT_BUS_NAME = "";
     process.env.BACKGROUND_JOBS_REQUIRE_QUEUE = "";
+    process.env.BACKGROUND_JOBS_DB_POLLING_FALLBACK = "";
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("skips publishing when no queue URL is configured", async () => {
+  it("fails loudly when no queue URL exists and DB-polling fallback is disabled", async () => {
+    process.env.BACKGROUND_JOBS_DB_POLLING_FALLBACK = "false";
+    const { createBackgroundJob, publishBackgroundJob } = await import(
+      "../packages/core/src/jobs/background-jobs"
+    );
+
+    await expect(
+      publishBackgroundJob(
+        createBackgroundJob({
+          id: "email.send:email-1",
+          type: "email.send",
+          source: "api",
+          emailId: "email-1",
+          requestedAt: "2026-04-28T00:00:00.000Z",
+        }),
+      ),
+    ).rejects.toMatchObject({
+      name: "BackgroundJobDeliveryUnavailableError",
+      code: "background_worker_unavailable",
+    });
+    expect(mockSqsClient).not.toHaveBeenCalled();
+  });
+
+  it("defers publishing by default when no queue URL is configured", async () => {
     const { createBackgroundJob, publishBackgroundJob } = await import(
       "../packages/core/src/jobs/background-jobs"
     );
@@ -71,7 +95,7 @@ describe("background job publisher", () => {
 
     expect(result).toEqual({
       status: "skipped",
-      reason: "queue_url_missing",
+      reason: "db_polling_fallback_enabled",
     });
     expect(mockSqsClient).not.toHaveBeenCalled();
 

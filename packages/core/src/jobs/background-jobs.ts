@@ -87,8 +87,20 @@ export type PublishBackgroundJobResult =
     }
   | {
       status: "skipped";
-      reason: "queue_url_missing";
+      reason: "db_polling_fallback_enabled";
     };
+
+export class BackgroundJobDeliveryUnavailableError extends Error {
+  readonly code = "background_worker_unavailable";
+  readonly statusCode = 503;
+
+  constructor(
+    message = "No background delivery worker is configured. Set BACKGROUND_JOBS_QUEUE_URL for SQS production delivery, or set BACKGROUND_JOBS_DB_POLLING_FALLBACK=true and run the ingester with BACKGROUND_WORKER_POLL=true for the self-host DB-polling fallback.",
+  ) {
+    super(message);
+    this.name = "BackgroundJobDeliveryUnavailableError";
+  }
+}
 
 let sqsClient: SQSClient | null = null;
 let eventBridgeClient: EventBridgeClient | null = null;
@@ -112,6 +124,10 @@ function requiresQueue(options: PublishBackgroundJobOptions): boolean {
     options.requireQueue === true ||
     process.env.BACKGROUND_JOBS_REQUIRE_QUEUE === "true"
   );
+}
+
+export function isDbPollingFallbackEnabled(): boolean {
+  return process.env.BACKGROUND_JOBS_DB_POLLING_FALLBACK !== "false";
 }
 
 function serviceForJobSource(source: BackgroundJobSource): string {
@@ -175,10 +191,12 @@ export async function publishBackgroundJob(
   const queueUrl = getQueueUrl();
 
   if (!queueUrl) {
-    if (requiresQueue(options)) {
-      const error = new Error(
-        "BACKGROUND_JOBS_QUEUE_URL is required to publish jobs",
-      );
+    if (requiresQueue(options) || !isDbPollingFallbackEnabled()) {
+      const error = requiresQueue(options)
+        ? new BackgroundJobDeliveryUnavailableError(
+            "BACKGROUND_JOBS_QUEUE_URL is required to publish background jobs. Configure SQS for this deployment, or set BACKGROUND_JOBS_REQUIRE_QUEUE=false and enable BACKGROUND_JOBS_DB_POLLING_FALLBACK=true with an ingester running BACKGROUND_WORKER_POLL=true.",
+          )
+        : new BackgroundJobDeliveryUnavailableError();
       recordTelemetryError(
         publishSpan.context,
         "queue.publish.missing_queue",
@@ -193,14 +211,19 @@ export async function publishBackgroundJob(
       throw error;
     }
 
-    logTelemetry("warn", "queue.publish.skipped", publishSpan.context, {
-      job_id: job.id,
-      job_type: job.type,
-      reason: "queue_url_missing",
-    });
+    logTelemetry(
+      "info",
+      "queue.publish.deferred_to_db_polling",
+      publishSpan.context,
+      {
+        job_id: job.id,
+        job_type: job.type,
+        reason: "db_polling_fallback_enabled",
+      },
+    );
     emitQueuePublishMetric(publishSpan.context, 0, job, "skipped");
     finishTelemetrySpan(publishSpan, { status: "skipped" });
-    return { status: "skipped", reason: "queue_url_missing" };
+    return { status: "skipped", reason: "db_polling_fallback_enabled" };
   }
 
   try {

@@ -33,6 +33,7 @@ import {
   replaceUnsubscribePlaceholder,
 } from "@/lib/unsubscribe";
 import {
+  BackgroundJobDeliveryUnavailableError,
   TemplateRendererError,
   createBackgroundJob,
   createTelemetryContext,
@@ -809,6 +810,17 @@ export async function handlePostEmailRequest(
     if (quotaReserved) {
       await releaseEmailQuota(auth.userId, 1);
     }
+
+    if (err instanceof BackgroundJobDeliveryUnavailableError) {
+      return await logResponse(
+        jsonWithTelemetry(
+          publicApiError(err.code, err.message, err.statusCode),
+          telemetry,
+          { status: err.statusCode },
+        ),
+      );
+    }
+
     return await logResponse(
       jsonWithTelemetry(
         publicApiError("internal_server_error", "Failed to send email.", 500),

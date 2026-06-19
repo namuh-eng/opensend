@@ -50,9 +50,9 @@ docker compose --profile smtp up -d smtp-relay
 Set `SMTP_RELAY_PORT` to change the published/listen port. Configure TLS paths
 only when the referenced certificate/key files are mounted into the relay
 container. Accepted SMTP messages only enter the normal delivery worker path
-when `BACKGROUND_JOBS_QUEUE_URL` is configured; without a queue URL, rows can
-be accepted for local evaluation but delivery is skipped until the queue
-contract is wired.
+when `BACKGROUND_JOBS_QUEUE_URL` is configured. In default Docker Compose,
+the ingester DB-polling fallback dispatches accepted rows when SQS is absent;
+for production scale, configure SQS and keep `BACKGROUND_WORKER_POLL=true`.
 
 For a standalone image:
 
