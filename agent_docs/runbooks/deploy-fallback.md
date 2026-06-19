@@ -70,7 +70,7 @@ The preflight does not push images, update ECS, run tasks, register task definit
 - The optional `AWS_ACCOUNT_ID` matches the authenticated AWS account.
 - Docker can authenticate to the resolved ECR registry using `aws ecr get-login-password` piped to `docker login --password-stdin`; the password is not printed.
 - ECR repositories for the app and ingester are reachable.
-- ECS services in the configured cluster are reachable.
+- ECS services in the configured cluster are reachable and both the app and ingester services report `ACTIVE` status. If a service is `DRAINING`, `INACTIVE`, or otherwise not active, the preflight fails with the affected service/status before any image push or ECS mutation.
 - The current task definitions for the app and ingester services are readable and include the expected app and ingester containers.
 - The current app task definition includes the production app startup-required environment or secret metadata names enforced at boot by `src/lib/startup-checks.ts`: `DATABASE_URL`, `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_TRUSTED_ORIGINS`, `WEBHOOK_SECRET_ENCRYPTION_KEY`, `TRACKING_SECRET`, `UNSUBSCRIBE_SECRET`, and `DKIM_ENCRYPTION_KEY`. This checks names only; it does not fetch, print, or compare secret values. The check fails before any image push or ECS task-definition mutation if the cloned app base task lacks metadata needed for production boot.
 - The current ingester task definition includes the scheduler base task secret metadata required by `bash scripts/deploy.sh all`: `DATABASE_URL` and `BETTER_AUTH_SECRET` on the ingester container. This validates secret names only; it does not fetch or print secret values.

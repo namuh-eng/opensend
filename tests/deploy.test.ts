@@ -1,11 +1,157 @@
 // ABOUTME: Static deployment tests for the app + ingester ECS Fargate split
 // ABOUTME: Verifies repo-visible Docker, compose, deploy script, and runbook wiring
 
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const root = join(__dirname, "..");
+
+type ServiceStatus = "ACTIVE" | "DRAINING" | "INACTIVE";
+
+function writeExecutable(path: string, contents: string): void {
+  writeFileSync(path, contents);
+  chmodSync(path, 0o755);
+}
+
+function runPreflightWithServiceStatuses(
+  appStatus: ServiceStatus,
+  ingesterStatus: ServiceStatus,
+): { status: number | null; stdout: string; stderr: string } {
+  const tempDir = mkdtempSync(join(tmpdir(), "opensend-deploy-preflight-"));
+  const binDir = join(tempDir, "bin");
+  mkdirSync(binDir);
+
+  writeExecutable(
+    join(binDir, "bun"),
+    `#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+  echo "1.3.8"
+  exit 0
+fi
+echo "unexpected bun args: $*" >&2
+exit 1
+`,
+  );
+  writeExecutable(
+    join(binDir, "python3"),
+    `#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+  echo "Python 3.13.0"
+  exit 0
+fi
+echo "unexpected python3 args: $*" >&2
+exit 1
+`,
+  );
+  writeExecutable(
+    join(binDir, "docker"),
+    `#!/usr/bin/env bash
+if [ "$1" = "--version" ]; then
+  echo "Docker version 27.0.0"
+  exit 0
+fi
+if [ "$1" = "buildx" ] && [ "$2" = "version" ]; then
+  echo "github.com/docker/buildx v0.16.0"
+  exit 0
+fi
+if [ "$1" = "login" ]; then
+  cat >/dev/null
+  echo "Login Succeeded"
+  exit 0
+fi
+echo "unexpected docker args: $*" >&2
+exit 1
+`,
+  );
+  writeExecutable(
+    join(binDir, "aws"),
+    `#!/usr/bin/env bash
+set -euo pipefail
+args="$*"
+if [ "$1" = "--version" ]; then
+  echo "aws-cli/2.17.0"
+  exit 0
+fi
+if [ "$1 $2" = "sts get-caller-identity" ]; then
+  echo "123456789012"
+  exit 0
+fi
+if [ "$1 $2" = "ecr get-login-password" ]; then
+  echo "fake-password-not-a-secret-value"
+  exit 0
+fi
+if [ "$1 $2" = "ecr describe-repositories" ]; then
+  printf 'opensend-app\topensend-ingester\n'
+  exit 0
+fi
+if [ "$1 $2" = "ecs describe-services" ]; then
+  if [[ "$args" == *"services[].{serviceName:serviceName,status:status}"* ]]; then
+    printf '[{"serviceName":"opensend-app","status":"%s"},{"serviceName":"opensend-ingester","status":"%s"}]\n' "\${APP_SERVICE_STATUS}" "\${INGESTER_SERVICE_STATUS}"
+    exit 0
+  fi
+  if [[ "$args" == *"{serviceName:services[0].serviceName,taskDefinition:services[0].taskDefinition}"* ]]; then
+    service="opensend-app"
+    if [[ "$args" == *"opensend-ingester"* ]]; then
+      service="opensend-ingester"
+    fi
+    printf '{"serviceName":"%s","taskDefinition":"arn:aws:ecs:us-east-1:123456789012:task-definition/%s:42"}\n' "$service" "$service"
+    exit 0
+  fi
+fi
+if [ "$1 $2" = "ecs describe-task-definition" ]; then
+  container="opensend-app"
+  if [[ "$args" == *"opensend-ingester"* ]]; then
+    container="opensend-ingester"
+  fi
+  printf '{"family":"%s","containers":[{"name":"%s","secrets":["DATABASE_URL","BETTER_AUTH_URL","NEXT_PUBLIC_APP_URL","BETTER_AUTH_SECRET","BETTER_AUTH_TRUSTED_ORIGINS","WEBHOOK_SECRET_ENCRYPTION_KEY","INGESTER_JOB_TOKEN","INGESTER_INBOUND_TOKEN","TRACKING_SECRET","UNSUBSCRIBE_SECRET","DKIM_ENCRYPTION_KEY"],"environment":[]}]}\n' "$container" "$container"
+  exit 0
+fi
+if [ "$1 $2" = "secretsmanager describe-secret" ]; then
+  echo '{"Name":"metadata-only","ARN":"arn:aws:secretsmanager:us-east-1:123456789012:secret:metadata-only"}'
+  exit 0
+fi
+echo "unexpected aws args: $*" >&2
+exit 1
+`,
+  );
+
+  try {
+    const result = spawnSync(
+      process.execPath,
+      ["tools/deploy-fallback-preflight.ts"],
+      {
+        cwd: root,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          APP_SERVICE_STATUS: appStatus,
+          INGESTER_SERVICE_STATUS: ingesterStatus,
+          PATH: `${binDir}${delimiter}${process.env.PATH ?? ""}`,
+          SECRET_VALUE_DO_NOT_PRINT: "this-secret-value-must-not-appear",
+        },
+      },
+    );
+
+    return {
+      status: result.status,
+      stdout: result.stdout ?? "",
+      stderr: result.stderr ?? "",
+    };
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
 
 function serviceBlock(compose: string, serviceName: string): string {
   const escapedServiceName = serviceName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -283,6 +429,46 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(runbook).toContain("not proven fully closed");
   });
 
+  it("deploy fallback preflight passes when app and ingester ECS services are ACTIVE", () => {
+    const result = runPreflightWithServiceStatuses("ACTIVE", "ACTIVE");
+    const output = `${result.stdout}
+${result.stderr}`;
+
+    expect(result.status).toBe(0);
+    expect(output).toContain(
+      "[PASS] ECS services: found ACTIVE services: opensend-app, opensend-ingester",
+    );
+    expect(output).not.toContain("this-secret-value-must-not-appear");
+  });
+
+  it.each([
+    {
+      appStatus: "DRAINING" as const,
+      ingesterStatus: "ACTIVE" as const,
+      expected: "opensend-app status DRAINING",
+    },
+    {
+      appStatus: "ACTIVE" as const,
+      ingesterStatus: "INACTIVE" as const,
+      expected: "opensend-ingester status INACTIVE",
+    },
+  ])(
+    "deploy fallback preflight fails when an ECS service is $expected",
+    ({ appStatus, ingesterStatus, expected }) => {
+      const result = runPreflightWithServiceStatuses(appStatus, ingesterStatus);
+      const output = `${result.stdout}
+${result.stderr}`;
+
+      expect(result.status).toBe(1);
+      expect(output).toContain("[FAIL] ECS services");
+      expect(output).toContain(expected);
+      expect(output).toContain(
+        "services must be ACTIVE before fallback deploy",
+      );
+      expect(output).not.toContain("this-secret-value-must-not-appear");
+    },
+  );
+
   it("deploy fallback preflight checks production reachability and Docker ECR auth without pushing", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf-8"));
     expect(pkg.scripts["deploy:fallback:preflight"]).toBe(
@@ -308,6 +494,14 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     );
     expect(preflight).toContain("describe-repositories");
     expect(preflight).toContain("describe-services");
+    expect(preflight).toContain("ecsServicesActiveCheck");
+    expect(preflight).toContain(
+      "services[].{serviceName:serviceName,status:status}",
+    );
+    expect(preflight).toContain(
+      "services must be ACTIVE before fallback deploy",
+    );
+    expect(preflight).toContain("status ${service.status}");
     expect(preflight).toContain("describe-task-definition");
     expect(preflight).toContain("ecsTaskDefinitionMetadataCheck");
     expect(preflight).toContain("taskDefinition.family");
@@ -391,6 +585,8 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(runbook).toContain("does not print the password");
     expect(runbook).toContain("does not push images");
     expect(runbook).toContain("current task definitions");
+    expect(runbook).toContain("services report `ACTIVE` status");
+    expect(runbook).toContain("service/status");
     expect(runbook).toContain("expected app and ingester containers");
     expect(runbook).toContain(
       "app task definition includes the production app startup-required environment or secret metadata names",

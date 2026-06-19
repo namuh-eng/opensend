@@ -162,6 +162,86 @@ function awsNameListCheck(
   return { label, ok: true, detail: `found ${names.join(", ")}` };
 }
 
+function ecsServicesActiveCheck(serviceNames: string[]): CheckResult {
+  const label = "ECS services";
+  const result = run("aws", [
+    "ecs",
+    "describe-services",
+    "--cluster",
+    cluster,
+    "--services",
+    ...serviceNames,
+    "--query",
+    "services[].{serviceName:serviceName,status:status}",
+    "--output",
+    "json",
+    "--region",
+    region,
+  ]);
+  if (result.status !== 0) {
+    return { label, ok: false, detail: summarizeFailure(result) };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    return {
+      label,
+      ok: false,
+      detail: "describe-services did not return JSON service status metadata",
+    };
+  }
+
+  const services = Array.isArray(parsed) ? parsed.filter(isRecord) : [];
+  const serviceStatuses = new Map<string, string>();
+  for (const service of services) {
+    if (typeof service.serviceName !== "string") {
+      continue;
+    }
+
+    serviceStatuses.set(
+      service.serviceName,
+      typeof service.status === "string" && service.status.length > 0
+        ? service.status
+        : "UNKNOWN",
+    );
+  }
+
+  const missing = serviceNames.filter(
+    (serviceName) => !serviceStatuses.has(serviceName),
+  );
+  if (missing.length > 0) {
+    return {
+      label,
+      ok: false,
+      detail: `missing expected services: ${missing.join(", ")}`,
+    };
+  }
+
+  const inactive = serviceNames
+    .map((serviceName) => ({
+      serviceName,
+      status: serviceStatuses.get(serviceName) ?? "UNKNOWN",
+    }))
+    .filter((service) => service.status !== "ACTIVE");
+  if (inactive.length > 0) {
+    return {
+      label,
+      ok: false,
+      detail: `services must be ACTIVE before fallback deploy: ${inactive
+        .map((service) => `${service.serviceName} status ${service.status}`)
+        .join(", ")}`,
+    };
+  }
+
+  return {
+    label,
+    ok: true,
+    detail: `found ACTIVE services: ${serviceNames.join(", ")}`,
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -484,23 +564,7 @@ function main(): void {
       ],
       [appRepo, ingesterRepo],
     ),
-    awsNameListCheck(
-      "ECS services",
-      [
-        "ecs",
-        "describe-services",
-        "--cluster",
-        cluster,
-        "--services",
-        appService,
-        ingesterService,
-        "--query",
-        "services[].serviceName",
-        "--output",
-        "text",
-      ],
-      [appService, ingesterService],
-    ),
+    ecsServicesActiveCheck([appService, ingesterService]),
     ecsTaskDefinitionMetadataCheck(
       appService,
       appContainerName,
