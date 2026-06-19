@@ -957,6 +957,16 @@ describe("QueueWorker", () => {
       },
       receivedAt: expect.any(Date),
     });
+    expect(mockEmitCloudWatchMetric).toHaveBeenCalledWith(
+      expect.objectContaining({ service: "worker" }),
+      expect.objectContaining({
+        metrics: [{ name: "SendFailed", value: 1, unit: "Count" }],
+        dimensions: {
+          Service: "worker",
+          Operation: "ses.send",
+        },
+      }),
+    );
     expect(mockEnqueueEmailWebhookEvent).not.toHaveBeenCalled();
   });
 

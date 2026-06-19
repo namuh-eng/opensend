@@ -62,4 +62,16 @@ describe("ingester job scheduler coverage", () => {
     );
     expect(docs).toContain("Authorization: Bearer ${INGESTER_JOB_TOKEN}");
   });
+  it("emits alarm-friendly scheduler heartbeat and failure metrics", () => {
+    const schedulerSource = readRepoFile(
+      "packages/ingester/src/job-scheduler.ts",
+    );
+
+    expect(schedulerSource).toContain('name: "SchedulerHeartbeat"');
+    expect(schedulerSource).toContain('name: "SchedulerJobFailed"');
+    expect(schedulerSource).toContain('Service: "scheduler"');
+    expect(schedulerSource).toContain('Operation: "scheduler.batch"');
+    expect(schedulerSource).toContain('Operation: "scheduler.job"');
+    expect(schedulerSource).toContain("job: job.name");
+  });
 });
