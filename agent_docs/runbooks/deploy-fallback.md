@@ -20,11 +20,14 @@ Use a trusted operator machine with:
 Required tools:
 
 ```bash
+bun --version
 docker --version
 docker buildx version
 python3 --version
 aws --version
 ```
+
+If Bun is missing, install it through the workstation's approved package manager or bootstrap process, then rerun `bun --version` before preflight.
 
 ## Non-secret environment contract
 
@@ -61,6 +64,7 @@ bun run deploy:fallback:preflight
 
 The preflight does not push images, update ECS, run tasks, register task definitions, or fetch secret values. It does write/refresh the local Docker ECR login entry for the resolved registry so `docker buildx build --push` can authenticate before any image build starts. It verifies:
 
+- Bun is available to run the repository preflight command.
 - Docker CLI and Docker `buildx` are available.
 - AWS CLI can resolve the caller identity.
 - The optional `AWS_ACCOUNT_ID` matches the authenticated AWS account.

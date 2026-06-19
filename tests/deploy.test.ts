@@ -298,6 +298,7 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(preflight).toContain("buildx");
     expect(preflight).toContain('const region = env.AWS_REGION || "us-east-1"');
     expect(preflight).not.toContain("AWS_DEFAULT_REGION");
+    expect(preflight).toContain('"bun", ["--version"]');
     expect(preflight).toContain('"python3", ["--version"]');
     expect(preflight).toContain("get-caller-identity");
     expect(preflight).toContain("get-login-password");
@@ -365,6 +366,8 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
       "utf-8",
     );
     expect(runbook).toContain("aws ecr get-login-password");
+    expect(runbook).toContain("bun --version");
+    expect(runbook).toContain("If Bun is missing");
     expect(runbook).toContain("python3 --version");
     expect(runbook).toContain("docker login --password-stdin");
     expect(runbook).toContain("does not print the password");
@@ -377,6 +380,9 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(runbook).toContain("DATABASE_URL");
     expect(runbook).toContain("BETTER_AUTH_SECRET");
     expect(runbook).toContain("scheduler base task");
+    expect(runbook).toContain(
+      "Bun is available to run the repository preflight command",
+    );
     expect(runbook).toContain("does write/refresh the local Docker ECR login");
     expect(runbook).toContain("TRACKING_SECRET_SECRET_ID");
     expect(runbook).toContain("INGESTER_JOB_TOKEN_SECRET_ID");

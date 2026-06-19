@@ -422,6 +422,7 @@ function dockerEcrLoginCheck(account: string): CheckResult {
 function main(): void {
   const identity = callerIdentity();
   const checks: CheckResult[] = [
+    commandCheck("Bun", "bun", ["--version"], (stdout) => stdout),
     commandCheck("Docker CLI", "docker", ["--version"], (stdout) => stdout),
     commandCheck(
       "Docker buildx",
