@@ -149,6 +149,7 @@ function parseJsonObject(value: string): Record<string, unknown> | undefined {
 function ecsTaskDefinitionMetadataCheck(
   serviceName: string,
   expectedContainerName: string,
+  requiredContainerSecretNames: string[] = [],
 ): CheckResult {
   const serviceResult = run("aws", [
     "ecs",
@@ -188,7 +189,7 @@ function ecsTaskDefinitionMetadataCheck(
     "--task-definition",
     taskDefinition,
     "--query",
-    "{family:taskDefinition.family,containers:taskDefinition.containerDefinitions[].name}",
+    "{family:taskDefinition.family,containers:taskDefinition.containerDefinitions[].{name:name,secrets:secrets[].name}}",
     "--output",
     "json",
     "--region",
@@ -205,12 +206,14 @@ function ecsTaskDefinitionMetadataCheck(
   const taskMetadata = parseJsonObject(taskDefinitionResult.stdout);
   const family =
     typeof taskMetadata?.family === "string" ? taskMetadata.family : "";
-  const containers = Array.isArray(taskMetadata?.containers)
-    ? taskMetadata.containers.filter(
-        (containerName): containerName is string =>
-          typeof containerName === "string" && containerName.length > 0,
-      )
+  const containerMetadata = Array.isArray(taskMetadata?.containers)
+    ? taskMetadata.containers.filter(isRecord)
     : [];
+  const containers = containerMetadata
+    .map((container) =>
+      typeof container.name === "string" ? container.name : "",
+    )
+    .filter((containerName) => containerName.length > 0);
 
   if (!family) {
     return {
@@ -228,10 +231,37 @@ function ecsTaskDefinitionMetadataCheck(
     };
   }
 
+  const expectedContainer = containerMetadata.find(
+    (container) => container.name === expectedContainerName,
+  );
+  const secretNames = new Set(
+    Array.isArray(expectedContainer?.secrets)
+      ? expectedContainer.secrets.filter(
+          (secretName): secretName is string =>
+            typeof secretName === "string" && secretName.length > 0,
+        )
+      : [],
+  );
+  const missingSecretNames = requiredContainerSecretNames.filter(
+    (secretName) => !secretNames.has(secretName),
+  );
+  if (missingSecretNames.length > 0) {
+    return {
+      label,
+      ok: false,
+      detail: `${taskDefinition} container ${expectedContainerName} missing required secret metadata: ${missingSecretNames.join(", ")}`,
+    };
+  }
+
+  const secretDetail =
+    requiredContainerSecretNames.length > 0
+      ? ` requiredSecrets=${requiredContainerSecretNames.join(",")}`
+      : "";
+
   return {
     label,
     ok: true,
-    detail: `${taskDefinition} family=${family} container=${expectedContainerName}`,
+    detail: `${taskDefinition} family=${family} container=${expectedContainerName}${secretDetail}`,
   };
 }
 
@@ -417,7 +447,10 @@ function main(): void {
       [appService, ingesterService],
     ),
     ecsTaskDefinitionMetadataCheck(appService, appContainerName),
-    ecsTaskDefinitionMetadataCheck(ingesterService, ingesterContainerName),
+    ecsTaskDefinitionMetadataCheck(ingesterService, ingesterContainerName, [
+      "DATABASE_URL",
+      "BETTER_AUTH_SECRET",
+    ]),
     ...requiredSecretRefs.map((secretRef) => secretMetadataCheck(secretRef)),
   ];
 
@@ -428,6 +461,9 @@ function main(): void {
   console.log(`ECR repositories=${appRepo}, ${ingesterRepo}`);
   console.log(`ECS services=${appService}, ${ingesterService}`);
   console.log(`ECS containers=${appContainerName}, ${ingesterContainerName}`);
+  console.log(
+    "Scheduler base task required secret metadata=DATABASE_URL, BETTER_AUTH_SECRET on the ingester container",
+  );
   console.log(
     `Required secret metadata=${requiredSecretRefs
       .map((secretRef) => secretRef.idEnvName)
