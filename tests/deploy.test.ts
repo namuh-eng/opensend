@@ -326,14 +326,28 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     )`);
     expect(preflight).toContain("environmentNames.has(name)");
     expect(preflight).toContain("secretNames.has(name)");
+    expect(preflight).toContain(
+      "ingesterStartupRequiredEnvironmentOrSecretNames",
+    );
     expect(preflight).toContain("DATABASE_URL");
+    expect(preflight).toContain("BETTER_AUTH_URL");
+    expect(preflight).toContain("NEXT_PUBLIC_APP_URL");
     expect(preflight).toContain("BETTER_AUTH_SECRET");
+    expect(preflight).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY");
+    expect(preflight).toContain("INGESTER_JOB_TOKEN");
+    expect(preflight).toContain("INGESTER_INBOUND_TOKEN");
+    expect(preflight).toContain("TRACKING_SECRET");
+    expect(preflight).toContain("UNSUBSCRIBE_SECRET");
+    expect(preflight).toContain("DKIM_ENCRYPTION_KEY");
     expect(preflight).toContain("missing required secret metadata");
     expect(preflight).toContain(
       "missing required environment or secret metadata",
     );
     expect(preflight).toContain("App base task required database metadata");
     expect(preflight).toContain("Scheduler base task required secret metadata");
+    expect(preflight).toContain(
+      "Ingester startup required environment/secret metadata",
+    );
     expect(preflight).toContain("describe-secret");
     expect(preflight).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID");
     expect(preflight).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN");
@@ -378,8 +392,21 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
       "app task definition includes `DATABASE_URL` as an environment variable or secret name",
     );
     expect(runbook).toContain("DATABASE_URL");
+    expect(runbook).toContain("BETTER_AUTH_URL");
+    expect(runbook).toContain("NEXT_PUBLIC_APP_URL");
     expect(runbook).toContain("BETTER_AUTH_SECRET");
+    expect(runbook).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY");
+    expect(runbook).toContain("INGESTER_JOB_TOKEN");
+    expect(runbook).toContain("INGESTER_INBOUND_TOKEN");
+    expect(runbook).toContain("TRACKING_SECRET");
+    expect(runbook).toContain("UNSUBSCRIBE_SECRET");
+    expect(runbook).toContain("DKIM_ENCRYPTION_KEY");
     expect(runbook).toContain("scheduler base task");
+    expect(runbook).toContain(
+      "startup-required environment or secret metadata",
+    );
+    expect(runbook).toContain("packages/ingester/src/startup-checks.ts");
+    expect(runbook).toContain("checks names only");
     expect(runbook).toContain(
       "Bun is available to run the repository preflight command",
     );

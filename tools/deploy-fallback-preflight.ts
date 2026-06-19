@@ -26,6 +26,21 @@ const appService = `${product}-app`;
 const ingesterService = `${product}-ingester`;
 const appContainerName = env.APP_CONTAINER_NAME || `${product}-app`;
 const ingesterContainerName = env.ING_CONTAINER_NAME || `${product}-ingester`;
+// Mirrors the production ingester boot requirements enforced by
+// packages/ingester/src/startup-checks.ts via packages/core/src/env.ts.
+// The preflight validates metadata names only; it never reads secret values.
+const ingesterStartupRequiredEnvironmentOrSecretNames = [
+  "DATABASE_URL",
+  "BETTER_AUTH_URL",
+  "NEXT_PUBLIC_APP_URL",
+  "BETTER_AUTH_SECRET",
+  "WEBHOOK_SECRET_ENCRYPTION_KEY",
+  "INGESTER_JOB_TOKEN",
+  "INGESTER_INBOUND_TOKEN",
+  "TRACKING_SECRET",
+  "UNSUBSCRIBE_SECRET",
+  "DKIM_ENCRYPTION_KEY",
+];
 const requiredSecretRefs = [
   {
     label: "Webhook secret encryption key",
@@ -478,10 +493,12 @@ function main(): void {
       [],
       ["DATABASE_URL"],
     ),
-    ecsTaskDefinitionMetadataCheck(ingesterService, ingesterContainerName, [
-      "DATABASE_URL",
-      "BETTER_AUTH_SECRET",
-    ]),
+    ecsTaskDefinitionMetadataCheck(
+      ingesterService,
+      ingesterContainerName,
+      ["DATABASE_URL", "BETTER_AUTH_SECRET"],
+      ingesterStartupRequiredEnvironmentOrSecretNames,
+    ),
     ...requiredSecretRefs.map((secretRef) => secretMetadataCheck(secretRef)),
   ];
 
@@ -497,6 +514,11 @@ function main(): void {
   );
   console.log(
     "Scheduler base task required secret metadata=DATABASE_URL, BETTER_AUTH_SECRET on the ingester container",
+  );
+  console.log(
+    `Ingester startup required environment/secret metadata=${ingesterStartupRequiredEnvironmentOrSecretNames.join(
+      ", ",
+    )} on the ingester container`,
   );
   console.log(
     `Required secret metadata=${requiredSecretRefs
