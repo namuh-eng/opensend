@@ -68,6 +68,7 @@ The preflight does not push images, update ECS, run tasks, register task definit
 - ECR repositories for the app and ingester are reachable.
 - ECS services in the configured cluster are reachable.
 - The current task definitions for the app and ingester services are readable and include the expected app and ingester containers.
+- The current app task definition includes `DATABASE_URL` as an environment variable or secret name on the app container, so the migrator cloned from the app task will not fail after image/task-definition mutations. This validates metadata names only; it does not fetch or print secret values.
 - The current ingester task definition includes the scheduler base task secret metadata required by `bash scripts/deploy.sh all`: `DATABASE_URL` and `BETTER_AUTH_SECRET` on the ingester container. This validates secret names only; it does not fetch or print secret values.
 - Required Secrets Manager secret name/ARN metadata for the webhook encryption key, tracking secret, ingester job token, and ingester inbound token is resolvable without fetching values.
 

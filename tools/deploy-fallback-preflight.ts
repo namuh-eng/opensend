@@ -150,6 +150,7 @@ function ecsTaskDefinitionMetadataCheck(
   serviceName: string,
   expectedContainerName: string,
   requiredContainerSecretNames: string[] = [],
+  requiredContainerEnvironmentOrSecretNames: string[] = [],
 ): CheckResult {
   const serviceResult = run("aws", [
     "ecs",
@@ -189,7 +190,7 @@ function ecsTaskDefinitionMetadataCheck(
     "--task-definition",
     taskDefinition,
     "--query",
-    "{family:taskDefinition.family,containers:taskDefinition.containerDefinitions[].{name:name,secrets:secrets[].name}}",
+    "{family:taskDefinition.family,containers:taskDefinition.containerDefinitions[].{name:name,secrets:secrets[].name,environment:environment[].name}}",
     "--output",
     "json",
     "--region",
@@ -242,6 +243,14 @@ function ecsTaskDefinitionMetadataCheck(
         )
       : [],
   );
+  const environmentNames = new Set(
+    Array.isArray(expectedContainer?.environment)
+      ? expectedContainer.environment.filter(
+          (environmentName): environmentName is string =>
+            typeof environmentName === "string" && environmentName.length > 0,
+        )
+      : [],
+  );
   const missingSecretNames = requiredContainerSecretNames.filter(
     (secretName) => !secretNames.has(secretName),
   );
@@ -253,15 +262,31 @@ function ecsTaskDefinitionMetadataCheck(
     };
   }
 
+  const missingEnvironmentOrSecretNames =
+    requiredContainerEnvironmentOrSecretNames.filter(
+      (name) => !environmentNames.has(name) && !secretNames.has(name),
+    );
+  if (missingEnvironmentOrSecretNames.length > 0) {
+    return {
+      label,
+      ok: false,
+      detail: `${taskDefinition} container ${expectedContainerName} missing required environment or secret metadata: ${missingEnvironmentOrSecretNames.join(", ")}`,
+    };
+  }
+
   const secretDetail =
     requiredContainerSecretNames.length > 0
       ? ` requiredSecrets=${requiredContainerSecretNames.join(",")}`
+      : "";
+  const environmentOrSecretDetail =
+    requiredContainerEnvironmentOrSecretNames.length > 0
+      ? ` requiredEnvironmentOrSecrets=${requiredContainerEnvironmentOrSecretNames.join(",")}`
       : "";
 
   return {
     label,
     ok: true,
-    detail: `${taskDefinition} family=${family} container=${expectedContainerName}${secretDetail}`,
+    detail: `${taskDefinition} family=${family} container=${expectedContainerName}${secretDetail}${environmentOrSecretDetail}`,
   };
 }
 
@@ -446,7 +471,12 @@ function main(): void {
       ],
       [appService, ingesterService],
     ),
-    ecsTaskDefinitionMetadataCheck(appService, appContainerName),
+    ecsTaskDefinitionMetadataCheck(
+      appService,
+      appContainerName,
+      [],
+      ["DATABASE_URL"],
+    ),
     ecsTaskDefinitionMetadataCheck(ingesterService, ingesterContainerName, [
       "DATABASE_URL",
       "BETTER_AUTH_SECRET",
@@ -461,6 +491,9 @@ function main(): void {
   console.log(`ECR repositories=${appRepo}, ${ingesterRepo}`);
   console.log(`ECS services=${appService}, ${ingesterService}`);
   console.log(`ECS containers=${appContainerName}, ${ingesterContainerName}`);
+  console.log(
+    "App base task required database metadata=DATABASE_URL as an environment or secret name on the app container",
+  );
   console.log(
     "Scheduler base task required secret metadata=DATABASE_URL, BETTER_AUTH_SECRET on the ingester container",
   );

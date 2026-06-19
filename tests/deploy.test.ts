@@ -311,14 +311,27 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(preflight).toContain("ecsTaskDefinitionMetadataCheck");
     expect(preflight).toContain("taskDefinition.family");
     expect(preflight).toContain(
-      "containerDefinitions[].{name:name,secrets:secrets[].name}",
+      "containerDefinitions[].{name:name,secrets:secrets[].name,environment:environment[].name}",
     );
     expect(preflight).toContain("appContainerName");
     expect(preflight).toContain("ingesterContainerName");
     expect(preflight).toContain("requiredContainerSecretNames");
+    expect(preflight).toContain("requiredContainerEnvironmentOrSecretNames");
+    expect(preflight).toContain(`ecsTaskDefinitionMetadataCheck(
+      appService,
+      appContainerName,
+      [],
+      ["DATABASE_URL"],
+    )`);
+    expect(preflight).toContain("environmentNames.has(name)");
+    expect(preflight).toContain("secretNames.has(name)");
     expect(preflight).toContain("DATABASE_URL");
     expect(preflight).toContain("BETTER_AUTH_SECRET");
     expect(preflight).toContain("missing required secret metadata");
+    expect(preflight).toContain(
+      "missing required environment or secret metadata",
+    );
+    expect(preflight).toContain("App base task required database metadata");
     expect(preflight).toContain("Scheduler base task required secret metadata");
     expect(preflight).toContain("describe-secret");
     expect(preflight).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID");
@@ -338,6 +351,7 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(preflight).not.toContain("env.APP_SERVICE");
     expect(preflight).not.toContain("env.ING_SERVICE");
 
+    expect(preflight).not.toContain("environment[].value");
     expect(preflight).not.toContain("get-secret-value");
     expect(preflight).not.toContain("update-service");
     expect(preflight).not.toContain("register-task-definition");
@@ -357,6 +371,9 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(runbook).toContain("does not push images");
     expect(runbook).toContain("current task definitions");
     expect(runbook).toContain("expected app and ingester containers");
+    expect(runbook).toContain(
+      "app task definition includes `DATABASE_URL` as an environment variable or secret name",
+    );
     expect(runbook).toContain("DATABASE_URL");
     expect(runbook).toContain("BETTER_AUTH_SECRET");
     expect(runbook).toContain("scheduler base task");
