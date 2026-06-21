@@ -1,5 +1,6 @@
 import { LandingPage } from "@/components/landing/landing-page";
 import { getOpenSendGithubStars } from "@/lib/github-stars";
+import { SITE_URL, SOCIAL_PREVIEW_IMAGE } from "@/lib/site-metadata";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -11,17 +12,19 @@ export const metadata: Metadata = {
     description:
       "Open-source, ELv2 email platform with a Resend-compatible API, SDK, dashboard, domain verification, and webhooks. Self-host on your own AWS SES, or use the hosted version.",
     type: "website",
-    url: "https://opensend.namuh.co",
+    url: SITE_URL,
     siteName: "OpenSend",
+    images: [SOCIAL_PREVIEW_IMAGE],
   },
   twitter: {
     card: "summary_large_image",
     title: "OpenSend — Open-source email API you can self-host",
     description:
       "Open-source, ELv2 email platform with a Resend-compatible API, SDK, and dashboard.",
+    images: [SOCIAL_PREVIEW_IMAGE.url],
   },
   alternates: {
-    canonical: "https://opensend.namuh.co/",
+    canonical: `${SITE_URL}/`,
   },
 };
 
