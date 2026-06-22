@@ -20,7 +20,7 @@ describe("SettingsPage", () => {
           plan: { name: "Free", slug: "free" },
           transactional: {
             monthlyUsed: 12,
-            monthlyLimit: 5000,
+            monthlyLimit: 500,
             dailyUsed: 2,
             dailyLimit: 100,
           },
@@ -42,7 +42,7 @@ describe("SettingsPage", () => {
 
     render(<SettingsPage />);
 
-    await waitFor(() => expect(screen.getByText("12 / 5,000")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("12 / 500")).toBeTruthy());
     expect(mockFetch).toHaveBeenCalledWith("/api/usage");
   });
 
@@ -55,7 +55,7 @@ describe("SettingsPage", () => {
     render(<SettingsPage />);
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
-    expect(screen.getByText("0 / 5,000")).toBeTruthy();
+    expect(screen.getByText("0 / 500")).toBeTruthy();
     expect(screen.queryByText("Missing or invalid API key")).toBeNull();
   });
 

@@ -1,4 +1,4 @@
-# ABOUTME: Tag-triggered release workflow — version-sync gate + GitHub Release on `v*` tags.
+# ABOUTME: Tag-triggered release workflow — version-sync gate, GHCR images, curated GitHub Release.
 name: Release
 
 on:
@@ -8,64 +8,102 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  APP_IMAGE: ghcr.io/namuh-eng/opensend
+  INGESTER_IMAGE: ghcr.io/namuh-eng/opensend-ingester
 
 jobs:
   verify-version-sync:
     name: Verify Version Sync
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.release-meta.outputs.tag }}
+      version: ${{ steps.release-meta.outputs.version }}
+      release_notes: ${{ steps.release-meta.outputs.release_notes }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - name: Verify package versions match tag
+      - name: Verify package versions and curated release notes match tag
+        env:
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+        run: node tools/verify-release-version-sync.mjs --tag "$GITHUB_REF_NAME" --require-release-notes
+
+      - name: Export release metadata
+        id: release-meta
         env:
           GITHUB_REF_NAME: ${{ github.ref_name }}
         run: |
-          node --input-type=module <<'EOF'
-          import fs from 'node:fs';
-          import path from 'node:path';
+          version="${GITHUB_REF_NAME#v}"
+          release_notes="docs/release-notes/${GITHUB_REF_NAME}.md"
+          {
+            echo "tag=${GITHUB_REF_NAME}"
+            echo "version=${version}"
+            echo "release_notes=${release_notes}"
+          } >> "$GITHUB_OUTPUT"
 
-          const root = process.cwd();
-          const tag = process.env.GITHUB_REF_NAME ?? '';
-          const expected = tag.replace(/^v/, '');
+  build-and-push-images:
+    name: Build and Push Multi-arch Images
+    needs: [verify-version-sync]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
 
-          const synced = [
-            'package.json',
-            'packages/core/package.json',
-            'packages/ingester/package.json',
-          ];
+      - uses: docker/setup-qemu-action@v3
 
-          const problems = [];
+      - uses: docker/setup-buildx-action@v3
 
-          if (!/^v\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(tag)) {
-            problems.push(`tag "${tag}" is not a valid semver vX.Y.Z(-suffix)`);
-          }
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
 
-          for (const rel of synced) {
-            const pkg = JSON.parse(fs.readFileSync(path.join(root, rel), 'utf-8'));
-            if (pkg.version !== expected) {
-              problems.push(`${rel} version (${pkg.version}) does not match tag (${expected})`);
-            }
-          }
+      - name: Build and push app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runner
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.APP_IMAGE }}:${{ needs.verify-version-sync.outputs.tag }}
+            ${{ env.APP_IMAGE }}:${{ needs.verify-version-sync.outputs.version }}
 
-          if (problems.length > 0) {
-            for (const p of problems) console.error(`[version-sync] ${p}`);
-            process.exit(1);
-          }
+      - name: Build and push ingester image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./packages/ingester/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.INGESTER_IMAGE }}:${{ needs.verify-version-sync.outputs.tag }}
+            ${{ env.INGESTER_IMAGE }}:${{ needs.verify-version-sync.outputs.version }}
 
-          console.log(`[version-sync] OK tag=${tag} root/core/ingester=${expected}`);
-          console.log('[version-sync] note: packages/sdk has an independent version cadence and is not gated here.');
-          EOF
+      - name: Verify pushed multi-arch manifests
+        env:
+          TAG: ${{ needs.verify-version-sync.outputs.tag }}
+        run: |
+          set -euo pipefail
+          docker buildx imagetools inspect "${APP_IMAGE}:${TAG}"
+          docker buildx imagetools inspect "${INGESTER_IMAGE}:${TAG}"
 
   publish-release:
     name: Publish GitHub Release
-    needs: [verify-version-sync]
+    needs: [verify-version-sync, build-and-push-images]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -76,13 +114,26 @@ jobs:
       - name: Create or update GitHub Release for tag
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.verify-version-sync.outputs.tag }}
+          RELEASE_NOTES: ${{ needs.verify-version-sync.outputs.release_notes }}
+          TARGET_SHA: ${{ github.sha }}
         run: |
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release for $TAG already exists; leaving body untouched."
-            exit 0
+          set -euo pipefail
+          prerelease_flag=()
+          if [[ "$TAG" == *-* ]]; then
+            prerelease_flag=(--prerelease)
           fi
-          gh release create "$TAG" \
-            --title "$TAG" \
-            --target main \
-            --generate-notes
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" \
+              --title "$TAG" \
+              --target "$TARGET_SHA" \
+              --notes-file "$RELEASE_NOTES" \
+              "${prerelease_flag[@]}"
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --target "$TARGET_SHA" \
+              --notes-file "$RELEASE_NOTES" \
+              "${prerelease_flag[@]}"
+          fi

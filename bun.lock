@@ -64,7 +64,7 @@
     },
     "packages/core": {
       "name": "@opensend/core",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@aws-sdk/client-ses": "^3.1019.0",
         "lru-cache": "^11.0.0",
@@ -72,7 +72,7 @@
     },
     "packages/ingester": {
       "name": "@opensend/ingester",
-      "version": "0.1.0",
+      "version": "1.0.0",
       "dependencies": {
         "@opensend/core": "workspace:*",
         "redis": "^5.12.1",
@@ -83,6 +83,13 @@
       "version": "0.1.0",
       "bin": {
         "opensend-mcp": "src/stdio.ts",
+      },
+    },
+    "packages/migrate-from-resend": {
+      "name": "@opensend/migrate-from-resend",
+      "version": "0.1.0",
+      "bin": {
+        "migrate-from-resend": "src/cli.ts",
       },
     },
     "packages/sdk": {
@@ -482,6 +489,8 @@
     "@opensend/ingester": ["@opensend/ingester@workspace:packages/ingester"],
 
     "@opensend/mcp": ["@opensend/mcp@workspace:packages/mcp"],
+
+    "@opensend/migrate-from-resend": ["@opensend/migrate-from-resend@workspace:packages/migrate-from-resend"],
 
     "@opensend/smtp-relay": ["@opensend/smtp-relay@workspace:packages/smtp-relay"],
 

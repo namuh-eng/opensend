@@ -40,7 +40,7 @@ OpenSend is source-available under the [Elastic License 2.0](./LICENSE): you can
 - **Own the data boundary**: keep API traffic, recipient data, delivery events, and webhook secrets inside infrastructure you control.
 - **Use your SES quota**: send through AWS SES with OpenSend's dashboard, API keys, SDKs, webhooks, audiences, broadcasts, and templates on top.
 - **Inspect the whole path**: app, API routes, database schema, ingester, scheduler, webhook signing, docs, and generated OpenAPI all live in this repo.
-- **Start with Compose**: `cp .env.example .env && docker compose up -d` brings up Postgres, migrations, app, ingester, and scheduler.
+- **Start with Compose**: `bun run setup && docker compose up -d` generates local secrets, then brings up Postgres, migrations, app, ingester, and scheduler.
 - **Stay telemetry-explicit**: self-hosted deployments make zero outbound calls to OpenSend-operated vendors unless you set the relevant env vars.
 
 ## Cloud or self-hosted
@@ -48,7 +48,7 @@ OpenSend is source-available under the [Elastic License 2.0](./LICENSE): you can
 |               | OpenSend Cloud                         | Self-host                                     |
 | ------------- | -------------------------------------- | --------------------------------------------- |
 | Where it runs | Managed at `opensend.namuh.co`         | Your infrastructure                           |
-| Fastest setup | Sign in with Google and add a domain   | `docker compose up -d`                        |
+| Fastest setup | Sign in with Google and add a domain   | `bun run setup && docker compose up -d`       |
 | Cost model    | Free tier, paid plans for hosted usage | Free software; you pay AWS SES/infrastructure |
 | Best for      | Teams that want zero ops               | Teams that want full control                  |
 
@@ -61,28 +61,39 @@ The fastest local path is Docker Compose:
 ```bash
 git clone https://github.com/namuh-eng/opensend.git
 cd opensend
-cp .env.example .env
+bun run setup
 docker compose up -d
 ```
 
 Open **http://localhost:3015**.
 
-The checked-in `BETTER_AUTH_SECRET`, `INGESTER_JOB_TOKEN`, and `WEBHOOK_SECRET_ENCRYPTION_KEY` values in `.env.example` are local-only placeholders so the stack can boot for localhost evaluation. Replace them with `openssl rand -hex 32` values before any shared, staging, or production deploy; the app and ingester refuse the local auth placeholder when the configured app URL is not localhost.
+`bun run setup` writes a complete `.env` with fresh local secrets for Better Auth, webhook/integration encryption, ingester and scheduler auth, tracking, unsubscribe, DKIM, cron auth, and the Compose Postgres password. It prompts only for external provider values such as AWS, Cloudflare, S3, and Google OAuth; you can leave those blank and fill them in later. Production deploys should inject these values from a secrets manager or platform secret store instead of baking `.env` into images.
 
 Compose starts:
 
 - `app`: Next.js dashboard and public API on `:3015`
 - `postgres`: local database
+- `redis`: shared rate limiting and cache coordination
 - `migrate`: one-shot schema migration runner
 - `ingester`: SES/SNS ingestion and workers on `:3016`
 - `scheduler`: scheduled job trigger sidecar
+- optional `smtp-relay`: SMTP compatibility service, only with `docker compose --profile smtp up -d smtp-relay`
+
+### v1.0.0 release artifacts
+
+The authorized `v1.0.0` tag workflow publishes pinned multi-arch GHCR images, and the default Compose file uses those exact tags for reproducible self-host deploys:
+
+- `ghcr.io/namuh-eng/opensend:v1.0.0` — app/API/dashboard
+- `ghcr.io/namuh-eng/opensend-ingester:v1.0.0` — ingester and scheduler bundle
+
+The workflow also publishes `:1.0.0` aliases and intentionally does not publish `:latest`. For local source-build evaluation, run `docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build`. The release notes and runbook live in [`docs/release-notes/v1.0.0.md`](docs/release-notes/v1.0.0.md).
 
 For real email delivery, add AWS SES credentials and verify a sending domain. For dashboard login, add Google OAuth credentials.
 
 For local development without the full app container:
 
 ```bash
-cp .env.example .env
+bun run setup
 make setup    # starts Postgres, installs deps, pushes schema, seeds data
 make dev      # http://localhost:3015
 ```
@@ -266,20 +277,19 @@ Full docs: [`packages/ruby-sdk/README.md`](./packages/ruby-sdk/README.md) and [`
 - Docker and Docker Compose
 - AWS account with SES access for real email delivery
 - Optional Cloudflare account for automatic DNS records
-- Optional Redis/SQS/EventBridge for production-grade rate limiting and background jobs
+- Redis (included in Docker Compose) plus optional SQS/EventBridge for production-grade background jobs
 
 ### Docker Compose
 
 ```bash
 git clone https://github.com/namuh-eng/opensend.git
 cd opensend
-cp .env.example .env
-# Set BETTER_AUTH_SECRET, Google OAuth if you want dashboard login,
-# and AWS credentials when you want real sending.
+bun run setup
+# Fill in Google OAuth for dashboard login and AWS credentials for real sending.
 docker compose up -d
 ```
 
-The dashboard/API runs at **http://localhost:3015**. The ingester health endpoint is **http://localhost:3016/health**.
+The dashboard/API runs at **http://localhost:3015**. The ingester health endpoint is **http://localhost:3016/health**. Compose also starts Redis for shared rate limiting/cache coordination; the SMTP relay is available only when explicitly enabled with `docker compose --profile smtp up -d smtp-relay`.
 
 ### Production deployments
 
@@ -312,6 +322,7 @@ src/                 # Next.js app and public API routes
 packages/
 ├── core/            # Shared DB client, repositories, DTOs, webhook helpers
 ├── ingester/        # Production Hono ingester and workers, port 3016
+├── smtp-relay/      # Optional SMTP compatibility relay, profile-gated in Compose
 ├── sdk/             # TypeScript SDK
 ├── python-sdk/      # Python SDK
 ├── go-sdk/          # Go SDK
@@ -343,7 +354,7 @@ docs/                # Deployment, SDK, and operations docs
 | Billing for hosted cloud | Stripe                                          |
 | Ingester                 | Hono on Bun                                     |
 | Background jobs          | AWS SQS, EventBridge, scheduler sidecar         |
-| Cache/rate limit         | Redis                                           |
+| Cache/rate limit         | Redis (default in Docker Compose)              |
 | Tests                    | Vitest, Playwright                              |
 | Lint/format              | Biome                                           |
 
@@ -382,7 +393,7 @@ This repo is designed to be understandable to coding agents, but agent setup is 
 - [x] Built-in open/click analytics
 - [x] Additional webhook event types: opened, clicked, complained, delivery delayed
 - [x] Familiar audiences/contact API slices
-- [ ] SMTP relay support without AWS SES
+- [x] SMTP relay compatibility service for self-hosted deployments
 
 ## Contributing
 

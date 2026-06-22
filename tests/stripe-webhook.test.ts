@@ -216,6 +216,38 @@ describe("StripeWebhookProcessor", () => {
     );
   });
 
+  it("resolves the local plan when Stripe returns the metered overage item before the base item", async () => {
+    const { processor, calls } = createProcessor({
+      findSubscription: async () => null,
+    });
+    const fixture = await signedFixture({
+      id: "evt_sub_created_overage_first",
+      type: "customer.subscription.created",
+      data: {
+        object: {
+          ...subscriptionObject,
+          items: {
+            data: [
+              { price: { id: "price_overage" } },
+              { price: { id: "price_pro" } },
+            ],
+          },
+        },
+      },
+    });
+
+    const outcome = await processor.process(fixture);
+
+    expect(outcome.status).toBe("processed");
+    expect(calls.upsertSubscription).toHaveBeenCalledWith(
+      "user-1",
+      expect.objectContaining({
+        planId: "plan-pro",
+        stripeSubscriptionId: "sub_stripe_1",
+      }),
+    );
+  });
+
   it("updates status for customer.subscription.updated", async () => {
     const { processor, calls } = createProcessor();
     const fixture = await signedFixture({

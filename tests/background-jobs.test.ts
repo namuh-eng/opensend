@@ -48,13 +48,37 @@ describe("background job publisher", () => {
     process.env.BACKGROUND_JOBS_QUEUE_URL = "";
     process.env.BACKGROUND_JOBS_EVENT_BUS_NAME = "";
     process.env.BACKGROUND_JOBS_REQUIRE_QUEUE = "";
+    process.env.BACKGROUND_JOBS_DB_POLLING_FALLBACK = "";
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("skips publishing when no queue URL is configured", async () => {
+  it("fails loudly when no queue URL exists and DB-polling fallback is disabled", async () => {
+    process.env.BACKGROUND_JOBS_DB_POLLING_FALLBACK = "false";
+    const { createBackgroundJob, publishBackgroundJob } = await import(
+      "../packages/core/src/jobs/background-jobs"
+    );
+
+    await expect(
+      publishBackgroundJob(
+        createBackgroundJob({
+          id: "email.send:email-1",
+          type: "email.send",
+          source: "api",
+          emailId: "email-1",
+          requestedAt: "2026-04-28T00:00:00.000Z",
+        }),
+      ),
+    ).rejects.toMatchObject({
+      name: "BackgroundJobDeliveryUnavailableError",
+      code: "background_worker_unavailable",
+    });
+    expect(mockSqsClient).not.toHaveBeenCalled();
+  });
+
+  it("defers publishing by default when no queue URL is configured", async () => {
     const { createBackgroundJob, publishBackgroundJob } = await import(
       "../packages/core/src/jobs/background-jobs"
     );
@@ -71,9 +95,31 @@ describe("background job publisher", () => {
 
     expect(result).toEqual({
       status: "skipped",
-      reason: "queue_url_missing",
+      reason: "db_polling_fallback_enabled",
     });
     expect(mockSqsClient).not.toHaveBeenCalled();
+
+    const metricLines = vi
+      .mocked(console.info)
+      .mock.calls.map(([line]) => String(line))
+      .filter((line) => line.includes('"event":"metric.emf"'));
+    const skippedMetric = metricLines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .find((entry) => entry.QueuePublishSkipped === 1);
+
+    expect(skippedMetric).toMatchObject({
+      Service: "api",
+      Operation: "queue.publish",
+      QueuePublishSkipped: 1,
+      job_type: "email.send",
+    });
+    expect(
+      (
+        skippedMetric?._aws as {
+          CloudWatchMetrics: Array<{ Dimensions: string[][] }>;
+        }
+      ).CloudWatchMetrics[0]?.Dimensions,
+    ).toEqual([["Service", "Operation"]]);
   });
 
   it("publishes SQS jobs and optional EventBridge lifecycle events", async () => {
@@ -151,6 +197,47 @@ describe("background job publisher", () => {
         }),
       ],
     });
+  });
+
+  it("emits an alarm-friendly queue publish failure aggregate", async () => {
+    const { createBackgroundJob, publishBackgroundJob } = await import(
+      "../packages/core/src/jobs/background-jobs"
+    );
+
+    await expect(
+      publishBackgroundJob(
+        createBackgroundJob({
+          id: "email.send:email-1",
+          type: "email.send",
+          source: "api",
+          emailId: "email-1",
+          requestedAt: "2026-04-28T00:00:00.000Z",
+        }),
+        { requireQueue: true },
+      ),
+    ).rejects.toThrow("BACKGROUND_JOBS_QUEUE_URL is required");
+
+    const metricLines = vi
+      .mocked(console.info)
+      .mock.calls.map(([line]) => String(line))
+      .filter((line) => line.includes('"event":"metric.emf"'));
+    const failureMetric = metricLines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .find((entry) => entry.QueuePublishFailed === 1);
+
+    expect(failureMetric).toMatchObject({
+      Service: "api",
+      Operation: "queue.publish",
+      QueuePublishFailed: 1,
+      job_type: "email.send",
+    });
+    expect(
+      (
+        failureMetric?._aws as {
+          CloudWatchMetrics: Array<{ Dimensions: string[][] }>;
+        }
+      ).CloudWatchMetrics[0]?.Dimensions,
+    ).toEqual([["Service", "Operation"]]);
   });
 
   it("parses supported job payloads and rejects invalid ones", async () => {

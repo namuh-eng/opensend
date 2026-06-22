@@ -3,13 +3,30 @@ import { runIngesterStartupChecks } from "../packages/ingester/src/startup-check
 
 const ENV_KEYS = [
   "NODE_ENV",
+  "DATABASE_URL",
   "BETTER_AUTH_SECRET",
   "BETTER_AUTH_URL",
   "NEXT_PUBLIC_APP_URL",
   "WEBHOOK_SECRET_ENCRYPTION_KEY",
   "INGESTER_JOB_TOKEN",
   "INGESTER_INBOUND_TOKEN",
+  "TRACKING_SECRET",
+  "UNSUBSCRIBE_SECRET",
+  "DKIM_ENCRYPTION_KEY",
 ];
+
+function setProductionRequiredEnv(): void {
+  process.env.DATABASE_URL = "postgres://app:strong-password@db/app";
+  process.env.BETTER_AUTH_SECRET = "x".repeat(32);
+  process.env.BETTER_AUTH_URL = "https://mail.example.com";
+  process.env.NEXT_PUBLIC_APP_URL = "https://mail.example.com";
+  process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+  process.env.INGESTER_JOB_TOKEN = "j".repeat(32);
+  process.env.INGESTER_INBOUND_TOKEN = "i".repeat(32);
+  process.env.TRACKING_SECRET = "t".repeat(32);
+  process.env.UNSUBSCRIBE_SECRET = "u".repeat(32);
+  process.env.DKIM_ENCRYPTION_KEY = Buffer.alloc(32, 1).toString("base64");
+}
 
 describe("ingester startup checks", () => {
   const snapshot: Record<string, string | undefined> = {};
@@ -34,71 +51,53 @@ describe("ingester startup checks", () => {
 
   it("throws in production when the job token is missing", () => {
     vi.stubEnv("NODE_ENV", "production");
-    process.env.BETTER_AUTH_SECRET = "x".repeat(32);
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
+    setProductionRequiredEnv();
+    process.env.INGESTER_JOB_TOKEN = undefined;
 
-    expect(() => runIngesterStartupChecks()).toThrow(
-      "INGESTER_JOB_TOKEN missing/too short in production",
-    );
+    expect(() => runIngesterStartupChecks()).toThrow("INGESTER_JOB_TOKEN");
   });
 
-  it("warns but does not boot-fail when the optional inbound token is absent", () => {
+  it("throws in production when the inbound token is absent", () => {
     vi.stubEnv("NODE_ENV", "production");
-    process.env.BETTER_AUTH_SECRET = "x".repeat(32);
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
-    process.env.INGESTER_JOB_TOKEN = "j".repeat(32);
+    setProductionRequiredEnv();
+    process.env.INGESTER_INBOUND_TOKEN = undefined;
 
-    expect(() => runIngesterStartupChecks()).not.toThrow();
-    expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining("security.startup.weak_inbound_token"),
-    );
+    expect(() => runIngesterStartupChecks()).toThrow("INGESTER_INBOUND_TOKEN");
   });
 
   it("throws in production when BETTER_AUTH_SECRET is missing or too short", () => {
     vi.stubEnv("NODE_ENV", "production");
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
-    process.env.INGESTER_JOB_TOKEN = "j".repeat(32);
+    setProductionRequiredEnv();
+    process.env.BETTER_AUTH_SECRET = undefined;
 
-    expect(() => runIngesterStartupChecks()).toThrow(
-      "BETTER_AUTH_SECRET missing/too short in production",
-    );
+    expect(() => runIngesterStartupChecks()).toThrow("BETTER_AUTH_SECRET");
   });
 
   it("allows the local BETTER_AUTH_SECRET placeholder only for localhost", () => {
     vi.stubEnv("NODE_ENV", "production");
+    setProductionRequiredEnv();
     process.env.BETTER_AUTH_SECRET =
       "local-dev-better-auth-secret-replace-before-production";
     process.env.BETTER_AUTH_URL = "http://localhost:3015";
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
-    process.env.INGESTER_JOB_TOKEN = "j".repeat(32);
+    process.env.NEXT_PUBLIC_APP_URL = "http://localhost:3015";
 
     expect(() => runIngesterStartupChecks()).not.toThrow();
   });
 
   it("throws when the local BETTER_AUTH_SECRET placeholder is used outside localhost", () => {
     vi.stubEnv("NODE_ENV", "production");
+    setProductionRequiredEnv();
     process.env.BETTER_AUTH_SECRET =
       "local-dev-better-auth-secret-replace-before-production";
-    process.env.BETTER_AUTH_URL = "https://mail.example.com";
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
-    process.env.INGESTER_JOB_TOKEN = "j".repeat(32);
 
-    expect(() => runIngesterStartupChecks()).toThrow(
-      "Local BETTER_AUTH_SECRET placeholder is forbidden",
-    );
+    expect(() => runIngesterStartupChecks()).toThrow("BETTER_AUTH_SECRET");
   });
 
-  it("throws when any configured app URL is public with the local BETTER_AUTH_SECRET placeholder", () => {
+  it("throws with all missing production keys instead of first-missing only", () => {
     vi.stubEnv("NODE_ENV", "production");
-    process.env.BETTER_AUTH_SECRET =
-      "local-dev-better-auth-secret-replace-before-production";
-    process.env.BETTER_AUTH_URL = "http://localhost:3015";
-    process.env.NEXT_PUBLIC_APP_URL = "https://mail.example.com";
-    process.env.WEBHOOK_SECRET_ENCRYPTION_KEY = "x".repeat(32);
-    process.env.INGESTER_JOB_TOKEN = "j".repeat(32);
 
     expect(() => runIngesterStartupChecks()).toThrow(
-      "Local BETTER_AUTH_SECRET placeholder is forbidden",
+      /DATABASE_URL[\s\S]*BETTER_AUTH_URL[\s\S]*INGESTER_JOB_TOKEN/,
     );
   });
 });

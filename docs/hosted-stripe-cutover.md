@@ -15,8 +15,8 @@ Resolve these product/deployment decisions before final production cutover:
    Stripe Products/Prices or updating `plans` rows.
 2. Confirm whether hosted billing starts with no trial or a 14-day Pro trial.
 3. Confirm org-level billing remains the intended account model.
-4. Confirm hard-cap quota gating is acceptable; the current implementation
-   blocks over-quota sends instead of grace or metered overage.
+4. Confirm paid-plan metered overage is acceptable: paid sends continue past
+   included quota and report overage usage to Stripe; Free remains hard-capped.
 
 Until those decisions are final, use test-mode Stripe Products/Prices and test
 plan rows only.
@@ -30,7 +30,7 @@ manager/runtime configuration, never by committing secrets.
 | Service | Required hosted billing env | Notes |
 | --- | --- | --- |
 | App / dashboard / REST API | `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY` | Enables billing pages and `/api/billing/*` checkout/portal routes. |
-| Ingester | `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Receives Stripe events at `POST /webhooks/stripe`; `STRIPE_WEBHOOK_SECRET` must match that endpoint's signing secret. |
+| Ingester | `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Receives Stripe events at `POST /webhooks/stripe`; `STRIPE_WEBHOOK_SECRET` must match that endpoint's signing secret. Set `STRIPE_OVERAGE_METER_EVENT_NAME` when the Stripe meter event name differs from the OpenSend default. |
 | Migrator | `DATABASE_URL` | Run migrations before deploying code that expects billing tables/columns. No Stripe secret is needed for migrations. |
 
 Optional hosted billing env:
@@ -63,10 +63,10 @@ bun run billing:preflight -- --service all --check-db --strict
 
 The DB check verifies:
 
-- public paid plans have a non-empty `plans.stripe_price_id`,
-- each paid public plan uses a `price_...` Stripe Price ID shape,
-- duplicate public plan Price IDs are rejected,
-- Free plan rows do not require Checkout.
+- public paid plans have non-empty base `plans.stripe_price_id` and metered `plans.stripe_overage_price_id` values,
+- each paid public plan uses `price_...` Stripe Price ID shapes,
+- duplicate public base Price IDs are rejected,
+- Free plan rows do not require Checkout or overage billing.
 
 A warning that no paid public plans exist means Checkout cannot be validated yet;
 seed approved paid tiers first.
@@ -79,16 +79,23 @@ staging evidence passes.
 1. In Stripe Dashboard, create one Product per approved public paid tier.
 2. Create one recurring monthly Price per tier. Keep currency/amount aligned
    with the approved public pricing decision.
-3. Record only Price IDs (`price_...`) in deployment notes; do not record API
+3. Create a metered overage Price that feeds the Stripe meter event configured
+   by `STRIPE_OVERAGE_METER_EVENT_NAME` (default `opensend_email_overage`).
+   Use the approved overage amount: $0.85 per 1,000 emails. A single shared
+   metered overage Price may be reused across paid tiers.
+4. Record only Price IDs (`price_...`) in deployment notes; do not record API
    keys or customer/payment details.
-4. Update `plans.stripe_price_id` for the matching paid public `plans.slug` rows.
-5. Run `bun run billing:preflight -- --check-db --strict` against the hosted DB.
+5. Update `plans.stripe_price_id` and `plans.stripe_overage_price_id` for the
+   matching paid public `plans.slug` rows.
+6. Run `bun run billing:preflight -- --check-db --strict` against the hosted DB.
 
 Example SQL shape; replace placeholders only after Jaeyun confirms tier names and
 prices:
 
 ```sql
-update plans set stripe_price_id = 'price_REPLACE_WITH_TEST_OR_LIVE_ID'
+update plans
+set stripe_price_id = 'price_REPLACE_WITH_BASE_PRICE_ID',
+    stripe_overage_price_id = 'price_REPLACE_WITH_METERED_OVERAGE_PRICE_ID'
 where slug = 'REPLACE_WITH_APPROVED_PLAN_SLUG';
 ```
 
@@ -113,7 +120,7 @@ Do not include secrets, PII, card numbers, or raw payment details.
 5. DB evidence to capture:
 
 ```sql
-select id, slug, name, monthly_price_cents, monthly_email_quota, stripe_price_id
+select id, slug, name, monthly_price_cents, monthly_email_quota, stripe_price_id, stripe_overage_price_id
 from plans
 where is_public = true
 order by monthly_price_cents;
@@ -170,27 +177,20 @@ log `stripe.webhook.duplicate` after the first successful processing.
 3. Return from Stripe and confirm the app lands back on `/settings/billing`.
 4. Confirm no 4xx/5xx errors in app logs for `POST /api/billing/portal`.
 
-### 5. Quota-gating behavior
+### 5. Quota and overage behavior
 
-Validate both hosted metered and self-host/default-disabled behavior.
+Validate hosted metered, Free hard-cap, and self-host/default-disabled behavior.
 
-Hosted over-quota path:
+Hosted paid over-quota path:
 
-1. Use a test account whose current plan has a low email quota or whose
-   `usage_periods.emails_sent` has been set to the limit in staging/test data.
+1. Use a paid test account whose current plan has a low email quota or whose
+   `usage_periods.emails_sent` has been set to the included limit in staging/test data.
 2. Send one email through the hosted API using a valid API key.
-3. Confirm response status is `402` with structured `quota_exceeded` body.
-4. Confirm no new downstream send job is queued for the rejected request.
+3. Confirm the send succeeds, `usage_periods.emails_sent` increments beyond the included limit, and 80%/100% threshold timestamps are recorded when crossed.
+4. Run `/jobs/billing-overage` and confirm it creates one `billing_overage_reports` row, reports the unreported overage delta to Stripe, and advances `usage_periods.overage_reported_emails`.
+5. Confirm repeated runs without new overage do not create another meter event. The automatic catch-up scan covers billing periods that ended within the last 30 days; reconcile older missed usage manually before invoice close.
 
-Expected response shape includes:
-
-```json
-{
-  "name": "quota_exceeded",
-  "message": "Quota exceeded.",
-  "statusCode": 402
-}
-```
+Hosted Free over-quota path still returns structured `quota_exceeded` (402); Free has no overage.
 
 Disabled/self-host path:
 
@@ -213,7 +213,9 @@ Disabled/self-host path:
 - Checkout return: pass/fail, Checkout Session ID:
 - Webhook processing: pass/fail, Stripe event IDs:
 - Customer Portal return: pass/fail
-- Quota exceeded 402: pass/fail
+- Paid overage accepted past included quota: pass/fail
+- Paid overage reported to Stripe meter: pass/fail, meter event/report ID:
+- Free quota exceeded 402: pass/fail
 - Disabled billing bypass: pass/fail
 - Blockers / residual risk:
 ```

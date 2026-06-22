@@ -25,8 +25,15 @@ const plan = {
   id: "plan-free",
   slug: "free",
   monthlyEmailQuota: 3,
+  monthlyPriceCents: 0,
   maxDomains: 1,
   maxApiKeys: 2,
+};
+const paidPlan = {
+  ...plan,
+  id: "plan-starter",
+  slug: "cloud_starter_55k_monthly",
+  monthlyPriceCents: 1900,
 };
 const subscription = {
   userId: "user-1",
@@ -103,7 +110,31 @@ describe("billing quota enforcement", () => {
     );
   });
 
-  it("allows the boundary send and rejects the next reservation with structured 402 info", async () => {
+  it("allows paid sends past quota and records threshold hooks instead of returning 402", async () => {
+    mockDb.query.subscriptions.findFirst.mockResolvedValue({
+      ...subscription,
+      planId: paidPlan.id,
+    });
+    mockDb.query.plans.findFirst.mockResolvedValue(paidPlan);
+    mockUsagePeriod(3);
+    const update = mockEmailReserveUpdate([{ emailsSent: 4 }]);
+
+    const { reserveEmailQuota } = await import("@/lib/billing/quota");
+    await expect(
+      reserveEmailQuota("user-1", 1, now, stripeEnv),
+    ).resolves.toEqual({ ok: true, bypassed: false });
+
+    expect(mockDb.update).toHaveBeenCalledTimes(1);
+    expect(update.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lastIncrementAt: now,
+        usageWarning80NotifiedAt: expect.anything(),
+        usageWarning100NotifiedAt: expect.anything(),
+      }),
+    );
+  });
+
+  it("allows the free-plan boundary send and rejects the next reservation with structured 402 info", async () => {
     mockPlanContext();
     mockUsagePeriod(2);
     mockEmailReserveUpdate([{ emailsSent: 3 }]);
@@ -133,7 +164,7 @@ describe("billing quota enforcement", () => {
     });
   });
 
-  it("rejects a batch overrun without partially reserving quota", async () => {
+  it("rejects a free-plan batch overrun without partially reserving quota", async () => {
     mockPlanContext();
     mockUsagePeriod(1);
     mockEmailReserveUpdate([]);
@@ -183,6 +214,29 @@ describe("billing quota enforcement", () => {
         emailsSent: 0,
       }),
     );
+  });
+
+  it("keeps blocking past-due subscriptions after the grace period expires", async () => {
+    mockDb.query.subscriptions.findFirst.mockResolvedValue({
+      ...subscription,
+      status: "past_due",
+      currentPeriodEnd: new Date("2026-05-10T00:00:00.000Z"),
+    });
+
+    const { reserveEmailQuota } = await import("@/lib/billing/quota");
+    await expect(
+      reserveEmailQuota("user-1", 1, now, stripeEnv),
+    ).resolves.toEqual({
+      ok: false,
+      info: {
+        resource: "emails",
+        plan: "past_due",
+        limit: 0,
+        used: 0,
+        upgrade_url: "/dashboard/billing",
+      },
+    });
+    expect(mockDb.update).not.toHaveBeenCalled();
   });
 
   it("gates domain and API key counts against active plan limits", async () => {

@@ -10,6 +10,7 @@ export const SCHEDULED_JOB_NAMES = [
   "scheduled-emails",
   "webhooks",
   "domain-verify",
+  "billing-overage",
 ] as const satisfies readonly string[];
 
 export type ScheduledJobName = (typeof SCHEDULED_JOB_NAMES)[number];

@@ -78,6 +78,11 @@ const COLLECTIONS = [
     "TypeScript, Python, Go, Ruby, and framework-specific send examples.",
   ],
   [
+    "Migrate from Resend",
+    "/docs/migrate-from-resend",
+    "Verifier CLI usage, compatibility statuses, sandbox dry-run planning, and migration caveats.",
+  ],
+  [
     "Domains",
     "/docs/dashboard/domains/introduction",
     "DNS setup, Cloudflare automation, DMARC, tracking, and provider guidance.",
@@ -133,6 +138,7 @@ export default async function DocsPage() {
               <div className="pill success">
                 <span className="dot" /> First-party docs · human and LLM ready
               </div>
+
               <h1 className="mt-6 max-w-3xl text-[40px] font-medium leading-[0.98] tracking-[-0.04em] text-fg sm:text-[56px]">
                 Email infrastructure docs without the guesswork.
               </h1>

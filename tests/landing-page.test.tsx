@@ -1,9 +1,18 @@
 import { metadata } from "@/app/landing/page";
+import { metadata as pricingMetadata } from "@/app/pricing/page";
 import { LandingPage } from "@/components/landing/landing-page";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 afterEach(cleanup);
+
+const expectedSocialPreviewImage = {
+  url: "https://opensend.namuh.co/landing/screenshot-dashboard.png",
+  width: 3456,
+  height: 2234,
+  alt: "OpenSend dashboard preview",
+  type: "image/png",
+} as const;
 
 vi.mock("next/link", () => ({
   default: ({
@@ -47,6 +56,39 @@ describe("Landing page metadata", () => {
     expect(metadata.openGraph?.title).toMatch(/OpenSend/);
     expect(metadata.openGraph?.url).toBe("https://opensend.namuh.co");
     expect(metadata.alternates?.canonical).toBe("https://opensend.namuh.co/");
+  });
+
+  it("declares social preview images for shared link cards", () => {
+    const twitter = metadata.twitter as {
+      card?: string;
+      images?: string[];
+    };
+
+    expect(metadata.openGraph?.images).toEqual([expectedSocialPreviewImage]);
+    expect(twitter.card).toBe("summary_large_image");
+    expect(twitter.images).toEqual([
+      "https://opensend.namuh.co/landing/screenshot-dashboard.png",
+    ]);
+  });
+});
+
+describe("Pricing page metadata", () => {
+  it("declares social preview images for shared pricing links", () => {
+    const twitter = pricingMetadata.twitter as {
+      card?: string;
+      images?: string[];
+    };
+
+    expect(pricingMetadata.openGraph?.url).toBe(
+      "https://opensend.namuh.co/pricing",
+    );
+    expect(pricingMetadata.openGraph?.images).toEqual([
+      expectedSocialPreviewImage,
+    ]);
+    expect(twitter.card).toBe("summary_large_image");
+    expect(twitter.images).toEqual([
+      "https://opensend.namuh.co/landing/screenshot-dashboard.png",
+    ]);
   });
 });
 

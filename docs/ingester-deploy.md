@@ -39,34 +39,50 @@ and SQS:
 
 | Service | Image source | Public host (example) | Port |
 | --- | --- | --- | --- |
-| App | `Dockerfile` (default target) | `app.yourdomain.com` and `api.app.yourdomain.com` | `8080` |
-| Ingester | `packages/ingester/Dockerfile` | `events.app.yourdomain.com` | `3016` |
+| App | `ghcr.io/namuh-eng/opensend:v1.0.0`; use `docker-compose.local.yml` or your own registry tag when building from source | `app.yourdomain.com` and `api.app.yourdomain.com` | `8080` |
+| Ingester | `ghcr.io/namuh-eng/opensend-ingester:v1.0.0`; scheduler uses the same image with `bun /app/job-scheduler.js` | `events.app.yourdomain.com` | `3016` |
 
 If your platform has host-based routing (AWS ALB, GCP Load Balancer, Cloudflare
 Spectrum), point each hostname at its target service. The events host has to
 be reachable from the public internet so SES SNS can deliver to it.
 
-Build images for `linux/amd64` even from M-chip Macs:
+The GitHub release workflow publishes the official app and ingester images on
+`v*` tags. The default `docker-compose.yml` pins those app, ingester, and
+scheduler tags for reproducible self-host deploys. The ingester process only
+consumes the image at runtime; it does not publish Docker images. The workflow
+publishes `:v1.0.0` and `:1.0.0` tags and intentionally does not publish
+`:latest`, so production deployments should pin the exact release tag they have
+validated.
+
+For forks, private registries, or pre-release validation, build images yourself.
+Use `linux/amd64` for amd64 production targets even from M-chip Macs, or include
+both supported release platforms when you need a multi-arch manifest:
 
 ```bash
-docker buildx build --platform linux/amd64 \
-  -t yourorg/opensend-app:latest --push .
+docker buildx build --platform linux/amd64,linux/arm64 \
+  --target runner \
+  -t yourorg/opensend-app:v1.0.0 --push .
 
-docker buildx build --platform linux/amd64 \
+docker buildx build --platform linux/amd64,linux/arm64 \
   -f packages/ingester/Dockerfile \
-  -t yourorg/opensend-ingester:latest --push .
+  -t yourorg/opensend-ingester:v1.0.0 --push .
+
+docker buildx imagetools inspect yourorg/opensend-app:v1.0.0
+docker buildx imagetools inspect yourorg/opensend-ingester:v1.0.0
 ```
 
 Run a one-shot migrator container against the production `DATABASE_URL`
 **before** redeploying the app or ingester when the change includes schema
-migrations:
+migrations. The v1.0.0 release workflow does not publish a separate migrator
+image, so build the root Dockerfile `migrator` target into your registry when
+your platform needs an image-only migration job:
 
 ```bash
 docker buildx build --platform linux/amd64 --target migrator \
-  -t yourorg/opensend-migrator:latest --push .
+  -t yourorg/opensend-migrator:v1.0.0 --push .
 
 # Run once against production DB
-docker run --rm --env DATABASE_URL=... yourorg/opensend-migrator:latest
+docker run --rm --env DATABASE_URL=... yourorg/opensend-migrator:v1.0.0
 ```
 
 ## Background job worker
@@ -166,7 +182,7 @@ INGESTER_SCHEDULER_INTERVAL_SECONDS=60
 
 ### Periodic scans
 
-Three scans need to run every minute: `/jobs/scheduled-emails`, `/jobs/webhooks`, and `/jobs/domain-verify`. The Docker Compose `scheduler` sidecar runs all three by default. For managed production, use one of these patterns:
+Four scans need to run every minute: `/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`, and `/jobs/billing-overage`. The Docker Compose `scheduler` sidecar runs all four by default. For managed production, use one of these patterns:
 
 **HTTP-driven** (e.g. AWS EventBridge schedule rule with HTTP target, or any
 cron driver that can issue authenticated POSTs):
@@ -179,11 +195,13 @@ curl -i -X POST "${INGESTER_URL}/jobs/webhooks" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 curl -i -X POST "${INGESTER_URL}/jobs/domain-verify" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
+curl -i -X POST "${INGESTER_URL}/jobs/billing-overage" \
+  -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 ```
 
 **Queue-driven**: publish `scheduled-email.scan` and `webhook-delivery.scan`
 SQS messages on the same minute cadence; the ingester picks them up via the
-normal long-poll loop. Domain verification is HTTP-only today, so keep an HTTP schedule for `/jobs/domain-verify`.
+normal long-poll loop. Domain verification and billing overage reporting are HTTP-only today, so keep an HTTP schedule for `/jobs/domain-verify` and `/jobs/billing-overage`.
 
 Manual probes during a deploy:
 
@@ -192,6 +210,8 @@ INGESTER_URL="https://events.yourdomain.com"
 curl -i -X POST "${INGESTER_URL}/jobs/poll" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 curl -i -X POST "${INGESTER_URL}/jobs/domain-verify" \
+  -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
+curl -i -X POST "${INGESTER_URL}/jobs/billing-overage" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 ```
 
@@ -305,9 +325,9 @@ Before pointing production SES SNS at a freshly stood-up ingester, verify:
   `/health`.
 - If hosted billing is enabled, Stripe Dashboard points to
   `https://events.<your-domain>/webhooks/stripe` and the ingester has
-  `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY`, and `STRIPE_WEBHOOK_SECRET`.
+  `BILLING_BACKEND=stripe`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and the configured Stripe overage meter event name. Overage reporting is skipped when billing is disabled; when enabled, the `/jobs/billing-overage` job uses the `billing_overage_reports` outbox table to retry/catch up reported deltas without double-counting. The automatic catch-up scan covers billing periods that ended within the last 30 days; older missed usage requires manual Stripe reconciliation before invoice close.
 - The SQS queue exists with a redrive policy + DLQ.
-- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}`.
+- Periodic scan rules (`/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`, `/jobs/billing-overage`) are scheduled on a 1-minute cadence and use `Authorization: Bearer ${INGESTER_JOB_TOKEN}`.
 - Domain verification runbook passed: create/use a pending domain, confirm SES is verified, do not click **Verify DNS Records**, wait for the scheduler, and confirm the OpenSend DB/dashboard flips to `verified`.
 - Migrations ran successfully against the production database before the new
   image started.

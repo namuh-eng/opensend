@@ -15,7 +15,7 @@ const plans: PricingPlan[] = [
     slug: "free",
     name: "Free",
     monthlyPriceCents: 0,
-    monthlyEmailQuota: 5000,
+    monthlyEmailQuota: 500,
     maxDomains: 1,
     maxApiKeys: 2,
   },

@@ -15,6 +15,7 @@ export const PUBLIC_API_ERROR_CODES = [
   "recipient_suppressed",
   "rate_limit_exceeded",
   "rate_limit_unavailable",
+  "background_worker_unavailable",
   "internal_server_error",
 ] as const;
 

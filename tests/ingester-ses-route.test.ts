@@ -359,7 +359,7 @@ describe("SES SNS ingestion route", () => {
     mockDispatchDelivery.mockResolvedValue(undefined);
     mockPublishBackgroundJob.mockResolvedValue({
       status: "skipped",
-      reason: "queue_url_missing",
+      reason: "db_polling_fallback_enabled",
     });
     mockWebhookListForUserDispatch.mockResolvedValue({
       data: [

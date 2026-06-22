@@ -27,6 +27,7 @@ scripts/*
 !scripts/check-changed-files.mjs
 !scripts/check-migration-parity.sh
 !scripts/deploy.sh
+!scripts/create-cloudwatch-alarms.ts
 
 # Playwright test artifacts
 test-results/

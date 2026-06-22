@@ -59,6 +59,7 @@ export type EmailPublicErrorCode =
   | "recipient_suppressed"
   | "rate_limit_exceeded"
   | "rate_limit_unavailable"
+  | "background_worker_unavailable"
   | "internal_server_error";
 
 export type EmailStatus =

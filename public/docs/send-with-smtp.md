@@ -91,6 +91,11 @@ The relay is a standalone Bun service in `packages/smtp-relay/`. Run it
 alongside the main app or as a separate container:
 
 ```bash
+# Docker Compose profile
+docker compose --profile smtp up -d smtp-relay
+```
+
+```bash
 # Standalone
 DATABASE_URL=postgres://... \
 BACKGROUND_JOBS_QUEUE_URL=https://sqs... \
@@ -111,8 +116,7 @@ docker run --rm \
   opensend-smtp-relay
 ```
 
-See `packages/smtp-relay/README.md` for the full list of environment variables
-and STARTTLS configuration.
+The Compose profile uses the same Postgres database as the app, publishes `SMTP_RELAY_PORT` (default `2587`), and is not started by default. In default self-host Compose, accepted SMTP messages can be dispatched by the ingester DB-polling fallback when SQS is not configured. Configure `BACKGROUND_JOBS_QUEUE_URL` and keep `BACKGROUND_WORKER_POLL=true` when you graduate to SQS-backed production delivery. See `packages/smtp-relay/README.md` for the full list of environment variables and STARTTLS configuration.
 
 ## Limitations
 

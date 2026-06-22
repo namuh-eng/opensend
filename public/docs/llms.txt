@@ -31,6 +31,7 @@
 - [React Email Skill](https://opensend.namuh.co/docs/react-email-skill.md): Build HTML email with React components.
 - [Email Best Practices Skill](https://opensend.namuh.co/docs/email-best-practices-skill.md): Guardrails for production email systems.
 - [Custom Event Schemas](https://opensend.namuh.co/docs/custom-event-schemas.md): Define and validate custom event payloads.
+- [Migrate from Resend](https://opensend.namuh.co/docs/migrate-from-resend.md): Use the in-tree OpenSend migration verifier to inspect an existing Resend integration before you point it at OpenSend. Always pass the application repository you want to scan; the verifier fails closed when the target directory is omitted.
 - [Send emails with PHP](https://opensend.namuh.co/docs/send-with-php.md): Send email from PHP with the first-party OpenSend PHP SDK. This first SDK slice is send-only: it supports the single-email send method, idempotency keys, typed request/response objects, and typed OpenSend API errors, but not other OpenSend resources yet.
 - [Introduction](https://opensend.namuh.co/docs/api-reference/introduction.md): Core concepts for the OpenSend API.
 - [Authentication](https://opensend.namuh.co/docs/api-reference/authentication.md): How API key authentication works in OpenSend.
@@ -217,7 +218,7 @@
 - [Ingester Deployment](https://opensend.namuh.co/docs/ingester-deploy.md): Deploy the standalone ingester and queue worker. Provider callbacks should target the ingester service, not the Next.js app URL.
 - [Security](https://opensend.namuh.co/docs/security.md): OpenSend is an email platform, so the security model centers on tenant isolation, API-key protection, signed webhooks, secret encryption, rate limiting, and explicit operator-controlled integrations.
 - [Privacy](https://opensend.namuh.co/docs/privacy.md): Self-hosted OpenSend is built around an explicit zero-phone-home default.
-- [Observability](https://opensend.namuh.co/docs/observability.md): Operate OpenSend in production.
+- [Observability](https://opensend.namuh.co/docs/observability.md): Operate OpenSend in production with health checks, structured logs, API request logs, CloudWatch EMF metrics, and committed CloudWatch alarm definitions.
 
 ## OpenAPI Specs
 
