@@ -230,9 +230,15 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
     expect(script).toContain("WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID");
     expect(script).toContain("TRACKING_SECRET_SECRET_ID");
+    expect(script).toContain("UNSUBSCRIBE_SECRET_SECRET_ID");
+    expect(script).toContain("DKIM_ENCRYPTION_KEY_SECRET_ID");
     expect(script).toContain("aws secretsmanager describe-secret");
     expect(script).toContain('"name": "WEBHOOK_SECRET_ENCRYPTION_KEY"');
     expect(script).toContain('"name": "TRACKING_SECRET"');
+    expect(script).toContain('"name": "UNSUBSCRIBE_SECRET"');
+    expect(script).toContain('"name": "DKIM_ENCRYPTION_KEY"');
+    expect(script).toContain('"NEXT_PUBLIC_APP_URL"');
+    expect(script).toContain('"BETTER_AUTH_TRUSTED_ORIGINS"');
     expect(script).toContain("register_app_task_definition");
     expect(script).toContain(
       'redeploy "${APP_SERVICE}" "${APP_TASK_DEFINITION}"',
@@ -292,6 +298,20 @@ describe("deploy-001: ECS Fargate deployment configuration", () => {
     expect(script).toContain('"SES_INBOUND_SNS_TOPIC_ARNS",');
     expect(script).toContain('"SES_INBOUND_BUCKET_NAME"');
     expect(script).toContain("app_task_definition");
+  });
+
+  it("deploy script wires every production ingester startup requirement", () => {
+    const script = readFileSync(join(root, "scripts", "deploy.sh"), "utf-8");
+    expect(script).toContain("UNSUBSCRIBE_SECRET_SECRET_ID");
+    expect(script).toContain("unsubscribe_secret_secret_arn");
+    expect(script).toContain("DKIM_ENCRYPTION_KEY_SECRET_ID");
+    expect(script).toContain("dkim_encryption_key_secret_arn");
+    expect(script).toContain('"name": "UNSUBSCRIBE_SECRET"');
+    expect(script).toContain('"name": "DKIM_ENCRYPTION_KEY"');
+    expect(script).toContain('"NEXT_PUBLIC_APP_URL"');
+    expect(script).toContain('app_environment.get("APP_URL")');
+    expect(script).toContain('app_environment.get("BETTER_AUTH_URL")');
+    expect(script).toContain('"BETTER_AUTH_URL"');
   });
 
   it("deploy script runs migrations before ECS service redeploys", () => {
@@ -658,6 +678,10 @@ ${result.stderr}`;
     expect(preflight).toContain("INGESTER_JOB_TOKEN_SECRET_ARN");
     expect(preflight).toContain("INGESTER_INBOUND_TOKEN_SECRET_ID");
     expect(preflight).toContain("INGESTER_INBOUND_TOKEN_SECRET_ARN");
+    expect(preflight).toContain("UNSUBSCRIBE_SECRET_SECRET_ID");
+    expect(preflight).toContain("UNSUBSCRIBE_SECRET_SECRET_ARN");
+    expect(preflight).toContain("DKIM_ENCRYPTION_KEY_SECRET_ID");
+    expect(preflight).toContain("DKIM_ENCRYPTION_KEY_SECRET_ARN");
     expect(preflight).toContain("Required secret metadata");
     expect(preflight).toContain("the password is not printed");
     expect(preflight).not.toContain("Optional Secrets Manager metadata");
