@@ -116,6 +116,8 @@ export type AudienceMetadataRepository = {
     userId: string;
     page: number;
     limit: number;
+    search?: string;
+    type?: string;
   }): Promise<{ data: PropertyListRow[]; total: number }>;
   createProperty(data: PropertyInsert): Promise<PropertyRow[]>;
   findPropertyByIdForUser(
@@ -557,6 +559,8 @@ export function createAudienceMetadataService({
       userId: string;
       page?: number;
       limit?: number;
+      search?: string;
+      type?: string;
     }) {
       const page = normalizePage(input.page);
       const limit = normalizeLimit(input.limit, 20);
@@ -564,6 +568,8 @@ export function createAudienceMetadataService({
         userId: input.userId,
         page,
         limit,
+        search: input.search?.trim() || undefined,
+        type: input.type?.trim() || undefined,
       });
 
       return {

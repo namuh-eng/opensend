@@ -8,6 +8,7 @@ import {
   useDashboardCsvExport,
 } from "@/components/use-dashboard-csv-export";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface ContactListItem {
@@ -20,6 +21,11 @@ interface ContactListItem {
   createdAt: string;
 }
 
+interface SegmentOption {
+  id: string;
+  name: string;
+}
+
 function getAvatarColor(email: string): string {
   let hash = 0;
   for (let i = 0; i < email.length; i++) {
@@ -30,22 +36,36 @@ function getAvatarColor(email: string): string {
 }
 
 export function ContactsList() {
+  const searchParams = useSearchParams();
   const [contacts, setContacts] = useState<ContactListItem[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [limit] = useState(40);
   const [search, setSearch] = useState("");
-  const [segmentFilter, setSegmentFilter] = useState("");
+  const [segmentFilter, setSegmentFilter] = useState(
+    () => searchParams.get("segmentId") ?? "",
+  );
   const [statusFilter, setStatusFilter] = useState("");
+  const [after, setAfter] = useState("");
+  const [hasMore, setHasMore] = useState(false);
+  const [pageCursors, setPageCursors] = useState<string[]>([""]);
+  const [segmentOptions, setSegmentOptions] = useState<SegmentOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>(null);
   const { exportState, exportCsv } = useDashboardCsvExport("contacts");
 
+  const resetPagination = useCallback(() => {
+    setPage(1);
+    setAfter("");
+    setPageCursors([""]);
+  }, []);
+
   const fetchContacts = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set("limit", String(limit));
+      if (after) params.set("after", after);
       if (search) params.set("search", search);
       if (statusFilter) params.set("status", statusFilter);
       if (segmentFilter) params.set("segment_id", segmentFilter);
@@ -53,18 +73,54 @@ export function ContactsList() {
       const res = await fetch(`/api/contacts?${params.toString()}`);
       const data = await res.json();
       setContacts(data.data || []);
-      setTotal(data.data?.length || 0); // Temporary until total count logic is updated in API
+      setHasMore(Boolean(data.has_more));
     } catch {
       setContacts([]);
-      setTotal(0);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, segmentFilter]);
+  }, [after, limit, search, statusFilter, segmentFilter]);
 
   useEffect(() => {
     fetchContacts();
   }, [fetchContacts]);
+
+  useEffect(() => {
+    const requestedSegment = searchParams.get("segmentId") ?? "";
+    setSegmentFilter(requestedSegment);
+    resetPagination();
+  }, [searchParams, resetPagination]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function fetchSegments() {
+      try {
+        const res = await fetch("/api/segments?limit=100");
+        const data = (await res.json()) as {
+          data?: Array<{ id?: unknown; name?: unknown }>;
+        };
+        if (!active) return;
+        setSegmentOptions(
+          (data.data ?? [])
+            .filter(
+              (segment): segment is { id: string; name: string } =>
+                typeof segment.id === "string" &&
+                typeof segment.name === "string",
+            )
+            .map((segment) => ({ id: segment.id, name: segment.name })),
+        );
+      } catch {
+        if (active) setSegmentOptions([]);
+      }
+    }
+
+    void fetchSegments();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSearchChange = (value: string) => {
     if (searchTimeout.current) {
@@ -72,7 +128,7 @@ export function ContactsList() {
     }
     searchTimeout.current = setTimeout(() => {
       setSearch(value);
-      setPage(1);
+      resetPagination();
     }, 300);
   };
 
@@ -107,18 +163,35 @@ export function ContactsList() {
     void exportCsv(params);
   };
 
-  const totalPages = Math.ceil(total / limit);
-  const start = total === 0 ? 0 : (page - 1) * limit + 1;
-  const end = Math.min(page * limit, total);
+  const goToPreviousPage = () => {
+    if (page <= 1) return;
+    const previousPage = page - 1;
+    setPage(previousPage);
+    setAfter(pageCursors[previousPage - 1] ?? "");
+  };
+
+  const goToNextPage = () => {
+    if (!hasMore) return;
+    const nextAfter = contacts.at(-1)?.id;
+    if (!nextAfter) return;
+    const nextPage = page + 1;
+    setPageCursors((current) => {
+      const next = current.slice(0, nextPage);
+      next[nextPage - 1] = nextAfter;
+      return next;
+    });
+    setPage(nextPage);
+    setAfter(nextAfter);
+  };
 
   return (
-    <div>
+    <div className="min-w-0">
       {/* Filter bar */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
         <input
           type="text"
           placeholder="Search by name, email, or multiple emails..."
-          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
+          className="h-9 min-w-[220px] flex-1 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
           onChange={(e) => handleSearchChange(e.target.value)}
         />
 
@@ -126,7 +199,7 @@ export function ContactsList() {
           value={segmentFilter}
           onChange={(e) => {
             setSegmentFilter(e.target.value);
-            setPage(1);
+            resetPagination();
           }}
           className="h-9 px-3 text-[13px] bg-bg-card border border-line rounded-md text-fg outline-none cursor-pointer appearance-none pr-8"
           style={{
@@ -136,13 +209,18 @@ export function ContactsList() {
           }}
         >
           <option value="">All contacts</option>
+          {segmentOptions.map((segment) => (
+            <option key={segment.id} value={segment.id}>
+              {segment.name}
+            </option>
+          ))}
         </select>
 
         <select
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
-            setPage(1);
+            resetPagination();
           }}
           className="h-9 px-3 text-[13px] bg-bg-card border border-line rounded-md text-fg outline-none cursor-pointer appearance-none pr-8"
           style={{
@@ -178,64 +256,66 @@ export function ContactsList() {
         </div>
       ) : (
         <>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-line">
-                <th className="w-10 px-3 py-2 text-left">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    className="accent-white rounded cursor-pointer"
-                    aria-label="Select all"
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[760px]">
+              <thead>
+                <tr className="border-b border-line">
+                  <th className="w-10 px-3 py-2 text-left">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      className="accent-white rounded cursor-pointer"
+                      aria-label="Select all"
+                    />
+                  </th>
+                  <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
+                    Email
+                  </th>
+                  <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
+                    Segments
+                  </th>
+                  <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
+                    Status
+                  </th>
+                  <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
+                    Added
+                  </th>
+                  <th className="w-10 px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {contacts.map((contact) => (
+                  <ContactRow
+                    key={contact.id}
+                    contact={contact}
+                    selected={selectedIds.has(contact.id)}
+                    onToggle={() => toggleRow(contact.id)}
+                    onDeleted={fetchContacts}
                   />
-                </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
-                  Email
-                </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
-                  Segments
-                </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
-                  Status
-                </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
-                  Added
-                </th>
-                <th className="w-10 px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {contacts.map((contact) => (
-                <ContactRow
-                  key={contact.id}
-                  contact={contact}
-                  selected={selectedIds.has(contact.id)}
-                  onToggle={() => toggleRow(contact.id)}
-                  onDeleted={fetchContacts}
-                />
-              ))}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           {/* Pagination */}
           <div className="flex items-center justify-between mt-3 text-[13px] text-fg-2">
             <span>
-              Page {page} – {start} of {total} contacts – {limit} items
+              Page {page} – showing {contacts.length} contacts
             </span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={goToPreviousPage}
                 className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
               >
                 ←
               </button>
               <button
                 type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
+                disabled={!hasMore}
+                onClick={goToNextPage}
                 className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
               >
                 →

@@ -1,4 +1,4 @@
-import { and, asc, count, eq } from "drizzle-orm";
+import { type SQL, and, asc, count, eq, ilike, or } from "drizzle-orm";
 import { db } from "../client";
 import { contactProperties } from "../schema";
 
@@ -31,8 +31,26 @@ export const propertyRepo = {
       .returning();
   },
 
-  async listForApi(options: { userId: string; page: number; limit: number }) {
-    const whereClause = eq(contactProperties.userId, options.userId);
+  async listForApi(options: {
+    userId: string;
+    page: number;
+    limit: number;
+    search?: string;
+    type?: string;
+  }) {
+    const conditions: SQL[] = [eq(contactProperties.userId, options.userId)];
+    if (options.search) {
+      const pattern = `%${options.search}%`;
+      const searchClause = or(
+        ilike(contactProperties.key, pattern),
+        ilike(contactProperties.name, pattern),
+      );
+      if (searchClause) conditions.push(searchClause);
+    }
+    if (options.type) {
+      conditions.push(eq(contactProperties.type, options.type));
+    }
+    const whereClause = and(...conditions);
     const offset = (options.page - 1) * options.limit;
 
     const [totalRow] = await db
