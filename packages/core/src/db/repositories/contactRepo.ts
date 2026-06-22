@@ -146,7 +146,26 @@ export const contactRepo = {
         firstName: contacts.firstName,
         lastName: contacts.lastName,
         unsubscribed: contacts.unsubscribed,
-        segments: contacts.segments,
+        // Segment membership lives in BOTH the contacts.segments JSONB names
+        // (legacy) and the contacts_to_segments join table (newer). Surface the
+        // union so rows joined only via the join table still list their
+        // segments. Outer contacts columns are referenced via sql.raw because
+        // Drizzle renders interpolated columns without a table qualifier.
+        segments: sql<string[]>`(
+          select coalesce(jsonb_agg(distinct merged.name), '[]'::jsonb)
+          from (
+            select s.name
+            from ${contactsToSegments} as cs
+            join ${segments} as s
+              on s.id = cs.segment_id
+              and s.user_id = ${options.userId}
+            where cs.contact_id = ${sql.raw('"contacts"."id"')}
+            union
+            select jsonb_array_elements_text(
+              coalesce(${sql.raw('"contacts"."segments"')}, '[]'::jsonb)
+            )
+          ) as merged
+        )`,
         createdAt: contacts.createdAt,
       })
       .from(contacts)

@@ -15,23 +15,24 @@ describe("segmentRepo listForApi tenant-scoped aggregates", () => {
       /unsubscribedCount:[\s\S]*?`([\s\S]*?)`\.mapWith\(Number\)/,
     )?.[1];
 
-    expect(contactsCountQuery).toContain("count(distinct ${contacts.id})");
-    expect(contactsCountQuery).toContain("left join ${contactsToSegments}");
+    expect(contactsCountQuery).toContain("count(distinct c.id)");
     expect(contactsCountQuery).toContain(
-      "where ${contacts.userId} = ${options.userId}",
+      "left join ${contactsToSegments} as cs",
     );
     expect(contactsCountQuery).toContain(
-      "coalesce(${contacts.segments}, '[]'::jsonb) ? ${segments.name}",
+      'cs.segment_id = ${sql.raw(\'"segments"."id"\')}',
     );
-    expect(unsubscribedCountQuery).toContain("count(distinct ${contacts.id})");
-    expect(unsubscribedCountQuery).toContain(
-      "where ${contacts.userId} = ${options.userId}",
+    expect(contactsCountQuery).toContain("where c.user_id = ${options.userId}");
+    expect(contactsCountQuery).toContain(
+      "coalesce(c.segments, '[]'::jsonb) ? ${sql.raw('\"segments\".\"name\"')}",
     );
+    expect(unsubscribedCountQuery).toContain("count(distinct c.id)");
     expect(unsubscribedCountQuery).toContain(
-      "and ${contacts.unsubscribed} = true",
+      "where c.user_id = ${options.userId}",
     );
+    expect(unsubscribedCountQuery).toContain("and c.unsubscribed = true");
     expect(unsubscribedCountQuery).toContain(
-      "coalesce(${contacts.segments}, '[]'::jsonb) ? ${segments.name}",
+      "coalesce(c.segments, '[]'::jsonb) ? ${sql.raw('\"segments\".\"name\"')}",
     );
   });
 });

@@ -318,7 +318,8 @@ export function TopicsList() {
               {/* Pagination */}
               <div className="flex items-center justify-between mt-3 text-[13px] text-fg-2">
                 <span>
-                  Page {page} – {start} of {total} topics – {limit} items
+                  Page {page} – showing {start}–{start + topics.length - 1} of{" "}
+                  {total} topics
                 </span>
                 <div className="flex items-center gap-2">
                   <button

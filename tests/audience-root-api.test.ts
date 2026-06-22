@@ -192,6 +192,22 @@ describe("Resend-compatible root audiences API", () => {
     expect(mockAudienceMetadataService.getSegment).not.toHaveBeenCalled();
   });
 
+  it("rejects dashboard-cookie-only callers on root audience collection aliases", async () => {
+    mockValidateApiKey.mockResolvedValue(null);
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({ dashboard: true });
+
+    const collectionRoute = await import("@/app/audiences/route");
+    const response = await collectionRoute.GET(
+      makeRequest("http://localhost/audiences", {
+        headers: { cookie: "better-auth.session_token=fake" },
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+    expect(mockAudienceMetadataService.listSegments).not.toHaveBeenCalled();
+  });
+
   it("maps segment service errors without leaking segment object responses", async () => {
     mockAudienceMetadataService.getSegment.mockRejectedValueOnce(
       new MockAudienceMetadataServiceError(

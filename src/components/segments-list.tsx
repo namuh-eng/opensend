@@ -251,7 +251,8 @@ export function SegmentsList() {
           {/* Pagination */}
           <div className="flex items-center justify-between mt-3 text-[13px] text-fg-2">
             <span>
-              Page {page} – {start} of {total} segments – {limit} items
+              Page {page} – showing {start}–{start + segments.length - 1} of{" "}
+              {total} segments
             </span>
             <div className="flex items-center gap-2">
               <button

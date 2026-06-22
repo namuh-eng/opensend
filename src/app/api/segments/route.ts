@@ -1,9 +1,12 @@
 import {
+  type AuthResult,
   authorizeDashboardOrApiKey,
   getServerSession,
   unauthorizedResponse,
+  validateApiKey,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
+import { getRootApiAlias } from "@/lib/root-api-compatibility";
 import {
   AudienceMetadataServiceError,
   createAudienceMetadataService,
@@ -16,9 +19,21 @@ type SegmentRouteAuth = NonNullable<
 
 async function resolveUserId(auth: SegmentRouteAuth): Promise<string | null> {
   if ("userId" in auth) return auth.userId;
+  if ("dashboardUserId" in auth) return auth.dashboardUserId;
 
   const session = await getServerSession();
   return session?.user?.id ?? null;
+}
+
+async function authorizeSegmentRequest(
+  request: NextRequest,
+): Promise<SegmentRouteAuth | AuthResult | null> {
+  const alias = getRootApiAlias(request.headers);
+  if (alias === "segments" || alias === "audiences") {
+    return validateApiKey(request.headers.get("authorization"));
+  }
+
+  return authorizeDashboardOrApiKey(request.headers.get("authorization"));
 }
 
 function audienceMetadataService() {
@@ -38,9 +53,7 @@ function mapServiceError(error: unknown, fallback: string) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
+  const auth = await authorizeSegmentRequest(request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
@@ -63,9 +76,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
+  const auth = await authorizeSegmentRequest(request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;

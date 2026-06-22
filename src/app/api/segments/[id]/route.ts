@@ -1,9 +1,12 @@
 import {
+  type AuthResult,
   authorizeDashboardOrApiKey,
   getServerSession,
   unauthorizedResponse,
+  validateApiKey,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
+import { getRootApiAlias } from "@/lib/root-api-compatibility";
 import {
   AudienceMetadataServiceError,
   createAudienceMetadataService,
@@ -18,8 +21,20 @@ type RouteAuth = NonNullable<
 // segment management works from the dashboard UI.
 async function resolveUserId(auth: RouteAuth): Promise<string | null> {
   if ("userId" in auth) return auth.userId;
+  if ("dashboardUserId" in auth) return auth.dashboardUserId;
   const session = await getServerSession();
   return session?.user?.id ?? null;
+}
+
+async function authorizeSegmentRequest(
+  request: NextRequest,
+): Promise<RouteAuth | AuthResult | null> {
+  const alias = getRootApiAlias(request.headers);
+  if (alias === "segments" || alias === "audiences") {
+    return validateApiKey(request.headers.get("authorization"));
+  }
+
+  return authorizeDashboardOrApiKey(request.headers.get("authorization"));
 }
 
 function audienceMetadataService() {
@@ -42,9 +57,7 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeDashboardOrApiKey(
-    _request.headers.get("authorization"),
-  );
+  const auth = await authorizeSegmentRequest(_request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
@@ -68,9 +81,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await authorizeDashboardOrApiKey(
-    _request.headers.get("authorization"),
-  );
+  const auth = await authorizeSegmentRequest(_request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;

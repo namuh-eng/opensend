@@ -324,4 +324,44 @@ describe("Resend-compatible root contacts API", () => {
       "dashboard-user",
     );
   });
+
+  it("keeps root contact collection and middleware-rewritten aliases API-key-only", async () => {
+    mockValidateApiKey.mockResolvedValue(null);
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({ dashboard: true });
+
+    const collectionRoute = await import("@/app/contacts/route");
+    const apiCollectionRoute = await import("@/app/api/contacts/route");
+    const apiDetailRoute = await import("@/app/api/contacts/[id]/route");
+
+    const rootListResponse = await collectionRoute.GET(
+      makeRequest("http://localhost/contacts", {
+        headers: { cookie: "better-auth.session_token=fake" },
+      }) as never,
+    );
+    expect(rootListResponse.status).toBe(401);
+
+    const rewrittenListResponse = await apiCollectionRoute.GET(
+      makeRequest("http://localhost/api/contacts", {
+        headers: {
+          cookie: "better-auth.session_token=fake",
+          "x-opensend-root-api-alias": "contacts",
+        },
+      }) as never,
+    );
+    expect(rewrittenListResponse.status).toBe(401);
+
+    const rewrittenDetailResponse = await apiDetailRoute.GET(
+      makeRequest("http://localhost/api/contacts/contact-1", {
+        headers: {
+          cookie: "better-auth.session_token=fake",
+          "x-opensend-root-api-alias": "contacts",
+        },
+      }) as never,
+      { params: Promise.resolve({ id: "contact-1" }) },
+    );
+    expect(rewrittenDetailResponse.status).toBe(401);
+    expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+    expect(mockContactService.listContacts).not.toHaveBeenCalled();
+    expect(mockContactService.getContact).not.toHaveBeenCalled();
+  });
 });

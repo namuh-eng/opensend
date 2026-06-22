@@ -21,6 +21,7 @@ type RouteAuth = NonNullable<
 // topic management works from the dashboard UI.
 async function resolveUserId(auth: RouteAuth): Promise<string | null> {
   if ("userId" in auth) return auth.userId;
+  if ("dashboardUserId" in auth) return auth.dashboardUserId;
   const session = await getServerSession();
   return session?.user?.id ?? null;
 }

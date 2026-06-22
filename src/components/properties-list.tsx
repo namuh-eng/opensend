@@ -40,7 +40,7 @@ type PropertyApiPayload = {
   updatedAt?: unknown;
 };
 
-function normalizeProperty(property: PropertyApiPayload): Property {
+export function normalizeProperty(property: PropertyApiPayload): Property {
   const type = isPropertyType(property.type) ? property.type : "string";
   const fallback = property.fallback_value ?? property.fallbackValue ?? null;
   const createdAt =
@@ -290,7 +290,8 @@ export function PropertiesList() {
           {/* Pagination */}
           <div className="flex items-center justify-between mt-3 text-[13px] text-fg-2">
             <span>
-              Page {page} – {start} of {total} properties – {limit} items
+              Page {page} – showing {start}–{start + properties.length - 1} of{" "}
+              {total} properties
             </span>
             <div className="flex items-center gap-2">
               <button

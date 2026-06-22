@@ -472,6 +472,18 @@ function toApiCompatibilityPath(pathname: string): string {
 }
 
 function rootApiAliasForPath(pathname: string): RootApiAlias | null {
+  if (pathname === "/contacts" || pathname.startsWith("/contacts/")) {
+    return "contacts";
+  }
+
+  if (pathname === "/segments" || pathname.startsWith("/segments/")) {
+    return "segments";
+  }
+
+  if (pathname === "/audiences" || pathname.startsWith("/audiences/")) {
+    return "audiences";
+  }
+
   if (pathname === "/topics" || pathname.startsWith("/topics/")) {
     return "topics";
   }

@@ -1,18 +1,14 @@
 import {
-  authorizeDashboardOrApiKey,
-  getServerSession,
+  type AuthResult,
   unauthorizedResponse,
+  validateApiKey,
 } from "@/lib/api-auth";
-import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
+import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import {
   AudienceMetadataServiceError,
   createAudienceMetadataService,
 } from "@opensend/core";
 import { NextResponse } from "next/server";
-
-type AudienceRouteAuth = NonNullable<
-  Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
->;
 
 type SegmentListResult = Awaited<
   ReturnType<ReturnType<typeof createAudienceMetadataService>["listSegments"]>
@@ -22,11 +18,17 @@ type SegmentCreateResult = Awaited<
   ReturnType<ReturnType<typeof createAudienceMetadataService>["createSegment"]>
 >;
 
-async function resolveUserId(auth: AudienceRouteAuth): Promise<string | null> {
-  if ("userId" in auth) return auth.userId;
+async function authorizeAudienceRequest(
+  request: Request,
+): Promise<(AuthResult & { userId: string }) | Response> {
+  const auth = await validateApiKey(request.headers.get("authorization"));
+  if (!auth) return unauthorizedResponse();
 
-  const session = await getServerSession();
-  return session?.user?.id ?? null;
+  const permissionError = requireFullAccessApiKey(auth);
+  if (permissionError) return permissionError;
+  if (!auth.userId) return unauthorizedResponse();
+
+  return { ...auth, userId: auth.userId };
 }
 
 function audienceMetadataService() {
@@ -62,19 +64,13 @@ function toAudienceCreateResponse(result: SegmentCreateResult) {
 }
 
 export async function GET(request: Request) {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessForApiKeyCaller(auth);
-  if (permissionError) return permissionError;
-  const userId = await resolveUserId(auth);
-  if (!userId) return unauthorizedResponse();
+  const auth = await authorizeAudienceRequest(request);
+  if (auth instanceof Response) return auth;
 
   try {
     const url = new URL(request.url);
     const result = await audienceMetadataService().listSegments({
-      userId,
+      userId: auth.userId,
       limit: Number(url.searchParams.get("limit")) || undefined,
       search: url.searchParams.get("search") || undefined,
       after: url.searchParams.get("after") || undefined,
@@ -87,19 +83,13 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
-  if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessForApiKeyCaller(auth);
-  if (permissionError) return permissionError;
-  const userId = await resolveUserId(auth);
-  if (!userId) return unauthorizedResponse();
+  const auth = await authorizeAudienceRequest(request);
+  if (auth instanceof Response) return auth;
 
   try {
     const body = await request.json();
     const result = await audienceMetadataService().createSegment({
-      userId,
+      userId: auth.userId,
       body,
     });
 

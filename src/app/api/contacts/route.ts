@@ -1,10 +1,13 @@
 import {
+  type AuthResult,
   authorizeDashboardOrApiKey,
   getServerSession,
   unauthorizedResponse,
+  validateApiKey,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { queueEvent } from "@/lib/events";
+import { isRootApiAlias } from "@/lib/root-api-compatibility";
 import { createContactSchema } from "@/lib/validation/contacts";
 import { ContactServiceError, createContactService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
@@ -15,9 +18,20 @@ type ContactRouteAuth = NonNullable<
 
 async function resolveUserId(auth: ContactRouteAuth): Promise<string | null> {
   if ("userId" in auth) return auth.userId;
+  if ("dashboardUserId" in auth) return auth.dashboardUserId;
 
   const session = await getServerSession();
   return session?.user?.id ?? null;
+}
+
+async function authorizeContactRequest(
+  request: Request,
+): Promise<ContactRouteAuth | AuthResult | null> {
+  if (isRootApiAlias(request.headers, "contacts")) {
+    return validateApiKey(request.headers.get("authorization"));
+  }
+
+  return authorizeDashboardOrApiKey(request.headers.get("authorization"));
 }
 
 function contactService() {
@@ -35,9 +49,7 @@ function mapContactServiceError(error: unknown, fallback: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
+  const auth = await authorizeContactRequest(request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
@@ -84,9 +96,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: Request) {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
+  const auth = await authorizeContactRequest(request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;

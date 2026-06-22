@@ -22,6 +22,7 @@ function inputMode(request: NextRequest) {
 
 async function resolveUserId(auth: PropertyRouteAuth): Promise<string | null> {
   if ("userId" in auth) return auth.userId;
+  if ("dashboardUserId" in auth) return auth.dashboardUserId;
 
   const session = await getServerSession();
   return session?.user?.id ?? null;

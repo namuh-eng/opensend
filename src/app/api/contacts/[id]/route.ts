@@ -1,10 +1,13 @@
 import {
+  type AuthResult,
   authorizeDashboardOrApiKey,
   getServerSession,
   unauthorizedResponse,
+  validateApiKey,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { queueEvent } from "@/lib/events";
+import { isRootApiAlias } from "@/lib/root-api-compatibility";
 import { ContactServiceError, createContactService } from "@opensend/core";
 
 type RouteAuth = NonNullable<
@@ -16,8 +19,19 @@ type RouteAuth = NonNullable<
 // applies so contact detail/edit/delete work from the dashboard UI.
 async function resolveUserId(auth: RouteAuth): Promise<string | null> {
   if ("userId" in auth) return auth.userId;
+  if ("dashboardUserId" in auth) return auth.dashboardUserId;
   const session = await getServerSession();
   return session?.user?.id ?? null;
+}
+
+async function authorizeContactRequest(
+  request: Request,
+): Promise<RouteAuth | AuthResult | null> {
+  if (isRootApiAlias(request.headers, "contacts")) {
+    return validateApiKey(request.headers.get("authorization"));
+  }
+
+  return authorizeDashboardOrApiKey(request.headers.get("authorization"));
 }
 
 function contactService() {
@@ -59,9 +73,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
+  const auth = await authorizeContactRequest(request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
@@ -82,9 +94,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
+  const auth = await authorizeContactRequest(request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
@@ -129,9 +139,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  const auth = await authorizeDashboardOrApiKey(
-    request.headers.get("authorization"),
-  );
+  const auth = await authorizeContactRequest(request);
   if (!auth) return unauthorizedResponse();
   const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;

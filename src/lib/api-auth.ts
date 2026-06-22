@@ -172,15 +172,20 @@ export async function getServerSession() {
  */
 export async function authorizeDashboardOrApiKey(
   authHeader: string | null | undefined,
-): Promise<AuthResult | { dashboard: true } | null> {
+): Promise<AuthResult | { dashboard: true; dashboardUserId: string } | null> {
   const apiKeyAuth = await validateApiKey(authHeader);
   if (apiKeyAuth) {
     return apiKeyAuth;
   }
 
   const session = await getServerSession();
-  if (session) {
-    return { dashboard: true };
+  if (session?.user?.id) {
+    // Carry the resolved user id (under a distinct key so `"userId" in auth`
+    // still uniquely narrows to the API-key AuthResult) so callers don't
+    // re-fetch the session a second time in resolveUserId(). The redundant
+    // round-trip also opened a window where a transient session-store error
+    // produced a spurious 401 even though auth had already succeeded.
+    return { dashboard: true, dashboardUserId: session.user.id };
   }
 
   return null;

@@ -5,6 +5,8 @@ const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockListSegments = vi.hoisted(() => vi.fn());
 const mockListSegmentContacts = vi.hoisted(() => vi.fn());
+const mockGetSegment = vi.hoisted(() => vi.fn());
+const mockDeleteSegment = vi.hoisted(() => vi.fn());
 const mockCreateTopic = vi.hoisted(() => vi.fn());
 const mockCreateProperty = vi.hoisted(() => vi.fn());
 const mockGetTopic = vi.hoisted(() => vi.fn());
@@ -38,6 +40,8 @@ vi.mock("@opensend/core", () => ({
   createAudienceMetadataService: () => ({
     listSegments: mockListSegments,
     listSegmentContacts: mockListSegmentContacts,
+    getSegment: mockGetSegment,
+    deleteSegment: mockDeleteSegment,
     createTopic: mockCreateTopic,
     createProperty: mockCreateProperty,
     getTopic: mockGetTopic,
@@ -307,6 +311,57 @@ describe("audience metadata route adapters", () => {
       after: "contact-9",
     });
     expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+  });
+
+  it("keeps root segment detail aliases API-key-only while preserving dashboard /api segment detail access", async () => {
+    mockValidateApiKey.mockResolvedValue(null);
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({ dashboard: true });
+    mockGetSegment.mockResolvedValueOnce({
+      object: "segment",
+      id: "seg-1",
+      name: "VIP",
+      contacts_count: 1,
+      unsubscribed_count: 0,
+      created_at: "2026-05-10T00:00:00.000Z",
+    });
+    const { GET, DELETE } = await import("@/app/api/segments/[id]/route");
+
+    const rootAliasResponse = await GET(
+      makeNextRequest("http://localhost/api/segments/seg-1", {
+        headers: {
+          cookie: "better-auth.session_token=fake",
+          "x-opensend-root-api-alias": "segments",
+        },
+      }) as never,
+      { params: Promise.resolve({ id: "seg-1" }) },
+    );
+    expect(rootAliasResponse.status).toBe(401);
+
+    const audienceAliasDeleteResponse = await DELETE(
+      makeNextRequest("http://localhost/api/segments/seg-1", {
+        method: "DELETE",
+        headers: {
+          cookie: "better-auth.session_token=fake",
+          "x-opensend-root-api-alias": "audiences",
+        },
+      }) as never,
+      { params: Promise.resolve({ id: "seg-1" }) },
+    );
+    expect(audienceAliasDeleteResponse.status).toBe(401);
+    expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+    expect(mockGetSegment).not.toHaveBeenCalled();
+    expect(mockDeleteSegment).not.toHaveBeenCalled();
+
+    const apiResponse = await GET(
+      makeNextRequest("http://localhost/api/segments/seg-1") as never,
+      { params: Promise.resolve({ id: "seg-1" }) },
+    );
+
+    expect(apiResponse.status).toBe(200);
+    expect(mockGetSegment).toHaveBeenCalledWith({
+      userId: "dashboard-user",
+      id: "seg-1",
+    });
   });
 
   it("maps service validation and not-found errors to existing HTTP error envelopes", async () => {

@@ -1,10 +1,21 @@
-export type RootApiAlias = "topics" | "contact-properties";
+export type RootApiAlias =
+  | "contacts"
+  | "segments"
+  | "audiences"
+  | "topics"
+  | "contact-properties";
 
 export const rootApiAliasHeaderName = "x-opensend-root-api-alias";
 
 export function getRootApiAlias(headers: Headers): RootApiAlias | null {
   const value = headers.get(rootApiAliasHeaderName);
-  if (value === "topics" || value === "contact-properties") {
+  if (
+    value === "contacts" ||
+    value === "segments" ||
+    value === "audiences" ||
+    value === "topics" ||
+    value === "contact-properties"
+  ) {
     return value;
   }
 

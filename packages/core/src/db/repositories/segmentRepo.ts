@@ -68,29 +68,34 @@ export const segmentRepo = {
         // or the persisted contacts.segments JSONB names used by existing
         // contacts. Count each tenant-owned contact once even when both
         // sources record the same membership.
+        // Drizzle renders interpolated columns WITHOUT a table qualifier, so the
+        // correlated reference to the outer segment must be written explicitly
+        // (sql.raw) and the inner tables aliased — otherwise `${segments.id}`
+        // collapses to the inner contacts.id and the join matches nothing,
+        // making every join-table membership count read 0.
         contactsCount: sql<number>`(
-          select count(distinct ${contacts.id})
-          from ${contacts}
-          left join ${contactsToSegments}
-            on ${contactsToSegments.contactId} = ${contacts.id}
-            and ${contactsToSegments.segmentId} = ${segments.id}
-          where ${contacts.userId} = ${options.userId}
+          select count(distinct c.id)
+          from ${contacts} as c
+          left join ${contactsToSegments} as cs
+            on cs.contact_id = c.id
+            and cs.segment_id = ${sql.raw('"segments"."id"')}
+          where c.user_id = ${options.userId}
           and (
-            ${contactsToSegments.segmentId} is not null
-            or coalesce(${contacts.segments}, '[]'::jsonb) ? ${segments.name}
+            cs.segment_id is not null
+            or coalesce(c.segments, '[]'::jsonb) ? ${sql.raw('"segments"."name"')}
           )
         )`.mapWith(Number),
         unsubscribedCount: sql<number>`(
-          select count(distinct ${contacts.id})
-          from ${contacts}
-          left join ${contactsToSegments}
-            on ${contactsToSegments.contactId} = ${contacts.id}
-            and ${contactsToSegments.segmentId} = ${segments.id}
-          where ${contacts.userId} = ${options.userId}
-          and ${contacts.unsubscribed} = true
+          select count(distinct c.id)
+          from ${contacts} as c
+          left join ${contactsToSegments} as cs
+            on cs.contact_id = c.id
+            and cs.segment_id = ${sql.raw('"segments"."id"')}
+          where c.user_id = ${options.userId}
+          and c.unsubscribed = true
           and (
-            ${contactsToSegments.segmentId} is not null
-            or coalesce(${contacts.segments}, '[]'::jsonb) ? ${segments.name}
+            cs.segment_id is not null
+            or coalesce(c.segments, '[]'::jsonb) ? ${sql.raw('"segments"."name"')}
           )
         )`.mapWith(Number),
       })
