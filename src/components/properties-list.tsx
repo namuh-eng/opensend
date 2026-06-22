@@ -1,14 +1,69 @@
 "use client";
 
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import { useCallback, useEffect, useRef, useState } from "react";
+
+const PROPERTY_TYPES = ["string", "number", "boolean", "date"] as const;
+
+type PropertyType = (typeof PROPERTY_TYPES)[number];
+
+function isPropertyType(value: unknown): value is PropertyType {
+  return (
+    typeof value === "string" &&
+    PROPERTY_TYPES.some((propertyType) => propertyType === value)
+  );
+}
+
+function labelForPropertyType(type: PropertyType): string {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
 
 interface Property {
   id: string;
   name: string;
-  type: "string" | "number";
+  type: PropertyType;
   fallbackValue: string | null;
   createdAt: string;
+  updatedAt?: string;
+}
+
+type PropertyApiPayload = {
+  id?: unknown;
+  name?: unknown;
+  type?: unknown;
+  fallback_value?: unknown;
+  fallbackValue?: unknown;
+  created_at?: unknown;
+  createdAt?: unknown;
+  updated_at?: unknown;
+  updatedAt?: unknown;
+};
+
+function normalizeProperty(property: PropertyApiPayload): Property {
+  const type = isPropertyType(property.type) ? property.type : "string";
+  const fallback = property.fallback_value ?? property.fallbackValue ?? null;
+  const createdAt =
+    typeof property.created_at === "string"
+      ? property.created_at
+      : typeof property.createdAt === "string"
+        ? property.createdAt
+        : new Date(0).toISOString();
+  const updatedAt =
+    typeof property.updated_at === "string"
+      ? property.updated_at
+      : typeof property.updatedAt === "string"
+        ? property.updatedAt
+        : undefined;
+
+  return {
+    id: String(property.id ?? ""),
+    name: String(property.name ?? ""),
+    type,
+    fallbackValue: fallback === null ? null : String(fallback),
+    createdAt,
+    updatedAt,
+  };
 }
 
 export function PropertiesList() {
@@ -33,8 +88,11 @@ export function PropertiesList() {
       if (typeFilter) params.set("type", typeFilter);
 
       const res = await fetch(`/api/properties?${params.toString()}`);
-      const data = await res.json();
-      setProperties(data.data || []);
+      const data = (await res.json()) as {
+        data?: PropertyApiPayload[];
+        total?: number;
+      };
+      setProperties((data.data ?? []).map(normalizeProperty));
       setTotal(data.total || 0);
     } catch {
       setProperties([]);
@@ -111,8 +169,11 @@ export function PropertiesList() {
           style={selectStyle}
         >
           <option value="">All Types</option>
-          <option value="string">String</option>
-          <option value="number">Number</option>
+          {PROPERTY_TYPES.map((propertyType) => (
+            <option key={propertyType} value={propertyType}>
+              {labelForPropertyType(propertyType)}
+            </option>
+          ))}
         </select>
 
         <button
@@ -197,23 +258,29 @@ export function PropertiesList() {
                     {formatRelativeTime(prop.createdAt)}
                   </td>
                   <td className="w-10 px-3 py-2 relative">
-                    <button
-                      type="button"
-                      aria-label="More actions"
-                      className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                      >
-                        <circle cx="12" cy="5" r="1.5" />
-                        <circle cx="12" cy="12" r="1.5" />
-                        <circle cx="12" cy="19" r="1.5" />
-                      </svg>
-                    </button>
+                    <RowActionsMenu
+                      deleteAction={{
+                        label: "Delete property",
+                        confirmText: `Permanently delete the property "${prop.name}"? Stored values on contacts are not removed.`,
+                        onConfirm: async () => {
+                          const res = await fetch(
+                            `/api/properties/${prop.id}`,
+                            {
+                              method: "DELETE",
+                            },
+                          );
+                          if (!res.ok) {
+                            const body = (await res
+                              .json()
+                              .catch(() => ({}))) as { error?: string };
+                            throw new Error(
+                              body.error ?? `Server error ${res.status}`,
+                            );
+                          }
+                          fetchProperties();
+                        },
+                      }}
+                    />
                   </td>
                 </tr>
               ))}
@@ -269,7 +336,7 @@ function AddPropertyModal({
   onCreated: () => void;
 }) {
   const [name, setName] = useState("");
-  const [type, setType] = useState<"string" | "number">("string");
+  const [type, setType] = useState<PropertyType>("string");
   const [fallbackValue, setFallbackValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -355,14 +422,17 @@ function AddPropertyModal({
             </label>
             <select
               id="prop-type"
-              value={type === "string" ? "String" : "Number"}
-              onChange={(e) =>
-                setType(e.target.value === "Number" ? "number" : "string")
-              }
+              value={type}
+              onChange={(e) => {
+                if (isPropertyType(e.target.value)) setType(e.target.value);
+              }}
               className="w-full h-9 px-3 text-[13px] bg-bg-card border border-line rounded-md text-fg outline-none cursor-pointer"
             >
-              <option>String</option>
-              <option>Number</option>
+              {PROPERTY_TYPES.map((propertyType) => (
+                <option key={propertyType} value={propertyType}>
+                  {labelForPropertyType(propertyType)}
+                </option>
+              ))}
             </select>
           </div>
 

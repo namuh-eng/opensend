@@ -1,11 +1,29 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
-import { getRootApiAlias } from "@/lib/root-api-compatibility";
+import {
+  type AuthResult,
+  authorizeDashboardOrApiKey,
+  getServerSession,
+  unauthorizedResponse,
+  validateApiKey,
+} from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
+import { getRootApiAlias, isRootApiAlias } from "@/lib/root-api-compatibility";
 import {
   AudienceMetadataServiceError,
   createAudienceMetadataService,
 } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
+
+type RouteAuth = NonNullable<
+  Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
+>;
+
+// Accept either a dashboard session cookie or a full-access Bearer key so
+// topic management works from the dashboard UI.
+async function resolveUserId(auth: RouteAuth): Promise<string | null> {
+  if ("userId" in auth) return auth.userId;
+  const session = await getServerSession();
+  return session?.user?.id ?? null;
+}
 
 function audienceMetadataService() {
   return createAudienceMetadataService();
@@ -28,20 +46,31 @@ function inputMode(request: NextRequest) {
   return alias === "topics" ? "root" : "api";
 }
 
+async function authorizeTopicRequest(
+  request: NextRequest,
+): Promise<RouteAuth | AuthResult | null> {
+  if (isRootApiAlias(request.headers, "topics")) {
+    return validateApiKey(request.headers.get("authorization"));
+  }
+
+  return authorizeDashboardOrApiKey(request.headers.get("authorization"));
+}
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(_request.headers.get("authorization"));
+  const auth = await authorizeTopicRequest(request);
   if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
-  if (!auth.userId) return unauthorizedResponse();
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id } = await params;
     const result = await audienceMetadataService().getTopic({
-      userId: auth.userId,
+      userId,
       id,
     });
 
@@ -55,17 +84,18 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeTopicRequest(request);
   if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
-  if (!auth.userId) return unauthorizedResponse();
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id } = await params;
     const body = await request.json();
     const result = await audienceMetadataService().updateTopic({
-      userId: auth.userId,
+      userId,
       id,
       body,
       mode: inputMode(request),
@@ -78,19 +108,20 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(_request.headers.get("authorization"));
+  const auth = await authorizeTopicRequest(request);
   if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
-  if (!auth.userId) return unauthorizedResponse();
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id } = await params;
     await audienceMetadataService().deleteTopic({
-      userId: auth.userId,
+      userId,
       id,
     });
 

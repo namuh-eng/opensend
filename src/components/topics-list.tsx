@@ -1,6 +1,7 @@
 "use client";
 
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
+import { RowActionsMenu } from "@/components/row-actions-menu";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -11,6 +12,55 @@ interface Topic {
   defaultSubscription: "opt_in" | "opt_out";
   visibility: "private" | "public";
   createdAt: string;
+  updatedAt?: string;
+}
+
+type TopicApiPayload = {
+  id?: unknown;
+  name?: unknown;
+  description?: unknown;
+  default_subscription?: unknown;
+  defaultSubscription?: unknown;
+  visibility?: unknown;
+  created_at?: unknown;
+  createdAt?: unknown;
+  updated_at?: unknown;
+  updatedAt?: unknown;
+};
+
+function normalizeTopic(topic: TopicApiPayload): Topic {
+  const defaultSubscription =
+    topic.default_subscription === "opt_in" ||
+    topic.defaultSubscription === "opt_in"
+      ? "opt_in"
+      : "opt_out";
+  const visibility =
+    topic.visibility === "private" || topic.visibility === "public"
+      ? topic.visibility
+      : "private";
+  const createdAt =
+    typeof topic.created_at === "string"
+      ? topic.created_at
+      : typeof topic.createdAt === "string"
+        ? topic.createdAt
+        : new Date(0).toISOString();
+  const updatedAt =
+    typeof topic.updated_at === "string"
+      ? topic.updated_at
+      : typeof topic.updatedAt === "string"
+        ? topic.updatedAt
+        : undefined;
+
+  return {
+    id: String(topic.id ?? ""),
+    name: String(topic.name ?? ""),
+    description:
+      typeof topic.description === "string" ? topic.description : null,
+    defaultSubscription,
+    visibility,
+    createdAt,
+    updatedAt,
+  };
 }
 
 export function TopicsList() {
@@ -35,8 +85,11 @@ export function TopicsList() {
       if (defaultFilter) params.set("default", defaultFilter);
 
       const res = await fetch(`/api/topics?${params.toString()}`);
-      const data = await res.json();
-      setTopics(data.data || []);
+      const data = (await res.json()) as {
+        data?: TopicApiPayload[];
+        total?: number;
+      };
+      setTopics((data.data ?? []).map(normalizeTopic));
       setTotal(data.total || 0);
     } catch {
       setTopics([]);
@@ -132,29 +185,170 @@ export function TopicsList() {
         </button>
       </div>
 
-      {/* Data table or empty state */}
-      {loading ? (
-        <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
-          Loading topics...
+      {/* Topics list (left) + live unsubscribe-page preview (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-6 items-start">
+        <div className="min-w-0">
+          {/* Data table or empty state */}
+          {loading ? (
+            <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
+              Loading topics...
+            </div>
+          ) : topics.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 px-6">
+              <h3 className="text-[16px] font-semibold text-fg mb-2">
+                No topics yet
+              </h3>
+              <p className="text-[14px] text-fg-2 text-center max-w-[360px] mb-6">
+                Topics let contacts manage their subscription preferences.
+                Create topics to allow users to opt in or out of different types
+                of communications.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(true)}
+                  className="btn btn-primary"
+                >
+                  Create topic
+                </button>
+                <Link
+                  href="/audience/topics/unsubscribe-page/edit"
+                  className="inline-flex items-center rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
+                >
+                  Customize page
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <>
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-line">
+                    <th className="w-10 px-3 py-2 text-left">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        className="accent-white rounded cursor-pointer"
+                        aria-label="Select all"
+                      />
+                    </th>
+                    <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
+                      Name
+                    </th>
+                    <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
+                      Description
+                    </th>
+                    <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
+                      Default
+                    </th>
+                    <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
+                      Visibility
+                    </th>
+                    <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
+                      Created
+                    </th>
+                    <th className="w-10 px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {topics.map((topic) => (
+                    <tr
+                      key={topic.id}
+                      className="border-b border-line hover:bg-bg-2 transition-colors group"
+                    >
+                      <td className="w-10 px-3 py-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(topic.id)}
+                          onChange={() => toggleRow(topic.id)}
+                          className="accent-white rounded cursor-pointer"
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-[14px] text-fg">
+                        {topic.name}
+                      </td>
+                      <td className="px-3 py-2 text-[14px] text-fg-2 max-w-[200px] truncate">
+                        {topic.description ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-[14px] text-fg-2">
+                        {topic.defaultSubscription === "opt_in"
+                          ? "Opt-in"
+                          : "Opt-out"}
+                      </td>
+                      <td className="px-3 py-2 text-[14px] text-fg-2">
+                        {topic.visibility === "public" ? "Public" : "Private"}
+                      </td>
+                      <td
+                        className="px-3 py-2 text-[14px] text-fg-2"
+                        title={new Date(topic.createdAt).toLocaleString()}
+                      >
+                        {formatRelativeTime(topic.createdAt)}
+                      </td>
+                      <td className="w-10 px-3 py-2 relative">
+                        <RowActionsMenu
+                          deleteAction={{
+                            label: "Delete topic",
+                            confirmText: `Permanently delete the topic "${topic.name}"? Existing subscriptions to it are removed.`,
+                            onConfirm: async () => {
+                              const res = await fetch(
+                                `/api/topics/${topic.id}`,
+                                {
+                                  method: "DELETE",
+                                },
+                              );
+                              if (!res.ok) {
+                                const body = (await res
+                                  .json()
+                                  .catch(() => ({}))) as { error?: string };
+                                throw new Error(
+                                  body.error ?? `Server error ${res.status}`,
+                                );
+                              }
+                              fetchTopics();
+                            },
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Pagination */}
+              <div className="flex items-center justify-between mt-3 text-[13px] text-fg-2">
+                <span>
+                  Page {page} – {start} of {total} topics – {limit} items
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
+                  >
+                    &larr;
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
+                  >
+                    &rarr;
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
-      ) : topics.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 px-6">
-          <h3 className="text-[16px] font-semibold text-fg mb-2">
-            No topics yet
-          </h3>
-          <p className="text-[14px] text-fg-2 text-center max-w-[360px] mb-6">
-            Topics let contacts manage their subscription preferences. Create
-            topics to allow users to opt in or out of different types of
-            communications.
-          </p>
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setShowModal(true)}
-              className="btn btn-primary"
-            >
-              Create topic
-            </button>
+
+        {/* Unsubscribe Page Preview */}
+        <div className="border border-line rounded-lg overflow-hidden lg:sticky lg:top-4">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-line">
+            <h3 className="text-[14px] font-medium text-fg">
+              Unsubscribe Page Preview
+            </h3>
             <Link
               href="/audience/topics/unsubscribe-page/edit"
               className="inline-flex items-center rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
@@ -162,185 +356,55 @@ export function TopicsList() {
               Customize page
             </Link>
           </div>
-        </div>
-      ) : (
-        <>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-line">
-                <th className="w-10 px-3 py-2 text-left">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    className="accent-white rounded cursor-pointer"
-                    aria-label="Select all"
-                  />
-                </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
-                  Name
-                </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
-                  Description
-                </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
-                  Default
-                </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
-                  Visibility
-                </th>
-                <th className="px-3 py-2 text-left text-[12px] font-medium text-fg-2 tracking-normal">
-                  Created
-                </th>
-                <th className="w-10 px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {topics.map((topic) => (
-                <tr
-                  key={topic.id}
-                  className="border-b border-line hover:bg-bg-2 transition-colors group"
-                >
-                  <td className="w-10 px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.has(topic.id)}
-                      onChange={() => toggleRow(topic.id)}
-                      className="accent-white rounded cursor-pointer"
-                    />
-                  </td>
-                  <td className="px-3 py-2 text-[14px] text-fg">
-                    {topic.name}
-                  </td>
-                  <td className="px-3 py-2 text-[14px] text-fg-2 max-w-[200px] truncate">
-                    {topic.description ?? "—"}
-                  </td>
-                  <td className="px-3 py-2 text-[14px] text-fg-2">
-                    {topic.defaultSubscription === "opt_in"
-                      ? "Opt-in"
-                      : "Opt-out"}
-                  </td>
-                  <td className="px-3 py-2 text-[14px] text-fg-2">
-                    {topic.visibility === "public" ? "Public" : "Private"}
-                  </td>
-                  <td
-                    className="px-3 py-2 text-[14px] text-fg-2"
-                    title={new Date(topic.createdAt).toLocaleString()}
-                  >
-                    {formatRelativeTime(topic.createdAt)}
-                  </td>
-                  <td className="w-10 px-3 py-2 relative">
-                    <button
-                      type="button"
-                      aria-label="More actions"
-                      className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors opacity-0 group-hover:opacity-100"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
+          <div className="bg-white rounded-b-lg p-8">
+            <div className="max-w-[400px] mx-auto text-center">
+              <h2 className="text-[20px] font-semibold text-fg mb-2">
+                Subscription Preferences
+              </h2>
+              <p className="text-[14px] text-fg-2 mb-6">
+                Manage your email subscription preferences below.
+              </p>
+              <div className="space-y-3 text-left">
+                {topics.length > 0 ? (
+                  topics
+                    .filter((t) => t.visibility === "public")
+                    .map((t) => (
+                      <label
+                        key={t.id}
+                        className="flex items-start gap-3 p-3 border border-line-2 rounded-lg cursor-pointer hover:bg-white/[0.04]"
                       >
-                        <circle cx="12" cy="5" r="1.5" />
-                        <circle cx="12" cy="12" r="1.5" />
-                        <circle cx="12" cy="19" r="1.5" />
-                      </svg>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* Pagination */}
-          <div className="flex items-center justify-between mt-3 text-[13px] text-fg-2">
-            <span>
-              Page {page} – {start} of {total} topics – {limit} items
-            </span>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
-              >
-                &larr;
-              </button>
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-2 py-1 rounded border border-line disabled:opacity-30 hover:border-line-3 transition-colors"
-              >
-                &rarr;
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* Unsubscribe Page Preview */}
-      <div className="mt-8 border border-line rounded-lg overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-line">
-          <h3 className="text-[14px] font-medium text-fg">
-            Unsubscribe Page Preview
-          </h3>
-          <Link
-            href="/audience/topics/unsubscribe-page/edit"
-            className="inline-flex items-center rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
-          >
-            Customize page
-          </Link>
-        </div>
-        <div className="bg-white rounded-b-lg p-8">
-          <div className="max-w-[400px] mx-auto text-center">
-            <h2 className="text-[20px] font-semibold text-fg mb-2">
-              Subscription Preferences
-            </h2>
-            <p className="text-[14px] text-fg-2 mb-6">
-              Manage your email subscription preferences below.
-            </p>
-            <div className="space-y-3 text-left">
-              {topics.length > 0 ? (
-                topics
-                  .filter((t) => t.visibility === "public")
-                  .map((t) => (
-                    <label
-                      key={t.id}
-                      className="flex items-start gap-3 p-3 border border-line-2 rounded-lg cursor-pointer hover:bg-white/[0.04]"
-                    >
-                      <input
-                        type="checkbox"
-                        defaultChecked={t.defaultSubscription === "opt_out"}
-                        className="mt-0.5 accent-black"
-                        disabled
-                      />
-                      <div>
-                        <div className="text-[14px] font-medium text-fg">
-                          {t.name}
-                        </div>
-                        {t.description && (
-                          <div className="text-[13px] text-fg-3 mt-0.5">
-                            {t.description}
+                        <input
+                          type="checkbox"
+                          defaultChecked={t.defaultSubscription === "opt_out"}
+                          className="mt-0.5 accent-black"
+                          disabled
+                        />
+                        <div>
+                          <div className="text-[14px] font-medium text-fg">
+                            {t.name}
                           </div>
-                        )}
-                      </div>
-                    </label>
-                  ))
-              ) : (
-                <div className="text-center text-[14px] text-fg-3 py-4">
-                  No public topics to display
-                </div>
-              )}
+                          {t.description && (
+                            <div className="text-[13px] text-fg-3 mt-0.5">
+                              {t.description}
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    ))
+                ) : (
+                  <div className="text-center text-[14px] text-fg-3 py-4">
+                    No public topics to display
+                  </div>
+                )}
+              </div>
+              <button
+                type="button"
+                className="mt-6 px-6 py-2 bg-black text-white text-[14px] font-medium rounded-md"
+                disabled
+              >
+                Save Preferences
+              </button>
             </div>
-            <button
-              type="button"
-              className="mt-6 px-6 py-2 bg-black text-white text-[14px] font-medium rounded-md"
-              disabled
-            >
-              Save Preferences
-            </button>
           </div>
         </div>
       </div>

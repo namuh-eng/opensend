@@ -1,9 +1,11 @@
 "use client";
 
 import { CopyToClipboard } from "@/components/copy-to-clipboard";
+import { EditContactModal } from "@/components/edit-contact-modal";
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
 import { StatusBadge } from "@/components/status-badge";
-import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useId, useRef, useState } from "react";
 
 export interface ContactDetailData {
   id: string;
@@ -46,7 +48,7 @@ function ActionsDropdown({
       <button
         type="button"
         aria-label="More actions"
-        className="p-2 rounded-lg hover:bg-white/[0.14] text-fg-2 hover:text-fg transition-colors"
+        className="p-2 rounded-lg hover:bg-white/[0.14] text-fg-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 transition-colors"
         onClick={() => setOpen(!open)}
       >
         <svg
@@ -92,6 +94,47 @@ function ActionsDropdown({
 
 export function ContactDetail({ contact }: ContactDetailProps) {
   const propertyEntries = Object.entries(contact.properties || {});
+  const router = useRouter();
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteCancelRef = useRef<HTMLButtonElement>(null);
+  const deleteDialogTitleId = useId();
+
+  useEffect(() => {
+    if (!deleteOpen) return;
+    deleteCancelRef.current?.focus();
+
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") setDeleteOpen(false);
+    }
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [deleteOpen]);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      // Same-origin: the dashboard session cookie authenticates the request.
+      const res = await fetch(`/api/contacts/${contact.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `Server error ${res.status}`);
+      }
+      router.push("/audience");
+      router.refresh();
+    } catch (err) {
+      setDeleteError(
+        err instanceof Error ? err.message : "Could not delete contact.",
+      );
+      setDeleting(false);
+    }
+  };
 
   return (
     <div className="p-6">
@@ -109,8 +152,78 @@ export function ContactDetail({ contact }: ContactDetailProps) {
             {contact.email}
           </h1>
         </div>
-        <ActionsDropdown onEdit={() => {}} onDelete={() => {}} />
+        <ActionsDropdown
+          onEdit={() => setEditOpen(true)}
+          onDelete={() => setDeleteOpen(true)}
+        />
       </div>
+
+      <EditContactModal
+        open={editOpen}
+        contact={{
+          id: contact.id,
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          status: contact.status,
+        }}
+        onClose={() => setEditOpen(false)}
+        onSuccess={() => router.refresh()}
+      />
+
+      {deleteOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDeleteOpen(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setDeleteOpen(false);
+          }}
+        >
+          {/* biome-ignore lint/a11y/useSemanticElements: review requested an explicit role=dialog for this custom modal overlay. */}
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={deleteDialogTitleId}
+            className="w-full max-w-sm bg-bg-card border border-line rounded-lg shadow-xl p-6"
+          >
+            <h2
+              id={deleteDialogTitleId}
+              className="text-[16px] font-semibold text-fg mb-2"
+            >
+              Delete contact
+            </h2>
+            <p className="text-[13px] text-fg-2 mb-4">
+              Permanently delete{" "}
+              <span className="font-medium text-fg">{contact.email}</span>? This
+              cannot be undone.
+            </p>
+            {deleteError && (
+              <p className="text-[12px] text-red-400 mb-3" role="alert">
+                {deleteError}
+              </p>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                ref={deleteCancelRef}
+                type="button"
+                onClick={() => setDeleteOpen(false)}
+                className="px-3 py-1.5 text-[13px] font-medium text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-3 py-1.5 text-[13px] font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300 transition-colors disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Metadata row 1 */}
       <div className="grid grid-cols-4 gap-6 mb-6">

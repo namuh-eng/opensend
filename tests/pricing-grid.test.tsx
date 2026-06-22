@@ -68,7 +68,7 @@ describe("PricingGrid", () => {
       "Starter",
     );
     expect(screen.getByTestId("pricing-tier-selector").textContent).toContain(
-      "55k",
+      "51k",
     );
     expect(screen.getByTestId("pricing-card-free").textContent).toContain(
       "For tinkering and side projects.",

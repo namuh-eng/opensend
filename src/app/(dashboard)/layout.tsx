@@ -36,16 +36,16 @@ export default async function DashboardLayout({
 
   return (
     <CommandPaletteProvider>
-      <div className="flex min-h-screen bg-bg">
+      <div className="flex min-h-screen overflow-x-hidden bg-bg">
         <Sidebar
           billingEnabled={billingEnabled}
           userName={userName}
           userEmail={userEmail}
           userInitials={initials(user?.name, user?.email)}
         />
-        <main className="flex min-h-screen flex-1 flex-col">
+        <main className="flex min-h-screen min-w-0 flex-1 flex-col">
           <TopBar />
-          <div className="flex-1 px-6 py-6">{children}</div>
+          <div className="min-w-0 flex-1 px-6 py-6">{children}</div>
           <footer className="flex items-center justify-end gap-4 border-t border-line px-6 py-3">
             <a
               href="https://github.com/namuh-eng/opensend/issues/new?labels=feedback"

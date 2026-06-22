@@ -264,8 +264,15 @@
     {
       "idx": 37,
       "version": "7",
+      "when": 1781677132000,
+      "tag": "0037_lite_tier_and_quota_20260617",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
       "when": 1781760814476,
-      "tag": "0037_real_hawkeye",
+      "tag": "0038_real_hawkeye",
       "breakpoints": true
     }
   ]

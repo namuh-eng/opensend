@@ -77,17 +77,19 @@ describe("TopicsList", () => {
             id: "t1",
             name: "Marketing Updates",
             description: "Monthly marketing newsletter",
-            defaultSubscription: "opt_out",
+            default_subscription: "opt_out",
             visibility: "public",
-            createdAt: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           },
           {
             id: "t2",
             name: "Product News",
             description: null,
-            defaultSubscription: "opt_in",
+            default_subscription: "opt_in",
             visibility: "private",
-            createdAt: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           },
         ],
         total: 2,
@@ -103,9 +105,10 @@ describe("TopicsList", () => {
       const marketingEls = screen.getAllByText("Marketing Updates");
       expect(marketingEls.length).toBeGreaterThanOrEqual(1);
     });
-    expect(screen.getAllByText("Product News").length).toBeGreaterThanOrEqual(
-      1,
-    );
+    expect(screen.getAllByText("Product News")).toHaveLength(1);
+    expect(
+      screen.getAllByText("Marketing Updates").length,
+    ).toBeGreaterThanOrEqual(2);
     // Table shows formatted default/visibility values
     const optOutEls = screen.getAllByText("Opt-out");
     expect(optOutEls.length).toBeGreaterThanOrEqual(1);
@@ -236,9 +239,9 @@ describe("TopicsList", () => {
             id: "t1",
             name: "Marketing Updates",
             description: "Monthly marketing newsletter",
-            defaultSubscription: "opt_out",
+            default_subscription: "opt_out",
             visibility: "public",
-            createdAt: new Date().toISOString(),
+            created_at: new Date().toISOString(),
           },
         ],
         total: 1,

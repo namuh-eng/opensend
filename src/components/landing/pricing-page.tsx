@@ -45,18 +45,18 @@ const FAQ: Array<[string, string]> = [
 ];
 
 const COMPARE_ROWS: string[][] = [
-  ["Monthly emails", "500", "55k-100k", "120k-500k", "Unlimited"],
-  ["Verified domains", "1", "10", "1,000", "Unlimited"],
-  ["API keys", "2", "10", "25", "Unlimited"],
+  ["Monthly emails", "500", "15k", "51k-100k", "120k-500k", "Unlimited"],
+  ["Verified domains", "1", "3", "10", "1,000", "Unlimited"],
+  ["API keys", "2", "5", "10", "25", "Unlimited"],
 
-  ["Webhooks", "✓", "✓", "✓", "✓"],
-  ["Broadcasts", "—", "✓", "✓", "✓"],
-  ["Automations", "—", "✓", "✓", "✓"],
-  ["Dedicated IP", "—", "—", "Add-on", "Included"],
-  ["SSO (Google)", "—", "—", "✓", "✓"],
-  ["Audit log", "—", "—", "90 days", "Unlimited"],
-  ["SLA", "—", "99.9%", "99.95%", "99.99%"],
-  ["Support", "Community", "48h email", "12h email", "1h Slack"],
+  ["Webhooks", "✓", "✓", "✓", "✓", "✓"],
+  ["Broadcasts", "—", "✓", "✓", "✓", "✓"],
+  ["Automations", "—", "✓", "✓", "✓", "✓"],
+  ["Dedicated IP", "—", "—", "—", "Add-on", "Included"],
+  ["SSO (Google)", "—", "—", "—", "✓", "✓"],
+  ["Audit log", "—", "—", "—", "90 days", "Unlimited"],
+  ["SLA", "—", "—", "99.9%", "99.95%", "99.99%"],
+  ["Support", "Community", "Community", "48h email", "12h email", "1h Slack"],
 ];
 
 function LogoMark({ size = 24 }: { size?: number }) {
@@ -292,7 +292,7 @@ function SelfHostLane() {
 }
 
 function CompareTable() {
-  const headers = ["Free", "Starter", "Growth", "Scale"];
+  const headers = ["Free", "Lite", "Starter", "Growth", "Scale"];
   return (
     <section style={{ padding: "80px 0" }}>
       <div className="wrap">
@@ -319,7 +319,7 @@ function CompareTable() {
             className="cmp-grid"
             style={{
               display: "grid",
-              gridTemplateColumns: "1.4fr repeat(4, 1fr)",
+              gridTemplateColumns: "1.4fr repeat(5, 1fr)",
               background: "rgba(255,255,255,0.025)",
               borderBottom: "1px solid var(--line-2)",
             }}
@@ -338,17 +338,17 @@ function CompareTable() {
                   className="mono"
                   style={{
                     fontSize: 11,
-                    color: i === 2 ? "var(--accent)" : "var(--fg-3)",
+                    color: i === 3 ? "var(--accent)" : "var(--fg-3)",
                     textTransform: "uppercase",
                     letterSpacing: "0.12em",
                   }}
                 >
-                  {i === 2 ? "most popular" : "plan"}
+                  {i === 3 ? "most popular" : "plan"}
                 </div>
                 <div style={{ fontSize: 16, fontWeight: 500, marginTop: 4 }}>
                   {n}
                 </div>
-                {i === 2 && (
+                {i === 3 && (
                   <span
                     style={{
                       position: "absolute",
@@ -371,7 +371,7 @@ function CompareTable() {
               className="cmp-grid"
               style={{
                 display: "grid",
-                gridTemplateColumns: "1.4fr repeat(4, 1fr)",
+                gridTemplateColumns: "1.4fr repeat(5, 1fr)",
                 borderTop: i ? "1px solid var(--line)" : "none",
               }}
             >
@@ -398,7 +398,7 @@ function CompareTable() {
                     color:
                       cell === "—"
                         ? "var(--fg-4)"
-                        : j === 2
+                        : j === 3
                           ? "var(--fg)"
                           : "var(--fg-2)",
                     fontFamily:
@@ -614,7 +614,7 @@ export function PricingPage() {
               className="plan-grid"
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(4, 1fr)",
+                gridTemplateColumns: "repeat(5, 1fr)",
                 gap: 18,
               }}
             >

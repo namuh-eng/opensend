@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
+const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockBulkAction = vi.hoisted(() => vi.fn());
 const mockImportContacts = vi.hoisted(() => vi.fn());
 const mockListContactTopics = vi.hoisted(() => vi.fn());
@@ -27,7 +28,10 @@ function makeRequest(url: string, init?: RequestInit) {
 }
 
 vi.mock("@/lib/api-auth", () => ({
+  // The bulk route still authenticates with a Bearer API key.
   validateApiKey: mockValidateApiKey,
+  // The CSV import route is dashboard-session-only.
+  getServerSession: mockGetServerSession,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
@@ -59,6 +63,8 @@ describe("contact operations route adapters", () => {
       domain: null,
       userId: "user-1",
     });
+    // CSV import resolves the user from the dashboard session.
+    mockGetServerSession.mockResolvedValue({ user: { id: "user-1" } });
   });
 
   it("keeps /api/contacts/bulk auth in the route and delegates body/user to the service", async () => {
@@ -182,6 +188,43 @@ describe("contact operations route adapters", () => {
       object: "import",
       created_count: 2,
       ids: ["contact-1", "contact-2"],
+    });
+  });
+
+  it("strips a leading comma-only junk row so rows key off the real header", async () => {
+    mockImportContacts.mockResolvedValueOnce({
+      object: "import",
+      created_count: 1,
+      ids: ["contact-1"],
+    });
+    // Mirrors the real export bug: a blank `,,,,,,` row precedes the header
+    // and there are trailing empty columns.
+    const csv =
+      ",,,,,,\r\nid,email,created_at,,,,\r\n3,weswong@gmail.com,2026-03-23\r\n";
+    const formData = {
+      get: (key: string) => {
+        if (key === "file") return { text: async () => csv };
+        if (key === "mapping") return JSON.stringify({ email: "email" });
+        return null;
+      },
+    };
+
+    const route = await import("@/app/api/contacts/import/route");
+    const response = await route.POST({
+      headers: new Headers({ authorization: "Bearer key" }),
+      formData: async () => formData,
+    } as never);
+
+    expect(response.status).toBe(200);
+    const callArg = mockImportContacts.mock.calls[0]?.[0] as {
+      rows: Record<string, string>[];
+    };
+    // The junk row is gone (one real data row), keyed by the real header.
+    expect(callArg.rows).toHaveLength(1);
+    expect(callArg.rows[0]).toMatchObject({
+      id: "3",
+      email: "weswong@gmail.com",
+      created_at: "2026-03-23",
     });
   });
 

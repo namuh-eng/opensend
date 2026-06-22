@@ -22,12 +22,17 @@ Segment routes manage audience groupings. Segment membership is tenant-scoped an
 
 ## Response
 
-Successful responses return JSON scoped to the authenticated tenant. A representative response shape is:
+Successful responses return JSON scoped to the authenticated tenant. Each
+segment includes membership counts derived from the contacts assigned to it.
+A representative response shape is:
 
 ```json
 {
   "id": "segment_123",
-  "name": "Product qualified leads"
+  "name": "Product qualified leads",
+  "created_at": "2026-06-17T00:00:00.000Z",
+  "contacts_count": 128,
+  "unsubscribed_count": 4
 }
 ```
 

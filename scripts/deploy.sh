@@ -102,6 +102,12 @@ build_and_push() {
 
   docker "${args[@]}"
   ok "  pushed ${image}"
+
+  # Drop the local copy now that it lives in ECR. These images are never run
+  # locally (migrations + deploys go through `aws ecs run-task`), so leaving the
+  # tagged build behind just leaks disk on the shared self-hosted Mac mini
+  # runner every deploy. Best-effort: never fail the deploy over cleanup.
+  docker image rm -f "${image}" >/dev/null 2>&1 || true
 }
 
 app_task_definition() {

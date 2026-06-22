@@ -1,4 +1,4 @@
-import { type SQL, and, count, desc, eq, ilike, lt } from "drizzle-orm";
+import { type SQL, and, count, desc, eq, ilike, lt, sql } from "drizzle-orm";
 import { db } from "../client";
 import { contacts, contactsToSegments, segments } from "../schema";
 
@@ -64,6 +64,35 @@ export const segmentRepo = {
         id: segments.id,
         name: segments.name,
         createdAt: segments.createdAt,
+        // Membership can come from the newer contacts_to_segments join table
+        // or the persisted contacts.segments JSONB names used by existing
+        // contacts. Count each tenant-owned contact once even when both
+        // sources record the same membership.
+        contactsCount: sql<number>`(
+          select count(distinct ${contacts.id})
+          from ${contacts}
+          left join ${contactsToSegments}
+            on ${contactsToSegments.contactId} = ${contacts.id}
+            and ${contactsToSegments.segmentId} = ${segments.id}
+          where ${contacts.userId} = ${options.userId}
+          and (
+            ${contactsToSegments.segmentId} is not null
+            or coalesce(${contacts.segments}, '[]'::jsonb) ? ${segments.name}
+          )
+        )`.mapWith(Number),
+        unsubscribedCount: sql<number>`(
+          select count(distinct ${contacts.id})
+          from ${contacts}
+          left join ${contactsToSegments}
+            on ${contactsToSegments.contactId} = ${contacts.id}
+            and ${contactsToSegments.segmentId} = ${segments.id}
+          where ${contacts.userId} = ${options.userId}
+          and ${contacts.unsubscribed} = true
+          and (
+            ${contactsToSegments.segmentId} is not null
+            or coalesce(${contacts.segments}, '[]'::jsonb) ? ${segments.name}
+          )
+        )`.mapWith(Number),
       })
       .from(segments)
       .where(whereClause)

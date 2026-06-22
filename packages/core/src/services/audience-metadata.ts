@@ -52,7 +52,10 @@ type UpdatePropertyInput = {
   mode?: ApiCompatibilityMode;
 };
 
-type SegmentListRow = Pick<SegmentRow, "id" | "name" | "createdAt">;
+type SegmentListRow = Pick<SegmentRow, "id" | "name" | "createdAt"> & {
+  contactsCount: number;
+  unsubscribedCount: number;
+};
 type SegmentContactListRow = Pick<
   ContactRow,
   "id" | "email" | "firstName" | "lastName" | "unsubscribed" | "createdAt"
@@ -113,6 +116,8 @@ export type AudienceMetadataRepository = {
     userId: string;
     page: number;
     limit: number;
+    search?: string;
+    type?: string;
   }): Promise<{ data: PropertyListRow[]; total: number }>;
   createProperty(data: PropertyInsert): Promise<PropertyRow[]>;
   findPropertyByIdForUser(
@@ -241,6 +246,8 @@ function toSegmentListItem(row: SegmentListRow) {
     id: row.id,
     name: row.name,
     created_at: row.createdAt,
+    contacts_count: row.contactsCount,
+    unsubscribed_count: row.unsubscribedCount,
   };
 }
 
@@ -552,6 +559,8 @@ export function createAudienceMetadataService({
       userId: string;
       page?: number;
       limit?: number;
+      search?: string;
+      type?: string;
     }) {
       const page = normalizePage(input.page);
       const limit = normalizeLimit(input.limit, 20);
@@ -559,6 +568,8 @@ export function createAudienceMetadataService({
         userId: input.userId,
         page,
         limit,
+        search: input.search?.trim() || undefined,
+        type: input.type?.trim() || undefined,
       });
 
       return {

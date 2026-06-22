@@ -59,6 +59,8 @@ export async function GET(request: NextRequest) {
       userId,
       page: Number(url.searchParams.get("page")) || undefined,
       limit: Number(url.searchParams.get("limit")) || undefined,
+      search: url.searchParams.get("search") || undefined,
+      type: url.searchParams.get("type") || undefined,
     });
 
     return NextResponse.json(result);

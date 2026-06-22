@@ -1,4 +1,10 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
@@ -118,5 +124,122 @@ describe("ContactDetail", () => {
     // ID value is displayed (truncated in UI but full in the component)
     const idText = screen.getByText(mockContact.id);
     expect(idText).toBeDefined();
+  });
+
+  // --- Behavioral: these fail on the previous dead `() => {}` handlers ---
+
+  it("opens the edit modal when Edit contact is clicked", () => {
+    render(<ContactDetail contact={mockContact} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByText("Edit contact"));
+
+    // Edit modal heading + seeded fields appear
+    expect(
+      screen
+        .getByRole("dialog", { name: "Edit contact" })
+        .getAttribute("aria-modal"),
+    ).toBe("true");
+    expect(screen.getByRole("heading", { name: "Edit contact" })).toBeDefined();
+    expect(
+      (screen.getByLabelText("First name") as HTMLInputElement).value,
+    ).toBe("John");
+    expect((screen.getByLabelText("Last name") as HTMLInputElement).value).toBe(
+      "Doe",
+    );
+  });
+
+  it("focuses safe dialog actions and closes dialogs with Escape", async () => {
+    render(<ContactDetail contact={mockContact} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByText("Edit contact"));
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByLabelText("First name"));
+    });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Edit contact" })).toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByText("Delete contact"));
+
+    expect(
+      screen
+        .getByRole("dialog", { name: "Delete contact" })
+        .getAttribute("aria-modal"),
+    ).toBe("true");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole("button", { name: "Cancel" }),
+      );
+    });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "Delete contact" }),
+      ).toBeNull();
+    });
+  });
+
+  it("calls the delete API when deletion is confirmed", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ContactDetail contact={mockContact} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByText("Delete contact"));
+
+    // Confirm dialog, then confirm
+    expect(
+      screen.getByRole("dialog", { name: "Delete contact" }),
+    ).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/contacts/${mockContact.id}`,
+      expect.objectContaining({ method: "DELETE" }),
+    );
+
+    vi.unstubAllGlobals();
+  });
+
+  it("saves edits through the persisted UUID contact detail endpoint", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({}) });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ContactDetail contact={mockContact} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "More actions" }));
+    fireEvent.click(screen.getByText("Edit contact"));
+    fireEvent.change(screen.getByLabelText("First name"), {
+      target: { value: "Jane" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `/api/contacts/${mockContact.id}`,
+        expect.objectContaining({
+          method: "PATCH",
+          body: JSON.stringify({
+            first_name: "Jane",
+            last_name: "Doe",
+            unsubscribed: false,
+          }),
+        }),
+      );
+    });
+
+    vi.unstubAllGlobals();
   });
 });

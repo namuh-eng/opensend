@@ -303,6 +303,15 @@ describe("contact API tenant isolation", () => {
       domain: null,
       userId: "user-b",
     });
+    // The [id] routes resolve the caller via authorizeDashboardOrApiKey now,
+    // so re-establish it after resetAllMocks (session path returns null).
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({
+      apiKeyId: "key-b",
+      permission: "full_access",
+      domain: null,
+      userId: "user-b",
+    });
+    mockGetServerSession.mockResolvedValue(null);
     mockContactFindFirst.mockResolvedValueOnce({
       id: "contact-b",
       email: "b@example.com",
@@ -511,6 +520,9 @@ describe("contact API tenant isolation", () => {
   });
 
   it("stamps imported contacts with the caller user", async () => {
+    // CSV import is dashboard-session-only: the caller user comes from the
+    // authenticated session, not a Bearer key.
+    mockGetServerSession.mockResolvedValue({ user: { id: "user-b" } });
     mockContactOperationsService.importContacts.mockResolvedValueOnce({
       object: "import",
       created_count: 1,
@@ -528,7 +540,7 @@ describe("contact API tenant isolation", () => {
 
     const route = await import("@/app/api/contacts/import/route");
     const response = await route.POST({
-      headers: new Headers({ authorization: "Bearer user-b-key" }),
+      headers: new Headers(),
       formData: async () => formData,
     } as never);
 
@@ -542,12 +554,14 @@ describe("contact API tenant isolation", () => {
   });
 
   it("rejects contact routes when the caller user cannot be resolved", async () => {
-    mockValidateApiKey.mockResolvedValueOnce({
+    // API key with no userId and no dashboard session → unresolvable caller.
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({
       apiKeyId: "legacy-key",
       permission: "full_access",
       domain: null,
       userId: null,
     });
+    mockGetServerSession.mockResolvedValueOnce(null);
 
     const route = await import("@/app/api/contacts/[id]/route");
     const response = await route.GET(
