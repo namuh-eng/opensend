@@ -82,6 +82,18 @@ const requiredSecretRefs = [
     arnEnvName: "INGESTER_INBOUND_TOKEN_SECRET_ARN",
     defaultId: `${product}/ingester-inbound-token`,
   },
+  {
+    label: "Unsubscribe secret",
+    idEnvName: "UNSUBSCRIBE_SECRET_SECRET_ID",
+    arnEnvName: "UNSUBSCRIBE_SECRET_SECRET_ARN",
+    defaultId: `${product}/unsubscribe-secret`,
+  },
+  {
+    label: "DKIM encryption key",
+    idEnvName: "DKIM_ENCRYPTION_KEY_SECRET_ID",
+    arnEnvName: "DKIM_ENCRYPTION_KEY_SECRET_ARN",
+    defaultId: `${product}/dkim/encryption-key`,
+  },
 ];
 
 function run(command: string, args: string[]): CommandResult {

@@ -43,6 +43,10 @@ WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ID="${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_
 WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN="${WEBHOOK_SECRET_ENCRYPTION_KEY_SECRET_ARN:-}"
 TRACKING_SECRET_SECRET_ID="${TRACKING_SECRET_SECRET_ID:-${PRODUCT}/tracking-secret}"
 TRACKING_SECRET_SECRET_ARN="${TRACKING_SECRET_SECRET_ARN:-}"
+UNSUBSCRIBE_SECRET_SECRET_ID="${UNSUBSCRIBE_SECRET_SECRET_ID:-${PRODUCT}/unsubscribe-secret}"
+UNSUBSCRIBE_SECRET_SECRET_ARN="${UNSUBSCRIBE_SECRET_SECRET_ARN:-}"
+DKIM_ENCRYPTION_KEY_SECRET_ID="${DKIM_ENCRYPTION_KEY_SECRET_ID:-${PRODUCT}/dkim/encryption-key}"
+DKIM_ENCRYPTION_KEY_SECRET_ARN="${DKIM_ENCRYPTION_KEY_SECRET_ARN:-}"
 SES_EVENTS_SNS_TOPIC_ARN="${SES_EVENTS_SNS_TOPIC_ARN:-}"
 SES_INBOUND_SNS_TOPIC_ARN="${SES_INBOUND_SNS_TOPIC_ARN:-}"
 SES_INBOUND_SNS_TOPIC_ARNS="${SES_INBOUND_SNS_TOPIC_ARNS:-}"
@@ -145,6 +149,32 @@ tracking_secret_secret_arn() {
     --output text
 }
 
+unsubscribe_secret_secret_arn() {
+  if [[ -n "${UNSUBSCRIBE_SECRET_SECRET_ARN}" ]]; then
+    printf "%s\n" "${UNSUBSCRIBE_SECRET_SECRET_ARN}"
+    return
+  fi
+
+  aws secretsmanager describe-secret \
+    --secret-id "${UNSUBSCRIBE_SECRET_SECRET_ID}" \
+    --region "${AWS_REGION}" \
+    --query 'ARN' \
+    --output text
+}
+
+dkim_encryption_key_secret_arn() {
+  if [[ -n "${DKIM_ENCRYPTION_KEY_SECRET_ARN}" ]]; then
+    printf "%s\n" "${DKIM_ENCRYPTION_KEY_SECRET_ARN}"
+    return
+  fi
+
+  aws secretsmanager describe-secret \
+    --secret-id "${DKIM_ENCRYPTION_KEY_SECRET_ID}" \
+    --region "${AWS_REGION}" \
+    --query 'ARN' \
+    --output text
+}
+
 ingester_job_token_secret_arn() {
   if [[ -n "${INGESTER_JOB_TOKEN_SECRET_ARN}" ]]; then
     printf "%s\n" "${INGESTER_JOB_TOKEN_SECRET_ARN}"
@@ -168,7 +198,7 @@ ingester_inbound_token_secret_arn() {
     --secret-id "${INGESTER_INBOUND_TOKEN_SECRET_ID}" \
     --region "${AWS_REGION}" \
     --query 'ARN' \
-    --output text 2>/dev/null || true
+    --output text
 }
 
 write_service_network_configuration() {
@@ -183,7 +213,7 @@ write_service_network_configuration() {
 }
 
 write_app_task_definition() {
-  local base_task_definition="$1" app_image="$2" webhook_secret_arn="$3" tracking_secret_arn="$4" ses_events_sns_topic_arn="$5" ses_inbound_sns_topic_arn="$6" ses_inbound_sns_topic_arns="$7" output_file="$8"
+  local base_task_definition="$1" app_image="$2" webhook_secret_arn="$3" tracking_secret_arn="$4" unsubscribe_secret_arn="$5" dkim_encryption_key_arn="$6" ses_events_sns_topic_arn="$7" ses_inbound_sns_topic_arn="$8" ses_inbound_sns_topic_arns="$9" output_file="${10}"
   local base_task_file
   base_task_file="$(mktemp)"
 
@@ -193,7 +223,7 @@ write_app_task_definition() {
     --query 'taskDefinition' \
     --output json > "${base_task_file}"
 
-  python3 - "${base_task_file}" "${app_image}" "${APP_CONTAINER_NAME}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${ses_events_sns_topic_arn}" "${ses_inbound_sns_topic_arn}" "${ses_inbound_sns_topic_arns}" > "${output_file}" <<'PY'
+  python3 - "${base_task_file}" "${app_image}" "${APP_CONTAINER_NAME}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${unsubscribe_secret_arn}" "${dkim_encryption_key_arn}" "${ses_events_sns_topic_arn}" "${ses_inbound_sns_topic_arn}" "${ses_inbound_sns_topic_arns}" > "${output_file}" <<'PY'
 import copy
 import json
 import sys
@@ -204,10 +234,12 @@ import sys
     container_name,
     webhook_secret_arn,
     tracking_secret_arn,
+    unsubscribe_secret_arn,
+    dkim_encryption_key_arn,
     ses_events_sns_topic_arn,
     ses_inbound_sns_topic_arn,
     ses_inbound_sns_topic_arns,
-) = sys.argv[1:9]
+) = sys.argv[1:11]
 with open(base_task_file, "r", encoding="utf-8") as handle:
     task = json.load(handle)
 
@@ -243,6 +275,33 @@ if selected is None:
     raise SystemExit(f"base task definition has no {container_name!r} container")
 
 selected["image"] = app_image
+environment = selected.setdefault("environment", [])
+current_environment = {
+    item.get("name"): item.get("value")
+    for item in environment
+    if item.get("name") and item.get("value") is not None
+}
+app_url = (
+    current_environment.get("NEXT_PUBLIC_APP_URL")
+    or current_environment.get("APP_URL")
+    or current_environment.get("BETTER_AUTH_URL")
+)
+required_environment = {}
+if app_url:
+    required_environment["NEXT_PUBLIC_APP_URL"] = app_url
+    required_environment["BETTER_AUTH_TRUSTED_ORIGINS"] = app_url
+for name, value in required_environment.items():
+    item = {
+        "name": name,
+        "value": value,
+    }
+    for index, existing in enumerate(environment):
+        if existing.get("name") == name:
+            environment[index] = item
+            break
+    else:
+        environment.append(item)
+
 topic_environment = {
     "SES_EVENTS_SNS_TOPIC_ARN": ses_events_sns_topic_arn,
     "SES_INBOUND_SNS_TOPIC_ARN": ses_inbound_sns_topic_arn,
@@ -273,6 +332,14 @@ required_secrets = [
         "name": "TRACKING_SECRET",
         "valueFrom": tracking_secret_arn,
     },
+    {
+        "name": "UNSUBSCRIBE_SECRET",
+        "valueFrom": unsubscribe_secret_arn,
+    },
+    {
+        "name": "DKIM_ENCRYPTION_KEY",
+        "valueFrom": dkim_encryption_key_arn,
+    },
 ]
 for required_secret in required_secrets:
     for index, secret in enumerate(secrets):
@@ -288,13 +355,15 @@ PY
 }
 
 register_app_task_definition() {
-  local app_image="$1" base_task_definition webhook_secret_arn tracking_secret_arn task_file
+  local app_image="$1" base_task_definition webhook_secret_arn tracking_secret_arn unsubscribe_secret_arn dkim_encryption_key_arn task_file
   base_task_definition="$(app_task_definition)"
   webhook_secret_arn="$(webhook_secret_encryption_key_secret_arn)"
   tracking_secret_arn="$(tracking_secret_secret_arn)"
+  unsubscribe_secret_arn="$(unsubscribe_secret_secret_arn)"
+  dkim_encryption_key_arn="$(dkim_encryption_key_secret_arn)"
   task_file="$(mktemp)"
 
-  write_app_task_definition "${base_task_definition}" "${app_image}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${SES_EVENTS_SNS_TOPIC_ARN}" "${SES_INBOUND_SNS_TOPIC_ARN}" "${SES_INBOUND_SNS_TOPIC_ARNS}" "${task_file}"
+  write_app_task_definition "${base_task_definition}" "${app_image}" "${webhook_secret_arn}" "${tracking_secret_arn}" "${unsubscribe_secret_arn}" "${dkim_encryption_key_arn}" "${SES_EVENTS_SNS_TOPIC_ARN}" "${SES_INBOUND_SNS_TOPIC_ARN}" "${SES_INBOUND_SNS_TOPIC_ARNS}" "${task_file}"
 
   aws ecs register-task-definition \
     --cli-input-json "file://${task_file}" \
@@ -313,7 +382,7 @@ ingester_task_definition() {
 }
 
 write_ingester_task_definition() {
-  local base_task_definition="$1" ingester_image="$2" job_token_arn="$3" inbound_token_arn="$4" tracking_secret_arn="$5" app_task_definition="$6" ses_events_sns_topic_arn="$7" ses_inbound_sns_topic_arn="$8" ses_inbound_sns_topic_arns="$9" output_file="${10}"
+  local base_task_definition="$1" ingester_image="$2" job_token_arn="$3" inbound_token_arn="$4" tracking_secret_arn="$5" unsubscribe_secret_arn="$6" dkim_encryption_key_arn="$7" app_task_definition="$8" ses_events_sns_topic_arn="$9" ses_inbound_sns_topic_arn="${10}" ses_inbound_sns_topic_arns="${11}" output_file="${12}"
   local base_task_file app_task_file
   base_task_file="$(mktemp)"
   app_task_file="$(mktemp)"
@@ -330,7 +399,7 @@ write_ingester_task_definition() {
     --query 'taskDefinition' \
     --output json > "${app_task_file}"
 
-  python3 - "${base_task_file}" "${app_task_file}" "${ingester_image}" "${ING_CONTAINER_NAME}" "${job_token_arn}" "${inbound_token_arn}" "${tracking_secret_arn}" "${ses_events_sns_topic_arn}" "${ses_inbound_sns_topic_arn}" "${ses_inbound_sns_topic_arns}" > "${output_file}" <<'PY'
+  python3 - "${base_task_file}" "${app_task_file}" "${ingester_image}" "${ING_CONTAINER_NAME}" "${job_token_arn}" "${inbound_token_arn}" "${tracking_secret_arn}" "${unsubscribe_secret_arn}" "${dkim_encryption_key_arn}" "${ses_events_sns_topic_arn}" "${ses_inbound_sns_topic_arn}" "${ses_inbound_sns_topic_arns}" > "${output_file}" <<'PY'
 import copy
 import json
 import sys
@@ -343,10 +412,12 @@ import sys
     job_token_arn,
     inbound_token_arn,
     tracking_secret_arn,
+    unsubscribe_secret_arn,
+    dkim_encryption_key_arn,
     ses_events_sns_topic_arn,
     ses_inbound_sns_topic_arn,
     ses_inbound_sns_topic_arns,
-) = sys.argv[1:11]
+) = sys.argv[1:13]
 with open(base_task_file, "r", encoding="utf-8") as handle:
     task = json.load(handle)
 with open(app_task_file, "r", encoding="utf-8") as handle:
@@ -397,6 +468,15 @@ required_environment = {
     "NODE_ENV": "production",
     "HOST": "0.0.0.0",
 }
+app_url = (
+    app_environment.get("NEXT_PUBLIC_APP_URL")
+    or app_environment.get("APP_URL")
+    or app_environment.get("BETTER_AUTH_URL")
+)
+if app_url:
+    required_environment["NEXT_PUBLIC_APP_URL"] = app_url
+if "BETTER_AUTH_URL" in app_environment:
+    required_environment["BETTER_AUTH_URL"] = app_environment["BETTER_AUTH_URL"]
 for name in [
     "AWS_REGION",
     "S3_BUCKET_NAME",
@@ -432,11 +512,12 @@ required_secret = {
 required_secrets = [
     required_secret,
     {"name": "TRACKING_SECRET", "valueFrom": tracking_secret_arn},
+    {"name": "UNSUBSCRIBE_SECRET", "valueFrom": unsubscribe_secret_arn},
+    {"name": "DKIM_ENCRYPTION_KEY", "valueFrom": dkim_encryption_key_arn},
 ]
-if inbound_token_arn:
-    required_secrets.append(
-        {"name": "INGESTER_INBOUND_TOKEN", "valueFrom": inbound_token_arn}
-    )
+required_secrets.append(
+    {"name": "INGESTER_INBOUND_TOKEN", "valueFrom": inbound_token_arn}
+)
 
 for required_secret in required_secrets:
     for index, secret in enumerate(secrets):
@@ -452,12 +533,14 @@ PY
 }
 
 register_ingester_task_definition() {
-  local ingester_image="$1" base_task_definition app_base_task_definition job_token_arn inbound_token_arn tracking_secret_arn task_file
+  local ingester_image="$1" base_task_definition app_base_task_definition job_token_arn inbound_token_arn tracking_secret_arn unsubscribe_secret_arn dkim_encryption_key_arn task_file
   base_task_definition="$(ingester_task_definition)"
   app_base_task_definition="$(app_task_definition)"
   job_token_arn="$(ingester_job_token_secret_arn)"
   inbound_token_arn="$(ingester_inbound_token_secret_arn)"
   tracking_secret_arn="$(tracking_secret_secret_arn)"
+  unsubscribe_secret_arn="$(unsubscribe_secret_secret_arn)"
+  dkim_encryption_key_arn="$(dkim_encryption_key_secret_arn)"
   task_file="$(mktemp)"
 
   write_ingester_task_definition \
@@ -466,6 +549,8 @@ register_ingester_task_definition() {
     "${job_token_arn}" \
     "${inbound_token_arn}" \
     "${tracking_secret_arn}" \
+    "${unsubscribe_secret_arn}" \
+    "${dkim_encryption_key_arn}" \
     "${app_base_task_definition}" \
     "${SES_EVENTS_SNS_TOPIC_ARN}" \
     "${SES_INBOUND_SNS_TOPIC_ARN}" \
