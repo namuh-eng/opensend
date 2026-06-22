@@ -4,10 +4,25 @@ import { formatRelativeTime } from "@/components/emails-sending-data-table";
 import { RowActionsMenu } from "@/components/row-actions-menu";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+const PROPERTY_TYPES = ["string", "number", "boolean", "date"] as const;
+
+type PropertyType = (typeof PROPERTY_TYPES)[number];
+
+function isPropertyType(value: unknown): value is PropertyType {
+  return (
+    typeof value === "string" &&
+    PROPERTY_TYPES.some((propertyType) => propertyType === value)
+  );
+}
+
+function labelForPropertyType(type: PropertyType): string {
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
 interface Property {
   id: string;
   name: string;
-  type: "string" | "number";
+  type: PropertyType;
   fallbackValue: string | null;
   createdAt: string;
   updatedAt?: string;
@@ -26,7 +41,7 @@ type PropertyApiPayload = {
 };
 
 function normalizeProperty(property: PropertyApiPayload): Property {
-  const type = property.type === "number" ? "number" : "string";
+  const type = isPropertyType(property.type) ? property.type : "string";
   const fallback = property.fallback_value ?? property.fallbackValue ?? null;
   const createdAt =
     typeof property.created_at === "string"
@@ -154,8 +169,11 @@ export function PropertiesList() {
           style={selectStyle}
         >
           <option value="">All Types</option>
-          <option value="string">String</option>
-          <option value="number">Number</option>
+          {PROPERTY_TYPES.map((propertyType) => (
+            <option key={propertyType} value={propertyType}>
+              {labelForPropertyType(propertyType)}
+            </option>
+          ))}
         </select>
 
         <button
@@ -318,7 +336,7 @@ function AddPropertyModal({
   onCreated: () => void;
 }) {
   const [name, setName] = useState("");
-  const [type, setType] = useState<"string" | "number">("string");
+  const [type, setType] = useState<PropertyType>("string");
   const [fallbackValue, setFallbackValue] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -404,14 +422,17 @@ function AddPropertyModal({
             </label>
             <select
               id="prop-type"
-              value={type === "string" ? "String" : "Number"}
-              onChange={(e) =>
-                setType(e.target.value === "Number" ? "number" : "string")
-              }
+              value={type}
+              onChange={(e) => {
+                if (isPropertyType(e.target.value)) setType(e.target.value);
+              }}
               className="w-full h-9 px-3 text-[13px] bg-bg-card border border-line rounded-md text-fg outline-none cursor-pointer"
             >
-              <option>String</option>
-              <option>Number</option>
+              {PROPERTY_TYPES.map((propertyType) => (
+                <option key={propertyType} value={propertyType}>
+                  {labelForPropertyType(propertyType)}
+                </option>
+              ))}
             </select>
           </div>
 
