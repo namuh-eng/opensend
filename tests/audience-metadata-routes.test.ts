@@ -7,9 +7,12 @@ const mockListSegments = vi.hoisted(() => vi.fn());
 const mockListSegmentContacts = vi.hoisted(() => vi.fn());
 const mockCreateTopic = vi.hoisted(() => vi.fn());
 const mockCreateProperty = vi.hoisted(() => vi.fn());
+const mockGetTopic = vi.hoisted(() => vi.fn());
 const mockGetProperty = vi.hoisted(() => vi.fn());
 const mockUpdateTopic = vi.hoisted(() => vi.fn());
 const mockUpdateProperty = vi.hoisted(() => vi.fn());
+const mockDeleteTopic = vi.hoisted(() => vi.fn());
+const mockDeleteProperty = vi.hoisted(() => vi.fn());
 
 class TestAudienceMetadataServiceError extends Error {
   constructor(
@@ -37,9 +40,12 @@ vi.mock("@opensend/core", () => ({
     listSegmentContacts: mockListSegmentContacts,
     createTopic: mockCreateTopic,
     createProperty: mockCreateProperty,
+    getTopic: mockGetTopic,
     getProperty: mockGetProperty,
     updateTopic: mockUpdateTopic,
     updateProperty: mockUpdateProperty,
+    deleteTopic: mockDeleteTopic,
+    deleteProperty: mockDeleteProperty,
   }),
 }));
 
@@ -237,7 +243,7 @@ describe("audience metadata route adapters", () => {
     });
   });
 
-  it("keeps detail routes API-key-only and tenant-scoped through auth.userId", async () => {
+  it("authenticates detail routes via session or API key and tenant-scopes them", async () => {
     mockGetProperty.mockResolvedValueOnce({
       id: "prop-1",
       key: "company",
@@ -261,7 +267,9 @@ describe("audience metadata route adapters", () => {
       userId: "user-1",
       id: "prop-1",
     });
-    expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+    // Detail routes now accept a dashboard session OR an API key, so they
+    // authenticate through authorizeDashboardOrApiKey (not validateApiKey).
+    expect(mockAuthorizeDashboardOrApiKey).toHaveBeenCalled();
   });
 
   it("keeps segment contacts as an API-key-only thin service adapter", async () => {
@@ -368,6 +376,68 @@ describe("audience metadata route adapters", () => {
     });
   });
 
+  it("keeps root topic detail aliases API-key-only while preserving dashboard /api topic detail updates", async () => {
+    mockValidateApiKey.mockResolvedValue(null);
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({ dashboard: true });
+    mockUpdateTopic.mockResolvedValueOnce({
+      id: "topic-1",
+      name: "Dashboard News",
+      description: null,
+      defaultSubscription: "opt_out",
+      visibility: "public",
+      createdAt: "2026-05-10T00:00:00.000Z",
+    });
+    const { PATCH } = await import("@/app/api/topics/[id]/route");
+
+    const rootAliasResponse = await PATCH(
+      makeNextRequest("http://localhost/api/topics/topic-1", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-opensend-root-api-alias": "topics",
+        },
+        body: JSON.stringify({ name: "Root News" }),
+      }) as never,
+      { params: Promise.resolve({ id: "topic-1" }) },
+    );
+
+    expect(rootAliasResponse.status).toBe(401);
+    const rootAliasDeleteResponse = await (
+      await import("@/app/api/topics/[id]/route")
+    ).DELETE(
+      makeNextRequest("http://localhost/api/topics/topic-1", {
+        method: "DELETE",
+        headers: {
+          "x-opensend-root-api-alias": "topics",
+        },
+      }) as never,
+      { params: Promise.resolve({ id: "topic-1" }) },
+    );
+    expect(rootAliasDeleteResponse.status).toBe(401);
+    expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+    expect(mockUpdateTopic).not.toHaveBeenCalled();
+    expect(mockDeleteTopic).not.toHaveBeenCalled();
+
+    const apiResponse = await PATCH(
+      makeNextRequest("http://localhost/api/topics/topic-1", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "Dashboard News" }),
+      }) as never,
+      { params: Promise.resolve({ id: "topic-1" }) },
+    );
+
+    expect(apiResponse.status).toBe(200);
+    expect(mockUpdateTopic).toHaveBeenCalledWith({
+      userId: "dashboard-user",
+      id: "topic-1",
+      body: { name: "Dashboard News" },
+      mode: "api",
+    });
+  });
+
   it("passes root-api alias mode to strict property detail update calls when header is present", async () => {
     mockUpdateProperty.mockResolvedValueOnce({
       id: "prop-1",
@@ -404,13 +474,78 @@ describe("audience metadata route adapters", () => {
     });
   });
 
-  it("rejects detail calls when the API key has no tenant owner", async () => {
-    mockValidateApiKey.mockResolvedValueOnce({
+  it("keeps root contact-property detail aliases API-key-only while preserving dashboard /api property updates", async () => {
+    mockValidateApiKey.mockResolvedValue(null);
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({ dashboard: true });
+    mockUpdateProperty.mockResolvedValueOnce({
+      id: "prop-1",
+      key: "company",
+      name: "Company",
+      type: "string",
+      fallback_value: null,
+      created_at: "2026-05-10T00:00:00.000Z",
+      updated_at: "2026-05-10T00:00:00.000Z",
+    });
+    const { PATCH } = await import("@/app/api/properties/[id]/route");
+
+    const rootAliasResponse = await PATCH(
+      makeNextRequest("http://localhost/api/properties/prop-1", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "x-opensend-root-api-alias": "contact-properties",
+        },
+        body: JSON.stringify({ type: "number" }),
+      }) as never,
+      { params: Promise.resolve({ id: "prop-1" }) },
+    );
+
+    expect(rootAliasResponse.status).toBe(401);
+    const rootAliasDeleteResponse = await (
+      await import("@/app/api/properties/[id]/route")
+    ).DELETE(
+      makeNextRequest("http://localhost/api/properties/prop-1", {
+        method: "DELETE",
+        headers: {
+          "x-opensend-root-api-alias": "contact-properties",
+        },
+      }) as never,
+      { params: Promise.resolve({ id: "prop-1" }) },
+    );
+    expect(rootAliasDeleteResponse.status).toBe(401);
+    expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+    expect(mockUpdateProperty).not.toHaveBeenCalled();
+    expect(mockDeleteProperty).not.toHaveBeenCalled();
+
+    const apiResponse = await PATCH(
+      makeNextRequest("http://localhost/api/properties/prop-1", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ name: "Company" }),
+      }) as never,
+      { params: Promise.resolve({ id: "prop-1" }) },
+    );
+
+    expect(apiResponse.status).toBe(200);
+    expect(mockUpdateProperty).toHaveBeenCalledWith({
+      userId: "dashboard-user",
+      id: "prop-1",
+      body: { name: "Company" },
+      mode: "api",
+    });
+  });
+
+  it("rejects detail calls when the caller has no tenant owner", async () => {
+    // API key with no userId and no dashboard session → user unresolvable.
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({
       apiKeyId: "legacy-key",
       permission: "full_access",
       domain: null,
       userId: null,
     });
+    mockGetServerSession.mockResolvedValueOnce(null);
     const { GET } = await import("@/app/api/properties/[id]/route");
 
     const response = await GET(

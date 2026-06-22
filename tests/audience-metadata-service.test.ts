@@ -145,6 +145,17 @@ function makeRepository(seed?: {
     async listPropertiesForApi(options) {
       const filtered = properties
         .filter((property) => property.userId === options.userId)
+        .filter((property) =>
+          options.search
+            ? property.key
+                .toLowerCase()
+                .includes(options.search.toLowerCase()) ||
+              property.name.toLowerCase().includes(options.search.toLowerCase())
+            : true,
+        )
+        .filter((property) =>
+          options.type ? property.type === options.type : true,
+        )
         .sort((a, b) => a.key.localeCompare(b.key));
       const offset = (options.page - 1) * options.limit;
       return {
@@ -215,7 +226,12 @@ function topic(id: string, name: string, userId: string): TopicRow {
   };
 }
 
-function property(id: string, key: string, userId: string): PropertyRow {
+function property(
+  id: string,
+  key: string,
+  userId: string,
+  overrides: Partial<PropertyRow> = {},
+): PropertyRow {
   return {
     id,
     key,
@@ -226,6 +242,7 @@ function property(id: string, key: string, userId: string): PropertyRow {
     updatedAt: baseDate,
     document: null,
     userId,
+    ...overrides,
   };
 }
 
@@ -264,7 +281,15 @@ describe("audience metadata service", () => {
       service.listSegments({ userId: "user-1", search: "vip", limit: 1 }),
     ).resolves.toEqual({
       object: "list",
-      data: [{ id: "seg-c", name: "VIP Customers", created_at: baseDate }],
+      data: [
+        {
+          id: "seg-c",
+          name: "VIP Customers",
+          created_at: baseDate,
+          contacts_count: 0,
+          unsubscribed_count: 0,
+        },
+      ],
       has_more: true,
       total: 2,
     });
@@ -511,17 +536,24 @@ describe("audience metadata service", () => {
     ).rejects.toMatchObject({ message: "Segment not found", status: 404 });
   });
 
-  it("lists and creates properties with tenant isolation, key generation, and page metadata", async () => {
+  it("lists and creates properties with tenant isolation, filters, key generation, and page metadata", async () => {
     const repository = makeRepository({
       properties: [
         property("prop-b", "company", "user-1"),
+        property("prop-c", "company_size", "user-1", { type: "number" }),
         property("prop-a", "external", "user-2"),
       ],
     });
     const service = createAudienceMetadataService({ repository });
 
     await expect(
-      service.listProperties({ userId: "user-1", page: 1, limit: 20 }),
+      service.listProperties({
+        userId: "user-1",
+        page: 1,
+        limit: 20,
+        search: "company",
+        type: "string",
+      }),
     ).resolves.toEqual({
       data: [
         {

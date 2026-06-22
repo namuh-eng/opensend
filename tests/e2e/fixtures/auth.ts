@@ -214,6 +214,14 @@ export async function cleanupE2ERun(
     [`${userPrefix}%`, runId],
   );
   await client.query(
+    "delete from topics where user_id like $1 or document->>'test_run_id' = $2",
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
+    "delete from contact_properties where user_id like $1 or document->>'test_run_id' = $2",
+    [`${userPrefix}%`, runId],
+  );
+  await client.query(
     "delete from domain_deliverability_statuses where user_id like $1",
     [`${userPrefix}%`],
   );

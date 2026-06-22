@@ -260,4 +260,68 @@ describe("Resend-compatible root contacts API", () => {
       "user-1",
     );
   });
+
+  it("keeps root contact detail aliases API-key-only while preserving dashboard /api contact detail access", async () => {
+    const createdAt = new Date("2026-05-08T00:00:00.000Z");
+    mockValidateApiKey.mockResolvedValue(null);
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({ dashboard: true });
+    mockGetServerSession.mockResolvedValueOnce({
+      user: { id: "dashboard-user" },
+    });
+    mockContactService.getContact.mockResolvedValueOnce({
+      object: "contact",
+      id: "contact-1",
+      email: "user@example.com",
+      first_name: "User",
+      last_name: "One",
+      unsubscribed: false,
+      properties: null,
+      segments: [],
+      topics: [],
+      created_at: createdAt,
+    });
+
+    const rootRoute = await import("@/app/contacts/[contact_id]/route");
+    const apiRoute = await import("@/app/api/contacts/[id]/route");
+
+    const rootResponse = await rootRoute.GET(
+      makeRequest("http://localhost/contacts/contact-1"),
+      { params: Promise.resolve({ contact_id: "contact-1" }) },
+    );
+    expect(rootResponse.status).toBe(401);
+    const rootPatchResponse = await rootRoute.PATCH(
+      makeRequest("http://localhost/contacts/contact-1", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ first_name: "Dashboard" }),
+      }),
+      { params: Promise.resolve({ contact_id: "contact-1" }) },
+    );
+    expect(rootPatchResponse.status).toBe(401);
+    const rootDeleteResponse = await rootRoute.DELETE(
+      makeRequest("http://localhost/contacts/contact-1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ contact_id: "contact-1" }) },
+    );
+    expect(rootDeleteResponse.status).toBe(401);
+    expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+    expect(mockContactService.getContact).not.toHaveBeenCalled();
+    expect(mockContactService.updateContact).not.toHaveBeenCalled();
+    expect(mockContactService.deleteContact).not.toHaveBeenCalled();
+
+    const apiResponse = await apiRoute.GET(
+      makeRequest("http://localhost/api/contacts/contact-1"),
+      { params: Promise.resolve({ id: "contact-1" }) },
+    );
+    expect(apiResponse.status).toBe(200);
+    await expect(apiResponse.json()).resolves.toMatchObject({
+      object: "contact",
+      id: "contact-1",
+    });
+    expect(mockContactService.getContact).toHaveBeenCalledWith(
+      "contact-1",
+      "dashboard-user",
+    );
+  });
 });

@@ -192,7 +192,7 @@ describe("Resend-compatible root segments API", () => {
   });
 
   it("keeps root /segments API-key-only while preserving dashboard-session access on /api/segments", async () => {
-    mockValidateApiKey.mockResolvedValueOnce(null);
+    mockValidateApiKey.mockResolvedValue(null);
     mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({ dashboard: true });
     mockAudienceMetadataService.listSegments.mockResolvedValueOnce({
       object: "list",
@@ -219,6 +219,46 @@ describe("Resend-compatible root segments API", () => {
       limit: undefined,
       search: undefined,
       after: undefined,
+    });
+  });
+
+  it("keeps root segment detail aliases API-key-only while preserving dashboard-session access on /api/segments/:id", async () => {
+    mockValidateApiKey.mockResolvedValue(null);
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({ dashboard: true });
+    mockAudienceMetadataService.getSegment.mockResolvedValueOnce({
+      object: "segment",
+      id: "seg-1",
+      name: "VIP",
+      created_at: "2026-05-12",
+    });
+
+    const rootRoute = await import("@/app/segments/[id]/route");
+    const apiRoute = await import("@/app/api/segments/[id]/route");
+
+    const rootResponse = await rootRoute.GET(
+      makeRequest("http://localhost/segments/seg-1") as never,
+      { params: Promise.resolve({ id: "seg-1" }) },
+    );
+    expect(rootResponse.status).toBe(401);
+    const rootDeleteResponse = await rootRoute.DELETE(
+      makeRequest("http://localhost/segments/seg-1", {
+        method: "DELETE",
+      }) as never,
+      { params: Promise.resolve({ id: "seg-1" }) },
+    );
+    expect(rootDeleteResponse.status).toBe(401);
+    expect(mockAuthorizeDashboardOrApiKey).not.toHaveBeenCalled();
+    expect(mockAudienceMetadataService.getSegment).not.toHaveBeenCalled();
+    expect(mockAudienceMetadataService.deleteSegment).not.toHaveBeenCalled();
+
+    const apiResponse = await apiRoute.GET(
+      makeRequest("http://localhost/api/segments/seg-1") as never,
+      { params: Promise.resolve({ id: "seg-1" }) },
+    );
+    expect(apiResponse.status).toBe(200);
+    expect(mockAudienceMetadataService.getSegment).toHaveBeenCalledWith({
+      userId: "dashboard-user",
+      id: "seg-1",
     });
   });
 

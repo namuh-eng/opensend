@@ -25,29 +25,48 @@ describe("PropertiesList", () => {
       id: "p1",
       name: "company_name",
       type: "string",
-      fallbackValue: null,
-      createdAt: new Date().toISOString(),
+      fallback_value: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     },
     {
       id: "p2",
       name: "employee_count",
       type: "number",
-      fallbackValue: "0",
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
+      fallback_value: "0",
+      created_at: new Date(Date.now() - 86400000).toISOString(),
+      updated_at: new Date(Date.now() - 86400000).toISOString(),
     },
     {
       id: "p3",
       name: "plan_type",
       type: "string",
-      fallbackValue: "free",
-      createdAt: new Date(Date.now() - 172800000).toISOString(),
+      fallback_value: "free",
+      created_at: new Date(Date.now() - 172800000).toISOString(),
+      updated_at: new Date(Date.now() - 172800000).toISOString(),
+    },
+    {
+      id: "p4",
+      name: "trial_active",
+      type: "boolean",
+      fallback_value: "false",
+      created_at: new Date(Date.now() - 259200000).toISOString(),
+      updated_at: new Date(Date.now() - 259200000).toISOString(),
+    },
+    {
+      id: "p5",
+      name: "renewal_date",
+      type: "date",
+      fallback_value: null,
+      created_at: new Date(Date.now() - 345600000).toISOString(),
+      updated_at: new Date(Date.now() - 345600000).toISOString(),
     },
   ];
 
   beforeEach(() => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ data: mockProperties, total: 3 }),
+      json: () => Promise.resolve({ data: mockProperties, total: 5 }),
     });
   });
 
@@ -62,10 +81,14 @@ describe("PropertiesList", () => {
     expect(screen.getByText("company_name")).toBeTruthy();
     expect(screen.getByText("employee_count")).toBeTruthy();
     expect(screen.getByText("plan_type")).toBeTruthy();
+    expect(screen.getByText("trial_active")).toBeTruthy();
+    expect(screen.getByText("renewal_date")).toBeTruthy();
 
     // Check type column
     expect(screen.getAllByText("string")).toHaveLength(2);
     expect(screen.getByText("number")).toBeTruthy();
+    expect(screen.getByText("boolean")).toBeTruthy();
+    expect(screen.getByText("date")).toBeTruthy();
 
     // Check fallback values
     expect(screen.getByText("0")).toBeTruthy();
@@ -102,6 +125,8 @@ describe("PropertiesList", () => {
     const optionTexts = Array.from(options).map((o) => o.textContent);
     expect(optionTexts).toContain("String");
     expect(optionTexts).toContain("Number");
+    expect(optionTexts).toContain("Boolean");
+    expect(optionTexts).toContain("Date");
   });
 
   it("search filters properties by name", async () => {
@@ -138,6 +163,23 @@ describe("PropertiesList", () => {
     });
   });
 
+  it("type filter supports boolean and date properties", async () => {
+    render(<PropertiesList />);
+
+    await waitFor(() => {
+      expect(screen.getByText("company_name")).toBeTruthy();
+    });
+
+    const typeFilter = screen.getByDisplayValue("All Types");
+    fireEvent.change(typeFilter, { target: { value: "date" } });
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("type=date"),
+      );
+    });
+  });
+
   it("submits new property via add modal", async () => {
     mockFetch
       .mockResolvedValueOnce({
@@ -148,7 +190,7 @@ describe("PropertiesList", () => {
         ok: true,
         json: () =>
           Promise.resolve({
-            id: "p4",
+            id: "p6",
             name: "phone_number",
             type: "string",
             fallbackValue: null,
@@ -161,14 +203,14 @@ describe("PropertiesList", () => {
             data: [
               ...mockProperties,
               {
-                id: "p4",
+                id: "p6",
                 name: "phone_number",
                 type: "string",
-                fallbackValue: null,
-                createdAt: new Date().toISOString(),
+                fallback_value: null,
+                created_at: new Date().toISOString(),
               },
             ],
-            total: 4,
+            total: 6,
           }),
       });
 
