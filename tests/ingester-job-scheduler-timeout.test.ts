@@ -3,6 +3,10 @@ import {
   type SchedulerRequestTimeoutError,
   fetchSchedulerJobResult,
 } from "../packages/ingester/src/job-scheduler-request";
+import {
+  type SchedulerHeartbeatTimeoutError,
+  upsertSchedulerHeartbeat,
+} from "../packages/ingester/src/scheduler-heartbeat-write";
 
 describe("ingester job scheduler request timeout", () => {
   it("fails a never-settling job request on the scheduler timeout", async () => {
@@ -39,5 +43,24 @@ describe("ingester job scheduler request timeout", () => {
       ok: true,
       status: 200,
     });
+  });
+
+  it("fails a never-settling heartbeat write on the scheduler timeout", async () => {
+    const heartbeatRepo = {
+      upsert: () => new Promise<unknown>(() => undefined),
+    };
+
+    await expect(
+      upsertSchedulerHeartbeat({
+        heartbeatRepo,
+        jobName: "scheduled-emails",
+        result: { interval_ms: 60_000, status: "ok", http_status: 200 },
+        timeoutMs: 1,
+      }),
+    ).rejects.toMatchObject({
+      name: "SchedulerHeartbeatTimeoutError",
+      jobName: "scheduled-emails",
+      timeoutMs: 1,
+    } satisfies Partial<SchedulerHeartbeatTimeoutError>);
   });
 });

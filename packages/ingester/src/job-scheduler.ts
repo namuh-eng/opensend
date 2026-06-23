@@ -5,6 +5,10 @@ import {
   assertValidOpenSendEnv,
 } from "@opensend/core/src/env";
 import { fetchSchedulerJobResult } from "./job-scheduler-request";
+import {
+  type SchedulerHeartbeatRepo,
+  upsertSchedulerHeartbeat,
+} from "./scheduler-heartbeat-write";
 
 function runSchedulerStartupChecks(): void {
   try {
@@ -29,6 +33,7 @@ function runSchedulerStartupChecks(): void {
 const DEFAULT_INGESTER_URL = "http://ingester:3016";
 const DEFAULT_INTERVAL_SECONDS = 60;
 const REQUEST_TIMEOUT_MS = 20_000;
+const HEARTBEAT_UPSERT_TIMEOUT_MS = 5_000;
 
 // Paths are kept as literal strings (not derived) so the static-coverage
 // test at tests/ingester-job-scheduler-coverage.test.ts can grep for each
@@ -43,13 +48,6 @@ const JOB_PATHS = {
 type ScheduledJob = {
   readonly name: ScheduledJobName;
   readonly path: string;
-};
-
-type SchedulerHeartbeatRepo = {
-  readonly upsert: (
-    jobName: string,
-    result: Record<string, unknown>,
-  ) => Promise<unknown>;
 };
 
 type SchedulerRuntime = {
@@ -195,7 +193,12 @@ async function runJob(
       // body wasn't JSON — that's fine, we already logged it above
     }
 
-    await runtime.heartbeatRepo.upsert(job.name, resultPayload);
+    await upsertSchedulerHeartbeat({
+      heartbeatRepo: runtime.heartbeatRepo,
+      jobName: job.name,
+      result: resultPayload,
+      timeoutMs: HEARTBEAT_UPSERT_TIMEOUT_MS,
+    });
   } catch (heartbeatErr) {
     console.error(
       JSON.stringify({
