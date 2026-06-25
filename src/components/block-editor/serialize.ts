@@ -55,7 +55,7 @@ function renderBlock(block: EditorBlock): string | null {
     case "social_links":
       return "<!-- social links placeholder -->";
     case "unsubscribe_footer":
-      return `<p style="text-align:center;font-size:12px;"><a href="{{{RESEND_UNSUBSCRIBE_URL}}}">Unsubscribe</a></p>`;
+      return `<p style="text-align:center;font-size:12px;"><a href="{{{OPENSEND_UNSUBSCRIBE_URL}}}">Unsubscribe</a></p>`;
     case "html":
       return content;
     case "variable":

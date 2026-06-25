@@ -10,6 +10,8 @@ type ContactTopicSubscription = { topicId: string; subscribed: boolean };
 
 type PublicContactTopic = { id: string; subscription: "opt_in" | "opt_out" };
 
+type ContactServiceListTopic = PublicContactTopic & { name: string };
+
 export type CreateContactTopicInput =
   | string
   | { id: string; subscription?: "opt_in" | "opt_out" };
@@ -62,6 +64,7 @@ export type ContactServiceListItem = {
   unsubscribed: boolean;
   status: "subscribed" | "unsubscribed";
   segments: string[];
+  topics: ContactServiceListTopic[];
   created_at: ContactRow["createdAt"];
 };
 
@@ -151,6 +154,7 @@ export type ContactRepository = {
       | "lastName"
       | "unsubscribed"
       | "segments"
+      | "topicSubscriptions"
       | "createdAt"
     >[];
     hasMore: boolean;
@@ -171,6 +175,10 @@ export type ContactRepository = {
     topicId: string,
     userId: string,
   ): Promise<TopicRow | undefined>;
+  findTopicsByIdsForUser(
+    topicIds: string[],
+    userId: string,
+  ): Promise<Pick<TopicRow, "id" | "name">[]>;
   addContactToSegment(contactId: string, segmentId: string): Promise<void>;
   removeContactFromSegment(contactId: string, segmentId: string): Promise<void>;
 };
@@ -257,8 +265,10 @@ function toContactServiceListItem(
     | "lastName"
     | "unsubscribed"
     | "segments"
+    | "topicSubscriptions"
     | "createdAt"
   >,
+  topicsById: ReadonlyMap<string, string>,
 ): ContactServiceListItem {
   return {
     id: contact.id,
@@ -270,8 +280,39 @@ function toContactServiceListItem(
     unsubscribed: contact.unsubscribed,
     status: contact.unsubscribed ? "unsubscribed" : "subscribed",
     segments: normalizeSegments(contact.segments),
+    topics: normalizeTopics(contact.topicSubscriptions)
+      .map((topic) => {
+        const name = topicsById.get(topic.topicId);
+        if (!name) return null;
+        return {
+          id: topic.topicId,
+          name,
+          subscription: topic.subscribed ? "opt_in" : "opt_out",
+        };
+      })
+      .filter((topic): topic is ContactServiceListTopic => topic !== null),
     created_at: contact.createdAt,
   };
+}
+
+async function resolveListTopicNames(
+  repository: ContactRepository,
+  userId: string,
+  contacts: readonly Pick<ContactRow, "topicSubscriptions">[],
+): Promise<ReadonlyMap<string, string>> {
+  const topicIds = [
+    ...new Set(
+      contacts.flatMap((contact) =>
+        normalizeTopics(contact.topicSubscriptions).map(
+          (topic) => topic.topicId,
+        ),
+      ),
+    ),
+  ];
+  if (topicIds.length === 0) return new Map();
+
+  const topicRows = await repository.findTopicsByIdsForUser(topicIds, userId);
+  return new Map(topicRows.map((topic) => [topic.id, topic.name]));
 }
 
 function valuesEqual(a: unknown, b: unknown): boolean {
@@ -439,9 +480,16 @@ export function createContactService({
         status: input.status || undefined,
         segmentName,
       });
+      const topicsById = await resolveListTopicNames(
+        repository,
+        input.userId,
+        result.data,
+      );
 
       return {
-        data: result.data.map((contact) => toContactServiceListItem(contact)),
+        data: result.data.map((contact) =>
+          toContactServiceListItem(contact, topicsById),
+        ),
         hasMore: result.hasMore,
       };
     },

@@ -147,6 +147,7 @@ export const contactRepo = {
         lastName: contacts.lastName,
         unsubscribed: contacts.unsubscribed,
         segments: contacts.segments,
+        topicSubscriptions: contacts.topicSubscriptions,
         createdAt: contacts.createdAt,
       })
       .from(contacts)
@@ -192,6 +193,15 @@ export const contactRepo = {
     return await db.query.topics.findFirst({
       where: and(eq(topics.id, topicId), eq(topics.userId, userId)),
     });
+  },
+
+  async findTopicsByIdsForUser(topicIds: string[], userId: string) {
+    if (topicIds.length === 0) return [];
+
+    return await db
+      .select({ id: topics.id, name: topics.name })
+      .from(topics)
+      .where(and(inArray(topics.id, topicIds), eq(topics.userId, userId)));
   },
 
   async addContactToSegment(contactId: string, segmentId: string) {

@@ -88,6 +88,9 @@ function makeRepository(
     async listForApi() {
       return { data: [makeBroadcast()], hasMore: false };
     },
+    async findTopicByIdForUser(topicId) {
+      return { id: topicId };
+    },
     ...overrides,
   };
 }
@@ -263,6 +266,38 @@ describe("broadcast service boundary", () => {
     expect(createCalled).toBe(false);
   });
 
+  it("rejects broadcast create when topic_id is not owned by the caller", async () => {
+    let createCalled = false;
+    const service = createBroadcastService({
+      repository: makeRepository({
+        async findTopicByIdForUser() {
+          return undefined;
+        },
+        async create(data) {
+          createCalled = true;
+          return [makeBroadcast(data)];
+        },
+      }),
+    });
+
+    await expect(
+      service.createBroadcast({
+        userId: "user-2",
+        body: {
+          from: "team@example.com",
+          subject: "Hello",
+          segment_id: "segment-2",
+          topic_id: "topic-missing",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_input",
+      message:
+        "topic_id must reference a topic owned by the authenticated user",
+    } satisfies Partial<BroadcastServiceError>);
+    expect(createCalled).toBe(false);
+  });
+
   it("maps update aliases and scopes mutations by id plus user id", async () => {
     let capturedId = "";
     let capturedUserId = "";
@@ -304,6 +339,36 @@ describe("broadcast service boundary", () => {
       audienceId: "segment-3",
     });
     expect(result.replyTo).toBe("reply@example.com");
+  });
+
+  it("rejects broadcast update when topic_id is not owned by the caller", async () => {
+    let updateCalled = false;
+    const service = createBroadcastService({
+      repository: makeRepository({
+        async findTopicByIdForUser() {
+          return undefined;
+        },
+        async updateForUser(id, userId, data) {
+          updateCalled = true;
+          return [makeBroadcast({ id, userId, topicId: String(data.topicId) })];
+        },
+      }),
+    });
+
+    await expect(
+      service.updateBroadcast({
+        id: "broadcast-3",
+        userId: "user-3",
+        body: {
+          topic_id: "topic-missing",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_input",
+      message:
+        "topic_id must reference a topic owned by the authenticated user",
+    } satisfies Partial<BroadcastServiceError>);
+    expect(updateCalled).toBe(false);
   });
 
   it("queues or schedules draft broadcasts through tenant-scoped send methods", async () => {

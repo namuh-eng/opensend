@@ -14,6 +14,7 @@ Create a subscription topic for audience preference management.
 - `default_subscription` is required and must be either `opt_in` or `opt_out`.
 - `visibility` is required and must be either `public` or `private`.
 - `description` is optional and still capped at 200 characters.
+- `default_subscription` is creation-time behavior for the Resend-compatible API and cannot be changed later through `/topics/{id}`.
 
 `/api/topics` retains OpenSend extension behavior:
 

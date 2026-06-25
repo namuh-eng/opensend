@@ -12,6 +12,10 @@ import {
   getPublicBaseUrl,
   replaceUnsubscribePlaceholder,
 } from "@/lib/unsubscribe";
+import {
+  isSubscribedToTopic,
+  normalizeTopicSubscriptions,
+} from "@opensend/core";
 import { and, eq, lte, sql } from "drizzle-orm";
 
 /**
@@ -53,6 +57,10 @@ export async function processScheduledBroadcasts() {
         email: string;
         firstName: string | null;
         lastName: string | null;
+        topicSubscriptions: Array<{
+          topicId: string;
+          subscribed: boolean;
+        }> | null;
       }[] = [];
 
       const broadcastUserId = broadcast.userId;
@@ -86,6 +94,7 @@ export async function processScheduledBroadcasts() {
               email: contacts.email,
               firstName: contacts.firstName,
               lastName: contacts.lastName,
+              topicSubscriptions: contacts.topicSubscriptions,
             })
             .from(contacts)
             .where(
@@ -104,6 +113,7 @@ export async function processScheduledBroadcasts() {
             email: contacts.email,
             firstName: contacts.firstName,
             lastName: contacts.lastName,
+            topicSubscriptions: contacts.topicSubscriptions,
           })
           .from(contacts)
           .where(
@@ -112,6 +122,23 @@ export async function processScheduledBroadcasts() {
               eq(contacts.userId, broadcastUserId),
             ),
           );
+      }
+
+      if (broadcast.topicId) {
+        const topic = await db.query.topics.findFirst({
+          where: and(
+            eq(topics.id, broadcast.topicId),
+            eq(topics.userId, broadcastUserId),
+          ),
+        });
+        targetContacts = topic
+          ? targetContacts.filter((contact) =>
+              isSubscribedToTopic(
+                topic,
+                normalizeTopicSubscriptions(contact.topicSubscriptions),
+              ),
+            )
+          : [];
       }
 
       // 4. Perform fanout (create individual email records)
@@ -136,6 +163,10 @@ export async function processScheduledBroadcasts() {
           const unsubscribeUrl = createUnsubscribeUrl(
             contact.id,
             getPublicBaseUrl(),
+            {
+              topicId: broadcast.topicId,
+              broadcastId: broadcast.id,
+            },
           );
           html = replaceUnsubscribePlaceholder(html, unsubscribeUrl);
           const text = replaceUnsubscribePlaceholder(

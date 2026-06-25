@@ -19,6 +19,9 @@ async function cleanup(client: Client, marker: string): Promise<void> {
   await client.query("delete from contacts where user_id like $1", [
     `${marker}%`,
   ]);
+  await client.query("delete from topics where user_id like $1", [
+    `${marker}%`,
+  ]);
   await client.query("delete from segments where user_id like $1", [
     `${marker}%`,
   ]);
@@ -130,5 +133,72 @@ describeIfDb("broadcast sender tenant isolation", () => {
       [JSON.stringify([{ name: "broadcast_id", value: broadcastId }])],
     );
     expect(emails.rows[0]?.count).toBe("0");
+  });
+
+  it("fans out topic broadcasts only to contacts effectively subscribed to the topic", async () => {
+    await client.query("delete from contacts where user_id = $1", [tenantA]);
+
+    const topicId = randomUUID();
+    const contactExplicitIn = randomUUID();
+    const contactExplicitOut = randomUUID();
+    const contactDefaultIn = randomUUID();
+    const contactGlobalOut = randomUUID();
+    const broadcastId = randomUUID();
+
+    await client.query(
+      "insert into topics (id, name, default_subscription, visibility, user_id) values ($1, 'Announcements', 'opt_in', 'public', $2)",
+      [topicId, tenantA],
+    );
+    await client.query(
+      `insert into contacts (id, email, first_name, unsubscribed, topic_subscriptions, user_id)
+       values
+       ($1, $2, 'In', false, $3::jsonb, $4),
+       ($5, $6, 'Out', false, $7::jsonb, $8),
+       ($9, $10, 'Default', false, null, $11),
+       ($12, $13, 'Global', true, $14::jsonb, $15)`,
+      [
+        contactExplicitIn,
+        `${marker}-topic-in@example.test`,
+        JSON.stringify([{ topicId, subscribed: true }]),
+        tenantA,
+        contactExplicitOut,
+        `${marker}-topic-out@example.test`,
+        JSON.stringify([{ topicId, subscribed: false }]),
+        tenantA,
+        contactDefaultIn,
+        `${marker}-topic-default@example.test`,
+        tenantA,
+        contactGlobalOut,
+        `${marker}-topic-global@example.test`,
+        JSON.stringify([{ topicId, subscribed: true }]),
+        tenantA,
+      ],
+    );
+    await client.query(
+      "insert into broadcasts (id, name, status, topic_id, subject, html, scheduled_at, user_id) values ($1, 'Topic Launch', 'queued', $2, 'Hello {{FIRST_NAME}}', '<p>{{{OPENSEND_UNSUBSCRIBE_URL}}}</p>', now() - interval '1 minute', $3)",
+      [broadcastId, topicId, tenantA],
+    );
+
+    const result = await processScheduledBroadcasts();
+    expect(result.processed).toBeGreaterThanOrEqual(1);
+    expect(result.emailsCreated ?? 0).toBeGreaterThanOrEqual(2);
+
+    const created = await client.query<{
+      to: string[];
+      topic_id: string | null;
+      html: string | null;
+    }>(
+      'select "to", topic_id, html from emails where user_id = $1 and tags @> $2::jsonb order by "to" asc',
+      [tenantA, JSON.stringify([{ name: "broadcast_id", value: broadcastId }])],
+    );
+
+    expect(created.rows).toHaveLength(2);
+    expect(created.rows.map((row) => row.to[0]).sort()).toEqual([
+      `${marker}-topic-default@example.test`,
+      `${marker}-topic-in@example.test`,
+    ]);
+    expect(created.rows.every((row) => row.topic_id === topicId)).toBe(true);
+    expect(created.rows[0]?.html).toContain(`topic_id=${topicId}`);
+    expect(created.rows[0]?.html).toContain(`broadcast_id=${broadcastId}`);
   });
 });

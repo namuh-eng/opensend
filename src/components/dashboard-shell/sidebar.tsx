@@ -311,7 +311,7 @@ export function Sidebar({
           : g,
       );
   return (
-    <aside className="sticky top-0 flex h-screen w-[248px] flex-none flex-col border-r border-line bg-bg">
+    <aside className="sticky top-0 hidden h-screen w-[248px] flex-none flex-col border-r border-line bg-bg lg:flex">
       <WorkspaceSwitcher name={workspaceName} tier={workspaceTier} />
       <CommandSearch />
       <nav className="mt-2 flex-1 overflow-y-auto px-2 pb-3">

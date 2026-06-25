@@ -510,16 +510,13 @@ export function createAudienceMetadataService({
       const defaultSubscriptionInput =
         body.default_subscription ?? body.defaultSubscription;
       if (defaultSubscriptionInput !== undefined) {
+        if (mode === "root") {
+          throw invalidInput(
+            "default_subscription cannot be changed after topic creation",
+          );
+        }
         updateData.defaultSubscription =
-          mode === "root"
-            ? (assertStrictEnumValue(
-                defaultSubscriptionInput,
-                validTopicDefaultSubscriptions,
-                "default_subscription",
-              ) as TopicDefaultSubscription)
-            : defaultSubscriptionInput === "opt_in"
-              ? "opt_in"
-              : "opt_out";
+          defaultSubscriptionInput === "opt_in" ? "opt_in" : "opt_out";
       }
       if (body.visibility !== undefined) {
         updateData.visibility =
