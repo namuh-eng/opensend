@@ -1,7 +1,11 @@
-.PHONY: check test test-e2e typecheck lint format fix all dev build clean setup cli-build cli-test cli-check go-all bench
+.PHONY: check test test-e2e typecheck lint format fix all dev build clean setup db _db-heal cli-build cli-test cli-check go-all bench
 
 # Go CLI version (override with make cli-build VERSION=1.2.3)
 VERSION ?= dev
+
+# Postgres volume/container names (compose project `opensend-staging`).
+PG_VOLUME = opensend-staging_pgdata
+PG_CONTAINER = opensend-staging-postgres-1
 
 # Full validation: check + test
 all: check test
@@ -50,8 +54,22 @@ db-migrate:
 db-push:
 	bunx drizzle-kit push --config drizzle.config.ts
 
+# Start only Postgres for local dev (app runs natively via `make dev`).
+db: _db-heal
+	@echo "→ Starting Postgres..." && docker compose up postgres -d
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; echo "  ✓ Postgres up on port $${POSTGRES_PORT:-5432}"
+
+# Remove a stale postmaster.pid left by an unclean shutdown — but ONLY when
+# Postgres is not running, so a live database is never touched. No-op if the
+# volume/container don't exist yet (fresh machine).
+_db-heal:
+	@if [ -z "$$(docker ps -q -f name=$(PG_CONTAINER) -f status=running)" ]; then \
+		docker run --rm -v $(PG_VOLUME):/var/lib/postgresql/data postgres:16-alpine \
+			sh -c 'rm -f /var/lib/postgresql/data/postmaster.pid' >/dev/null 2>&1 || true; \
+	fi
+
 # One-command local setup (requires Docker)
-setup:
+setup: _db-heal
 	@test -f .env || (cp .env.example .env && echo "  ✓ Created .env from .env.example")
 	@echo "→ Starting Postgres..." && docker compose up postgres -d
 	@echo "→ Waiting for Postgres..." && until docker compose exec -T postgres pg_isready -U opensend >/dev/null 2>&1; do sleep 1; done && echo "  ✓ Postgres is ready"

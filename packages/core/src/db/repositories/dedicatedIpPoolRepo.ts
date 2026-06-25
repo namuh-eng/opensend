@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "../client";
 import { dedicatedIpPools } from "../schema";
 
@@ -78,6 +78,9 @@ export const dedicatedIpPoolRepo = {
         | "provisionedAt"
         | "warmingStartedAt"
         | "retiredAt"
+        | "awsRegion"
+        | "lastSyncedAt"
+        | "ipCount"
       >
     >,
   ) {
@@ -87,6 +90,59 @@ export const dedicatedIpPoolRepo = {
       .where(
         and(eq(dedicatedIpPools.id, id), eq(dedicatedIpPools.userId, userId)),
       )
+      .returning();
+    return row;
+  },
+
+  async listByStatus(status: DedicatedIpPoolStatus) {
+    return await db
+      .select()
+      .from(dedicatedIpPools)
+      .where(eq(dedicatedIpPools.status, status))
+      .orderBy(asc(dedicatedIpPools.createdAt));
+  },
+
+  async updateById(
+    id: string,
+    updates: Partial<
+      Pick<
+        typeof dedicatedIpPools.$inferInsert,
+        | "name"
+        | "sesPoolName"
+        | "scalingMode"
+        | "status"
+        | "provider"
+        | "operatorNotes"
+        | "provisionedAt"
+        | "warmingStartedAt"
+        | "retiredAt"
+        | "awsRegion"
+        | "lastSyncedAt"
+        | "ipCount"
+      >
+    >,
+  ) {
+    const [row] = await db
+      .update(dedicatedIpPools)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(dedicatedIpPools.id, id))
+      .returning();
+    return row;
+  },
+
+  async updateSyncMetadata(
+    id: string,
+    data: { lastSyncedAt: Date; ipCount: number; awsRegion?: string },
+  ) {
+    const [row] = await db
+      .update(dedicatedIpPools)
+      .set({
+        lastSyncedAt: data.lastSyncedAt,
+        ipCount: data.ipCount,
+        ...(data.awsRegion ? { awsRegion: data.awsRegion } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(dedicatedIpPools.id, id))
       .returning();
     return row;
   },
