@@ -267,6 +267,13 @@
       "when": 1781760814476,
       "tag": "0037_real_hawkeye",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1782383309872,
+      "tag": "0038_talented_smasher",
+      "breakpoints": true
     }
   ]
 }

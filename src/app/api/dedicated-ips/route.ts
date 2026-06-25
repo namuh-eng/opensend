@@ -79,6 +79,8 @@ function toDedicatedIpPoolResponse(
     scaling_mode: pool.scalingMode,
     status: pool.status,
     operator_notes: pool.operatorNotes,
+    ip_count: pool.ipCount ?? null,
+    aws_region: pool.awsRegion ?? null,
     provisioned_at: pool.provisionedAt,
     warming_started_at: pool.warmingStartedAt,
     retired_at: pool.retiredAt,

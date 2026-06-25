@@ -75,6 +75,7 @@ export * from "./services/auditEvents";
 export * from "./services/suppressions";
 export * from "./services/emailProvider";
 export * from "./services/configurationSet";
+export * from "./services/dedicatedIpPoolService";
 export * from "./services/tracking";
 export * from "./services/trackingRoute";
 export * from "./services/sandboxTestRecipients";

@@ -175,7 +175,7 @@ contributor-facing set; the table below adds the production-only entries.
 | `SES_INBOUND_SNS_TOPIC_ARN` | SNS topic for SES receipt-rule S3 notifications. Required for hosted-style receiving provisioning. Subscribe it to `/events/inbound/ses-s3`. |
 | `SES_INBOUND_BUCKET_NAME` | Optional raw MIME bucket allowlist for SES receipt-rule ingestion. Defaults to `S3_BUCKET_NAME`. |
 | `SES_INBOUND_RULE_SET_NAME` | Optional SES receipt rule set managed by the dashboard receiving toggle. Defaults to `opensend-inbound`. |
-| `INGESTER_SCHEDULER_INTERVAL_SECONDS` | Compose scheduler cadence for `/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`, and `/jobs/billing-overage`. Default `60`; minimum `10`. |
+| `INGESTER_SCHEDULER_INTERVAL_SECONDS` | Compose scheduler cadence for `/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`, `/jobs/billing-overage`, and `/jobs/dedicated-ip-sync`. Default `60`; minimum `10`. |
 | `RATE_LIMIT_BACKEND` | `disabled` (single-process dev outside Compose), or `redis` (Compose/shared/staging/production). |
 | `REDIS_URL` | Redis endpoint. Compose defaults to `redis://redis:6379`; managed production should use a private TLS endpoint such as `rediss://default:<password>@<endpoint>:6379`. Used for rate limiting, auth/domain metadata cache, and ingester cache invalidation. |
 | `OPENSEND_APP_REPLICAS` | Expected app replica count. Set greater than `1` when load balancing app containers; startup checks warn unless `RATE_LIMIT_BACKEND=redis`. |
