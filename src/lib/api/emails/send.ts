@@ -13,7 +13,13 @@ import {
   reserveEmailQuota,
 } from "@/lib/billing/quota";
 import { db } from "@/lib/db";
-import { contacts, emailEvents, emails, templates } from "@/lib/db/schema";
+import {
+  contacts,
+  emailEvents,
+  emails,
+  templates,
+  topics,
+} from "@/lib/db/schema";
 import { normalizeAttachmentsForStorage } from "@/lib/email-attachments";
 import {
   findSuppressedRecipients,
@@ -217,6 +223,29 @@ function sandboxSuppressedRecipientError(recipients: string[]) {
   );
 }
 
+function invalidTopicIdError() {
+  return publicApiError("validation_error", "Validation failed.", 422, {
+    formErrors: [],
+    fieldErrors: {
+      topic_id: [
+        "topic_id must reference a topic owned by the authenticated user.",
+      ],
+    },
+  });
+}
+
+async function isOwnedTopicId(
+  userId: string,
+  topicId: string | null | undefined,
+): Promise<boolean> {
+  if (!topicId) return true;
+
+  const topic = await db.query.topics.findFirst({
+    where: and(eq(topics.id, topicId), eq(topics.userId, userId)),
+  });
+  return Boolean(topic);
+}
+
 function findSandboxSuppressedRecipients(recipients: string[]): string[] {
   return recipients.filter(
     (recipient) =>
@@ -264,6 +293,7 @@ async function applyManagedUnsubscribe(input: {
   text: string;
   headers: Record<string, string>;
   baseUrl: string;
+  topicId: string | null;
 }): Promise<{ html: string; text: string; headers: Record<string, string> }> {
   if (
     input.to.length !== 1 ||
@@ -288,7 +318,9 @@ async function applyManagedUnsubscribe(input: {
     return { html: input.html, text: input.text, headers: input.headers };
   }
 
-  const unsubscribeUrl = createUnsubscribeUrl(contact.id, input.baseUrl);
+  const unsubscribeUrl = createUnsubscribeUrl(contact.id, input.baseUrl, {
+    topicId: input.topicId,
+  });
   return {
     html: replaceUnsubscribePlaceholder(input.html, unsubscribeUrl),
     text: replaceUnsubscribePlaceholder(input.text, unsubscribeUrl),
@@ -433,6 +465,16 @@ export async function handlePostEmailRequest(
       outcome: "unauthorized",
     });
     return await logResponse(domainRestrictionError);
+  }
+
+  if (!(await isOwnedTopicId(auth.userId, validated.topic_id))) {
+    recordAcceptMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "invalid",
+    });
+    return await logResponse(
+      jsonWithTelemetry(invalidTopicIdError(), telemetry, { status: 422 }),
+    );
   }
 
   // Idempotency check
@@ -669,6 +711,7 @@ export async function handlePostEmailRequest(
         text: finalText,
         headers: finalHeaders,
         baseUrl: getPublicBaseUrl(request),
+        topicId: validated.topic_id ?? null,
       });
       finalHtml = managedUnsubscribe.html;
       finalText = managedUnsubscribe.text;

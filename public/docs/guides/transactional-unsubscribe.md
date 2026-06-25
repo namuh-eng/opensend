@@ -11,15 +11,15 @@ Add the OpenSend unsubscribe placeholder to your HTML or text body:
 ```html
 <p>
   You can stop these product updates at any time:
-  <a href="{{{RESEND_UNSUBSCRIBE_URL}}}">unsubscribe</a>.
+  <a href="{{{OPENSEND_UNSUBSCRIBE_URL}}}">unsubscribe</a>.
 </p>
 ```
 
 ```text
-Stop these product updates: {{{RESEND_UNSUBSCRIBE_URL}}}
+Stop these product updates: {{{OPENSEND_UNSUBSCRIBE_URL}}}
 ```
 
-When the send is accepted, OpenSend looks up the sole `to` recipient in your tenant's contacts. If the contact exists and is not already unsubscribed, OpenSend replaces every placeholder occurrence with `/unsubscribe/{contactId}?token=...` and adds:
+When the send is accepted, OpenSend looks up the sole `to` recipient in your tenant's contacts. If the contact exists and is not already unsubscribed, OpenSend replaces every placeholder occurrence with `/unsubscribe/{contactId}?token=...`. When the send has a `topic_id`, OpenSend also includes topic context on the hosted link. The same URL is used for one-click unsubscribe headers:
 
 - `List-Unsubscribe: <https://your-opensend-host/unsubscribe/{contactId}?token=...>`
 - `List-Unsubscribe-Post: List-Unsubscribe=One-Click`
@@ -34,8 +34,8 @@ curl -X POST https://opensend.namuh.co/emails \
     "from": "Acme <updates@example.com>",
     "to": "ada@example.com",
     "subject": "Product activity summary",
-    "html": "<p>Your workspace processed 42 events today.</p><p><a href=\"{{{RESEND_UNSUBSCRIBE_URL}}}\">Unsubscribe from product summaries</a></p>",
-    "text": "Your workspace processed 42 events today. Unsubscribe: {{{RESEND_UNSUBSCRIBE_URL}}}"
+    "html": "<p>Your workspace processed 42 events today.</p><p><a href=\"{{{OPENSEND_UNSUBSCRIBE_URL}}}\">Unsubscribe from product summaries</a></p>",
+    "text": "Your workspace processed 42 events today. Unsubscribe: {{{OPENSEND_UNSUBSCRIBE_URL}}}"
   }'
 ```
 
@@ -44,7 +44,9 @@ curl -X POST https://opensend.namuh.co/emails \
 - The email must have exactly one `to` recipient. Multi-recipient sends are left unchanged.
 - The recipient must already exist as a contact for the authenticated tenant.
 - If the contact is already unsubscribed, OpenSend leaves the placeholder unchanged and does not add unsubscribe headers.
-- The public unsubscribe route marks the contact as `unsubscribed` after verifying the HMAC token.
+- Browser visits to the public unsubscribe route render the hosted preference page after verifying the HMAC token; they do not mutate contact state.
+- Mail clients that send `List-Unsubscribe=One-Click` to the signed URL mark the contact as globally unsubscribed.
+- Browser form saves can update topic preferences or explicitly unsubscribe the contact from all marketing mail.
 - Production deployments must set `UNSUBSCRIBE_SECRET` to at least 16 characters so signed links remain stable and private across deploys.
 
 ## Transactional vs marketing use
@@ -55,5 +57,5 @@ OpenSend does not decide whether a message is legally transactional or marketing
 
 - **Audience → Contacts** shows contact unsubscribe state.
 - **Audience → Topics** manages preference categories.
-- **Audience → Topics → Unsubscribe page customization** edits the hosted confirmation page.
+- **Audience → Topics → Unsubscribe page customization** edits the hosted preference page branding.
 - **Settings → Unsubscribe Page** currently shows a preview-only settings tab; use the Topics editor for live customization.

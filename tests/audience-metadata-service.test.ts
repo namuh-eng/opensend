@@ -401,6 +401,29 @@ describe("audience metadata service", () => {
     });
   });
 
+  it("rejects root topic default subscription updates because defaults are creation-time only", async () => {
+    const service = createAudienceMetadataService({
+      repository: makeRepository({
+        topics: [topic("topic-1", "News", "user-1")],
+      }),
+    });
+
+    await expect(
+      service.updateTopic({
+        userId: "user-1",
+        mode: "root",
+        id: "topic-1",
+        body: {
+          default_subscription: "opt_in",
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_input",
+      message: "default_subscription cannot be changed after topic creation",
+      status: 400,
+    } satisfies Partial<AudienceMetadataServiceError>);
+  });
+
   it("supports root-detail topic PATCH validation without requiring omitted enum fields", async () => {
     const service = createAudienceMetadataService({
       repository: makeRepository({
@@ -414,13 +437,12 @@ describe("audience metadata service", () => {
         mode: "root",
         id: "topic-1",
         body: {
-          defaultSubscription: "opt_in",
           visibility: "private",
         },
       }),
     ).resolves.toMatchObject({
       id: "topic-1",
-      defaultSubscription: "opt_in",
+      defaultSubscription: "opt_out",
       visibility: "private",
     });
 
@@ -434,8 +456,8 @@ describe("audience metadata service", () => {
         },
       }),
     ).rejects.toMatchObject({
-      message: "default_subscription must be one of: opt_in | opt_out",
-      status: 422,
+      message: "default_subscription cannot be changed after topic creation",
+      status: 400,
     });
 
     await expect(

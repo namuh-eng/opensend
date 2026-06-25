@@ -13,7 +13,7 @@ import {
   reserveEmailQuota,
 } from "@/lib/billing/quota";
 import { db } from "@/lib/db";
-import { contacts, emailEvents, emails } from "@/lib/db/schema";
+import { contacts, emailEvents, emails, topics } from "@/lib/db/schema";
 import { normalizeAttachmentsForStorage } from "@/lib/email-attachments";
 import {
   findSuppressedRecipients,
@@ -256,6 +256,35 @@ function sandboxSuppressedRecipientError(recipients: string[]) {
   );
 }
 
+function invalidTopicIdError() {
+  return publicApiError("validation_error", "Validation failed.", 422, {
+    formErrors: [],
+    fieldErrors: {
+      topic_id: [
+        "topic_id must reference a topic owned by the authenticated user.",
+      ],
+    },
+  });
+}
+
+async function areOwnedTopicIds(
+  userId: string,
+  topicIds: readonly string[],
+): Promise<boolean> {
+  const uniqueTopicIds = [...new Set(topicIds.filter(Boolean))];
+  if (uniqueTopicIds.length === 0) return true;
+
+  const owned = await Promise.all(
+    uniqueTopicIds.map(async (topicId) => {
+      const topic = await db.query.topics.findFirst({
+        where: and(eq(topics.id, topicId), eq(topics.userId, userId)),
+      });
+      return Boolean(topic);
+    }),
+  );
+  return owned.every(Boolean);
+}
+
 function findSandboxSuppressedRecipients(recipients: string[]): string[] {
   return recipients.filter(
     (recipient) =>
@@ -303,6 +332,7 @@ async function applyManagedUnsubscribe(input: {
   text: string;
   headers: Record<string, string>;
   baseUrl: string;
+  topicId: string | null;
 }): Promise<{ html: string; text: string; headers: Record<string, string> }> {
   if (
     input.to.length !== 1 ||
@@ -327,7 +357,9 @@ async function applyManagedUnsubscribe(input: {
     return { html: input.html, text: input.text, headers: input.headers };
   }
 
-  const unsubscribeUrl = createUnsubscribeUrl(contact.id, input.baseUrl);
+  const unsubscribeUrl = createUnsubscribeUrl(contact.id, input.baseUrl, {
+    topicId: input.topicId,
+  });
   return {
     html: replaceUnsubscribePlaceholder(input.html, unsubscribeUrl),
     text: replaceUnsubscribePlaceholder(input.text, unsubscribeUrl),
@@ -500,6 +532,22 @@ export async function handlePostEmailBatchRequest(
     });
     return await logResponse(domainRestrictionError);
   }
+
+  if (
+    !(await areOwnedTopicIds(
+      auth.userId,
+      validatedItems.flatMap((item) => (item.topic_id ? [item.topic_id] : [])),
+    ))
+  ) {
+    recordBatchMetric(telemetry, {
+      durationMs: performance.now() - startedAt,
+      outcome: "invalid",
+    });
+    return await logResponse(
+      jsonWithTelemetry(invalidTopicIdError(), telemetry, { status: 422 }),
+    );
+  }
+
   const itemRecipients = validatedItems.map(
     (item) => normalizeEmailRecipient(item.to) as string[],
   );
@@ -640,6 +688,7 @@ export async function handlePostEmailBatchRequest(
           text: item.text ?? "",
           headers: (item.headers as Record<string, string>) ?? {},
           baseUrl: getPublicBaseUrl(request),
+          topicId: item.topic_id ?? null,
         });
         const emailId = randomUUID();
         const replyTracking = await prepareOutboundReplyTracking({

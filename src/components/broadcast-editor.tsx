@@ -191,12 +191,20 @@ export function BroadcastEditor({
 
   const selectedTopic = topics.find((t) => t.id === topicId);
   const selectedSegment = segments.find((s) => s.id === segmentId);
+  const managedUnsubscribePlaceholders = [
+    "{{{OPENSEND_UNSUBSCRIBE_URL}}}",
+    "{{{RESEND_UNSUBSCRIBE_URL}}}",
+  ] as const;
   const hasManagedUnsubscribeLink =
-    (broadcast?.html?.includes("{{{RESEND_UNSUBSCRIBE_URL}}}") ?? false) ||
+    managedUnsubscribePlaceholders.some((placeholder) =>
+      broadcast?.html?.includes(placeholder),
+    ) ||
     blocks.some(
       (block) =>
         block.type === "unsubscribe_footer" ||
-        block.content.includes("{{{RESEND_UNSUBSCRIBE_URL}}}"),
+        managedUnsubscribePlaceholders.some((placeholder) =>
+          block.content.includes(placeholder),
+        ),
     );
 
   const statusLabel = broadcast?.status

@@ -2,7 +2,10 @@
 
 import { formatRelativeTime } from "@/components/emails-sending-data-table";
 import { RowActionsMenu } from "@/components/row-actions-menu";
+import { UnsubscribePagePreview } from "@/components/unsubscribe-page-preview";
+import { PenLine, Plus, Search } from "lucide-react";
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 interface Topic {
@@ -73,6 +76,9 @@ export function TopicsList() {
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showModal, setShowModal] = useState(false);
+  const [previewMode, setPreviewMode] = useState<"preferences" | "success">(
+    "preferences",
+  );
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>(null);
 
   const fetchTopics = useCallback(async () => {
@@ -114,7 +120,6 @@ export function TopicsList() {
   };
 
   const allSelected = topics.length > 0 && selectedIds.size === topics.length;
-
   const toggleAll = () => {
     if (allSelected) {
       setSelectedIds(new Set());
@@ -143,17 +148,29 @@ export function TopicsList() {
     backgroundRepeat: "no-repeat",
     backgroundPosition: "right 10px center",
   };
-
+  const previewTabStyle = (active: boolean): CSSProperties => ({
+    backgroundColor: active ? "var(--accent-soft)" : "transparent",
+    borderColor: active ? "rgba(196, 255, 90, 0.5)" : "transparent",
+    color: active ? "var(--accent)" : "var(--fg-3)",
+  });
   return (
     <div>
       {/* Filter bar */}
-      <div className="flex items-center gap-3 mb-4">
-        <input
-          type="text"
-          placeholder="Search..."
-          className="flex-1 h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3"
-          onChange={(e) => handleSearchChange(e.target.value)}
-        />
+      <div className="flex flex-col gap-3 mb-5 xl:flex-row xl:items-center">
+        <label className="relative flex-1">
+          <span className="sr-only">Search topics</span>
+          <Search
+            aria-hidden="true"
+            className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-3"
+            strokeWidth={1.8}
+          />
+          <input
+            type="text"
+            placeholder="Search..."
+            className="h-10 w-full rounded-lg border border-line bg-bg-card pl-10 pr-3 text-[13px] text-fg outline-none transition-colors placeholder:text-fg-3 focus:border-line-3"
+            onChange={(e) => handleSearchChange(e.target.value)}
+          />
+        </label>
 
         <select
           value={defaultFilter}
@@ -161,7 +178,7 @@ export function TopicsList() {
             setDefaultFilter(e.target.value);
             setPage(1);
           }}
-          className="h-9 px-3 text-[13px] bg-bg-card border border-line rounded-md text-fg outline-none cursor-pointer appearance-none pr-8"
+          className="h-10 min-w-[156px] cursor-pointer appearance-none rounded-lg border border-line bg-bg-card px-3 pr-8 text-[13px] text-fg outline-none transition-colors focus:border-line-3"
           style={selectStyle}
         >
           <option value="">Any Default</option>
@@ -171,9 +188,11 @@ export function TopicsList() {
 
         <Link
           href="/audience/topics/unsubscribe-page/edit"
-          className="inline-flex items-center rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
+          className="btn btn-ghost"
         >
-          Edit Unsubscribe Page
+          <PenLine aria-hidden="true" className="size-4" strokeWidth={1.8} />
+          <span className="hidden sm:inline">Edit Unsubscribe Page</span>
+          <span className="sm:hidden">Edit</span>
         </Link>
 
         <button
@@ -181,44 +200,45 @@ export function TopicsList() {
           onClick={() => setShowModal(true)}
           className="btn btn-primary"
         >
+          <Plus aria-hidden="true" className="size-4" strokeWidth={2} />
           Create topic
         </button>
       </div>
 
       {/* Topics list (left) + live unsubscribe-page preview (right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-6 items-start">
+      <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="min-w-0">
           {/* Data table or empty state */}
           {loading ? (
-            <div className="flex items-center justify-center py-16 text-[14px] text-fg-2">
+            <div className="flex min-h-[320px] items-center justify-center rounded-card border border-line bg-bg-card text-[14px] text-fg-2">
               Loading topics...
             </div>
           ) : topics.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 px-6">
-              <h3 className="text-[16px] font-semibold text-fg mb-2">
-                No topics yet
-              </h3>
-              <p className="text-[14px] text-fg-2 text-center max-w-[360px] mb-6">
-                Topics let contacts manage their subscription preferences.
-                Create topics to allow users to opt in or out of different types
-                of communications.
-              </p>
-              <div className="flex items-center gap-3">
+            <section className="relative flex min-h-[420px] overflow-hidden rounded-card border border-line bg-bg-card px-6 py-12">
+              <div className="absolute inset-x-10 top-8 h-36 rounded-full bg-bg-3 blur-3xl" />
+              <div className="relative mx-auto flex max-w-[440px] flex-col items-center justify-center text-center">
+                <div className="mb-7 flex size-20 items-center justify-center rounded-[22px] border border-line-2 bg-bg-3">
+                  <div className="grid size-11 place-items-center rounded-[16px] border border-line-3 bg-bg">
+                    <div className="size-5 rounded-md border border-accent/70 bg-accent-soft" />
+                  </div>
+                </div>
+                <h3 className="mb-2 text-[20px] font-semibold leading-tight text-fg">
+                  No topics yet
+                </h3>
+                <p className="mb-7 max-w-[360px] text-[14px] leading-6 text-fg-2">
+                  Let contacts choose the mail they want to receive while
+                  keeping global unsubscribe one click away.
+                </p>
                 <button
                   type="button"
                   onClick={() => setShowModal(true)}
                   className="btn btn-primary"
                 >
+                  <Plus aria-hidden="true" className="size-4" strokeWidth={2} />
                   Create topic
                 </button>
-                <Link
-                  href="/audience/topics/unsubscribe-page/edit"
-                  className="inline-flex items-center rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
-                >
-                  Customize page
-                </Link>
               </div>
-            </div>
+            </section>
           ) : (
             <>
               <table className="w-full">
@@ -344,69 +364,50 @@ export function TopicsList() {
         </div>
 
         {/* Unsubscribe Page Preview */}
-        <div className="border border-line rounded-lg overflow-hidden lg:sticky lg:top-4">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-line">
+        <aside className="hidden overflow-hidden rounded-card border border-line bg-bg-card md:block xl:sticky xl:top-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
             <h3 className="text-[14px] font-medium text-fg">
               Unsubscribe Page Preview
             </h3>
+            <div
+              className="inline-flex rounded-lg border border-line bg-bg p-1"
+              aria-label="Preview state"
+            >
+              <button
+                type="button"
+                onClick={() => setPreviewMode("preferences")}
+                aria-pressed={previewMode === "preferences"}
+                className="rounded-md border px-3 py-1 text-[12px] font-medium transition-colors hover:text-fg"
+                style={previewTabStyle(previewMode === "preferences")}
+              >
+                Preferences
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewMode("success")}
+                aria-pressed={previewMode === "success"}
+                className="rounded-md border px-3 py-1 text-[12px] font-medium transition-colors hover:text-fg"
+                style={previewTabStyle(previewMode === "success")}
+              >
+                Success
+              </button>
+            </div>
             <Link
               href="/audience/topics/unsubscribe-page/edit"
-              className="inline-flex items-center rounded-md border border-line px-4 py-2 text-[13px] font-medium text-fg transition-colors hover:bg-bg-card"
+              className="btn btn-ghost btn-sm"
             >
+              <PenLine
+                aria-hidden="true"
+                className="size-3.5"
+                strokeWidth={1.8}
+              />
               Customize page
             </Link>
           </div>
-          <div className="bg-white rounded-b-lg p-8">
-            <div className="max-w-[400px] mx-auto text-center">
-              <h2 className="text-[20px] font-semibold text-fg mb-2">
-                Subscription Preferences
-              </h2>
-              <p className="text-[14px] text-fg-2 mb-6">
-                Manage your email subscription preferences below.
-              </p>
-              <div className="space-y-3 text-left">
-                {topics.length > 0 ? (
-                  topics
-                    .filter((t) => t.visibility === "public")
-                    .map((t) => (
-                      <label
-                        key={t.id}
-                        className="flex items-start gap-3 p-3 border border-line-2 rounded-lg cursor-pointer hover:bg-white/[0.04]"
-                      >
-                        <input
-                          type="checkbox"
-                          defaultChecked={t.defaultSubscription === "opt_out"}
-                          className="mt-0.5 accent-black"
-                          disabled
-                        />
-                        <div>
-                          <div className="text-[14px] font-medium text-fg">
-                            {t.name}
-                          </div>
-                          {t.description && (
-                            <div className="text-[13px] text-fg-3 mt-0.5">
-                              {t.description}
-                            </div>
-                          )}
-                        </div>
-                      </label>
-                    ))
-                ) : (
-                  <div className="text-center text-[14px] text-fg-3 py-4">
-                    No public topics to display
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                className="mt-6 px-6 py-2 bg-black text-white text-[14px] font-medium rounded-md"
-                disabled
-              >
-                Save Preferences
-              </button>
-            </div>
+          <div className="p-6">
+            <UnsubscribePagePreview mode={previewMode} topics={topics} />
           </div>
-        </div>
+        </aside>
       </div>
 
       {/* Create Topic Modal */}

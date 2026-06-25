@@ -108,6 +108,11 @@ function createRepository(
     async findTopicByIdForUser() {
       return topicRow();
     },
+    async findTopicsByIdsForUser(ids) {
+      return ids.map((id, index) =>
+        topicRow({ id, name: index === 0 ? "Product Updates" : "Changelog" }),
+      );
+    },
     async addContactToSegment() {},
     async removeContactFromSegment() {},
     ...overrides,
@@ -214,14 +219,33 @@ describe("contact service", () => {
 
   it("normalizes list pagination and preserves public list shape", async () => {
     let options: Parameters<ContactRepository["listForApi"]>[0] | null = null;
+    let topicLookup: Parameters<
+      ContactRepository["findTopicsByIdsForUser"]
+    > | null = null;
     const service = createContactService({
       repository: createRepository({
         async listForApi(input) {
           options = input;
           return {
-            data: [contactRow({ unsubscribed: true, segments: null })],
+            data: [
+              contactRow({
+                unsubscribed: false,
+                segments: null,
+                topicSubscriptions: [
+                  { topicId: "topic-1", subscribed: true },
+                  { topicId: "topic-2", subscribed: false },
+                ],
+              }),
+            ],
             hasMore: true,
           };
+        },
+        async findTopicsByIdsForUser(ids, userId) {
+          topicLookup = [ids, userId];
+          return [
+            topicRow({ id: "topic-1", name: "Product Updates" }),
+            topicRow({ id: "topic-2", name: "Changelog" }),
+          ];
         },
       }),
     });
@@ -242,6 +266,7 @@ describe("contact service", () => {
       status: "unsubscribed",
       segmentName: undefined,
     });
+    expect(topicLookup).toEqual([["topic-1", "topic-2"], "user-1"]);
     expect(result).toEqual({
       data: [
         {
@@ -251,9 +276,21 @@ describe("contact service", () => {
           lastName: "One",
           first_name: "User",
           last_name: "One",
-          unsubscribed: true,
-          status: "unsubscribed",
+          unsubscribed: false,
+          status: "subscribed",
           segments: [],
+          topics: [
+            {
+              id: "topic-1",
+              name: "Product Updates",
+              subscription: "opt_in",
+            },
+            {
+              id: "topic-2",
+              name: "Changelog",
+              subscription: "opt_out",
+            },
+          ],
           created_at: createdAt,
         },
       ],

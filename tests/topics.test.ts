@@ -302,6 +302,25 @@ describe("TopicsList", () => {
 
     expect(screen.getByText("Unsubscribe Page Preview")).toBeTruthy();
   });
+
+  it("can preview the unsubscribe success state", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ data: [], total: 0, page: 1, limit: 20 }),
+    });
+
+    renderTopics();
+
+    await waitFor(() => {
+      expect(screen.getByText("No topics yet")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Success" }));
+
+    expect(
+      screen.getByText("Your email preferences were updated."),
+    ).toBeTruthy();
+  });
 });
 
 describe("Topics API route", () => {

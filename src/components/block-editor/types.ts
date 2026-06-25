@@ -91,8 +91,8 @@ export const VARIABLES: { label: string; value: string }[] = [
     value: "{{{contact.company_name}}}",
   },
   {
-    label: "{{{RESEND_UNSUBSCRIBE_URL}}}",
-    value: "{{{RESEND_UNSUBSCRIBE_URL}}}",
+    label: "{{{OPENSEND_UNSUBSCRIBE_URL}}}",
+    value: "{{{OPENSEND_UNSUBSCRIBE_URL}}}",
   },
 ];
 

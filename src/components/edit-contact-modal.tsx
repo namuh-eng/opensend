@@ -1,17 +1,59 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import type { ContactDetailData } from "@/components/contact-detail";
+import {
+  type EditableTopic,
+  type PropertyRow,
+  type SegmentOption,
+  createPropertyRows,
+  diffIds,
+  extractSegments,
+  extractTopics,
+  reconcileSegments,
+  reconcileTopics,
+  rowsToProperties,
+} from "@/components/contact-edit-data";
+import {
+  IdentitySection,
+  PropertiesSection,
+  SegmentsSection,
+  TopicsSection,
+} from "@/components/edit-contact-modal-sections";
+import { X } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 interface EditContactModalProps {
-  open: boolean;
-  contact: {
-    id: string;
-    firstName: string | null;
-    lastName: string | null;
-    status: "subscribed" | "unsubscribed";
-  };
-  onClose: () => void;
-  onSuccess: () => void;
+  readonly open: boolean;
+  readonly contact: ContactDetailData;
+  readonly onClose: () => void;
+  readonly onSuccess: () => void;
+}
+
+function readErrorField(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const message = Reflect.get(payload, "error");
+  return typeof message === "string" ? message : null;
+}
+
+async function requireOk(response: Response, fallback: string): Promise<void> {
+  if (response.ok) return;
+
+  try {
+    const payload: unknown = await response.json();
+    throw new Error(readErrorField(payload) ?? fallback);
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error(fallback);
+  }
+}
+
+function toEditableTopics(contact: ContactDetailData): EditableTopic[] {
+  return contact.topics.map((topic) => ({
+    id: topic.id,
+    name: topic.name,
+    defaultSubscription: topic.subscription,
+    subscription: topic.subscription,
+  }));
 }
 
 export function EditContactModal({
@@ -20,58 +62,198 @@ export function EditContactModal({
   onClose,
   onSuccess,
 }: EditContactModalProps) {
+  const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [unsubscribed, setUnsubscribed] = useState(false);
+  const [subscribed, setSubscribed] = useState(true);
+  const [availableSegments, setAvailableSegments] = useState<SegmentOption[]>(
+    [],
+  );
+  const [selectedSegments, setSelectedSegments] = useState<SegmentOption[]>([]);
+  const [segmentSearch, setSegmentSearch] = useState("");
+  const [topics, setTopics] = useState<EditableTopic[]>([]);
+  const [properties, setProperties] = useState<PropertyRow[]>([]);
+  const [loadingLists, setLoadingLists] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const firstNameInputRef = useRef<HTMLInputElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const initialSegmentIdsRef = useRef<string[]>([]);
   const dialogTitleId = useId();
 
-  // Seed the form from the contact whenever the modal opens.
-  useEffect(() => {
-    if (open) {
-      setFirstName(contact.firstName ?? "");
-      setLastName(contact.lastName ?? "");
-      setUnsubscribed(contact.status === "unsubscribed");
-      setSubmitError(null);
-      queueMicrotask(() => firstNameInputRef.current?.focus());
+  const loadAudienceLists = useCallback(async () => {
+    setLoadingLists(true);
+    try {
+      const [segmentsResponse, topicsResponse] = await Promise.all([
+        fetch("/api/segments"),
+        fetch("/api/topics"),
+      ]);
+
+      if (segmentsResponse.ok) {
+        const segmentPayload: unknown = await segmentsResponse.json();
+        const nextSegments = extractSegments(segmentPayload);
+        setAvailableSegments(nextSegments);
+        setSelectedSegments((current) =>
+          reconcileSegments(current, nextSegments),
+        );
+      }
+
+      if (topicsResponse.ok) {
+        const topicPayload: unknown = await topicsResponse.json();
+        setTopics((current) =>
+          reconcileTopics(current, extractTopics(topicPayload)),
+        );
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        setSubmitError("Could not load segments or topics.");
+        return;
+      }
+      throw error;
+    } finally {
+      setLoadingLists(false);
     }
-  }, [open, contact]);
+  }, []);
 
   useEffect(() => {
-    function handleEscape(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+    if (!open) return;
+
+    const initialSegments = contact.segments.map((segment) => ({
+      id: segment.id,
+      name: segment.name,
+    }));
+    initialSegmentIdsRef.current = initialSegments.map((segment) => segment.id);
+    setEmail(contact.email);
+    setFirstName(contact.firstName ?? "");
+    setLastName(contact.lastName ?? "");
+    setSubscribed(contact.status === "subscribed");
+    setSelectedSegments(initialSegments);
+    setSegmentSearch("");
+    setTopics(toEditableTopics(contact));
+    setProperties(createPropertyRows(contact.properties));
+    setSubmitError(null);
+    queueMicrotask(() => emailInputRef.current?.focus());
+    void loadAudienceLists();
+  }, [open, contact, loadAudienceLists]);
+
+  useEffect(() => {
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
     }
     if (open) document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
   }, [open, onClose]);
 
+  const filteredSegments = availableSegments.filter((segment) => {
+    const search = segmentSearch.trim().toLowerCase();
+    const matchesSearch =
+      !search || segment.name.toLowerCase().includes(search);
+    const selected = selectedSegments.some((item) => item.id === segment.id);
+    return matchesSearch && !selected;
+  });
+
+  const addSegment = (segment: SegmentOption) => {
+    setSelectedSegments((current) => [...current, segment]);
+    setSegmentSearch("");
+  };
+
+  const removeSegment = (id: string) => {
+    setSelectedSegments((current) =>
+      current.filter((segment) => segment.id !== id),
+    );
+  };
+
+  const updateProperty = (
+    rowId: string,
+    field: "key" | "value",
+    value: string,
+  ) => {
+    setProperties((current) =>
+      current.map((row) =>
+        row.rowId === rowId ? { ...row, [field]: value } : row,
+      ),
+    );
+  };
+
+  const addProperty = () => {
+    setProperties((current) => [
+      ...current,
+      { rowId: `property-new-${Date.now()}`, key: "", value: "" },
+    ]);
+  };
+
+  const removeProperty = (rowId: string) => {
+    setProperties((current) => current.filter((item) => item.rowId !== rowId));
+  };
+
+  const setTopicSubscription = (
+    id: string,
+    subscription: EditableTopic["subscription"],
+  ) => {
+    setTopics((current) =>
+      current.map((item) =>
+        item.id === id ? { ...item, subscription } : item,
+      ),
+    );
+  };
+
+  const saveRelationships = async () => {
+    const nextSegmentIds = selectedSegments.map((segment) => segment.id);
+    const segmentDiff = diffIds(initialSegmentIdsRef.current, nextSegmentIds);
+
+    await Promise.all([
+      ...segmentDiff.added.map((segmentId) =>
+        fetch(`/api/contacts/${contact.id}/segments/${segmentId}`, {
+          method: "POST",
+        }).then((response) =>
+          requireOk(response, "Could not add contact segment."),
+        ),
+      ),
+      ...segmentDiff.removed.map((segmentId) =>
+        fetch(`/api/contacts/${contact.id}/segments/${segmentId}`, {
+          method: "DELETE",
+        }).then((response) =>
+          requireOk(response, "Could not remove contact segment."),
+        ),
+      ),
+    ]);
+
+    if (topics.length === 0) return;
+    const topicResponse = await fetch(`/api/contacts/${contact.id}/topics`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topics: topics.map((topic) => ({
+          id: topic.id,
+          subscription: topic.subscription,
+        })),
+      }),
+    });
+    await requireOk(topicResponse, "Could not save topic preferences.");
+  };
+
   const handleSubmit = async () => {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      // Same-origin: the dashboard session cookie authenticates the request.
-      const res = await fetch(`/api/contacts/${contact.id}`, {
+      const response = await fetch(`/api/contacts/${contact.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          email: email.trim(),
           first_name: firstName.trim(),
           last_name: lastName.trim(),
-          unsubscribed,
+          unsubscribed: !subscribed,
+          properties: rowsToProperties(properties),
         }),
       });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? `Server error ${res.status}`);
-      }
+      await requireOk(response, "Could not save contact.");
+      await saveRelationships();
       onSuccess();
       onClose();
-    } catch (err) {
+    } catch (error) {
       setSubmitError(
-        err instanceof Error ? err.message : "Could not save changes.",
+        error instanceof Error ? error.message : "Could not save changes.",
       );
     } finally {
       setSubmitting(false);
@@ -83,12 +265,12 @@ export function EditContactModal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      onClick={(e) => {
-        if (e.target === overlayRef.current) onClose();
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={(event) => {
+        if (event.target === overlayRef.current) onClose();
       }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") onClose();
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onClose();
       }}
     >
       {/* biome-ignore lint/a11y/useSemanticElements: review requested an explicit role=dialog for this custom modal overlay. */}
@@ -96,80 +278,61 @@ export function EditContactModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={dialogTitleId}
-        className="w-full max-w-md bg-bg-card border border-line rounded-lg shadow-xl"
+        className="max-h-[88dvh] w-full max-w-2xl overflow-hidden rounded-lg border border-line bg-bg-card shadow-xl"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-line">
-          <h2 id={dialogTitleId} className="text-[16px] font-semibold text-fg">
-            Edit contact
-          </h2>
+        <div className="flex items-start justify-between border-line border-b px-6 py-4">
+          <div>
+            <h2
+              id={dialogTitleId}
+              className="font-semibold text-[16px] text-fg"
+            >
+              Edit contact
+            </h2>
+            <p className="mt-1 text-[12px] text-fg-2">
+              Identity, subscription state, audience membership, and properties.
+            </p>
+          </div>
           <button
-            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="p-1 rounded hover:bg-white/[0.14] text-fg-2 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 transition-colors"
+            className="rounded p-1 text-fg-2 transition-colors hover:bg-white/[0.14] hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M18 6L6 18" />
-              <path d="M6 6l12 12" />
-            </svg>
+            <X aria-hidden="true" size={16} />
           </button>
         </div>
 
-        <div className="px-6 py-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label
-                htmlFor="edit-contact-first"
-                className="block text-[13px] font-medium text-fg mb-1.5"
-              >
-                First name
-              </label>
-              <input
-                ref={firstNameInputRef}
-                id="edit-contact-first"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                className="w-full h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3 focus-visible:ring-2 focus-visible:ring-white/30"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="edit-contact-last"
-                className="block text-[13px] font-medium text-fg mb-1.5"
-              >
-                Last name
-              </label>
-              <input
-                id="edit-contact-last"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                className="w-full h-9 px-3 text-[13px] bg-transparent border border-line rounded-md text-fg placeholder-[#666] outline-none focus:border-line-3 focus-visible:ring-2 focus-visible:ring-white/30"
-              />
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2 text-[13px] text-fg cursor-pointer">
-            <input
-              type="checkbox"
-              checked={unsubscribed}
-              onChange={(e) => setUnsubscribed(e.target.checked)}
-              className="accent-white rounded cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-            />
-            Unsubscribed from all mail
-          </label>
+        <div className="max-h-[calc(88dvh-132px)] space-y-5 overflow-y-auto px-6 py-4">
+          <IdentitySection
+            emailInputRef={emailInputRef}
+            email={email}
+            firstName={firstName}
+            lastName={lastName}
+            subscribed={subscribed}
+            setEmail={setEmail}
+            setFirstName={setFirstName}
+            setLastName={setLastName}
+            setSubscribed={setSubscribed}
+          />
+          <SegmentsSection
+            selectedSegments={selectedSegments}
+            filteredSegments={filteredSegments}
+            segmentSearch={segmentSearch}
+            loadingLists={loadingLists}
+            setSegmentSearch={setSegmentSearch}
+            addSegment={addSegment}
+            removeSegment={removeSegment}
+          />
+          <TopicsSection
+            topics={topics}
+            setTopicSubscription={setTopicSubscription}
+          />
+          <PropertiesSection
+            properties={properties}
+            addProperty={addProperty}
+            removeProperty={removeProperty}
+            updateProperty={updateProperty}
+          />
 
           {submitError && (
             <p className="text-[12px] text-red-400" role="alert">
@@ -178,11 +341,11 @@ export function EditContactModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-line">
+        <div className="flex items-center justify-end gap-2 border-line border-t px-6 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-[13px] font-medium text-fg-2 border border-line rounded-md hover:text-fg hover:border-line-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 transition-colors"
+            className="rounded-md border border-line px-3 py-1.5 font-medium text-[13px] text-fg-2 transition-colors hover:border-line-3 hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
           >
             Cancel
           </button>

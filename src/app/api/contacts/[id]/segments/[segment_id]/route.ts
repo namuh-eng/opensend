@@ -1,10 +1,35 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
+import {
+  authorizeDashboardOrApiKey,
+  getServerSession,
+  unauthorizedResponse,
+  validateApiKey,
+} from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import { ContactServiceError, createContactService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 
+type ContactSegmentAuth = NonNullable<
+  Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
+>;
+
 function contactService() {
   return createContactService();
+}
+
+async function authorizeContactSegmentRequest(
+  request: NextRequest,
+): Promise<ContactSegmentAuth | null> {
+  const authHeader = request.headers.get("authorization");
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return await authorizeDashboardOrApiKey(authHeader);
+  }
+  return await validateApiKey(authHeader);
+}
+
+async function resolveUserId(auth: ContactSegmentAuth): Promise<string | null> {
+  if ("userId" in auth) return auth.userId;
+  const session = await getServerSession();
+  return session?.user?.id ?? null;
 }
 
 function mapContactServiceError(error: unknown, fallback: string) {
@@ -20,12 +45,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; segment_id: string }> },
 ) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeContactSegmentRequest(request);
   if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
-  if (!auth.userId) return unauthorizedResponse();
-  const userId = auth.userId;
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id: idOrEmail, segment_id: segmentId } = await params;
@@ -50,12 +75,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; segment_id: string }> },
 ) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeContactSegmentRequest(request);
   if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
-  if (!auth.userId) return unauthorizedResponse();
-  const userId = auth.userId;
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id: idOrEmail, segment_id: segmentId } = await params;

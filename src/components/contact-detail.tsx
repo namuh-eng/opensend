@@ -14,7 +14,11 @@ export interface ContactDetailData {
   lastName: string | null;
   status: "subscribed" | "unsubscribed";
   segments: Array<{ id: string; name: string }>;
-  topics: Array<{ id: string; name: string }>;
+  topics: Array<{
+    id: string;
+    name: string;
+    subscription: "opt_in" | "opt_out";
+  }>;
   properties: Record<string, string>;
   createdAt: string;
   activity: Array<{ type: string; timestamp: string }>;
@@ -160,12 +164,7 @@ export function ContactDetail({ contact }: ContactDetailProps) {
 
       <EditContactModal
         open={editOpen}
-        contact={{
-          id: contact.id,
-          firstName: contact.firstName,
-          lastName: contact.lastName,
-          status: contact.status,
-        }}
+        contact={contact}
         onClose={() => setEditOpen(false)}
         onSuccess={() => router.refresh()}
       />

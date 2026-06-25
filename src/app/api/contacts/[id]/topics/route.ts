@@ -1,13 +1,38 @@
-import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
-import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
+import {
+  authorizeDashboardOrApiKey,
+  getServerSession,
+  unauthorizedResponse,
+  validateApiKey,
+} from "@/lib/api-auth";
+import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import {
   ContactOperationsServiceError,
   createContactOperationsService,
 } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 
+type ContactTopicsAuth = NonNullable<
+  Awaited<ReturnType<typeof authorizeDashboardOrApiKey>>
+>;
+
 function contactOperationsService() {
   return createContactOperationsService();
+}
+
+async function authorizeContactTopicsRequest(
+  request: NextRequest,
+): Promise<ContactTopicsAuth | null> {
+  const authHeader = request.headers.get("authorization");
+  if (request.nextUrl.pathname.startsWith("/api/")) {
+    return await authorizeDashboardOrApiKey(authHeader);
+  }
+  return await validateApiKey(authHeader);
+}
+
+async function resolveUserId(auth: ContactTopicsAuth): Promise<string | null> {
+  if ("userId" in auth) return auth.userId;
+  const session = await getServerSession();
+  return session?.user?.id ?? null;
 }
 
 function mapFetchContactTopicsError(error: unknown) {
@@ -44,12 +69,12 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeContactTopicsRequest(request);
   if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
-  if (!auth.userId) return unauthorizedResponse();
-  const userId = auth.userId;
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id: idOrEmail } = await params;
@@ -68,12 +93,12 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await validateApiKey(request.headers.get("authorization"));
+  const auth = await authorizeContactTopicsRequest(request);
   if (!auth) return unauthorizedResponse();
-  const permissionError = requireFullAccessApiKey(auth);
+  const permissionError = requireFullAccessForApiKeyCaller(auth);
   if (permissionError) return permissionError;
-  if (!auth.userId) return unauthorizedResponse();
-  const userId = auth.userId;
+  const userId = await resolveUserId(auth);
+  if (!userId) return unauthorizedResponse();
 
   try {
     const { id: idOrEmail } = await params;

@@ -153,7 +153,7 @@ export function BlockRenderer({
     case "unsubscribe_footer":
       return (
         <div className="text-center py-3 text-[12px] text-fg-4">
-          <a href="{{{RESEND_UNSUBSCRIBE_URL}}}" className="underline">
+          <a href="{{{OPENSEND_UNSUBSCRIBE_URL}}}" className="underline">
             Unsubscribe
           </a>
         </div>

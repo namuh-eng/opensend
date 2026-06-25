@@ -5,7 +5,7 @@ import {
 } from "../contracts/send";
 import { db } from "../db/client";
 import { broadcastRepo } from "../db/repositories/broadcastRepo";
-import { broadcasts, emails } from "../db/schema";
+import { broadcasts, emails, topics } from "../db/schema";
 
 type BroadcastRow = typeof broadcasts.$inferSelect;
 type BroadcastInsert = typeof broadcasts.$inferInsert;
@@ -140,6 +140,10 @@ export type BroadcastRepository = {
     status?: string;
     segmentId?: string;
   }): Promise<BroadcastListResult>;
+  findTopicByIdForUser(
+    topicId: string,
+    userId: string,
+  ): Promise<{ id: string } | undefined>;
 };
 
 export type BroadcastMetricsCache = {
@@ -272,6 +276,13 @@ const defaultBroadcastRepository: BroadcastRepository = {
 
     return stats ?? emptyBroadcastMetricsCounts;
   },
+  async findTopicByIdForUser(topicId, userId) {
+    const topic = await db.query.topics.findFirst({
+      columns: { id: true },
+      where: and(eq(topics.id, topicId), eq(topics.userId, userId)),
+    });
+    return topic;
+  },
 };
 
 function readScheduledAt(body: unknown): Date | null {
@@ -362,6 +373,28 @@ function buildUpdateData(
   return updateData;
 }
 
+function readTopicId(body: Record<string, unknown>): string | null {
+  if (body.topic_id !== undefined) return optionalStoredString(body.topic_id);
+  if (body.topicId !== undefined) return optionalStoredString(body.topicId);
+  return null;
+}
+
+async function assertOwnedTopicId(
+  repository: BroadcastRepository,
+  userId: string,
+  topicId: string | null,
+): Promise<void> {
+  if (!topicId) return;
+
+  const topic = await repository.findTopicByIdForUser(topicId, userId);
+  if (!topic) {
+    throw new BroadcastServiceError(
+      "invalid_input",
+      "topic_id must reference a topic owned by the authenticated user",
+    );
+  }
+}
+
 export function createBroadcastService({
   repository = defaultBroadcastRepository,
   metricsCache,
@@ -388,6 +421,7 @@ export function createBroadcastService({
       const from = trimString(body.from);
       const subject = trimString(body.subject);
       const audienceId = body.segment_id || body.audience_id || null;
+      const topicId = readTopicId(body);
 
       if (!from || !subject || !audienceId) {
         throw new BroadcastServiceError(
@@ -395,6 +429,8 @@ export function createBroadcastService({
           "from, subject, and segment_id are required",
         );
       }
+
+      await assertOwnedTopicId(repository, input.userId, topicId);
 
       const scheduledAt = readScheduledAt(body);
       const shouldSend = body.send === true;
@@ -407,7 +443,7 @@ export function createBroadcastService({
         text: optionalStoredString(body.text),
         replyTo: optionalStoredString(body.reply_to),
         previewText: optionalStoredString(body.preview_text),
-        topicId: optionalStoredString(body.topic_id),
+        topicId,
         status: shouldSend ? (scheduledAt ? "scheduled" : "queued") : "draft",
         scheduledAt,
         userId: input.userId,
@@ -433,10 +469,12 @@ export function createBroadcastService({
     async updateBroadcast(
       input: UpdateBroadcastInput,
     ): Promise<BroadcastDetail> {
+      const body = asRecord(input.body);
+      await assertOwnedTopicId(repository, input.userId, readTopicId(body));
       const [updated] = await repository.updateForUser(
         input.id,
         input.userId,
-        buildUpdateData(asRecord(input.body)),
+        buildUpdateData(body),
       );
 
       if (!updated) {

@@ -392,6 +392,35 @@ describe("broadcast tenant isolation", () => {
     );
   });
 
+  it("maps invalid broadcast update input to a 422 response", async () => {
+    mockBroadcastService.updateBroadcast.mockRejectedValueOnce(
+      new MockBroadcastServiceError(
+        "invalid_input",
+        "topic_id must reference a topic owned by the authenticated user",
+      ),
+    );
+
+    const { PATCH } = await import("@/app/api/broadcasts/[id]/route");
+    const patchBody = { topic_id: "topic-missing" };
+    const response = await PATCH(
+      jsonRequest(
+        "http://localhost:3015/api/broadcasts/broadcast-1",
+        patchBody,
+      ),
+      { params: Promise.resolve({ id: "broadcast-1" }) },
+    );
+
+    expect(response.status).toBe(422);
+    await expect(response.json()).resolves.toEqual({
+      error: "topic_id must reference a topic owned by the authenticated user",
+    });
+    expect(mockBroadcastService.updateBroadcast).toHaveBeenCalledWith({
+      id: "broadcast-1",
+      userId: "user-b",
+      body: patchBody,
+    });
+  });
+
   it("delegates root broadcast detail and send aliases with route params", async () => {
     const createdAt = new Date("2026-01-01T00:00:00Z");
     const scheduledAt = new Date("2026-06-01T00:00:00Z");

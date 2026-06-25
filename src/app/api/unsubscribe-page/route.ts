@@ -5,6 +5,7 @@ import {
 } from "@/lib/api-auth";
 import {
   UnsubscribePageSettingsValidationError,
+  createAudienceMetadataService,
   getUnsubscribePageSettings,
   updateUnsubscribePageSettings,
 } from "@opensend/core";
@@ -35,7 +36,10 @@ export async function GET(req: Request) {
   const userId = userIdOrResponse;
 
   try {
-    const settings = await getUnsubscribePageSettings(userId);
+    const [settings, topics] = await Promise.all([
+      getUnsubscribePageSettings(userId),
+      createAudienceMetadataService().listTopics({ userId, limit: 100 }),
+    ]);
     return NextResponse.json({
       object: "unsubscribe_page_settings",
       logo_url: settings.logoUrl,
@@ -43,6 +47,7 @@ export async function GET(req: Request) {
       headline: settings.headline,
       message: settings.message,
       footer_text: settings.footerText,
+      topics: topics.data,
     });
   } catch (error) {
     console.error("Failed to get unsubscribe page settings:", error);

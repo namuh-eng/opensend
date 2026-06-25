@@ -1,5 +1,11 @@
 import { SettingsPage } from "@/components/settings-page";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockFetch = vi.fn();
@@ -79,5 +85,62 @@ describe("SettingsPage", () => {
     render(<SettingsPage billingEnabled={true} />);
 
     expect(screen.getByRole("button", { name: "Billing" })).toBeDefined();
+  });
+
+  it("renders the live unsubscribe page editor from the settings tab", async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            logo_url: null,
+            brand_color: "#10b981",
+            headline: "Unsubscribed successfully",
+            message:
+              "You have been removed from this mailing list. You will no longer receive marketing emails from this sender.",
+            footer_text: "Powered by OpenSend",
+            topics: [
+              {
+                id: "topic-1",
+                name: "product update",
+                description: "product update",
+                default_subscription: "opt_in",
+                visibility: "public",
+              },
+              {
+                id: "topic-2",
+                name: "test topic",
+                description: "test",
+                default_subscription: "opt_out",
+                visibility: "public",
+              },
+            ],
+          }),
+      });
+
+    render(<SettingsPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Unsubscribe Page" }));
+
+    await waitFor(() =>
+      expect(mockFetch).toHaveBeenCalledWith("/api/unsubscribe-page"),
+    );
+    expect(screen.getByRole("button", { name: /^Preferences$/ })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Success" })).toBeDefined();
+    expect(
+      screen
+        .getByRole("button", { name: "Edit" })
+        .getAttribute("aria-expanded"),
+    ).toBe("false");
+    expect(screen.getByText("Subscription preferences")).toBeDefined();
+    expect(screen.getAllByText("product update").length).toBeGreaterThanOrEqual(
+      1,
+    );
+    expect(screen.getByText("test topic")).toBeDefined();
+    expect(screen.queryByText("Do you want to unsubscribe?")).toBeNull();
   });
 });
