@@ -4,6 +4,7 @@ import { CopyToClipboard } from "@/components/copy-to-clipboard";
 import { DocumentsTab } from "@/components/settings-documents";
 import { TeamTab } from "@/components/settings-team";
 import { type UsageData, UsageTab } from "@/components/settings-usage";
+import { UnsubscribePageEditor } from "@/components/unsubscribe-page-editor";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -226,41 +227,7 @@ SMTP_PASS=YOUR_API_KEY`}
       {activeTab === "documents" && <DocumentsTab />}
 
       {/* Unsubscribe Tab */}
-      {activeTab === "unsubscribe" && (
-        <div>
-          <p className="text-[14px] text-fg-2 mb-6">
-            Preview the unsubscribe page shown to recipients when they click the
-            unsubscribe link.
-          </p>
-
-          <div className="border border-line rounded-lg overflow-hidden bg-bg-card">
-            <div className="p-8 flex flex-col items-center justify-center min-h-[400px]">
-              <div className="max-w-md w-full text-center">
-                <h2 className="text-xl font-semibold text-fg mb-2">
-                  Unsubscribe
-                </h2>
-                <p className="text-fg-2 text-sm mb-6">
-                  You have been unsubscribed from this mailing list. You will no
-                  longer receive emails from this sender.
-                </p>
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 text-sm font-medium rounded-md">
-                  <svg
-                    aria-hidden="true"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                  </svg>
-                  Successfully unsubscribed
-                </div>
-                <p className="text-fg-3 text-xs mt-6">Powered by Opensend</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === "unsubscribe" && <UnsubscribePageEditor />}
     </div>
   );
 }

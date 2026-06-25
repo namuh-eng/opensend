@@ -1,6 +1,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+export const OPENSEND_UNSUBSCRIBE_URL = "{{{OPENSEND_UNSUBSCRIBE_URL}}}";
 export const RESEND_UNSUBSCRIBE_URL = "{{{RESEND_UNSUBSCRIBE_URL}}}";
+const UNSUBSCRIBE_PLACEHOLDERS = [
+  OPENSEND_UNSUBSCRIBE_URL,
+  RESEND_UNSUBSCRIBE_URL,
+] as const;
 export const LIST_UNSUBSCRIBE_HEADER = "List-Unsubscribe";
 export const LIST_UNSUBSCRIBE_POST_HEADER = "List-Unsubscribe-Post";
 export const LIST_UNSUBSCRIBE_POST_VALUE = "List-Unsubscribe=One-Click";
@@ -59,23 +64,40 @@ export function getPublicBaseUrl(request?: Request): string {
 export function createUnsubscribeUrl(
   contactId: string,
   baseUrl: string,
+  context: {
+    readonly topicId?: string | null;
+    readonly broadcastId?: string | null;
+  } = {},
 ): string {
   const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
   const token = createUnsubscribeToken(contactId);
-  return `${normalizedBaseUrl}/unsubscribe/${encodeURIComponent(
-    contactId,
-  )}?token=${encodeURIComponent(token)}`;
+  const url = new URL(
+    `${normalizedBaseUrl}/unsubscribe/${encodeURIComponent(contactId)}`,
+  );
+  url.searchParams.set("token", token);
+  if (context.topicId) url.searchParams.set("topic_id", context.topicId);
+  if (context.broadcastId) {
+    url.searchParams.set("broadcast_id", context.broadcastId);
+  }
+  return url.toString();
 }
 
 export function hasUnsubscribePlaceholder(input: string | null | undefined) {
-  return input?.includes(RESEND_UNSUBSCRIBE_URL) ?? false;
+  return (
+    input !== null &&
+    input !== undefined &&
+    UNSUBSCRIBE_PLACEHOLDERS.some((placeholder) => input.includes(placeholder))
+  );
 }
 
 export function replaceUnsubscribePlaceholder(
   input: string | null | undefined,
   unsubscribeUrl: string,
 ): string {
-  return (input ?? "").split(RESEND_UNSUBSCRIBE_URL).join(unsubscribeUrl);
+  return UNSUBSCRIBE_PLACEHOLDERS.reduce(
+    (value, placeholder) => value.split(placeholder).join(unsubscribeUrl),
+    input ?? "",
+  );
 }
 
 export function buildOneClickUnsubscribeHeaders(

@@ -18,7 +18,15 @@ interface ContactListItem {
   lastName: string | null;
   status: "subscribed" | "unsubscribed";
   segments: string[];
-  createdAt: string;
+  topics?: ContactListTopic[];
+  createdAt?: string;
+  created_at?: string;
+}
+
+interface ContactListTopic {
+  id: string;
+  name: string;
+  subscription: "opt_in" | "opt_out";
 }
 
 interface SegmentOption {
@@ -342,6 +350,7 @@ function ContactRow({
   const displayName = [contact.firstName, contact.lastName]
     .filter(Boolean)
     .join(" ");
+  const createdAt = contact.createdAt ?? contact.created_at ?? "";
 
   return (
     <tr className="border-b border-line hover:bg-bg-2 transition-colors group">
@@ -377,18 +386,13 @@ function ContactRow({
         {contact.segments.length > 0 ? contact.segments.join(", ") : "—"}
       </td>
       <td className="px-3 py-2">
-        <StatusBadge
-          status={
-            contact.status === "subscribed" ? "Subscribed" : "Unsubscribed"
-          }
-          variant={contact.status === "subscribed" ? "success" : "default"}
-        />
+        <ContactStatusBadge contactId={contact.id} contact={contact} />
       </td>
       <td
         className="px-3 py-2 text-[14px] text-fg-2"
-        title={new Date(contact.createdAt).toLocaleString()}
+        title={createdAt ? new Date(createdAt).toLocaleString() : undefined}
       >
-        {formatRelativeTime(contact.createdAt)}
+        {createdAt ? formatRelativeTime(createdAt) : "—"}
       </td>
       <td className="w-10 px-3 py-2 relative">
         <RowActionsMenu
@@ -419,5 +423,72 @@ function ContactRow({
         />
       </td>
     </tr>
+  );
+}
+
+export function ContactStatusBadge({
+  contactId,
+  contact,
+}: {
+  contactId: string;
+  contact: ContactListItem;
+}) {
+  const [showTopics, setShowTopics] = useState(false);
+  const topics = contact.topics ?? [];
+
+  if (contact.status !== "subscribed" || topics.length === 0) {
+    return (
+      <StatusBadge
+        status={contact.status === "subscribed" ? "Subscribed" : "Unsubscribed"}
+        variant={contact.status === "subscribed" ? "success" : "default"}
+      />
+    );
+  }
+
+  const tooltipId = `contact-${contactId}-topics`;
+
+  return (
+    <button
+      type="button"
+      aria-label={`Subscribed to ${topics.length} ${
+        topics.length === 1 ? "topic" : "topics"
+      }`}
+      aria-describedby={showTopics ? tooltipId : undefined}
+      className="relative inline-flex cursor-default items-center rounded-md outline-none focus-visible:ring-2 focus-visible:ring-line-3 focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      onMouseEnter={() => setShowTopics(true)}
+      onMouseLeave={() => setShowTopics(false)}
+      onFocus={() => setShowTopics(true)}
+      onBlur={() => setShowTopics(false)}
+    >
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md bg-green-400/10 px-2 py-0.5 text-[12px] font-medium text-green-400">
+        <span>Subscribed</span>
+        <span className="min-w-4 rounded bg-green-400/15 px-1 text-center text-[11px] leading-4 text-green-300">
+          {topics.length}
+        </span>
+      </span>
+      {showTopics && (
+        <div
+          id={tooltipId}
+          role="tooltip"
+          aria-label="Topics"
+          className="absolute bottom-[calc(100%+6px)] left-0 z-30 w-52 rounded-md border border-line bg-bg-card p-2 text-left shadow-xl shadow-black/30"
+        >
+          <div className="mb-1.5 text-[12px] font-medium text-fg">Topics</div>
+          <div className="space-y-1">
+            {topics.map((topic) => (
+              <div
+                key={topic.id}
+                className="flex min-w-0 items-center justify-between gap-2 text-[12px] text-fg-2"
+              >
+                <span className="truncate">{topic.name}</span>
+                <span className="shrink-0 text-[11px] text-fg-3">
+                  {topic.subscription === "opt_in" ? "on" : "off"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </button>
   );
 }

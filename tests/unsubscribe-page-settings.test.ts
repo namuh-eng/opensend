@@ -22,7 +22,18 @@ vi.mock("../packages/core/src/db/client", () => ({
 }));
 
 // Mock the app DB used by the public route
-const mockRouteDb = vi.hoisted(() => ({ update: vi.fn() }));
+const mockRouteContactFindFirst = vi.hoisted(() => vi.fn());
+const mockRouteTopicsFindMany = vi.hoisted(() => vi.fn());
+const mockRouteBroadcastFindFirst = vi.hoisted(() => vi.fn());
+const mockRouteUpdate = vi.hoisted(() => vi.fn());
+const mockRouteDb = vi.hoisted(() => ({
+  query: {
+    contacts: { findFirst: mockRouteContactFindFirst },
+    topics: { findMany: mockRouteTopicsFindMany },
+    broadcasts: { findFirst: mockRouteBroadcastFindFirst },
+  },
+  update: mockRouteUpdate,
+}));
 vi.mock("@/lib/db", () => ({ db: mockRouteDb }));
 
 // Mock drizzle-orm eq so route tests still work
@@ -267,22 +278,33 @@ describe("public unsubscribe route — XSS escaping", () => {
   beforeEach(() => {
     vi.resetModules();
     process.env.UNSUBSCRIBE_SECRET = "test-unsubscribe-secret";
-    mockRouteDb.update.mockReset();
+    mockRouteUpdate.mockReset();
+    mockRouteContactFindFirst.mockReset();
+    mockRouteTopicsFindMany.mockReset();
+    mockRouteBroadcastFindFirst.mockReset();
     mockFindFirst.mockReset();
   });
 
-  function mockSuccessfulUpdate(userId = "user-xss") {
-    const returning = vi
-      .fn()
-      .mockResolvedValue([{ id: "contact-xss", userId }]);
-    const where = vi.fn().mockReturnValue({ returning });
-    const set = vi.fn().mockReturnValue({ where });
-    mockRouteDb.update.mockReturnValue({ set });
-    return { set, where, returning };
+  function mockSignedContact(userId = "user-xss") {
+    mockRouteContactFindFirst.mockResolvedValue({
+      id: "contact-xss",
+      email: "xss@example.test",
+      firstName: null,
+      lastName: null,
+      unsubscribed: false,
+      customProperties: null,
+      segments: null,
+      topicSubscriptions: [],
+      createdAt: new Date(),
+      document: null,
+      userId,
+    });
+    mockRouteTopicsFindMany.mockResolvedValue([]);
+    mockRouteBroadcastFindFirst.mockResolvedValue(undefined);
   }
 
   it("HTML-escapes a headline containing a <script> tag", async () => {
-    mockSuccessfulUpdate("user-xss");
+    mockSignedContact("user-xss");
 
     const maliciousSettings = {
       id: "uuid-xss",
@@ -315,7 +337,7 @@ describe("public unsubscribe route — XSS escaping", () => {
   });
 
   it("HTML-escapes a message containing double quotes", async () => {
-    mockSuccessfulUpdate("user-xss2");
+    mockSignedContact("user-xss2");
 
     const maliciousSettings = {
       id: "uuid-xss2",
@@ -347,7 +369,7 @@ describe("public unsubscribe route — XSS escaping", () => {
   });
 
   it("falls back to default brand color when an invalid color is stored", async () => {
-    mockSuccessfulUpdate("user-xss3");
+    mockSignedContact("user-xss3");
 
     const badColorSettings = {
       id: "uuid-xss3",
@@ -380,7 +402,7 @@ describe("public unsubscribe route — XSS escaping", () => {
   });
 
   it("renders no logo when logo URL uses a non-http scheme", async () => {
-    mockSuccessfulUpdate("user-xss4");
+    mockSignedContact("user-xss4");
 
     const badLogoSettings = {
       id: "uuid-xss4",

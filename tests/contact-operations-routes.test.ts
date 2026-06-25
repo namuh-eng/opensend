@@ -2,10 +2,25 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
 const mockGetServerSession = vi.hoisted(() => vi.fn());
+const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
 const mockBulkAction = vi.hoisted(() => vi.fn());
 const mockImportContacts = vi.hoisted(() => vi.fn());
+const mockAddContactToSegment = vi.hoisted(() => vi.fn());
 const mockListContactTopics = vi.hoisted(() => vi.fn());
 const mockUpdateContactTopics = vi.hoisted(() => vi.fn());
+
+const MockContactServiceError = vi.hoisted(
+  () =>
+    class ContactServiceError extends Error {
+      constructor(
+        readonly code: "not_found" | "duplicate_email",
+        message: string,
+      ) {
+        super(message);
+        this.name = "ContactServiceError";
+      }
+    },
+);
 
 const MockContactOperationsServiceError = vi.hoisted(
   () =>
@@ -32,6 +47,7 @@ vi.mock("@/lib/api-auth", () => ({
   validateApiKey: mockValidateApiKey,
   // The CSV import route is dashboard-session-only.
   getServerSession: mockGetServerSession,
+  authorizeDashboardOrApiKey: mockAuthorizeDashboardOrApiKey,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
@@ -41,10 +57,18 @@ vi.mock("@/lib/api-key-permissions", () => ({
     auth.permission === "full_access"
       ? null
       : Response.json({ error: "Forbidden" }, { status: 403 }),
+  requireFullAccessForApiKeyCaller: (auth: { permission?: string }) =>
+    auth.permission === undefined || auth.permission === "full_access"
+      ? null
+      : Response.json({ error: "Forbidden" }, { status: 403 }),
 }));
 
 vi.mock("@opensend/core", () => ({
+  ContactServiceError: MockContactServiceError,
   ContactOperationsServiceError: MockContactOperationsServiceError,
+  createContactService: () => ({
+    addContactToSegment: mockAddContactToSegment,
+  }),
   createContactOperationsService: () => ({
     bulkAction: mockBulkAction,
     importContacts: mockImportContacts,
@@ -62,6 +86,16 @@ describe("contact operations route adapters", () => {
       permission: "full_access",
       domain: null,
       userId: "user-1",
+    });
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({
+      apiKeyId: "key-1",
+      permission: "full_access",
+      domain: null,
+      userId: "user-1",
+    });
+    mockAddContactToSegment.mockResolvedValue({
+      contactId: "contact-1",
+      segmentId: "seg-1",
     });
     // CSV import resolves the user from the dashboard session.
     mockGetServerSession.mockResolvedValue({ user: { id: "user-1" } });
@@ -264,6 +298,50 @@ describe("contact operations route adapters", () => {
     await expect(response.json()).resolves.toEqual({
       object: "list",
       data: [{ id: "topic-1", name: "News", subscription: "opt_in" }],
+    });
+  });
+
+  it("allows dashboard sessions to manage contact relationships on api paths", async () => {
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({ dashboard: true });
+    mockGetServerSession.mockResolvedValue({ user: { id: "dashboard-user" } });
+    mockUpdateContactTopics.mockResolvedValueOnce({
+      object: "contact_topics",
+      contact_id: "contact-1",
+      updated: true,
+    });
+
+    const segmentRoute = await import(
+      "@/app/api/contacts/[id]/segments/[segment_id]/route"
+    );
+    const topicsRoute = await import("@/app/api/contacts/[id]/topics/route");
+
+    const segmentResponse = await segmentRoute.POST(
+      makeRequest("http://localhost/api/contacts/contact-1/segments/seg-1", {
+        method: "POST",
+      }) as never,
+      { params: Promise.resolve({ id: "contact-1", segment_id: "seg-1" }) },
+    );
+    expect(segmentResponse.status).toBe(200);
+    expect(mockAddContactToSegment).toHaveBeenCalledWith({
+      idOrEmail: "contact-1",
+      segmentId: "seg-1",
+      userId: "dashboard-user",
+    });
+
+    const topicsResponse = await topicsRoute.PATCH(
+      makeRequest("http://localhost/api/contacts/contact-1/topics", {
+        method: "PATCH",
+        body: JSON.stringify({
+          topics: [{ id: "topic-1", subscription: "opt_out" }],
+        }),
+      }) as never,
+      { params: Promise.resolve({ id: "contact-1" }) },
+    );
+    expect(topicsResponse.status).toBe(200);
+    expect(mockUpdateContactTopics).toHaveBeenCalledWith({
+      idOrEmail: "contact-1",
+      userId: "dashboard-user",
+      body: expect.any(Function),
     });
   });
 

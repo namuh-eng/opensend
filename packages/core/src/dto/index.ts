@@ -262,6 +262,10 @@ export interface ContactTopicPreference {
   subscription: "opt_in" | "opt_out";
 }
 
+export interface ContactListTopicPreference extends ContactTopicPreference {
+  name: string;
+}
+
 export interface ContactResponse {
   object: "contact";
   id: string;
@@ -285,6 +289,7 @@ export interface ContactListItem {
   lastName: string | null;
   status: "subscribed" | "unsubscribed";
   segments: string[];
+  topics: ContactListTopicPreference[];
   created_at: string;
 }
 

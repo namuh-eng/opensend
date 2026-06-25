@@ -193,7 +193,7 @@ describe("BroadcastEditor — Block Editor", () => {
     expect(screen.getByText("{{{contact.email}}}")).toBeDefined();
     expect(screen.getByText("{{{contact.company_name}}}")).toBeDefined();
     // System variable
-    expect(screen.getByText("{{{RESEND_UNSUBSCRIBE_URL}}}")).toBeDefined();
+    expect(screen.getByText("{{{OPENSEND_UNSUBSCRIBE_URL}}}")).toBeDefined();
   });
 
   it("bottom toolbar has Text, Image, Components, Variables tabs", async () => {

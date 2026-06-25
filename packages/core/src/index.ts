@@ -93,6 +93,7 @@ export * from "./services/publicStatus";
 export * from "./services/invites";
 export * from "./services/workspaces";
 export * from "./services/unsubscribePageSettings";
+export * from "./services/topic-preferences";
 export * from "./jobs/background-jobs";
 export * from "./jobs/scheduled-jobs";
 export * from "./cache/domain-cache-keys";

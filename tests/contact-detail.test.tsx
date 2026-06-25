@@ -27,7 +27,11 @@ const mockContact = {
   lastName: "Doe",
   status: "subscribed" as const,
   segments: [] as Array<{ id: string; name: string }>,
-  topics: [] as Array<{ id: string; name: string }>,
+  topics: [] as Array<{
+    id: string;
+    name: string;
+    subscription: "opt_in" | "opt_out";
+  }>,
   properties: {
     first_name: "John",
     last_name: "Doe",
@@ -75,7 +79,9 @@ describe("ContactDetail", () => {
         { id: "s1", name: "VIP" },
         { id: "s2", name: "Newsletter" },
       ],
-      topics: [{ id: "t1", name: "Product Updates" }],
+      topics: [
+        { id: "t1", name: "Product Updates", subscription: "opt_in" as const },
+      ],
     };
 
     render(<ContactDetail contact={contactWithSegments} />);
@@ -129,6 +135,11 @@ describe("ContactDetail", () => {
   // --- Behavioral: these fail on the previous dead `() => {}` handlers ---
 
   it("opens the edit modal when Edit contact is clicked", () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+
     render(<ContactDetail contact={mockContact} />);
 
     fireEvent.click(screen.getByRole("button", { name: "More actions" }));
@@ -141,22 +152,41 @@ describe("ContactDetail", () => {
         .getAttribute("aria-modal"),
     ).toBe("true");
     expect(screen.getByRole("heading", { name: "Edit contact" })).toBeDefined();
+    expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe(
+      "test@example.com",
+    );
+    expect(
+      (screen.getByRole("switch", { name: "Subscribed" }) as HTMLInputElement)
+        .checked,
+    ).toBe(true);
     expect(
       (screen.getByLabelText("First name") as HTMLInputElement).value,
     ).toBe("John");
     expect((screen.getByLabelText("Last name") as HTMLInputElement).value).toBe(
       "Doe",
     );
+    expect(screen.getByText("Segments")).toBeDefined();
+    expect(screen.getByText("Topics")).toBeDefined();
+    expect(screen.getAllByLabelText("Property key")).toHaveLength(3);
+    expect(screen.getByDisplayValue("company_name")).toBeDefined();
+    expect(screen.getByDisplayValue("Acme Inc")).toBeDefined();
+
+    vi.unstubAllGlobals();
   });
 
   it("focuses safe dialog actions and closes dialogs with Escape", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ data: [] }) });
+    vi.stubGlobal("fetch", fetchMock);
+
     render(<ContactDetail contact={mockContact} />);
 
     fireEvent.click(screen.getByRole("button", { name: "More actions" }));
     fireEvent.click(screen.getByText("Edit contact"));
 
     await waitFor(() => {
-      expect(document.activeElement).toBe(screen.getByLabelText("First name"));
+      expect(document.activeElement).toBe(screen.getByLabelText("Email"));
     });
 
     fireEvent.keyDown(document, { key: "Escape" });
@@ -184,6 +214,8 @@ describe("ContactDetail", () => {
         screen.queryByRole("dialog", { name: "Delete contact" }),
       ).toBeNull();
     });
+
+    vi.unstubAllGlobals();
   });
 
   it("calls the delete API when deletion is confirmed", async () => {
@@ -212,17 +244,63 @@ describe("ContactDetail", () => {
   });
 
   it("saves edits through the persisted UUID contact detail endpoint", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue({ ok: true, json: async () => ({}) });
+    const contactWithRelationships = {
+      ...mockContact,
+      segments: [{ id: "segment-1", name: "Newsletter" }],
+      topics: [
+        {
+          id: "topic-1",
+          name: "Product",
+          subscription: "opt_in" as const,
+        },
+      ],
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url === "/api/segments") {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [
+              { id: "segment-1", name: "Newsletter" },
+              { id: "segment-2", name: "Customers" },
+            ],
+          }),
+        };
+      }
+      if (url === "/api/topics") {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [
+              { id: "topic-1", name: "Product" },
+              { id: "topic-2", name: "Billing" },
+            ],
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ContactDetail contact={mockContact} />);
+    render(<ContactDetail contact={contactWithRelationships} />);
 
     fireEvent.click(screen.getByRole("button", { name: "More actions" }));
     fireEvent.click(screen.getByText("Edit contact"));
+    await waitFor(() => {
+      expect(screen.getByText("Customers")).toBeDefined();
+    });
+
+    fireEvent.change(screen.getByLabelText("Email"), {
+      target: { value: "jane@example.com" },
+    });
     fireEvent.change(screen.getByLabelText("First name"), {
       target: { value: "Jane" },
+    });
+    fireEvent.click(screen.getByText("Customers"));
+    fireEvent.click(screen.getByRole("switch", { name: "Billing" }));
+    fireEvent.change(screen.getByDisplayValue("Acme Inc"), {
+      target: { value: "Namuh" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
@@ -232,13 +310,35 @@ describe("ContactDetail", () => {
         expect.objectContaining({
           method: "PATCH",
           body: JSON.stringify({
+            email: "jane@example.com",
             first_name: "Jane",
             last_name: "Doe",
             unsubscribed: false,
+            properties: {
+              first_name: "John",
+              last_name: "Doe",
+              company_name: "Namuh",
+            },
           }),
         }),
       );
     });
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/contacts/${mockContact.id}/segments/segment-2`,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      `/api/contacts/${mockContact.id}/topics`,
+      expect.objectContaining({
+        method: "PATCH",
+        body: JSON.stringify({
+          topics: [
+            { id: "topic-1", subscription: "opt_in" },
+            { id: "topic-2", subscription: "opt_in" },
+          ],
+        }),
+      }),
+    );
 
     vi.unstubAllGlobals();
   });

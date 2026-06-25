@@ -44,11 +44,17 @@ Open-source, self-hostable email platform. REST API, TypeScript SDK, React email
 - `make all` — check + test
 - `bun run dev` — Next.js dev server on port 3015
 - `bun run build` — production build
+- `make db` — start **only** Postgres for local dev (self-heals a stale `postmaster.pid`)
+- `make setup` — one-command local bootstrap: Postgres + deps + schema (`db:push`) + seed
 - `bun run db:generate` — Drizzle migration files
 - `bun run db:migrate` — apply migrations for the configured `DATABASE_URL`
 - `bun run db:push` — push schema (dev)
 - `bun run db:seed` — seed sample data
 - `docker compose up -d` — full stack with Postgres + auto-migration
+
+**Local dev uses `db:push`, not `db:migrate`.** `make setup` bootstraps the dev DB via `drizzle-kit push` (schema sync), so the Drizzle migration-tracking table stays empty. Running `bun run db:migrate` against a push-bootstrapped local DB fails (it tries to replay migration #1 over existing tables) and the error is swallowed — so reach for `db:push` when syncing schema locally. `db:migrate` is for the Docker `migrate` service and real deploys.
+
+**Keep `.env` in sync with `.env.example`.** Compose interpolates every service before starting any one, so a `.env` missing required keys (e.g. `INGESTER_JOB_TOKEN`, `WEBHOOK_SECRET_ENCRYPTION_KEY`) aborts even `make db` / `docker compose up postgres`. After pulling, diff your `.env` keys against `.env.example` and add any new placeholders.
 
 
 ## Worktrees

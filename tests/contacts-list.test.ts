@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createElement } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Mock next/navigation
 
@@ -25,6 +27,13 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/audience",
   useSearchParams: () => new URLSearchParams(),
 }));
+
+import { ContactStatusBadge } from "@/components/contacts-list";
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 function createChainMock(resolvedData: unknown[], count: number) {
   const chain = {
@@ -161,6 +170,55 @@ describe("Contacts List — API route", () => {
 });
 
 describe("Contacts List — Component logic", () => {
+  it("shows contact topics when the subscribed badge is hovered or focused", async () => {
+    render(
+      createElement(ContactStatusBadge, {
+        contactId: "c1",
+        contact: {
+          id: "c1",
+          email: "alice@example.com",
+          firstName: "Alice",
+          lastName: "Smith",
+          segments: ["Newsletter"],
+          status: "subscribed",
+          topics: [
+            {
+              id: "topic-1",
+              name: "product update",
+              subscription: "opt_in",
+            },
+            {
+              id: "topic-2",
+              name: "test",
+              subscription: "opt_out",
+            },
+          ],
+          created_at: "2026-03-20T10:00:00.000Z",
+        },
+      }),
+    );
+
+    const statusBadge = screen.getByRole("button", {
+      name: "Subscribed to 2 topics",
+    });
+
+    expect(screen.getByText("Subscribed")).toBeDefined();
+    expect(screen.getByText("2")).toBeDefined();
+    expect(screen.queryByRole("tooltip", { name: "Topics" })).toBeNull();
+
+    fireEvent.mouseEnter(statusBadge);
+
+    expect(screen.getByRole("tooltip", { name: "Topics" })).toBeDefined();
+    expect(screen.getByText("product update")).toBeDefined();
+    expect(screen.getByText("test")).toBeDefined();
+
+    fireEvent.mouseLeave(statusBadge);
+    expect(screen.queryByRole("tooltip", { name: "Topics" })).toBeNull();
+
+    fireEvent.focus(statusBadge);
+    expect(screen.getByRole("tooltip", { name: "Topics" })).toBeDefined();
+  });
+
   it("renders contact rows with correct columns", () => {
     const contacts = [
       {
@@ -170,6 +228,7 @@ describe("Contacts List — Component logic", () => {
         lastName: "Smith",
         segments: ["Newsletter"],
         status: "subscribed" as const,
+        topics: [],
         createdAt: "2026-03-20T10:00:00Z",
       },
       {
@@ -179,6 +238,7 @@ describe("Contacts List — Component logic", () => {
         lastName: "Jones",
         segments: [],
         status: "unsubscribed" as const,
+        topics: [],
         createdAt: "2026-03-15T10:00:00Z",
       },
     ];
@@ -188,6 +248,7 @@ describe("Contacts List — Component logic", () => {
       expect(contact).toHaveProperty("email");
       expect(contact).toHaveProperty("segments");
       expect(contact).toHaveProperty("status");
+      expect(contact).toHaveProperty("topics");
       expect(contact).toHaveProperty("createdAt");
       expect(["subscribed", "unsubscribed"]).toContain(contact.status);
     }

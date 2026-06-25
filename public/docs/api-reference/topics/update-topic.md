@@ -7,13 +7,12 @@ Update mutable subscription topic fields.
 Compatibility behavior:
 
 - `/topics/{id}` is the compatibility alias handled by middleware rewrite to `/api/topics/{id}`.
-- In compatibility mode, provided enum fields are validated strictly:
-  - `default_subscription` (or `defaultSubscription`): `opt_in` | `opt_out`
-  - `visibility`: `public` | `private`
+- In compatibility mode, `visibility` is validated strictly when provided: `public` | `private`.
+- `default_subscription` and `defaultSubscription` cannot be changed after topic creation through the Resend-compatible alias.
 - `name` and `description` remain optional for partial updates.
-- `PATCH /api/topics/{id}` remains legacy compatible for existing OpenSend integrations.
+- `PATCH /api/topics/{id}` remains legacy compatible for existing OpenSend integrations and may still normalize `default_subscription` updates as an OpenSend-specific extension.
 
-Note: compatibility updates are partial and strict on provided enum fields only.
+Note: compatibility updates are partial. Create a new topic when the default subscription policy needs to change for Resend-compatible clients.
 
 ## Authentication
 

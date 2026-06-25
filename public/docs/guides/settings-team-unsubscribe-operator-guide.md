@@ -52,7 +52,7 @@ The live editor supports:
 - Message up to 1,000 characters.
 - Footer text up to 200 characters.
 
-Saved settings apply to hosted unsubscribe links after the public route verifies the signed token and marks the contact unsubscribed.
+Saved settings apply to hosted unsubscribe links after the public route verifies the signed token and renders the recipient preference page. Browser visits do not mutate contact state; one-click POST and explicit form submissions perform unsubscribe or preference writes.
 
 ## Unavailable or partial behavior to expect
 

@@ -86,8 +86,11 @@ export async function PATCH(
 
     return broadcastDetailResponse(updated);
   } catch (error) {
-    if (error instanceof BroadcastServiceError && error.code === "not_found") {
-      return notFoundResponse();
+    if (error instanceof BroadcastServiceError) {
+      if (error.code === "not_found") return notFoundResponse();
+      if (error.code === "invalid_input") {
+        return NextResponse.json({ error: error.message }, { status: 422 });
+      }
     }
 
     console.error("Failed to update broadcast:", error);

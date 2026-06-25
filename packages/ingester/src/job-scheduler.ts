@@ -1,8 +1,14 @@
 import { createTelemetryContext, emitCloudWatchMetric } from "@opensend/core";
+import type { ScheduledJobName } from "@opensend/core";
 import {
   OpenSendEnvValidationError,
   assertValidOpenSendEnv,
 } from "@opensend/core/src/env";
+import { fetchSchedulerJobResult } from "./job-scheduler-request";
+import {
+  type SchedulerHeartbeatRepo,
+  upsertSchedulerHeartbeat,
+} from "./scheduler-heartbeat-write";
 
 function runSchedulerStartupChecks(): void {
   try {
@@ -24,35 +30,32 @@ function runSchedulerStartupChecks(): void {
   }
 }
 
-runSchedulerStartupChecks();
-
-const { SCHEDULED_JOB_NAMES, schedulerHeartbeatRepo } = await import(
-  "@opensend/core"
-);
-
 const DEFAULT_INGESTER_URL = "http://ingester:3016";
 const DEFAULT_INTERVAL_SECONDS = 60;
 const REQUEST_TIMEOUT_MS = 20_000;
+const HEARTBEAT_UPSERT_TIMEOUT_MS = 5_000;
 
 // Paths are kept as literal strings (not derived) so the static-coverage
 // test at tests/ingester-job-scheduler-coverage.test.ts can grep for each
 // endpoint in this source file. See that test for the contract.
-const JOB_PATHS: Record<(typeof SCHEDULED_JOB_NAMES)[number], string> = {
+const JOB_PATHS = {
   "scheduled-emails": "/jobs/scheduled-emails",
   webhooks: "/jobs/webhooks",
   "domain-verify": "/jobs/domain-verify",
   "billing-overage": "/jobs/billing-overage",
-};
+} as const satisfies Record<ScheduledJobName, string>;
 
 type ScheduledJob = {
-  name: (typeof SCHEDULED_JOB_NAMES)[number];
-  path: string;
+  readonly name: ScheduledJobName;
+  readonly path: string;
 };
 
-const scheduledJobs: ScheduledJob[] = SCHEDULED_JOB_NAMES.map((name) => ({
-  name,
-  path: JOB_PATHS[name],
-}));
+type SchedulerRuntime = {
+  readonly baseUrl: string;
+  readonly heartbeatRepo: SchedulerHeartbeatRepo;
+  readonly intervalMs: number;
+  readonly jobs: readonly ScheduledJob[];
+};
 
 function getEnv(name: string): string | undefined {
   const value = process.env[name]?.trim();
@@ -120,11 +123,10 @@ function emitSchedulerJobFailed(
 }
 
 async function runJob(
-  baseUrl: string,
+  runtime: SchedulerRuntime,
   job: ScheduledJob,
-  intervalMs: number,
 ): Promise<void> {
-  const url = new URL(job.path, baseUrl);
+  const url = new URL(job.path, runtime.baseUrl);
   const startedAt = Date.now();
 
   let status = 0;
@@ -132,15 +134,15 @@ async function runJob(
   let body = "";
 
   try {
-    const response = await fetch(url, {
-      method: "POST",
+    const result = await fetchSchedulerJobResult({
       headers: buildHeaders(),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      url,
     });
-    body = await response.text();
+    body = result.body;
     const durationMs = Date.now() - startedAt;
-    status = response.status;
-    ok = response.ok;
+    status = result.status;
+    ok = result.ok;
 
     console.log(
       JSON.stringify({
@@ -153,8 +155,8 @@ async function runJob(
       }),
     );
 
-    if (!response.ok) {
-      emitSchedulerJobFailed(job, { status: response.status });
+    if (!result.ok) {
+      emitSchedulerJobFailed(job, { status: result.status });
     }
   } catch (error) {
     const durationMs = Date.now() - startedAt;
@@ -175,7 +177,7 @@ async function runJob(
   // DB errors are caught here — a Postgres hiccup must not crash the scheduler.
   try {
     const resultPayload: Record<string, unknown> = {
-      interval_ms: intervalMs,
+      interval_ms: runtime.intervalMs,
       status: ok ? "ok" : "error",
       http_status: status,
     };
@@ -191,7 +193,12 @@ async function runJob(
       // body wasn't JSON — that's fine, we already logged it above
     }
 
-    await schedulerHeartbeatRepo.upsert(job.name, resultPayload);
+    await upsertSchedulerHeartbeat({
+      heartbeatRepo: runtime.heartbeatRepo,
+      jobName: job.name,
+      result: resultPayload,
+      timeoutMs: HEARTBEAT_UPSERT_TIMEOUT_MS,
+    });
   } catch (heartbeatErr) {
     console.error(
       JSON.stringify({
@@ -207,17 +214,15 @@ async function runJob(
   }
 }
 
-async function runAllJobs(baseUrl: string, intervalMs: number): Promise<void> {
-  for (const job of scheduledJobs) {
-    await runJob(baseUrl, job, intervalMs);
+async function runAllJobs(runtime: SchedulerRuntime): Promise<void> {
+  for (const job of runtime.jobs) {
+    await runJob(runtime, job);
   }
 }
 
-const ingesterUrl = getEnv("INGESTER_URL") ?? DEFAULT_INGESTER_URL;
-const intervalMs = getIntervalMs();
 let isRunning = false;
 
-async function runScheduledBatch(): Promise<void> {
+async function runScheduledBatch(runtime: SchedulerRuntime): Promise<void> {
   if (isRunning) {
     console.warn(
       JSON.stringify({
@@ -232,24 +237,54 @@ async function runScheduledBatch(): Promise<void> {
   isRunning = true;
   emitSchedulerHeartbeat();
   try {
-    await runAllJobs(ingesterUrl, intervalMs);
+    await runAllJobs(runtime);
   } finally {
     isRunning = false;
   }
 }
 
-console.log(
-  JSON.stringify({
-    level: "info",
-    event: "scheduler.started",
-    ingester_url: ingesterUrl,
-    interval_seconds: intervalMs / 1000,
-    jobs: scheduledJobs.map((job) => job.path),
-    auth: getEnv("INGESTER_JOB_TOKEN") ? "bearer" : "none",
-  }),
-);
+async function createSchedulerRuntime(): Promise<SchedulerRuntime> {
+  runSchedulerStartupChecks();
+  const { SCHEDULED_JOB_NAMES, schedulerHeartbeatRepo } = await import(
+    "@opensend/core"
+  );
 
-await runScheduledBatch();
-setInterval(() => {
-  void runScheduledBatch();
-}, intervalMs);
+  return {
+    baseUrl: getEnv("INGESTER_URL") ?? DEFAULT_INGESTER_URL,
+    heartbeatRepo: schedulerHeartbeatRepo,
+    intervalMs: getIntervalMs(),
+    jobs: SCHEDULED_JOB_NAMES.map((name) => ({
+      name,
+      path: JOB_PATHS[name],
+    })),
+  };
+}
+
+async function startScheduler(): Promise<void> {
+  const runtime = await createSchedulerRuntime();
+
+  console.log(
+    JSON.stringify({
+      level: "info",
+      event: "scheduler.started",
+      ingester_url: runtime.baseUrl,
+      interval_seconds: runtime.intervalMs / 1000,
+      jobs: runtime.jobs.map((job) => job.path),
+      auth: getEnv("INGESTER_JOB_TOKEN") ? "bearer" : "none",
+    }),
+  );
+
+  await runScheduledBatch(runtime);
+  setInterval(() => {
+    void runScheduledBatch(runtime);
+  }, runtime.intervalMs);
+}
+
+const schedulerEntrypoint = process.argv[1];
+const isSchedulerEntrypoint =
+  schedulerEntrypoint?.endsWith("job-scheduler.ts") === true ||
+  schedulerEntrypoint?.endsWith("job-scheduler.js") === true;
+
+if (isSchedulerEntrypoint) {
+  await startScheduler();
+}

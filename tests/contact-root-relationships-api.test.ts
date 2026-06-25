@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockValidateApiKey = vi.hoisted(() => vi.fn());
+const mockAuthorizeDashboardOrApiKey = vi.hoisted(() => vi.fn());
+const mockGetServerSession = vi.hoisted(() => vi.fn());
 const mockRequireFullAccessApiKey = vi.hoisted(() => vi.fn());
+const mockRequireFullAccessForApiKeyCaller = vi.hoisted(() => vi.fn());
 const mockContactService = vi.hoisted(() => ({
   listContactSegments: vi.fn(),
   addContactToSegment: vi.fn(),
@@ -47,12 +50,15 @@ function makeRequest(url: string, init?: RequestInit) {
 
 vi.mock("@/lib/api-auth", () => ({
   validateApiKey: mockValidateApiKey,
+  authorizeDashboardOrApiKey: mockAuthorizeDashboardOrApiKey,
+  getServerSession: mockGetServerSession,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
 }));
 
 vi.mock("@/lib/api-key-permissions", () => ({
   requireFullAccessApiKey: mockRequireFullAccessApiKey,
+  requireFullAccessForApiKeyCaller: mockRequireFullAccessForApiKeyCaller,
 }));
 
 vi.mock("@opensend/core", () => ({
@@ -72,7 +78,14 @@ describe("root contact relationship API route adapters", () => {
       domain: null,
       userId: "user-1",
     });
+    mockAuthorizeDashboardOrApiKey.mockResolvedValue({
+      apiKeyId: "key-1",
+      permission: "full_access",
+      domain: null,
+      userId: "user-1",
+    });
     mockRequireFullAccessApiKey.mockReturnValue(null);
+    mockRequireFullAccessForApiKeyCaller.mockReturnValue(null);
   });
 
   it("lists, adds, and removes contact segments at root paths", async () => {
@@ -257,7 +270,7 @@ describe("root contact relationship API route adapters", () => {
       domain: null,
       userId: "user-1",
     });
-    mockRequireFullAccessApiKey.mockReturnValueOnce(
+    mockRequireFullAccessForApiKeyCaller.mockReturnValueOnce(
       Response.json({ error: "Forbidden" }, { status: 403 }),
     );
 
