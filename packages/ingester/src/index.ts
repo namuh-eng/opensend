@@ -294,6 +294,41 @@ app.post("/jobs/billing-overage", async (c) =>
   runJobEndpoint(c, async () => await reportBillingOverageUsage()),
 );
 
+app.post("/jobs/dedicated-ip-sync", async (c) =>
+  runJobEndpoint(c, async () => {
+    const { dedicatedIpPoolRepo, reconcileProvisionedPool } = await import(
+      "@opensend/core"
+    );
+
+    const provisioned = await dedicatedIpPoolRepo.listByStatus("provisioned");
+    const warming = await dedicatedIpPoolRepo.listByStatus("warming");
+    const pools = [...provisioned, ...warming];
+
+    const scanned = pools.length;
+    let updated = 0;
+    let failed = 0;
+
+    for (const pool of pools) {
+      try {
+        const result = await reconcileProvisionedPool(pool.id);
+        if (result.graduated) updated++;
+      } catch (err) {
+        failed++;
+        console.error(
+          JSON.stringify({
+            level: "error",
+            event: "dedicated_ip.sync.pool_failed",
+            pool_id: pool.id,
+          }),
+          err,
+        );
+      }
+    }
+
+    return { scanned, updated, failed };
+  }),
+);
+
 app.post("/jobs/domain-verify", async (c) =>
   runJobEndpoint(c, async () => {
     const telemetry = createTelemetryContext({
