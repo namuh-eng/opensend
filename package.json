@@ -23,6 +23,7 @@
     "lint:fix": "biome check --write .",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
+    "db:up": "docker compose up postgres -d",
     "db:push": "drizzle-kit push --config drizzle.config.ts",
     "db:seed": "tsx scripts/seed.ts",
     "dev:api": "bun run --cwd services/api dev",

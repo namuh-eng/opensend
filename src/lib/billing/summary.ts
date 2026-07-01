@@ -8,7 +8,6 @@ import {
 } from "@/lib/db/schema";
 import {
   type DashboardUsagePayload,
-  FREE_PLAN_SLUG,
   type SubscriptionStatus,
   createDashboardAggregateService,
 } from "@opensend/core";
@@ -140,7 +139,6 @@ function toPlanSummary(row: BillingPlanRow): BillingPlanSummary {
 
 export function isApprovedPublicPlan(row: BillingPlanRow): boolean {
   if (!row.isPublic) return false;
-  if (row.slug === FREE_PLAN_SLUG) return row.monthlyPriceCents === 0;
   const stripePriceId = row.stripePriceId;
   const stripeOveragePriceId = row.stripeOveragePriceId;
   return (
@@ -166,10 +164,7 @@ async function loadPlanAndSubscription(userId: string) {
     if (plan) return { plan, subscription: sub };
   }
 
-  const free = await db.query.plans.findFirst({
-    where: eq(plans.slug, FREE_PLAN_SLUG),
-  });
-  return { plan: free, subscription: null };
+  return { plan: null, subscription: null };
 }
 
 async function loadLatestUsagePeriod(userId: string) {

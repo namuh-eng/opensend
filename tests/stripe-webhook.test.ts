@@ -57,7 +57,6 @@ function createProcessor(overrides?: {
       { id: "plan-pro", stripePriceId: "price_pro" },
       { id: "plan-free", stripePriceId: null },
     ]),
-    ensureFreePlan: vi.fn(async () => ({ id: "plan-free" })),
     findSubscription: vi.fn(
       overrides?.findSubscription ??
         (async () => ({
@@ -89,7 +88,6 @@ function createProcessor(overrides?: {
       },
       planStore: {
         list: calls.listPlans,
-        ensureFreePlan: calls.ensureFreePlan,
       },
       subscriptionStore: {
         findByStripeSubscriptionId: calls.findSubscription,

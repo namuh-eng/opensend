@@ -1,3 +1,7 @@
+import {
+  checkMutationAllowed,
+  quotaExceededResponse,
+} from "@/lib/billing/quota";
 import { BroadcastServiceError, createBroadcastService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 import { resolveBroadcastRouteUserId } from "../auth";
@@ -74,6 +78,8 @@ export async function PATCH(
   );
   if (userIdOrResponse instanceof Response) return userIdOrResponse;
   const userId = userIdOrResponse;
+  const gate = await checkMutationAllowed(userId);
+  if (!gate.ok) return quotaExceededResponse(gate.info);
 
   try {
     const { id } = await params;
@@ -110,6 +116,8 @@ export async function DELETE(
   );
   if (userIdOrResponse instanceof Response) return userIdOrResponse;
   const userId = userIdOrResponse;
+  const gate = await checkMutationAllowed(userId);
+  if (!gate.ok) return quotaExceededResponse(gate.info);
 
   try {
     const { id } = await params;

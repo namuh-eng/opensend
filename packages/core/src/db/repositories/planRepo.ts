@@ -1,5 +1,4 @@
 import { asc, eq } from "drizzle-orm";
-import { FREE_PLAN_DEFAULTS, FREE_PLAN_SLUG } from "../../dto";
 import { db } from "../client";
 import { plans } from "../schema";
 
@@ -27,34 +26,5 @@ export const planRepo = {
       .from(plans)
       .where(eq(plans.isPublic, true))
       .orderBy(asc(plans.monthlyPriceCents));
-  },
-
-  async ensureFreePlan() {
-    const [row] = await db
-      .insert(plans)
-      .values({
-        slug: FREE_PLAN_DEFAULTS.slug,
-        name: FREE_PLAN_DEFAULTS.name,
-        monthlyPriceCents: FREE_PLAN_DEFAULTS.monthlyPriceCents,
-        monthlyEmailQuota: FREE_PLAN_DEFAULTS.monthlyEmailQuota,
-        dailyEmailQuota: FREE_PLAN_DEFAULTS.dailyEmailQuota,
-        maxDomains: FREE_PLAN_DEFAULTS.maxDomains,
-        maxApiKeys: FREE_PLAN_DEFAULTS.maxApiKeys,
-        maxContacts: FREE_PLAN_DEFAULTS.maxContacts,
-        maxSegments: FREE_PLAN_DEFAULTS.maxSegments,
-        maxBroadcasts: FREE_PLAN_DEFAULTS.maxBroadcasts,
-        ratePerSecond: FREE_PLAN_DEFAULTS.ratePerSecond,
-        isPublic: FREE_PLAN_DEFAULTS.isPublic,
-      })
-      .onConflictDoNothing({ target: plans.slug })
-      .returning();
-
-    if (row) return row;
-
-    const existing = await this.findBySlug(FREE_PLAN_SLUG);
-    if (!existing) {
-      throw new Error("Free plan ensure failed: insert ignored but no row");
-    }
-    return existing;
   },
 };

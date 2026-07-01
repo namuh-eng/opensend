@@ -32,13 +32,13 @@ const plansEnvelope = {
   data: [
     {
       object: "plan",
-      id: "plan-free",
-      slug: "free",
-      name: "Free",
-      monthly_price_cents: 0,
-      monthly_email_quota: 500,
-      max_domains: 1,
-      max_api_keys: 2,
+      id: "plan-cloud-lite",
+      slug: "cloud_lite_15k_monthly",
+      name: "Cloud Lite",
+      monthly_price_cents: 1500,
+      monthly_email_quota: 15000,
+      max_domains: 3,
+      max_api_keys: 5,
     },
   ],
 };
@@ -46,22 +46,28 @@ const plansEnvelope = {
 const summaryEnvelope = {
   object: "billing_summary",
   plan: {
-    id: "plan-free",
-    slug: "free",
-    name: "Free",
-    monthly_price_cents: 0,
-    monthly_email_quota: 500,
-    max_domains: 1,
-    max_api_keys: 2,
+    id: "plan-cloud-lite",
+    slug: "cloud_lite_15k_monthly",
+    name: "Cloud Lite",
+    monthly_price_cents: 1500,
+    monthly_email_quota: 15000,
+    max_domains: 3,
+    max_api_keys: 5,
   },
-  subscription: null,
+  subscription: {
+    id: "sub-1",
+    status: "active",
+    current_period_start: "2026-05-01T00:00:00.000Z",
+    current_period_end: "2026-06-01T00:00:00.000Z",
+    cancel_at_period_end: false,
+  },
   usage: {
-    emails: { used: null, limit: 500 },
-    domains: { used: 1, limit: 1 },
-    api_keys: { used: 1, limit: 2 },
-    period_start: null,
-    period_end: null,
-    has_usage_period: false,
+    emails: { used: 123, limit: 15000 },
+    domains: { used: 1, limit: 3 },
+    api_keys: { used: 1, limit: 5 },
+    period_start: "2026-05-01T00:00:00.000Z",
+    period_end: "2026-06-01T00:00:00.000Z",
+    has_usage_period: true,
   },
 };
 
@@ -132,7 +138,7 @@ describe("billing plans and summary route adapters", () => {
     expect(mockGetBillingSummary).not.toHaveBeenCalled();
   });
 
-  it("returns the summary service envelope and the missing-plan response", async () => {
+  it("returns the active paid summary envelope and the no-active-plan response", async () => {
     const { GET } = await importSummaryRoute();
 
     const response = await GET();
@@ -142,9 +148,10 @@ describe("billing plans and summary route adapters", () => {
 
     mockGetBillingSummary.mockResolvedValueOnce(null);
     const missing = await GET();
-    expect(missing.status).toBe(503);
+    expect(missing.status).toBe(402);
     await expect(missing.json()).resolves.toEqual({
-      error: "No plan available. Run database seed to create the Free plan.",
+      error: "No active plan. Subscribe to Lite to use the hosted service.",
+      code: "no_active_plan",
     });
   });
 

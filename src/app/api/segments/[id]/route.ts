@@ -5,6 +5,10 @@ import {
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
 import {
+  checkMutationAllowed,
+  quotaExceededResponse,
+} from "@/lib/billing/quota";
+import {
   AudienceMetadataServiceError,
   createAudienceMetadataService,
 } from "@opensend/core";
@@ -76,6 +80,8 @@ export async function DELETE(
   if (permissionError) return permissionError;
   const userId = await resolveUserId(auth);
   if (!userId) return unauthorizedResponse();
+  const gate = await checkMutationAllowed(userId);
+  if (!gate.ok) return quotaExceededResponse(gate.info);
 
   try {
     const { id } = await params;

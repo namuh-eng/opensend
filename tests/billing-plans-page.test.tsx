@@ -87,17 +87,17 @@ describe("authenticated billing plans page", () => {
     mockGetServerSession.mockResolvedValue({ user: { id: "user_123" } });
     mockListPublicPlans.mockResolvedValue([
       {
-        id: "plan_free",
-        slug: "free",
-        name: "Free",
-        monthlyPriceCents: 0,
-        monthlyEmailQuota: 500,
-        maxDomains: 1,
-        maxApiKeys: 2,
+        id: "plan_lite",
+        slug: "cloud_lite_15k_monthly",
+        name: "Lite",
+        monthlyPriceCents: 1000,
+        monthlyEmailQuota: 15000,
+        maxDomains: 3,
+        maxApiKeys: 5,
       },
       {
         id: "plan_starter",
-        slug: "starter",
+        slug: "cloud_starter_55k_monthly",
         name: "Starter",
         monthlyPriceCents: 1900,
         monthlyEmailQuota: 55000,
@@ -105,7 +105,7 @@ describe("authenticated billing plans page", () => {
         maxApiKeys: 10,
       },
     ]);
-    mockLoadBillingSummary.mockResolvedValue({ plan: { id: "plan_free" } });
+    mockLoadBillingSummary.mockResolvedValue({ plan: { id: "plan_lite" } });
   });
 
   it("redirects logged-out users to auth before listing checkout-capable plans", async () => {
@@ -130,22 +130,22 @@ describe("authenticated billing plans page", () => {
     expect(screen.getByRole("heading", { name: "Plans" })).toBeDefined();
     expect(
       screen.getByTestId("pricing-grid").getAttribute("data-current-plan-id"),
-    ).toBe("plan_free");
+    ).toBe("plan_lite");
     expect(mockPricingGrid).toHaveBeenCalledWith(
       expect.objectContaining({
         plans: [
           {
-            id: "plan_free",
-            slug: "free",
-            name: "Free",
-            monthlyPriceCents: 0,
-            monthlyEmailQuota: 500,
-            maxDomains: 1,
-            maxApiKeys: 2,
+            id: "plan_lite",
+            slug: "cloud_lite_15k_monthly",
+            name: "Lite",
+            monthlyPriceCents: 1000,
+            monthlyEmailQuota: 15000,
+            maxDomains: 3,
+            maxApiKeys: 5,
           },
           {
             id: "plan_starter",
-            slug: "starter",
+            slug: "cloud_starter_55k_monthly",
             name: "Starter",
             monthlyPriceCents: 1900,
             monthlyEmailQuota: 55000,
@@ -153,7 +153,7 @@ describe("authenticated billing plans page", () => {
             maxApiKeys: 10,
           },
         ],
-        currentPlanId: "plan_free",
+        currentPlanId: "plan_lite",
       }),
       undefined,
     );

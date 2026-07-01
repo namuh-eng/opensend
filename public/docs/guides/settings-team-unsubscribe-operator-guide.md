@@ -8,7 +8,7 @@ The **Settings** page includes tabs for Usage, SMTP, Team, Unsubscribe Page, Bil
 
 | Area | Current behavior |
 | --- | --- |
-| Usage | Shows transactional, marketing, and team quota counters. It falls back to Free-plan defaults if usage data cannot load. |
+| Usage | Shows transactional, marketing, and team quota counters. It falls back to zeroed no-active-plan defaults if usage data cannot load. |
 | SMTP | Shows SMTP host, port, and username only when `SMTP_HOST`, `SMTP_PORT`, and `SMTP_USER` are configured. The SMTP password is your OpenSend API key. |
 | Team | Lists workspace members and pending invitations. Owners can invite, revoke pending invitations, change admin/member roles, and remove other members. |
 | Unsubscribe Page | Shows a preview-only card in Settings. Live editing is available from the Topics unsubscribe-page editor. |

@@ -4,7 +4,7 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
-import { dedicatedIpPoolRepo } from "@opensend/core";
+import { configurationSetService, dedicatedIpPoolRepo } from "@opensend/core";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -73,6 +73,8 @@ function toDedicatedIpPoolResponse(
     scaling_mode: pool.scalingMode,
     status: pool.status,
     operator_notes: pool.operatorNotes,
+    ip_count: pool.ipCount ?? null,
+    aws_region: pool.awsRegion ?? null,
     provisioned_at: pool.provisionedAt,
     warming_started_at: pool.warmingStartedAt,
     retired_at: pool.retiredAt,
@@ -127,6 +129,29 @@ export async function PATCH(
   const providerPoolName =
     parsed.data.provider_pool_name ?? parsed.data.ses_pool_name ?? undefined;
   const status = parsed.data.status;
+
+  // If retiring a SES-provisioned pool, release it from SES first (best-effort).
+  if (status === "retired") {
+    const existing = await dedicatedIpPoolRepo.findByIdForUser(id, userId);
+    if (existing?.provider === "ses") {
+      try {
+        await configurationSetService.deleteDedicatedIpPool({
+          poolName: existing.sesPoolName,
+          region: existing.awsRegion ?? undefined,
+        });
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            level: "error",
+            event: "dedicated_ip.patch.delete_ses_pool_failed",
+            pool_id: id,
+          }),
+          err,
+        );
+      }
+    }
+  }
+
   const updated = await dedicatedIpPoolRepo.updateForUser(id, userId, {
     name: parsed.data.name,
     sesPoolName: providerPoolName === null ? undefined : providerPoolName,
@@ -152,6 +177,31 @@ export async function DELETE(
   const userId = userIdOrResponse;
 
   const { id } = await params;
+
+  // Load the pool before retiring so we know its SES name and provider.
+  const existing = await dedicatedIpPoolRepo.findByIdForUser(id, userId);
+  if (!existing) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Release the SES pool if it was auto-provisioned (best-effort).
+  if (existing.provider === "ses") {
+    try {
+      await configurationSetService.deleteDedicatedIpPool({
+        poolName: existing.sesPoolName,
+        region: existing.awsRegion ?? undefined,
+      });
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "dedicated_ip.delete.delete_ses_pool_failed",
+          pool_id: id,
+        }),
+        err,
+      );
+    }
+  }
 
   const pool = await dedicatedIpPoolRepo.updateForUser(id, userId, {
     status: "retired",

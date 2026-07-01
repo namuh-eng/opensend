@@ -1,12 +1,9 @@
 import { and, eq, sql } from "drizzle-orm";
+import { resolveBillingEntitlement } from "../billing/entitlement";
 import { db } from "../db/client";
-import { plans, subscriptions, usagePeriods } from "../db/schema";
-import { FREE_PLAN_DEFAULTS, FREE_PLAN_SLUG } from "../dto";
+import { usagePeriods } from "../db/schema";
 
-type BillingDb = Pick<typeof db, "insert" | "query" | "update">;
-
-const PAST_DUE_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
-const ACTIVE_STATUSES = new Set(["active", "trialing", "past_due"]);
+type BillingDb = Pick<typeof db, "insert" | "query" | "update" | "select">;
 
 export type UsageQuotaResult =
   | { ok: true; bypassed: boolean }
@@ -19,87 +16,6 @@ export type UsageQuotaResult =
         used: number;
       };
     };
-
-function startOfMonthUtc(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-}
-
-function startOfNextMonthUtc(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
-}
-
-function billingEnabled(env: Record<string, string | undefined>): boolean {
-  return (
-    env.BILLING_BACKEND?.trim().toLowerCase() === "stripe" &&
-    Boolean(env.STRIPE_SECRET_KEY?.trim())
-  );
-}
-
-async function ensureFreePlan(database: BillingDb) {
-  const [created] = await database
-    .insert(plans)
-    .values({
-      slug: FREE_PLAN_DEFAULTS.slug,
-      name: FREE_PLAN_DEFAULTS.name,
-      monthlyPriceCents: FREE_PLAN_DEFAULTS.monthlyPriceCents,
-      monthlyEmailQuota: FREE_PLAN_DEFAULTS.monthlyEmailQuota,
-      dailyEmailQuota: FREE_PLAN_DEFAULTS.dailyEmailQuota,
-      maxDomains: FREE_PLAN_DEFAULTS.maxDomains,
-      maxApiKeys: FREE_PLAN_DEFAULTS.maxApiKeys,
-      maxContacts: FREE_PLAN_DEFAULTS.maxContacts,
-      maxSegments: FREE_PLAN_DEFAULTS.maxSegments,
-      maxBroadcasts: FREE_PLAN_DEFAULTS.maxBroadcasts,
-      ratePerSecond: FREE_PLAN_DEFAULTS.ratePerSecond,
-      isPublic: FREE_PLAN_DEFAULTS.isPublic,
-    })
-    .onConflictDoNothing({ target: plans.slug })
-    .returning();
-  if (created) return created;
-
-  const existing = await database.query.plans.findFirst({
-    where: eq(plans.slug, FREE_PLAN_SLUG),
-  });
-  if (!existing) {
-    throw new Error("Free plan ensure failed: insert ignored but no row");
-  }
-  return existing;
-}
-
-async function loadPlanContext(userId: string, now: Date, database: BillingDb) {
-  const sub = await database.query.subscriptions.findFirst({
-    where: eq(subscriptions.userId, userId),
-  });
-
-  if (sub && ACTIVE_STATUSES.has(sub.status)) {
-    if (sub.status === "past_due") {
-      const periodEnd = sub.currentPeriodEnd;
-      if (
-        !periodEnd ||
-        now.getTime() - periodEnd.getTime() > PAST_DUE_GRACE_MS
-      ) {
-        return "blocked" as const;
-      }
-    }
-
-    const plan = await database.query.plans.findFirst({
-      where: eq(plans.id, sub.planId),
-    });
-    if (plan) {
-      return {
-        plan,
-        periodStart: sub.currentPeriodStart ?? startOfMonthUtc(now),
-        periodEnd: sub.currentPeriodEnd ?? startOfNextMonthUtc(now),
-      };
-    }
-  }
-
-  const plan = await ensureFreePlan(database);
-  return {
-    plan,
-    periodStart: startOfMonthUtc(now),
-    periodEnd: startOfNextMonthUtc(now),
-  };
-}
 
 async function ensureUsagePeriod(input: {
   userId: string;
@@ -148,33 +64,42 @@ export async function reserveTransactionalEmailQuota(
   env: Record<string, string | undefined> = process.env,
   database: BillingDb = db,
 ): Promise<UsageQuotaResult> {
-  if (delta <= 0 || !userId || !billingEnabled(env)) {
+  if (delta <= 0 || !userId) {
     return { ok: true, bypassed: true };
   }
 
-  const ctx = await loadPlanContext(userId, now, database);
-  if (ctx === "blocked") {
+  const entitlement = await resolveBillingEntitlement(
+    userId,
+    now,
+    env,
+    database,
+  );
+  // Self-host (billing disabled) grants everything.
+  if (entitlement.mode === "self_host") {
+    return { ok: true, bypassed: true };
+  }
+  // Hosted without an active paid subscription is blocked (402 upstream).
+  if (entitlement.mode === "blocked") {
     return {
       ok: false,
-      info: { resource: "emails", plan: "past_due", limit: 0, used: 0 },
+      info: { resource: "emails", plan: entitlement.reason, limit: 0, used: 0 },
     };
   }
 
+  const { plan, periodStart, periodEnd } = entitlement;
   await ensureUsagePeriod({
     userId,
-    periodStart: ctx.periodStart,
-    periodEnd: ctx.periodEnd,
-    includedEmailQuota: ctx.plan.monthlyEmailQuota,
+    periodStart,
+    periodEnd,
+    includedEmailQuota: plan.monthlyEmailQuota,
     database,
   });
 
-  const hardCapEmails = ctx.plan.slug === FREE_PLAN_SLUG;
-  const limit = ctx.plan.monthlyEmailQuota;
+  // Paid plans increment past the included quota so overage can be reported
+  // asynchronously from the committed usage period (no hard cap).
+  const limit = plan.monthlyEmailQuota;
   const warn80Threshold = Math.ceil(limit * 0.8);
   const cap100Threshold = limit;
-  const quotaPredicate = hardCapEmails
-    ? sql`${usagePeriods.emailsSent} + ${delta} <= ${limit}`
-    : sql`true`;
 
   const updated = await database
     .update(usagePeriods)
@@ -202,8 +127,7 @@ export async function reserveTransactionalEmailQuota(
     .where(
       and(
         eq(usagePeriods.userId, userId),
-        eq(usagePeriods.periodStart, ctx.periodStart),
-        quotaPredicate,
+        eq(usagePeriods.periodStart, periodStart),
       ),
     )
     .returning({ emailsSent: usagePeriods.emailsSent });
@@ -213,7 +137,7 @@ export async function reserveTransactionalEmailQuota(
   const current = await database.query.usagePeriods.findFirst({
     where: and(
       eq(usagePeriods.userId, userId),
-      eq(usagePeriods.periodStart, ctx.periodStart),
+      eq(usagePeriods.periodStart, periodStart),
     ),
   });
 
@@ -221,8 +145,8 @@ export async function reserveTransactionalEmailQuota(
     ok: false,
     info: {
       resource: "emails",
-      plan: ctx.plan.slug,
-      limit: ctx.plan.monthlyEmailQuota,
+      plan: plan.slug,
+      limit: plan.monthlyEmailQuota,
       used: current?.emailsSent ?? 0,
     },
   };
@@ -235,11 +159,16 @@ export async function releaseTransactionalEmailQuota(
   env: Record<string, string | undefined> = process.env,
   database: BillingDb = db,
 ): Promise<void> {
-  if (delta <= 0 || !userId || !billingEnabled(env)) return;
+  if (delta <= 0 || !userId) return;
 
   try {
-    const ctx = await loadPlanContext(userId, now, database);
-    if (ctx === "blocked") return;
+    const entitlement = await resolveBillingEntitlement(
+      userId,
+      now,
+      env,
+      database,
+    );
+    if (entitlement.mode !== "active") return;
     await database
       .update(usagePeriods)
       .set({
@@ -248,7 +177,7 @@ export async function releaseTransactionalEmailQuota(
       .where(
         and(
           eq(usagePeriods.userId, userId),
-          eq(usagePeriods.periodStart, ctx.periodStart),
+          eq(usagePeriods.periodStart, entitlement.periodStart),
         ),
       );
   } catch {

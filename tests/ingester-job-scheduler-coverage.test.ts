@@ -21,6 +21,7 @@ describe("ingester job scheduler coverage", () => {
 
     expect(scheduledEndpoints).toEqual([
       "/jobs/billing-overage",
+      "/jobs/dedicated-ip-sync",
       "/jobs/domain-verify",
       "/jobs/scheduled-emails",
       "/jobs/webhooks",

@@ -17,7 +17,7 @@ If `RATE_LIMIT_BACKEND` is disabled, these middleware limits are not enforced. I
 
 ## Plan quotas
 
-Hosted plan quotas are counted across API and broadcast sends. Current public plan examples include Free at 500 emails/month, Lite at 15,000 emails/month, Starter tiers at 51,000 or 100,000 emails/month, Growth tiers up to 500,000 emails/month, and Scale/custom for BYO AWS or custom needs. Free is hard-capped with no overage. Paid plans soft-cap included emails: sends continue beyond the included quota and overage is billed at $0.85 per 1,000 emails. OpenSend records 80% and 100% usage-threshold timestamps for notification hooks; hosted email delivery for those notifications can be attached to those recorded transitions. Use the billing dashboard as the source of truth for the active workspace.
+Hosted plan quotas are counted across API and broadcast sends. The hosted service requires a paid subscription — Lite is the entry plan at 15,000 emails/month, with Starter tiers at 51,000 or 100,000 emails/month, Growth tiers up to 500,000 emails/month, and Scale/custom for BYO AWS or custom needs. Paid plans soft-cap included emails: sends continue beyond the included quota and overage is billed at $0.85 per 1,000 emails. Hosted users without an active paid subscription are blocked (HTTP 402) until they subscribe. Self-hosting the open-source project is free and unmetered. OpenSend records 80% and 100% usage-threshold timestamps for notification hooks; hosted email delivery for those notifications can be attached to those recorded transitions. Use the billing dashboard as the source of truth for the active workspace.
 
 ## Provider limits
 

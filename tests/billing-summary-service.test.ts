@@ -5,38 +5,24 @@ import {
 } from "@/lib/billing/summary";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const freePlan: BillingPlanSummary = {
-  id: "plan-free",
-  slug: "free",
-  name: "Free",
-  monthlyPriceCents: 0,
-  monthlyEmailQuota: 500,
-  dailyEmailQuota: 100,
-  maxDomains: 1,
-  maxApiKeys: 2,
-  maxContacts: 1000,
-  maxSegments: 3,
+const paidPlan: BillingPlanSummary = {
+  id: "plan-cloud-lite",
+  slug: "cloud_lite_15k_monthly",
+  name: "Cloud Lite",
+  monthlyPriceCents: 1500,
+  monthlyEmailQuota: 15_000,
+  dailyEmailQuota: 1_000,
+  maxDomains: 3,
+  maxApiKeys: 5,
+  maxContacts: 5000,
+  maxSegments: 25,
   maxBroadcasts: null,
-  ratePerSecond: 2,
+  ratePerSecond: 5,
   isPublic: true,
 };
 
 const proSummary: BillingSummary = {
-  plan: {
-    id: "plan-pro",
-    slug: "pro",
-    name: "Pro",
-    monthlyPriceCents: 2900,
-    monthlyEmailQuota: 55000,
-    dailyEmailQuota: 5000,
-    maxDomains: 10,
-    maxApiKeys: 20,
-    maxContacts: 10000,
-    maxSegments: 50,
-    maxBroadcasts: null,
-    ratePerSecond: 10,
-    isPublic: true,
-  },
+  plan: paidPlan,
   subscription: {
     id: "sub-1",
     status: "active",
@@ -45,9 +31,9 @@ const proSummary: BillingSummary = {
     cancelAtPeriodEnd: false,
   },
   usage: {
-    emails: { used: 123, limit: 5000 },
-    domains: { used: 4, limit: 10 },
-    apiKeys: { used: 3, limit: 20 },
+    emails: { used: 123, limit: 15000 },
+    domains: { used: 4, limit: 3 },
+    apiKeys: { used: 3, limit: 5 },
     periodStart: "2026-05-01T00:00:00.000Z",
     periodEnd: "2026-06-01T00:00:00.000Z",
     hasUsagePeriod: true,
@@ -55,25 +41,25 @@ const proSummary: BillingSummary = {
 };
 
 const baseUsagePayload = {
-  plan: { name: "Free", slug: "free" },
+  plan: { name: "No active plan", slug: "no_active_plan" },
   transactional: {
     monthlyUsed: 42,
-    monthlyLimit: 500,
+    monthlyLimit: 0,
     dailyUsed: 3,
-    dailyLimit: 100,
+    dailyLimit: 0,
   },
   marketing: {
     contactsUsed: 120,
-    contactsLimit: 1000,
+    contactsLimit: 0,
     segmentsUsed: 4,
-    segmentsLimit: 3,
+    segmentsLimit: 0,
     broadcastsUsed: 0,
-    broadcastsLimit: "Unlimited" as const,
+    broadcastsLimit: 0,
   },
   team: {
     domainsUsed: 2,
-    domainsLimit: 1,
-    rateLimit: 2,
+    domainsLimit: 0,
+    rateLimit: 0,
   },
 };
 
@@ -85,7 +71,7 @@ describe("billing summary service", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    listPlans.mockResolvedValue([freePlan, proSummary.plan]);
+    listPlans.mockResolvedValue([paidPlan]);
     loadSummary.mockResolvedValue(proSummary);
     getDashboardUsage.mockResolvedValue(baseUsagePayload);
   });
@@ -98,41 +84,31 @@ describe("billing summary service", () => {
       data: [
         {
           object: "plan",
-          id: "plan-free",
-          slug: "free",
-          name: "Free",
-          monthly_price_cents: 0,
-          monthly_email_quota: 500,
-          max_domains: 1,
-          max_api_keys: 2,
-        },
-        {
-          object: "plan",
-          id: "plan-pro",
-          slug: "pro",
-          name: "Pro",
-          monthly_price_cents: 2900,
-          monthly_email_quota: 55000,
-          max_domains: 10,
-          max_api_keys: 20,
+          id: "plan-cloud-lite",
+          slug: "cloud_lite_15k_monthly",
+          name: "Cloud Lite",
+          monthly_price_cents: 1500,
+          monthly_email_quota: 15000,
+          max_domains: 3,
+          max_api_keys: 5,
         },
       ],
     });
   });
 
-  it("maps billing summaries into the stable snake_case envelope", async () => {
+  it("maps active paid billing summaries into the stable snake_case envelope", async () => {
     const service = createBillingSummaryService({ listPlans, loadSummary });
 
     await expect(service.getBillingSummary("user-1")).resolves.toEqual({
       object: "billing_summary",
       plan: {
-        id: "plan-pro",
-        slug: "pro",
-        name: "Pro",
-        monthly_price_cents: 2900,
-        monthly_email_quota: 55000,
-        max_domains: 10,
-        max_api_keys: 20,
+        id: "plan-cloud-lite",
+        slug: "cloud_lite_15k_monthly",
+        name: "Cloud Lite",
+        monthly_price_cents: 1500,
+        monthly_email_quota: 15000,
+        max_domains: 3,
+        max_api_keys: 5,
       },
       subscription: {
         id: "sub-1",
@@ -142,9 +118,9 @@ describe("billing summary service", () => {
         cancel_at_period_end: false,
       },
       usage: {
-        emails: { used: 123, limit: 5000 },
-        domains: { used: 4, limit: 10 },
-        api_keys: { used: 3, limit: 20 },
+        emails: { used: 123, limit: 15000 },
+        domains: { used: 4, limit: 3 },
+        api_keys: { used: 3, limit: 5 },
         period_start: "2026-05-01T00:00:00.000Z",
         period_end: "2026-06-01T00:00:00.000Z",
         has_usage_period: true,
@@ -163,23 +139,23 @@ describe("billing summary service", () => {
       service.getUsage({ billingEnabled: true, userId: "user-1" }),
     ).resolves.toEqual({
       ...baseUsagePayload,
-      plan: { name: "Pro", slug: "pro" },
+      plan: { name: "Cloud Lite", slug: "cloud_lite_15k_monthly" },
       transactional: {
         ...baseUsagePayload.transactional,
-        monthlyLimit: 55000,
-        dailyLimit: 5000,
+        monthlyLimit: 15000,
+        dailyLimit: 1000,
       },
       marketing: {
         ...baseUsagePayload.marketing,
-        contactsLimit: 10000,
-        segmentsLimit: 50,
+        contactsLimit: 5000,
+        segmentsLimit: 25,
         broadcastsLimit: "Unlimited",
       },
       team: {
         ...baseUsagePayload.team,
         domainsUsed: 4,
-        domainsLimit: 10,
-        rateLimit: 10,
+        domainsLimit: 3,
+        rateLimit: 5,
       },
     });
     expect(loadSummary).toHaveBeenCalledWith("user-1");
@@ -198,7 +174,8 @@ describe("billing summary service", () => {
     expect(loadSummary).not.toHaveBeenCalled();
   });
 
-  it("keeps base dashboard usage when no billing summary exists", async () => {
+  it("keeps base dashboard usage and surfaces no active plan when no billing summary exists", async () => {
+    loadSummary.mockResolvedValueOnce(null);
     loadSummary.mockResolvedValueOnce(null);
     const service = createBillingSummaryService({
       loadSummary,
@@ -208,5 +185,6 @@ describe("billing summary service", () => {
     await expect(
       service.getUsage({ billingEnabled: true, userId: "user-1" }),
     ).resolves.toEqual(baseUsagePayload);
+    await expect(service.getBillingSummary("user-1")).resolves.toBeNull();
   });
 });

@@ -251,6 +251,7 @@ services:
   #   - /jobs/webhooks
   #   - /jobs/domain-verify
   #   - /jobs/billing-overage
+  #   - /jobs/dedicated-ip-sync
   # The scheduler sends Authorization: Bearer <INGESTER_JOB_TOKEN>.
   scheduler:
     image: ghcr.io/namuh-eng/opensend-ingester:v1.0.0

@@ -5,6 +5,10 @@ import {
   validateApiKey,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
+import {
+  checkMutationAllowed,
+  quotaExceededResponse,
+} from "@/lib/billing/quota";
 import { ContactServiceError, createContactService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 
@@ -51,6 +55,8 @@ export async function POST(
   if (permissionError) return permissionError;
   const userId = await resolveUserId(auth);
   if (!userId) return unauthorizedResponse();
+  const gate = await checkMutationAllowed(userId);
+  if (!gate.ok) return quotaExceededResponse(gate.info);
 
   try {
     const { id: idOrEmail, segment_id: segmentId } = await params;
@@ -81,6 +87,8 @@ export async function DELETE(
   if (permissionError) return permissionError;
   const userId = await resolveUserId(auth);
   if (!userId) return unauthorizedResponse();
+  const gate = await checkMutationAllowed(userId);
+  if (!gate.ok) return quotaExceededResponse(gate.info);
 
   try {
     const { id: idOrEmail, segment_id: segmentId } = await params;

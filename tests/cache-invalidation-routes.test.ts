@@ -85,6 +85,9 @@ vi.mock("@/lib/workspace-route-auth", () => ({
 
 vi.mock("@opensend/core", () => ({
   DomainDetailServiceError: MockDomainDetailServiceError,
+  resolveBillingEntitlement: vi.fn(async () => ({
+    mode: "self_host" as const,
+  })),
   ApiKeyServiceError: class ApiKeyServiceError extends Error {},
   createApiKeyService: () => ({
     createApiKey: mockCreateApiKey,

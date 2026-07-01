@@ -45,6 +45,9 @@ vi.mock("@/lib/events", () => ({
 vi.mock("@opensend/core", () => ({
   ContactServiceError: MockContactServiceError,
   createContactService: () => mockContactService,
+  resolveBillingEntitlement: vi.fn(async () => ({
+    mode: "self_host" as const,
+  })),
 }));
 
 describe("Resend-compatible root contacts API", () => {

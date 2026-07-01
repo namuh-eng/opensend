@@ -209,6 +209,9 @@ export const dedicatedIpPools = pgTable(
     provisionedAt: timestamp("provisioned_at", { withTimezone: true }),
     warmingStartedAt: timestamp("warming_started_at", { withTimezone: true }),
     retiredAt: timestamp("retired_at", { withTimezone: true }),
+    awsRegion: varchar("aws_region", { length: 32 }),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    ipCount: integer("ip_count"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

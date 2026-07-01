@@ -1,32 +1,27 @@
 import { getServerSession } from "@/lib/api-auth";
-import { db } from "@/lib/db";
-import { plans, subscriptions } from "@/lib/db/schema";
-import { dedicatedIpPoolRepo } from "@opensend/core";
-import { eq } from "drizzle-orm";
+
+import { dedicatedIpPoolRepo, resolveBillingEntitlement } from "@opensend/core";
+
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 async function loadPageData(userId: string) {
-  const [pools, sub] = await Promise.all([
+  const [pools, entitlement] = await Promise.all([
     dedicatedIpPoolRepo.listForUser(userId),
-    db.query.subscriptions.findFirst({
-      where: eq(subscriptions.userId, userId),
-    }),
+    resolveBillingEntitlement(userId),
   ]);
 
   let dedicatedIpsEnabled = false;
   let maxDedicatedIps = 0;
 
-  if (sub) {
-    const plan = await db.query.plans.findFirst({
-      where: eq(plans.id, sub.planId),
-    });
-    if (plan) {
-      dedicatedIpsEnabled = plan.dedicatedIpsEnabled;
-      maxDedicatedIps = plan.maxDedicatedIps;
-    }
+  if (entitlement.mode === "self_host") {
+    dedicatedIpsEnabled = true;
+    maxDedicatedIps = Number.MAX_SAFE_INTEGER;
+  } else if (entitlement.mode === "active") {
+    dedicatedIpsEnabled = entitlement.plan.dedicatedIpsEnabled;
+    maxDedicatedIps = entitlement.plan.maxDedicatedIps;
   }
 
   return { pools, dedicatedIpsEnabled, maxDedicatedIps };

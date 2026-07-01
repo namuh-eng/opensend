@@ -14,6 +14,14 @@ vi.mock("@aws-sdk/client-sesv2", () => {
       _name: "DeleteDedicatedIpPoolCommand",
       input,
     })),
+    GetDedicatedIpPoolCommand: vi.fn().mockImplementation((input) => ({
+      _name: "GetDedicatedIpPoolCommand",
+      input,
+    })),
+    GetDedicatedIpsCommand: vi.fn().mockImplementation((input) => ({
+      _name: "GetDedicatedIpsCommand",
+      input,
+    })),
     CreateConfigurationSetCommand: vi.fn().mockImplementation((input) => ({
       _name: "CreateConfigurationSetCommand",
       input,
@@ -103,6 +111,55 @@ describe("ConfigurationSetService", () => {
     await expect(
       svc.deleteDedicatedIpPool({ poolName: "gone-pool" }),
     ).resolves.toBeUndefined();
+  });
+
+  it("getDedicatedIpPool returns pool data from SES response", async () => {
+    mockSend.mockResolvedValueOnce({
+      DedicatedIpPool: { PoolName: "my-pool", ScalingMode: "MANAGED" },
+    });
+    const svc = new ConfigurationSetService();
+    const result = await svc.getDedicatedIpPool({
+      poolName: "my-pool",
+      region: "us-east-1",
+    });
+    expect(result).toEqual({ poolName: "my-pool", scalingMode: "MANAGED" });
+    const cmd = mockSend.mock.calls[0][0];
+    expect(cmd._name).toBe("GetDedicatedIpPoolCommand");
+    expect(cmd.input.PoolName).toBe("my-pool");
+  });
+
+  it("getDedicatedIpPool returns null on NotFoundException", async () => {
+    const err = new Error("not found");
+    (err as Error & { name: string }).name = "NotFoundException";
+    mockSend.mockRejectedValueOnce(err);
+    const svc = new ConfigurationSetService();
+    const result = await svc.getDedicatedIpPool({ poolName: "gone-pool" });
+    expect(result).toBeNull();
+  });
+
+  it("getDedicatedIps returns mapped IP array", async () => {
+    mockSend.mockResolvedValueOnce({
+      DedicatedIps: [
+        { Ip: "1.2.3.4", WarmupStatus: "NOT_APPLICABLE" },
+        { Ip: "5.6.7.8", WarmupStatus: "IN_PROGRESS" },
+      ],
+      NextToken: undefined,
+    });
+    const svc = new ConfigurationSetService();
+    const ips = await svc.getDedicatedIps({ poolName: "my-pool" });
+    expect(ips).toEqual([
+      { ip: "1.2.3.4", warmupStatus: "NOT_APPLICABLE" },
+      { ip: "5.6.7.8", warmupStatus: "IN_PROGRESS" },
+    ]);
+  });
+
+  it("getDedicatedIps returns empty array on NotFoundException", async () => {
+    const err = new Error("not found");
+    (err as Error & { name: string }).name = "NotFoundException";
+    mockSend.mockRejectedValueOnce(err);
+    const svc = new ConfigurationSetService();
+    const ips = await svc.getDedicatedIps({ poolName: "gone-pool" });
+    expect(ips).toEqual([]);
   });
 
   it("syncDomainConfigurationSet creates new set and returns name", async () => {

@@ -433,19 +433,6 @@ export interface UsagePeriodResponse {
   last_increment_at: string | null;
 }
 
-export const FREE_PLAN_SLUG = "free";
-export const FREE_PLAN_DEFAULTS = {
-  slug: FREE_PLAN_SLUG,
-  name: "Free",
-  monthlyPriceCents: 0,
-  monthlyEmailQuota: 500,
-  dailyEmailQuota: 100,
-  maxDomains: 1,
-  maxApiKeys: 2,
-  maxContacts: 1000,
-  maxSegments: 3,
-  // null = unlimited
-  maxBroadcasts: null as number | null,
-  ratePerSecond: 2,
-  isPublic: true,
-} as const;
+// Entry paid plan slug — the mandatory floor for hosted use after the free tier
+// was removed. Self-hosters (billing disabled) are unaffected.
+export const ENTRY_PLAN_SLUG = "cloud_lite_15k_monthly";

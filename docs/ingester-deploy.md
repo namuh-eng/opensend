@@ -182,7 +182,7 @@ INGESTER_SCHEDULER_INTERVAL_SECONDS=60
 
 ### Periodic scans
 
-Four scans need to run every minute: `/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`, and `/jobs/billing-overage`. The Docker Compose `scheduler` sidecar runs all four by default. For managed production, use one of these patterns:
+Five scans need to run every minute: `/jobs/scheduled-emails`, `/jobs/webhooks`, `/jobs/domain-verify`, `/jobs/billing-overage`, and `/jobs/dedicated-ip-sync`. The Docker Compose `scheduler` sidecar runs all five by default. For managed production, use one of these patterns:
 
 **HTTP-driven** (e.g. AWS EventBridge schedule rule with HTTP target, or any
 cron driver that can issue authenticated POSTs):
@@ -197,11 +197,13 @@ curl -i -X POST "${INGESTER_URL}/jobs/domain-verify" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 curl -i -X POST "${INGESTER_URL}/jobs/billing-overage" \
   -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
+curl -i -X POST "${INGESTER_URL}/jobs/dedicated-ip-sync" \
+  -H "Authorization: Bearer ${INGESTER_JOB_TOKEN}"
 ```
 
 **Queue-driven**: publish `scheduled-email.scan` and `webhook-delivery.scan`
 SQS messages on the same minute cadence; the ingester picks them up via the
-normal long-poll loop. Domain verification and billing overage reporting are HTTP-only today, so keep an HTTP schedule for `/jobs/domain-verify` and `/jobs/billing-overage`.
+normal long-poll loop. Domain verification, billing overage reporting, and dedicated IP sync are HTTP-only today, so keep an HTTP schedule for `/jobs/domain-verify`, `/jobs/billing-overage`, and `/jobs/dedicated-ip-sync`.
 
 Manual probes during a deploy:
 
