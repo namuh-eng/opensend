@@ -144,8 +144,8 @@ export async function processScheduledBroadcasts() {
 
       // 3.5 Billing gate + fanout in ONE transaction: reserve quota once for
       // the whole audience, create all email rows, and mark 'sent' atomically
-      // so there is never a partial fanout. On block/error the transaction
-      // rolls back (no reservation, no rows) and the status is set outside it.
+      // so there is never a partial fanout. On billing block/error the
+      // transaction rolls back (no reservation, no rows).
       const targetCount = targetContacts.length;
       let blockedBilling = false;
       let createdInTx = 0;
@@ -215,7 +215,7 @@ export async function processScheduledBroadcasts() {
         if (blockedBilling) {
           await db
             .update(broadcasts)
-            .set({ status: "blocked_billing" })
+            .set({ status: broadcast.status })
             .where(eq(broadcasts.id, broadcast.id));
           continue;
         }
