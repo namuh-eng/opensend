@@ -418,4 +418,21 @@ describe("PATCH /api/dedicated-ips/[id] — SES pool release on retire", () => {
     expect(res.status).toBe(200);
     expect(mockDeleteDedicatedIpPool).not.toHaveBeenCalled();
   });
+
+  it("rejects provider pool name changes after SES provisioning", async () => {
+    mockAuthorizeDashboardOrApiKey.mockResolvedValueOnce({ dashboard: true });
+    mockGetServerSession.mockResolvedValueOnce(SESSION);
+    mockFindByIdForUser.mockResolvedValueOnce(POOL_FIXTURE);
+
+    const req = new Request("http://localhost/api/dedicated-ips/pool-1", {
+      method: "PATCH",
+      body: JSON.stringify({ provider_pool_name: "attacker-existing-pool" }),
+    });
+    const res = await PATCH(req, { params: Promise.resolve({ id: "pool-1" }) });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.code).toBe("provider_pool_name_locked");
+    expect(mockUpdateForUser).not.toHaveBeenCalled();
+    expect(mockDeleteDedicatedIpPool).not.toHaveBeenCalled();
+  });
 });
