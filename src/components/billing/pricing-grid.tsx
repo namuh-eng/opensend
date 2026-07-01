@@ -127,16 +127,12 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
               ? "Unavailable"
               : displayPlan.checkoutKind === "stripe"
                 ? `Change to ${displayPlan.name} (${formatPrice(displayPlan)} / mo)`
-                : displayPlan.checkoutKind === "free"
-                  ? "Contact support"
-                  : displayPlan.cta;
+                : displayPlan.cta;
           const onAction = current
             ? () => undefined
             : dbPlan && displayPlan.checkoutKind === "stripe"
               ? () => handleUpgrade(dbPlan.id)
-              : displayPlan.checkoutKind === "free"
-                ? () => undefined
-                : undefined;
+              : undefined;
 
           return (
             <PricingPlanCard
@@ -144,7 +140,7 @@ export function PricingGrid({ plans, currentPlanId }: PricingGridProps) {
               plan={persistedPlan ?? displayPlan}
               current={current}
               pending={pending}
-              disabled={checkoutDisabled || displayPlan.checkoutKind === "free"}
+              disabled={checkoutDisabled}
               ctaLabel={ctaLabel}
               onAction={onAction}
               testId={`pricing-card-${displayPlan.family}`}

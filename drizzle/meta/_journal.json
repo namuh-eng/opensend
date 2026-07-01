@@ -281,6 +281,13 @@
       "when": 1782383309872,
       "tag": "0039_talented_smasher",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1782921120771,
+      "tag": "0040_remove_free_tier_public",
+      "breakpoints": true
     }
   ]
 }

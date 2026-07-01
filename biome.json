@@ -38,7 +38,8 @@
       "public",
       "private-docs",
       "opensend-new-design",
-      ".claude"
+      ".claude",
+      ".gjc"
     ]
   }
 }

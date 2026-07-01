@@ -274,6 +274,9 @@ describe("route smoke coverage", () => {
 
       return {
         createWebhookService: mockCreateWebhookService,
+        resolveBillingEntitlement: vi.fn(async () => ({
+          mode: "self_host" as const,
+        })),
         TemplateServiceError,
         ContactServiceError,
         ContactOperationsServiceError,

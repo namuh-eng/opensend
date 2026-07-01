@@ -59,6 +59,9 @@ vi.mock("@/lib/cache/dashboard-aggregates", async () => {
 vi.mock("@opensend/core", () => ({
   BroadcastServiceError: MockBroadcastServiceError,
   createBroadcastService: mockCreateBroadcastService,
+  resolveBillingEntitlement: vi.fn(async () => ({
+    mode: "self_host" as const,
+  })),
 }));
 
 function makeNextRequest(url: string, init?: RequestInit): NextRequest {

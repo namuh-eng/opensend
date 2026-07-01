@@ -54,7 +54,6 @@ type StripeCustomerStore = {
 
 type PlanStore = {
   list: () => Promise<Array<{ id: string; stripePriceId: string | null }>>;
-  ensureFreePlan: () => Promise<{ id: string } | undefined | null>;
 };
 
 type SubscriptionRow = {
@@ -500,8 +499,9 @@ export class StripeWebhookProcessor {
       if (matched) return matched.id;
       return null;
     }
-    const free = await this.planStore.ensureFreePlan();
-    return free?.id ?? null;
+    // No free fallback: unmatched Stripe prices are skipped upstream
+    // (skipped: no_plan_for_price) rather than resolving to a free plan.
+    return null;
   }
 }
 

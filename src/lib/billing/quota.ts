@@ -1,24 +1,14 @@
 import { publicApiErrorResponse } from "@/lib/api-errors";
 import { db } from "@/lib/db";
-import {
-  apiKeys,
-  domains,
-  plans,
-  subscriptions,
-  usagePeriods,
-} from "@/lib/db/schema";
-import { FREE_PLAN_DEFAULTS, FREE_PLAN_SLUG } from "@opensend/core";
+import { apiKeys, domains, usagePeriods } from "@/lib/db/schema";
+import { resolveBillingEntitlement } from "@opensend/core";
 import { and, count, eq, sql } from "drizzle-orm";
-import { getBillingBackend } from "./index";
 
 type BillingDb = Pick<typeof db, "insert" | "query" | "select" | "update">;
 
-const PAST_DUE_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
 const UPGRADE_URL = "/dashboard/billing";
 
-const ACTIVE_STATUSES = new Set(["active", "trialing", "past_due"]);
-
-export type QuotaResource = "emails" | "domains" | "api_keys";
+export type QuotaResource = "emails" | "domains" | "api_keys" | "mutation";
 
 export interface QuotaExceededInfo {
   resource: QuotaResource;
@@ -32,37 +22,9 @@ export type QuotaResult =
   | { ok: true; bypassed: boolean }
   | { ok: false; info: QuotaExceededInfo };
 
-interface PlanLike {
-  slug: string;
-  monthlyEmailQuota: number;
-  monthlyPriceCents: number;
-  maxDomains: number;
-  maxApiKeys: number;
-}
-
-interface PlanContext {
-  plan: PlanLike;
-  periodStart: Date;
-  periodEnd: Date;
-}
-
-function startOfMonthUtc(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-}
-
-function startOfNextMonthUtc(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
-}
-
-function isBillingDisabled(
-  env: Record<string, string | undefined> = process.env,
-): boolean {
-  return getBillingBackend(env) === "disabled";
-}
-
 function blockedInfo(
   resource: QuotaResource,
-  plan = "past_due",
+  plan = "no_subscription",
 ): QuotaExceededInfo {
   return {
     resource,
@@ -70,73 +32,6 @@ function blockedInfo(
     limit: 0,
     used: 0,
     upgrade_url: UPGRADE_URL,
-  };
-}
-
-async function ensureFreePlan(database: BillingDb): Promise<PlanLike> {
-  const [created] = await database
-    .insert(plans)
-    .values({
-      slug: FREE_PLAN_DEFAULTS.slug,
-      name: FREE_PLAN_DEFAULTS.name,
-      monthlyPriceCents: FREE_PLAN_DEFAULTS.monthlyPriceCents,
-      monthlyEmailQuota: FREE_PLAN_DEFAULTS.monthlyEmailQuota,
-      maxDomains: FREE_PLAN_DEFAULTS.maxDomains,
-      maxApiKeys: FREE_PLAN_DEFAULTS.maxApiKeys,
-      isPublic: FREE_PLAN_DEFAULTS.isPublic,
-    })
-    .onConflictDoNothing({ target: plans.slug })
-    .returning();
-
-  if (created) return created;
-
-  const existing = await database.query.plans.findFirst({
-    where: eq(plans.slug, FREE_PLAN_SLUG),
-  });
-  if (!existing) {
-    throw new Error("Free plan ensure failed: insert ignored but no row");
-  }
-  return existing;
-}
-
-async function loadPlanContext(
-  userId: string,
-  now: Date,
-  database: BillingDb,
-): Promise<PlanContext | "blocked"> {
-  const sub = await database.query.subscriptions.findFirst({
-    where: eq(subscriptions.userId, userId),
-  });
-
-  if (sub && ACTIVE_STATUSES.has(sub.status)) {
-    if (sub.status === "past_due") {
-      const periodEnd = sub.currentPeriodEnd;
-      if (
-        !periodEnd ||
-        now.getTime() - periodEnd.getTime() > PAST_DUE_GRACE_MS
-      ) {
-        return "blocked";
-      }
-    }
-
-    const plan = await database.query.plans.findFirst({
-      where: eq(plans.id, sub.planId),
-    });
-
-    if (plan) {
-      return {
-        plan,
-        periodStart: sub.currentPeriodStart ?? startOfMonthUtc(now),
-        periodEnd: sub.currentPeriodEnd ?? startOfNextMonthUtc(now),
-      };
-    }
-  }
-
-  const freePlan = await ensureFreePlan(database);
-  return {
-    plan: freePlan,
-    periodStart: startOfMonthUtc(now),
-    periodEnd: startOfNextMonthUtc(now),
   };
 }
 
@@ -183,14 +78,9 @@ async function ensureUsagePeriod(
 /**
  * Atomically reserve `delta` units of monthly email quota for `userId`.
  *
- * Implementation note: a single SQL `UPDATE` remains the source of truth for
- * atomicity. Free plans keep the `emails_sent + delta <= quota` hard cap;
- * paid plans increment past the included quota so overage can be reported
- * asynchronously from the committed usage period.
- *
- * Pass a Drizzle transaction as `database` when the reservation must commit with
- * the accepted email rows. Test doubles may omit true row locking; the SQL shape
- * is the production concurrency boundary.
+ * Self-host (billing disabled) bypasses. Hosted users without an active paid
+ * subscription are blocked (402 upstream). Paid plans increment past the
+ * included quota so overage can be reported asynchronously (no hard cap).
  */
 export async function reserveEmailQuota(
   userId: string | null | undefined,
@@ -200,29 +90,31 @@ export async function reserveEmailQuota(
   database: BillingDb = db,
 ): Promise<QuotaResult> {
   if (delta <= 0) return { ok: true, bypassed: true };
-  if (isBillingDisabled(env)) return { ok: true, bypassed: true };
   if (!userId) return { ok: true, bypassed: true };
 
-  const ctx = await loadPlanContext(userId, now, database);
-  if (ctx === "blocked") {
-    return { ok: false, info: blockedInfo("emails") };
+  const entitlement = await resolveBillingEntitlement(
+    userId,
+    now,
+    env,
+    database,
+  );
+  if (entitlement.mode === "self_host") return { ok: true, bypassed: true };
+  if (entitlement.mode === "blocked") {
+    return { ok: false, info: blockedInfo("emails", entitlement.reason) };
   }
 
+  const { plan, periodStart, periodEnd } = entitlement;
   await ensureUsagePeriod(
     userId,
-    ctx.periodStart,
-    ctx.periodEnd,
-    ctx.plan.monthlyEmailQuota,
+    periodStart,
+    periodEnd,
+    plan.monthlyEmailQuota,
     database,
   );
 
-  const hardCapEmails = ctx.plan.slug === FREE_PLAN_SLUG;
-  const limit = ctx.plan.monthlyEmailQuota;
+  const limit = plan.monthlyEmailQuota;
   const warn80Threshold = Math.ceil(limit * 0.8);
   const cap100Threshold = limit;
-  const quotaPredicate = hardCapEmails
-    ? sql`${usagePeriods.emailsSent} + ${delta} <= ${limit}`
-    : sql`true`;
 
   const updated = await database
     .update(usagePeriods)
@@ -250,8 +142,7 @@ export async function reserveEmailQuota(
     .where(
       and(
         eq(usagePeriods.userId, userId),
-        eq(usagePeriods.periodStart, ctx.periodStart),
-        quotaPredicate,
+        eq(usagePeriods.periodStart, periodStart),
       ),
     )
     .returning({ emailsSent: usagePeriods.emailsSent });
@@ -260,15 +151,15 @@ export async function reserveEmailQuota(
     const current = await database.query.usagePeriods.findFirst({
       where: and(
         eq(usagePeriods.userId, userId),
-        eq(usagePeriods.periodStart, ctx.periodStart),
+        eq(usagePeriods.periodStart, periodStart),
       ),
     });
     return {
       ok: false,
       info: {
         resource: "emails",
-        plan: ctx.plan.slug,
-        limit: ctx.plan.monthlyEmailQuota,
+        plan: plan.slug,
+        limit: plan.monthlyEmailQuota,
         used: current?.emailsSent ?? 0,
         upgrade_url: UPGRADE_URL,
       },
@@ -289,11 +180,16 @@ export async function releaseEmailQuota(
   env: Record<string, string | undefined> = process.env,
   database: BillingDb = db,
 ): Promise<void> {
-  if (delta <= 0 || !userId || isBillingDisabled(env)) return;
+  if (delta <= 0 || !userId) return;
 
   try {
-    const ctx = await loadPlanContext(userId, now, database);
-    if (ctx === "blocked") return;
+    const entitlement = await resolveBillingEntitlement(
+      userId,
+      now,
+      env,
+      database,
+    );
+    if (entitlement.mode !== "active") return;
     await database
       .update(usagePeriods)
       .set({
@@ -302,7 +198,7 @@ export async function releaseEmailQuota(
       .where(
         and(
           eq(usagePeriods.userId, userId),
-          eq(usagePeriods.periodStart, ctx.periodStart),
+          eq(usagePeriods.periodStart, entitlement.periodStart),
         ),
       );
   } catch {
@@ -316,12 +212,17 @@ export async function checkDomainQuota(
   env: Record<string, string | undefined> = process.env,
   database: BillingDb = db,
 ): Promise<QuotaResult> {
-  if (isBillingDisabled(env)) return { ok: true, bypassed: true };
   if (!userId) return { ok: true, bypassed: true };
 
-  const ctx = await loadPlanContext(userId, now, database);
-  if (ctx === "blocked") {
-    return { ok: false, info: blockedInfo("domains") };
+  const entitlement = await resolveBillingEntitlement(
+    userId,
+    now,
+    env,
+    database,
+  );
+  if (entitlement.mode === "self_host") return { ok: true, bypassed: true };
+  if (entitlement.mode === "blocked") {
+    return { ok: false, info: blockedInfo("domains", entitlement.reason) };
   }
 
   const [row] = await database
@@ -330,13 +231,13 @@ export async function checkDomainQuota(
     .where(eq(domains.userId, userId));
 
   const used = Number(row?.value ?? 0);
-  if (used >= ctx.plan.maxDomains) {
+  if (used >= entitlement.plan.maxDomains) {
     return {
       ok: false,
       info: {
         resource: "domains",
-        plan: ctx.plan.slug,
-        limit: ctx.plan.maxDomains,
+        plan: entitlement.plan.slug,
+        limit: entitlement.plan.maxDomains,
         used,
         upgrade_url: UPGRADE_URL,
       },
@@ -351,12 +252,17 @@ export async function checkApiKeyQuota(
   env: Record<string, string | undefined> = process.env,
   database: BillingDb = db,
 ): Promise<QuotaResult> {
-  if (isBillingDisabled(env)) return { ok: true, bypassed: true };
   if (!userId) return { ok: true, bypassed: true };
 
-  const ctx = await loadPlanContext(userId, now, database);
-  if (ctx === "blocked") {
-    return { ok: false, info: blockedInfo("api_keys") };
+  const entitlement = await resolveBillingEntitlement(
+    userId,
+    now,
+    env,
+    database,
+  );
+  if (entitlement.mode === "self_host") return { ok: true, bypassed: true };
+  if (entitlement.mode === "blocked") {
+    return { ok: false, info: blockedInfo("api_keys", entitlement.reason) };
   }
 
   const [row] = await database
@@ -365,17 +271,43 @@ export async function checkApiKeyQuota(
     .where(eq(apiKeys.userId, userId));
 
   const used = Number(row?.value ?? 0);
-  if (used >= ctx.plan.maxApiKeys) {
+  if (used >= entitlement.plan.maxApiKeys) {
     return {
       ok: false,
       info: {
         resource: "api_keys",
-        plan: ctx.plan.slug,
-        limit: ctx.plan.maxApiKeys,
+        plan: entitlement.plan.slug,
+        limit: entitlement.plan.maxApiKeys,
         used,
         upgrade_url: UPGRADE_URL,
       },
     };
+  }
+  return { ok: true, bypassed: false };
+}
+
+/**
+ * Gate a hosted mutating action (create/update/delete of contacts, segments,
+ * topics, broadcasts). Self-host bypasses; hosted requires an active paid
+ * subscription. Returns a QuotaResult so routes can `quotaExceededResponse`.
+ */
+export async function checkMutationAllowed(
+  userId: string | null | undefined,
+  now: Date = new Date(),
+  env: Record<string, string | undefined> = process.env,
+  database: BillingDb = db,
+): Promise<QuotaResult> {
+  if (!userId) return { ok: true, bypassed: true };
+
+  const entitlement = await resolveBillingEntitlement(
+    userId,
+    now,
+    env,
+    database,
+  );
+  if (entitlement.mode === "self_host") return { ok: true, bypassed: true };
+  if (entitlement.mode === "blocked") {
+    return { ok: false, info: blockedInfo("mutation", entitlement.reason) };
   }
   return { ok: true, bypassed: false };
 }

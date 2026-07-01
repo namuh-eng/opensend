@@ -57,3 +57,16 @@ describe("getBillingBackend()", () => {
     ).toBe("disabled");
   });
 });
+
+describe("billing-disabled bypass flag behavior", () => {
+  it("keeps billing disabled unless both hosted Stripe intent and secret are present", () => {
+    expect(isBillingEnabled({ BILLING_BACKEND: "disabled" })).toBe(false);
+    expect(isBillingEnabled({ BILLING_BACKEND: "stripe" })).toBe(false);
+    expect(
+      isBillingEnabled({
+        BILLING_BACKEND: "stripe",
+        STRIPE_SECRET_KEY: "sk_test_123",
+      }),
+    ).toBe(true);
+  });
+});

@@ -36,6 +36,7 @@ export * from "./db/repositories/usagePeriodRepo";
 export * from "./db/repositories/workspaceRepo";
 export * from "./billing/stripe-signature";
 export * from "./billing/stripe-events";
+export * from "./billing/entitlement";
 export * from "./auth/api-auth";
 export * from "./auth/rate-limiter";
 export * from "./auth/validate-api-key";

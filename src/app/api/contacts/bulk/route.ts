@@ -1,6 +1,10 @@
 import { unauthorizedResponse, validateApiKey } from "@/lib/api-auth";
 import { requireFullAccessApiKey } from "@/lib/api-key-permissions";
 import {
+  checkMutationAllowed,
+  quotaExceededResponse,
+} from "@/lib/billing/quota";
+import {
   ContactOperationsServiceError,
   createContactOperationsService,
 } from "@opensend/core";
@@ -29,6 +33,8 @@ export async function POST(request: NextRequest) {
   if (permissionError) return permissionError;
   if (!auth.userId) return unauthorizedResponse();
   const userId = auth.userId;
+  const gate = await checkMutationAllowed(userId);
+  if (!gate.ok) return quotaExceededResponse(gate.info);
 
   try {
     const body = await request.json();

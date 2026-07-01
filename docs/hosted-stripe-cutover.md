@@ -66,7 +66,7 @@ The DB check verifies:
 - public paid plans have non-empty base `plans.stripe_price_id` and metered `plans.stripe_overage_price_id` values,
 - each paid public plan uses `price_...` Stripe Price ID shapes,
 - duplicate public base Price IDs are rejected,
-- Free plan rows do not require Checkout or overage billing.
+- there is no free plan; every public plan requires Checkout and overage billing.
 
 A warning that no paid public plans exist means Checkout cannot be validated yet;
 seed approved paid tiers first.
@@ -179,7 +179,7 @@ log `stripe.webhook.duplicate` after the first successful processing.
 
 ### 5. Quota and overage behavior
 
-Validate hosted metered, Free hard-cap, and self-host/default-disabled behavior.
+Validate hosted metered overage, unpaid-hosted blocking (402), and self-host/default-disabled behavior.
 
 Hosted paid over-quota path:
 
@@ -190,7 +190,7 @@ Hosted paid over-quota path:
 4. Run `/jobs/billing-overage` and confirm it creates one `billing_overage_reports` row, reports the unreported overage delta to Stripe, and advances `usage_periods.overage_reported_emails`.
 5. Confirm repeated runs without new overage do not create another meter event. The automatic catch-up scan covers billing periods that ended within the last 30 days; reconcile older missed usage manually before invoice close.
 
-Hosted Free over-quota path still returns structured `quota_exceeded` (402); Free has no overage.
+Unpaid hosted path (no active paid subscription, or an active subscription that points at a legacy/zero-price plan) returns structured `quota_exceeded` (402) on every billable action. There is no hosted Free tier — Lite (`cloud_lite_15k_monthly`) is the mandatory entry paid plan.
 
 Disabled/self-host path:
 

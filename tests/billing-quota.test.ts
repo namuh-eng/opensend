@@ -21,7 +21,7 @@ const stripeEnv = {
 };
 
 const now = new Date("2026-05-15T12:00:00.000Z");
-const plan = {
+const legacyFreePlan = {
   id: "plan-free",
   slug: "free",
   monthlyEmailQuota: 3,
@@ -30,14 +30,14 @@ const plan = {
   maxApiKeys: 2,
 };
 const paidPlan = {
-  ...plan,
+  ...legacyFreePlan,
   id: "plan-starter",
   slug: "cloud_starter_55k_monthly",
   monthlyPriceCents: 1900,
 };
 const subscription = {
   userId: "user-1",
-  planId: "plan-free",
+  planId: paidPlan.id,
   status: "active",
   currentPeriodStart: new Date("2026-05-01T00:00:00.000Z"),
   currentPeriodEnd: new Date("2026-06-01T00:00:00.000Z"),
@@ -58,9 +58,12 @@ function mockEmailReserveUpdate(result: Array<{ emailsSent: number }>) {
   return { returning, set, where };
 }
 
-function mockPlanContext() {
-  mockDb.query.subscriptions.findFirst.mockResolvedValue(subscription);
-  mockDb.query.plans.findFirst.mockResolvedValue(plan);
+function mockPlanContext(selectedPlan = paidPlan) {
+  mockDb.query.subscriptions.findFirst.mockResolvedValue({
+    ...subscription,
+    planId: selectedPlan.id,
+  });
+  mockDb.query.plans.findFirst.mockResolvedValue(selectedPlan);
 }
 
 function mockCount(value: number) {
@@ -92,7 +95,7 @@ describe("billing quota enforcement", () => {
     expect(mockDb.query.subscriptions.findFirst).not.toHaveBeenCalled();
   });
 
-  it("allows sends under quota and uses one conditional UPDATE for the increment", async () => {
+  it("allows active paid sends under included quota and uses one UPDATE for the increment", async () => {
     mockPlanContext();
     mockUsagePeriod(1);
     const update = mockEmailReserveUpdate([{ emailsSent: 2 }]);
@@ -134,54 +137,47 @@ describe("billing quota enforcement", () => {
     );
   });
 
-  it("allows the free-plan boundary send and rejects the next reservation with structured 402 info", async () => {
-    mockPlanContext();
-    mockUsagePeriod(2);
-    mockEmailReserveUpdate([{ emailsSent: 3 }]);
+  it("blocks hosted users with no active subscription before reserving email quota", async () => {
+    mockDb.query.subscriptions.findFirst.mockResolvedValue(undefined);
 
     const { reserveEmailQuota } = await import("@/lib/billing/quota");
-    await expect(
-      reserveEmailQuota("user-1", 1, now, stripeEnv),
-    ).resolves.toEqual({ ok: true, bypassed: false });
-
-    mockEmailReserveUpdate([]);
-    mockDb.query.usagePeriods.findFirst.mockResolvedValue({
-      id: "usage-1",
-      emailsSent: 3,
-    });
-
     await expect(
       reserveEmailQuota("user-1", 1, now, stripeEnv),
     ).resolves.toEqual({
       ok: false,
       info: {
         resource: "emails",
-        plan: "free",
-        limit: 3,
-        used: 3,
+        plan: "no_subscription",
+        limit: 0,
+        used: 0,
         upgrade_url: "/dashboard/billing",
       },
     });
+
+    expect(mockDb.query.plans.findFirst).not.toHaveBeenCalled();
+    expect(mockDb.query.usagePeriods.findFirst).not.toHaveBeenCalled();
+    expect(mockDb.update).not.toHaveBeenCalled();
   });
 
-  it("rejects a free-plan batch overrun without partially reserving quota", async () => {
-    mockPlanContext();
-    mockUsagePeriod(1);
-    mockEmailReserveUpdate([]);
+  it("blocks legacy free plans with 402 info instead of allowing a boundary send", async () => {
+    mockPlanContext(legacyFreePlan);
 
     const { reserveEmailQuota } = await import("@/lib/billing/quota");
-    const result = await reserveEmailQuota("user-1", 3, now, stripeEnv);
-
-    expect(result).toEqual({
+    await expect(
+      reserveEmailQuota("user-1", 1, now, stripeEnv),
+    ).resolves.toEqual({
       ok: false,
       info: {
         resource: "emails",
-        plan: "free",
-        limit: 3,
-        used: 1,
+        plan: "legacy_free",
+        limit: 0,
+        used: 0,
         upgrade_url: "/dashboard/billing",
       },
     });
+
+    expect(mockDb.query.usagePeriods.findFirst).not.toHaveBeenCalled();
+    expect(mockDb.update).not.toHaveBeenCalled();
   });
 
   it("creates the current monthly usage period lazily", async () => {
@@ -239,7 +235,7 @@ describe("billing quota enforcement", () => {
     expect(mockDb.update).not.toHaveBeenCalled();
   });
 
-  it("gates domain and API key counts against active plan limits", async () => {
+  it("gates domain and API key counts against active paid plan limits", async () => {
     mockPlanContext();
     mockCount(1);
 
@@ -251,7 +247,7 @@ describe("billing quota enforcement", () => {
       ok: false,
       info: {
         resource: "domains",
-        plan: "free",
+        plan: paidPlan.slug,
         limit: 1,
         used: 1,
         upgrade_url: "/dashboard/billing",

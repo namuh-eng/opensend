@@ -75,6 +75,9 @@ vi.mock("@opensend/core", () => ({
     listContactTopics: mockListContactTopics,
     updateContactTopics: mockUpdateContactTopics,
   }),
+  resolveBillingEntitlement: vi.fn(async () => ({
+    mode: "self_host" as const,
+  })),
 }));
 
 describe("contact operations route adapters", () => {

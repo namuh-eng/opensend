@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 
+const mockSelect = vi.hoisted(() => vi.fn());
+
 vi.mock("@opensend/core", () => ({
-  FREE_PLAN_SLUG: "free",
   createDashboardAggregateService: () => ({ getUsage: vi.fn() }),
 }));
 
-import { isApprovedPublicPlan } from "@/lib/billing/summary";
+vi.mock("@/lib/db", () => ({
+  db: { select: mockSelect },
+}));
+
+import { isApprovedPublicPlan, listPublicPlans } from "@/lib/billing/summary";
 
 type PlanRow = Parameters<typeof isApprovedPublicPlan>[0];
 
@@ -34,8 +39,15 @@ function plan(overrides: Partial<PlanRow>): PlanRow {
   return { ...basePlan, ...overrides };
 }
 
+function mockPublicPlanRows(rows: PlanRow[]) {
+  const where = vi.fn().mockResolvedValue(rows);
+  const from = vi.fn(() => ({ where }));
+  mockSelect.mockReturnValue({ from });
+  return { from, where };
+}
+
 describe("public billing plan approval", () => {
-  it("allows the canonical public free plan without a Stripe price", () => {
+  it("rejects free or zero-price plans even with public visibility", () => {
     expect(
       isApprovedPublicPlan(
         plan({
@@ -47,7 +59,19 @@ describe("public billing plan approval", () => {
           isPublic: true,
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
+
+    expect(
+      isApprovedPublicPlan(
+        plan({
+          slug: "cloud_lite_15k_monthly",
+          monthlyPriceCents: 0,
+          stripePriceId: "price_live_123",
+          stripeOveragePriceId: "price_overage_123",
+          isPublic: true,
+        }),
+      ),
+    ).toBe(false);
   });
 
   it.each([
@@ -70,18 +94,19 @@ describe("public billing plan approval", () => {
     },
   );
 
-  it("rejects a malformed paid row using the canonical free slug", () => {
+  it("allows a paid row using a non-free public slug", () => {
     expect(
       isApprovedPublicPlan(
         plan({
-          slug: "free",
-          name: "Free",
-          monthlyPriceCents: 2900,
+          slug: "cloud_lite_15k_monthly",
+          name: "Cloud Lite",
+          monthlyPriceCents: 1500,
           stripePriceId: "price_live_123",
+          stripeOveragePriceId: "price_overage_123",
           isPublic: true,
         }),
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it.each([
@@ -101,5 +126,44 @@ describe("public billing plan approval", () => {
     },
   ])("rejects unapproved public paid/placeholder plans %#", (row) => {
     expect(isApprovedPublicPlan(plan(row))).toBe(false);
+  });
+
+  it("lists only paid public plans with valid Stripe IDs", async () => {
+    const freePlan = plan({
+      id: "plan-free",
+      slug: "free",
+      name: "Free",
+      monthlyPriceCents: 0,
+      stripePriceId: null,
+      stripeOveragePriceId: null,
+    });
+    const zeroPricePlan = plan({
+      id: "plan-zero",
+      slug: "zero_price",
+      monthlyPriceCents: 0,
+      stripePriceId: "price_live_123",
+      stripeOveragePriceId: "price_overage_123",
+    });
+    const paidPlan = plan({
+      id: "plan-cloud-lite",
+      slug: "cloud_lite_15k_monthly",
+      name: "Cloud Lite",
+      monthlyPriceCents: 1500,
+      monthlyEmailQuota: 15_000,
+      maxDomains: 3,
+      maxApiKeys: 5,
+      stripePriceId: "price_live_123",
+      stripeOveragePriceId: "price_overage_123",
+    });
+    mockPublicPlanRows([freePlan, zeroPricePlan, paidPlan]);
+
+    await expect(listPublicPlans()).resolves.toEqual([
+      expect.objectContaining({
+        id: "plan-cloud-lite",
+        slug: "cloud_lite_15k_monthly",
+        name: "Cloud Lite",
+        monthlyPriceCents: 1500,
+      }),
+    ]);
   });
 });
