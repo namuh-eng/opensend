@@ -288,25 +288,25 @@ describe("dashboard aggregate service", () => {
     expect(countInput?.startOfMonth).toEqual(new Date(2026, 3, 1));
     expect(countInput?.startOfDay).toEqual(new Date(2026, 3, 23));
     expect(payload).toEqual({
-      plan: { name: "Free", slug: "free" },
+      plan: { name: "No active plan", slug: "none" },
       transactional: {
         monthlyUsed: 42,
-        monthlyLimit: 500,
+        monthlyLimit: 0,
         dailyUsed: 3,
-        dailyLimit: 100,
+        dailyLimit: 0,
       },
       marketing: {
         contactsUsed: 120,
-        contactsLimit: 1000,
+        contactsLimit: 0,
         segmentsUsed: 4,
-        segmentsLimit: 3,
+        segmentsLimit: 0,
         broadcastsUsed: 0,
-        broadcastsLimit: "Unlimited",
+        broadcastsLimit: 0,
       },
       team: {
         domainsUsed: 2,
-        domainsLimit: 1,
-        rateLimit: 2,
+        domainsLimit: 0,
+        rateLimit: 0,
       },
     });
   });

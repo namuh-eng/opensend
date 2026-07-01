@@ -9,6 +9,8 @@ import {
   type EventDestinationDefinition,
   type EventType,
   GetConfigurationSetEventDestinationsCommand,
+  GetDedicatedIpPoolCommand,
+  GetDedicatedIpsCommand,
   PutConfigurationSetDeliveryOptionsCommand,
   SESv2Client,
   UpdateConfigurationSetEventDestinationCommand,
@@ -104,6 +106,76 @@ export class ConfigurationSetService {
     } catch (err) {
       if (!isNotFoundException(err)) throw err;
     }
+  }
+
+  /**
+   * Get a dedicated IP pool from SES. Returns null if not found.
+   */
+  async getDedicatedIpPool(input: {
+    poolName: string;
+    region?: string;
+  }): Promise<{ poolName: string; scalingMode: string } | null> {
+    if (useDevStub) {
+      console.log(`[DEV] Would get SES dedicated IP pool: ${input.poolName}`);
+      return { poolName: input.poolName, scalingMode: "MANAGED" };
+    }
+    try {
+      const resp = await this.getClient(input.region).send(
+        new GetDedicatedIpPoolCommand({ PoolName: input.poolName }),
+      );
+      const pool = resp.DedicatedIpPool;
+      if (!pool) return null;
+      return {
+        poolName: pool.PoolName ?? input.poolName,
+        scalingMode: pool.ScalingMode ?? "MANAGED",
+      };
+    } catch (err) {
+      if (isNotFoundException(err)) return null;
+      throw err;
+    }
+  }
+
+  /**
+   * List all dedicated IPs in a pool from SES, with pagination.
+   * Returns empty array if pool not found.
+   */
+  async getDedicatedIps(input: {
+    poolName: string;
+    region?: string;
+  }): Promise<{ ip: string; warmupStatus: string }[]> {
+    if (useDevStub) {
+      console.log(
+        `[DEV] Would list SES dedicated IPs for pool: ${input.poolName}`,
+      );
+      return [];
+    }
+    const results: { ip: string; warmupStatus: string }[] = [];
+    let nextToken: string | undefined;
+    let pages = 0;
+    const MAX_PAGES = 10;
+    try {
+      do {
+        const resp = await this.getClient(input.region).send(
+          new GetDedicatedIpsCommand({
+            PoolName: input.poolName,
+            PageSize: 100,
+            NextToken: nextToken,
+          }),
+        );
+        for (const ip of resp.DedicatedIps ?? []) {
+          results.push({
+            ip: ip.Ip ?? "",
+            warmupStatus: ip.WarmupStatus ?? "UNKNOWN",
+          });
+        }
+        nextToken = resp.NextToken;
+        pages++;
+      } while (nextToken && pages < MAX_PAGES);
+    } catch (err) {
+      if (isNotFoundException(err)) return [];
+      throw err;
+    }
+    return results;
   }
 
   /**

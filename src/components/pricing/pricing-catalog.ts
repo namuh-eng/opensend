@@ -1,15 +1,9 @@
 export const PRICING_CONTACT_URL = "mailto:hello@opensend.namuh.co";
 export const PRICING_AUTH_URL = "/auth";
 
-export type PricingPlanFamily =
-  | "free"
-  | "lite"
-  | "starter"
-  | "growth"
-  | "scale";
+export type PricingPlanFamily = "lite" | "starter" | "growth" | "scale";
 
 export type PricingTierSlug =
-  | "free"
   | "cloud_lite_15k_monthly"
   | "cloud_starter_55k_monthly"
   | "cloud_starter_100k_monthly"
@@ -19,7 +13,7 @@ export type PricingTierSlug =
   | "scale_custom";
 
 export type PricingCtaStyle = "primary" | "ghost";
-export type PricingCheckoutKind = "free" | "stripe" | "contact";
+export type PricingCheckoutKind = "stripe" | "contact";
 
 export interface PricingDisplayPlan {
   slug: PricingTierSlug;
@@ -42,32 +36,6 @@ export interface PricingDisplayPlan {
   perks: string[];
 }
 
-const FREE_PLAN: PricingDisplayPlan = {
-  slug: "free",
-  family: "free",
-  name: "Free",
-  blurb: "For tinkering and side projects.",
-  monthlyPrice: 0,
-  quota: "500 API + broadcast emails/mo",
-  quotaValue: 500,
-  domains: "1 verified domain",
-  maxDomains: 1,
-  keys: "2 API keys",
-  maxApiKeys: 2,
-  cta: "Get started",
-  ctaStyle: "ghost",
-  ctaHref: PRICING_AUTH_URL,
-  checkoutKind: "free",
-  selectorLabel: "500",
-  perks: [
-    "Resend-compatible REST API",
-    "TypeScript SDK + React Email",
-    "HMAC-signed webhooks",
-    "Open/click analytics",
-    "Community support",
-  ],
-};
-
 const LITE_PLAN: PricingDisplayPlan = {
   slug: "cloud_lite_15k_monthly",
   family: "lite",
@@ -86,7 +54,7 @@ const LITE_PLAN: PricingDisplayPlan = {
   checkoutKind: "stripe",
   selectorLabel: "15k",
   perks: [
-    "Everything in Free",
+    "Everything in the open-source core",
     "API sends + broadcast fanout",
     "Contacts, segments, and broadcasts",
     "Email automations",
@@ -201,7 +169,6 @@ const SCALE_CUSTOM: PricingDisplayPlan = {
 };
 
 export const PRICING_TIERS: PricingDisplayPlan[] = [
-  FREE_PLAN,
   LITE_PLAN,
   STARTER_55K,
   STARTER_100K,
@@ -231,7 +198,7 @@ export function defaultTierForFamily(
   if (family === "starter") return STARTER_55K;
   if (family === "growth") return GROWTH_120K;
   if (family === "scale") return SCALE_CUSTOM;
-  return FREE_PLAN;
+  return LITE_PLAN;
 }
 
 export function getPricingCardsForSelection(
@@ -240,5 +207,5 @@ export function getPricingCardsForSelection(
   const selected = findPricingTier(selectedSlug) ?? GROWTH_120K;
   const starter = selected.family === "starter" ? selected : STARTER_55K;
   const growth = selected.family === "growth" ? selected : GROWTH_120K;
-  return [FREE_PLAN, LITE_PLAN, starter, growth, SCALE_CUSTOM];
+  return [LITE_PLAN, starter, growth, SCALE_CUSTOM];
 }

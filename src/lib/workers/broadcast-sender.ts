@@ -1,3 +1,4 @@
+import { reserveEmailQuota } from "@/lib/billing/quota";
 import { db } from "@/lib/db";
 import {
   broadcasts,
@@ -141,64 +142,88 @@ export async function processScheduledBroadcasts() {
           : [];
       }
 
-      // 4. Perform fanout (create individual email records)
-      if (targetContacts.length > 0) {
-        for (const contact of targetContacts) {
-          let html = broadcast.html || "";
-          let subject = broadcast.subject || "";
-
-          // Simple variable replacement
-          const vars = {
-            FIRST_NAME: contact.firstName || "",
-            LAST_NAME: contact.lastName || "",
-            EMAIL: contact.email,
-          };
-
-          for (const [key, value] of Object.entries(vars)) {
-            const regex = new RegExp(`{{\\s*${key}\\s*}}`, "g");
-            html = html.replace(regex, value);
-            subject = subject.replace(regex, value);
+      // 3.5 Billing gate + fanout in ONE transaction: reserve quota once for
+      // the whole audience, create all email rows, and mark 'sent' atomically
+      // so there is never a partial fanout. On block/error the transaction
+      // rolls back (no reservation, no rows) and the status is set outside it.
+      const targetCount = targetContacts.length;
+      let blockedBilling = false;
+      let createdInTx = 0;
+      try {
+        await db.transaction(async (tx) => {
+          createdInTx = 0;
+          const reservation = await reserveEmailQuota(
+            broadcastUserId,
+            targetCount,
+            now,
+            process.env,
+            tx,
+          );
+          if (!reservation.ok) {
+            blockedBilling = true;
+            throw new Error("broadcast_blocked_billing");
           }
 
-          const unsubscribeUrl = createUnsubscribeUrl(
-            contact.id,
-            getPublicBaseUrl(),
-            {
+          for (const contact of targetContacts) {
+            let html = broadcast.html || "";
+            let subject = broadcast.subject || "";
+
+            const vars = {
+              FIRST_NAME: contact.firstName || "",
+              LAST_NAME: contact.lastName || "",
+              EMAIL: contact.email,
+            };
+            for (const [key, value] of Object.entries(vars)) {
+              const regex = new RegExp(`{{\\s*${key}\\s*}}`, "g");
+              html = html.replace(regex, value);
+              subject = subject.replace(regex, value);
+            }
+
+            const unsubscribeUrl = createUnsubscribeUrl(
+              contact.id,
+              getPublicBaseUrl(),
+              { topicId: broadcast.topicId, broadcastId: broadcast.id },
+            );
+            html = replaceUnsubscribePlaceholder(html, unsubscribeUrl);
+            const text = replaceUnsubscribePlaceholder(
+              broadcast.text || "",
+              unsubscribeUrl,
+            );
+
+            await tx.insert(emails).values({
+              from: broadcast.from || "system@opensend.com",
+              to: [contact.email],
+              subject,
+              html,
+              text,
+              headers: buildOneClickUnsubscribeHeaders(unsubscribeUrl),
+              status: "queued",
+              userId: broadcast.userId,
               topicId: broadcast.topicId,
-              broadcastId: broadcast.id,
-            },
-          );
-          html = replaceUnsubscribePlaceholder(html, unsubscribeUrl);
-          const text = replaceUnsubscribePlaceholder(
-            broadcast.text || "",
-            unsubscribeUrl,
-          );
+              tags: [{ name: "broadcast_id", value: broadcast.id }],
+            });
+            createdInTx++;
+          }
 
-          await db.insert(emails).values({
-            from: broadcast.from || "system@opensend.com",
-            to: [contact.email],
-            subject,
-            html,
-            text,
-            headers: buildOneClickUnsubscribeHeaders(unsubscribeUrl),
-            status: "queued", // Worker will pick these up
-            userId: broadcast.userId,
-            topicId: broadcast.topicId,
-            tags: [{ name: "broadcast_id", value: broadcast.id }],
-          });
-
-          totalEmailsCreated++;
+          await tx
+            .update(broadcasts)
+            .set({ status: "sent" })
+            .where(eq(broadcasts.id, broadcast.id));
+        });
+        totalEmailsCreated += createdInTx;
+      } catch (txErr) {
+        if (blockedBilling) {
+          await db
+            .update(broadcasts)
+            .set({ status: "blocked_billing" })
+            .where(eq(broadcasts.id, broadcast.id));
+          continue;
         }
+        throw txErr;
       }
-
-      // 5. Mark broadcast as finished
-      await db
-        .update(broadcasts)
-        .set({ status: "sent" })
-        .where(eq(broadcasts.id, broadcast.id));
     } catch (err) {
       console.error(`Failed to process broadcast ${broadcast.id}:`, err);
-      // Revert status to queued for retry
+      // Transaction rolled back (no rows, no reservation); requeue for retry.
       await db
         .update(broadcasts)
         .set({ status: "queued" })

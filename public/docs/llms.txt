@@ -74,7 +74,7 @@
 - [Update Contact](https://opensend.namuh.co/docs/api-reference/contacts/update-contact.md): Update contact fields. This page documents the OpenSend-owned API contract for PATCH /contacts/{contactid}.
 - [Auto Configure Domain](https://opensend.namuh.co/docs/api-reference/domains/auto-configure-domain.md): Write DNS records through configured Cloudflare credentials.
 - [Create Domain](https://opensend.namuh.co/docs/api-reference/domains/create-domain.md): Create a sending domain and return the DNS records OpenSend expects operators to publish.
-- [Dedicated IP lifecycle](https://opensend.namuh.co/docs/api-reference/domains/dedicated-ip-lifecycle.md): Dedicated IP APIs track manual lifecycle state for a tenant. They do not provision provider IP pools or run warmup flows in v1.
+- [Dedicated IP lifecycle](https://opensend.namuh.co/docs/api-reference/domains/dedicated-ip-lifecycle.md): Dedicated IP pool APIs let tenants request a dedicated IP pool and track it through its full lifecycle. Once a tenant's request is submitted, an operator approves it via the internal endpoint — at which point OpenSend automatically provisions an AWS SES MANAGED dedicated IP pool and begins reconciling its warmup state via the background scheduler.
 - [Delete Domain](https://opensend.namuh.co/docs/api-reference/domains/delete-domain.md): Delete a domain from the authenticated tenant after any operator-side cleanup you require.
 - [Get domain deliverability readiness](https://opensend.namuh.co/docs/api-reference/domains/get-domain-deliverability.md): Returns readiness/status information for one tenant-owned domain.
 - [Get Domain](https://opensend.namuh.co/docs/api-reference/domains/get-domain.md): Retrieve one domain, including verification status and DNS record metadata.

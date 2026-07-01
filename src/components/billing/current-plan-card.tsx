@@ -106,7 +106,9 @@ export function CurrentPlanCard({ plan, subscription }: CurrentPlanCardProps) {
               className="rounded-full border border-line px-2 py-0.5 capitalize text-fg-2"
               data-testid="current-plan-status"
             >
-              {subscription ? formatStatus(subscription.status) : "Free tier"}
+              {subscription
+                ? formatStatus(subscription.status)
+                : "No active plan"}
             </span>
             {subscription?.cancelAtPeriodEnd ? (
               <span

@@ -46,6 +46,9 @@ vi.mock("@/lib/api-key-permissions", () => ({
 vi.mock("@opensend/core", () => ({
   AudienceMetadataServiceError: TestAudienceMetadataServiceError,
   createAudienceMetadataService: () => mockAudienceMetadataService,
+  resolveBillingEntitlement: vi.fn(async () => ({
+    mode: "self_host" as const,
+  })),
 }));
 
 describe("Resend-compatible root segments API", () => {

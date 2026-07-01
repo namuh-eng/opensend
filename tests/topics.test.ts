@@ -385,6 +385,9 @@ describe("Topics API route", () => {
             };
           },
         }),
+        resolveBillingEntitlement: vi.fn(async () => ({
+          mode: "self_host" as const,
+        })),
       };
     });
   });

@@ -66,6 +66,9 @@ vi.mock("@opensend/core", () => ({
   ContactOperationsServiceError: MockContactOperationsServiceError,
   createContactService: () => mockContactService,
   createContactOperationsService: () => mockContactOperationsService,
+  resolveBillingEntitlement: vi.fn(async () => ({
+    mode: "self_host" as const,
+  })),
 }));
 
 describe("root contact relationship API route adapters", () => {

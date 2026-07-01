@@ -5,6 +5,8 @@ const mockReserveEmailQuota = vi.hoisted(() => vi.fn());
 const mockCheckDomainQuota = vi.hoisted(() => vi.fn());
 const mockCheckApiKeyQuota = vi.hoisted(() => vi.fn());
 const mockCreateDomainIdentity = vi.hoisted(() => vi.fn());
+const mockCreateApiKeyService = vi.hoisted(() => vi.fn());
+const mockCreateApiKey = vi.hoisted(() => vi.fn());
 const mockDb = vi.hoisted(() => ({
   insert: vi.fn(),
   select: vi.fn(),
@@ -18,6 +20,7 @@ vi.mock("@/lib/api-auth", () => ({
   authorizeDashboardOrApiKey: mockValidateApiKey,
   getServerSession: vi.fn(),
   validateApiKey: mockValidateApiKey,
+  invalidateApiKeyAuthCache: vi.fn(),
   getApiKeyAuthHeaderError: () => null,
   unauthorizedResponse: () =>
     Response.json({ error: "Missing or invalid API key" }, { status: 401 }),
@@ -44,6 +47,35 @@ vi.mock("@/lib/billing/quota", () => ({
       },
       { status: 402 },
     ),
+}));
+vi.mock("@/lib/audit-events", () => ({
+  auditContextForApiKey: (input: { userId: string; apiKeyId: string }) => ({
+    userId: input.userId,
+    actor: { type: "api_key", id: input.apiKeyId },
+    source: "api_key",
+    sourceApiKeyId: input.apiKeyId,
+  }),
+  auditContextForDashboardSession: (session: {
+    user?: { id?: string; email?: string };
+  }) =>
+    session.user?.id
+      ? {
+          userId: session.user.id,
+          actor: {
+            type: "user",
+            id: session.user.id,
+            email: session.user.email ?? null,
+          },
+          source: "dashboard",
+          sourceApiKeyId: null,
+        }
+      : null,
+  recordAuditEvent: vi.fn(),
+}));
+vi.mock("@/lib/events", () => ({
+  queueEvent: vi
+    .fn()
+    .mockResolvedValue({ eventId: "event-1", deliveryIds: [] }),
 }));
 vi.mock("@/lib/ses", () => ({
   createDomainIdentity: mockCreateDomainIdentity,
@@ -102,6 +134,32 @@ vi.mock("@opensend/core", async () => {
     await vi.importActual<typeof import("@opensend/core")>("@opensend/core");
   return {
     ...actual,
+    ApiKeyServiceError: class ApiKeyServiceError extends Error {
+      constructor(
+        readonly code: string,
+        message: string,
+      ) {
+        super(message);
+        this.name = "ApiKeyServiceError";
+      }
+    },
+    createApiKeyService: mockCreateApiKeyService,
+    createDomainService: () => ({
+      createDomain: async (input: { name: string; region?: string }) => ({
+        id: "domain-1",
+        name: input.name,
+        status: "pending",
+        region: input.region ?? "us-east-1",
+        records: [],
+        capabilities: [],
+        createdAt: new Date("2026-05-15T00:00:00.000Z"),
+        customReturnPath: null,
+        trackOpens: false,
+        trackClicks: false,
+        trackingSubdomain: null,
+        tls: "optional",
+      }),
+    }),
     createTelemetryContext: () => ({
       correlationId: "corr-quota",
       traceparent: "00-11111111111111111111111111111111-2222222222222222-01",
@@ -120,9 +178,9 @@ const auth = {
 };
 const quotaInfo = {
   resource: "emails",
-  limit: 3,
-  used: 3,
-  plan: "free",
+  limit: 0,
+  used: 0,
+  plan: "no_subscription",
   upgrade_url: "/dashboard/billing",
 };
 
@@ -167,9 +225,19 @@ describe("quota route gates", () => {
     mockDb.transaction.mockImplementation(
       async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb),
     );
+    mockCreateApiKey.mockReset();
+    mockCreateApiKey.mockResolvedValue({
+      id: "created-key",
+      token: "os_created",
+      tokenHash: "hash-created",
+    });
+    mockCreateApiKeyService.mockReset();
+    mockCreateApiKeyService.mockReturnValue({
+      createApiKey: mockCreateApiKey,
+    });
   });
 
-  it("returns 402 from POST /api/emails after payload validation and before insert", async () => {
+  it("returns 402 from POST /api/emails when hosted billing has no active subscription", async () => {
     mockReserveEmailQuota.mockResolvedValue({ ok: false, info: quotaInfo });
     const { POST } = await import("@/app/api/emails/route");
 
@@ -189,9 +257,9 @@ describe("quota route gates", () => {
       message: "Quota exceeded.",
       statusCode: 402,
       details: {
-        limit: 3,
-        used: 3,
-        plan: "free",
+        limit: 0,
+        used: 0,
+        plan: "no_subscription",
         upgrade_url: "/dashboard/billing",
       },
     });
@@ -205,7 +273,7 @@ describe("quota route gates", () => {
     expect(nonLogInsertCalls()).toHaveLength(0);
   });
 
-  it("returns 402 from POST /api/emails/batch when the batch would overrun quota", async () => {
+  it("returns 402 from POST /api/emails/batch when hosted billing has no active subscription", async () => {
     mockReserveEmailQuota.mockResolvedValue({ ok: false, info: quotaInfo });
     const { POST } = await import("@/app/api/emails/batch/route");
 
@@ -237,10 +305,10 @@ describe("quota route gates", () => {
     expect(nonLogInsertCalls()).toHaveLength(0);
   });
 
-  it("returns 402 from POST /api/domains before creating an SES identity", async () => {
+  it("returns 402 from POST /api/domains when hosted billing has no active subscription", async () => {
     mockCheckDomainQuota.mockResolvedValue({
       ok: false,
-      info: { ...quotaInfo, resource: "domains", limit: 1, used: 1 },
+      info: { ...quotaInfo, resource: "domains" },
     });
     const { POST } = await import("@/app/api/domains/route");
 
@@ -257,10 +325,10 @@ describe("quota route gates", () => {
     expect(nonLogInsertCalls()).toHaveLength(0);
   });
 
-  it("returns 402 from POST /api/api-keys before inserting a key", async () => {
+  it("returns 402 from POST /api/api-keys when hosted billing has no active subscription", async () => {
     mockCheckApiKeyQuota.mockResolvedValue({
       ok: false,
-      info: { ...quotaInfo, resource: "api_keys", limit: 2, used: 2 },
+      info: { ...quotaInfo, resource: "api_keys" },
     });
     const { POST } = await import("@/app/api/api-keys/route");
 
@@ -271,5 +339,98 @@ describe("quota route gates", () => {
     expect(res.status).toBe(402);
     expect(mockCheckApiKeyQuota).toHaveBeenCalledWith("user-1");
     expect(nonLogInsertCalls()).toHaveLength(0);
+  });
+
+  it("returns 2xx from POST /api/emails when quota is self-host bypassed", async () => {
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: true });
+    const values = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-1" }]),
+    });
+    mockDb.insert.mockReturnValue({ values });
+    const { POST } = await import("@/app/api/emails/route");
+
+    const res = await POST(
+      jsonRequest("http://localhost:3015/api/emails", {
+        from: "sender@example.com",
+        to: ["user@example.com"],
+        subject: "Allowed",
+        html: "<p>Allowed</p>",
+      }),
+    );
+
+    expect(res.status).toBeGreaterThanOrEqual(200);
+    expect(res.status).toBeLessThan(300);
+    expect(mockReserveEmailQuota).toHaveBeenCalledWith(
+      "user-1",
+      1,
+      expect.any(Date),
+      process.env,
+      mockDb,
+    );
+    expect(nonLogInsertCalls()).toHaveLength(1);
+  });
+
+  it("returns 2xx from POST /api/emails when quota is active paid", async () => {
+    mockReserveEmailQuota.mockResolvedValue({ ok: true, bypassed: false });
+    const values = vi.fn().mockReturnValue({
+      returning: vi.fn().mockResolvedValue([{ id: "email-1" }]),
+    });
+    mockDb.insert.mockReturnValue({ values });
+    const { POST } = await import("@/app/api/emails/route");
+
+    const res = await POST(
+      jsonRequest("http://localhost:3015/api/emails", {
+        from: "sender@example.com",
+        to: ["user@example.com"],
+        subject: "Allowed",
+        html: "<p>Allowed</p>",
+      }),
+    );
+
+    expect(res.status).toBeGreaterThanOrEqual(200);
+    expect(res.status).toBeLessThan(300);
+    expect(nonLogInsertCalls()).toHaveLength(1);
+  });
+
+  it("returns 2xx from POST /api/domains when quota is self-host or active paid", async () => {
+    const { POST } = await import("@/app/api/domains/route");
+
+    mockCheckDomainQuota.mockResolvedValueOnce({ ok: true, bypassed: true });
+    const selfHost = await POST(
+      jsonRequest("http://localhost:3015/api/domains", {
+        name: "selfhost.example.com",
+        region: "us-east-1",
+      }),
+    );
+    expect(selfHost.status).toBeGreaterThanOrEqual(200);
+    expect(selfHost.status).toBeLessThan(300);
+
+    mockCheckDomainQuota.mockResolvedValueOnce({ ok: true, bypassed: false });
+    const active = await POST(
+      jsonRequest("http://localhost:3015/api/domains", {
+        name: "active.example.com",
+        region: "us-east-1",
+      }),
+    );
+    expect(active.status).toBeGreaterThanOrEqual(200);
+    expect(active.status).toBeLessThan(300);
+  });
+
+  it("returns 2xx from POST /api/api-keys when quota is self-host or active paid", async () => {
+    const { POST } = await import("@/app/api/api-keys/route");
+
+    mockCheckApiKeyQuota.mockResolvedValueOnce({ ok: true, bypassed: true });
+    const selfHost = await POST(
+      jsonRequest("http://localhost:3015/api/api-keys", { name: "self-host" }),
+    );
+    expect(selfHost.status).toBeGreaterThanOrEqual(200);
+    expect(selfHost.status).toBeLessThan(300);
+
+    mockCheckApiKeyQuota.mockResolvedValueOnce({ ok: true, bypassed: false });
+    const active = await POST(
+      jsonRequest("http://localhost:3015/api/api-keys", { name: "active" }),
+    );
+    expect(active.status).toBeGreaterThanOrEqual(200);
+    expect(active.status).toBeLessThan(300);
   });
 });

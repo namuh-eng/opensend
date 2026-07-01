@@ -47,6 +47,9 @@ vi.mock("@opensend/core", () => ({
     deleteTopic: mockDeleteTopic,
     deleteProperty: mockDeleteProperty,
   }),
+  resolveBillingEntitlement: vi.fn(async () => ({
+    mode: "self_host" as const,
+  })),
 }));
 
 function makeNextRequest(url: string, init?: RequestInit) {

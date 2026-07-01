@@ -1,4 +1,8 @@
 import { getServerSession, unauthorizedResponse } from "@/lib/api-auth";
+import {
+  checkMutationAllowed,
+  quotaExceededResponse,
+} from "@/lib/billing/quota";
 import { createContactOperationsService } from "@opensend/core";
 import { type NextRequest, NextResponse } from "next/server";
 import Papa from "papaparse";
@@ -22,6 +26,8 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession();
   const userId = session?.user?.id;
   if (!userId) return unauthorizedResponse();
+  const gate = await checkMutationAllowed(userId);
+  if (!gate.ok) return quotaExceededResponse(gate.info);
 
   try {
     const formData = await request.formData();

@@ -1,30 +1,23 @@
 import { type SQL, and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../db/client";
-import {
-  contacts,
-  domains,
-  emailEvents,
-  emails,
-  plans,
-  segments,
-} from "../db/schema";
-import { FREE_PLAN_DEFAULTS, FREE_PLAN_SLUG } from "../dto";
+import { contacts, domains, emailEvents, emails, segments } from "../db/schema";
 
-// Last-resort fallback used only when the plans table is empty (cold start
-// before ensureFreePlan has run). All real values live on the Free plan row.
+// No-active-plan / cold-start fallback. Real limits come from the user's
+// active PAID subscription plan; unsubscribed hosted users are blocked and see
+// a subscribe prompt, so the fallback is intentionally zeroed.
 export const DASHBOARD_USAGE_LIMITS = {
   transactional: {
-    monthlyLimit: FREE_PLAN_DEFAULTS.monthlyEmailQuota,
-    dailyLimit: FREE_PLAN_DEFAULTS.dailyEmailQuota,
+    monthlyLimit: 0,
+    dailyLimit: 0,
   },
   marketing: {
-    contactsLimit: FREE_PLAN_DEFAULTS.maxContacts,
-    segmentsLimit: FREE_PLAN_DEFAULTS.maxSegments,
-    broadcastsLimit: FREE_PLAN_DEFAULTS.maxBroadcasts as number | null,
+    contactsLimit: 0,
+    segmentsLimit: 0,
+    broadcastsLimit: 0 as number | null,
   },
   team: {
-    domainsLimit: FREE_PLAN_DEFAULTS.maxDomains,
-    rateLimit: FREE_PLAN_DEFAULTS.ratePerSecond,
+    domainsLimit: 0,
+    rateLimit: 0,
   },
 } as const;
 
@@ -41,25 +34,9 @@ export type PlanUsageLimits = {
 };
 
 async function defaultLoadPlanLimits(): Promise<PlanUsageLimits | null> {
-  try {
-    const row = await db.query.plans.findFirst({
-      where: eq(plans.slug, FREE_PLAN_SLUG),
-    });
-    if (!row) return null;
-    return {
-      name: row.name,
-      slug: row.slug,
-      monthlyEmailQuota: row.monthlyEmailQuota,
-      dailyEmailQuota: row.dailyEmailQuota,
-      maxDomains: row.maxDomains,
-      maxContacts: row.maxContacts,
-      maxSegments: row.maxSegments,
-      maxBroadcasts: row.maxBroadcasts,
-      ratePerSecond: row.ratePerSecond,
-    };
-  } catch {
-    return null;
-  }
+  // No implicit free plan: cold-start returns no limits. Real limits come from
+  // the user's active paid subscription plan (resolved via billing entitlement).
+  return null;
 }
 
 const EVENT_TYPE_TO_EVENT_TYPES: Record<string, string[]> = {
@@ -628,8 +605,8 @@ export function createDashboardAggregateService({
 
       return {
         plan: {
-          name: plan?.name ?? FREE_PLAN_DEFAULTS.name,
-          slug: plan?.slug ?? FREE_PLAN_DEFAULTS.slug,
+          name: plan?.name ?? "No active plan",
+          slug: plan?.slug ?? "none",
         },
         transactional: {
           monthlyUsed: counts.monthlyEmails,

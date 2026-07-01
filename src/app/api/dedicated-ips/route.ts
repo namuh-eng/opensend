@@ -5,10 +5,9 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
-import { db } from "@/lib/db";
-import { plans, subscriptions } from "@/lib/db/schema";
-import { dedicatedIpPoolRepo } from "@opensend/core";
-import { eq } from "drizzle-orm";
+
+import { dedicatedIpPoolRepo, resolveBillingEntitlement } from "@opensend/core";
+
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -42,26 +41,28 @@ async function resolveUserId(req: Request): Promise<string | Response> {
   return unauthorizedResponse();
 }
 
-async function getUserPlan(
+async function getUserPlanEntitlement(
   userId: string,
-): Promise<{ dedicatedIpsEnabled: boolean; maxDedicatedIps: number } | null> {
-  const sub = await db.query.subscriptions.findFirst({
-    where: eq(subscriptions.userId, userId),
-  });
-
-  if (sub) {
-    const plan = await db.query.plans.findFirst({
-      where: eq(plans.id, sub.planId),
-    });
-    if (plan) {
-      return {
-        dedicatedIpsEnabled: plan.dedicatedIpsEnabled,
-        maxDedicatedIps: plan.maxDedicatedIps,
-      };
-    }
+): Promise<
+  | { blocked: string }
+  | { dedicatedIpsEnabled: boolean; maxDedicatedIps: number }
+> {
+  const entitlement = await resolveBillingEntitlement(userId);
+  // Self-host (billing disabled) grants the feature with no cap.
+  if (entitlement.mode === "self_host") {
+    return {
+      dedicatedIpsEnabled: true,
+      maxDedicatedIps: Number.MAX_SAFE_INTEGER,
+    };
   }
-
-  return { dedicatedIpsEnabled: false, maxDedicatedIps: 0 };
+  // Hosted without an active paid subscription is blocked (402 upstream).
+  if (entitlement.mode === "blocked") {
+    return { blocked: entitlement.reason };
+  }
+  return {
+    dedicatedIpsEnabled: entitlement.plan.dedicatedIpsEnabled,
+    maxDedicatedIps: entitlement.plan.maxDedicatedIps,
+  };
 }
 
 function toDedicatedIpPoolResponse(
@@ -79,6 +80,8 @@ function toDedicatedIpPoolResponse(
     scaling_mode: pool.scalingMode,
     status: pool.status,
     operator_notes: pool.operatorNotes,
+    ip_count: pool.ipCount ?? null,
+    aws_region: pool.awsRegion ?? null,
     provisioned_at: pool.provisionedAt,
     warming_started_at: pool.warmingStartedAt,
     retired_at: pool.retiredAt,
@@ -112,8 +115,18 @@ export async function POST(req: Request) {
   if (userIdOrResponse instanceof Response) return userIdOrResponse;
   const userId = userIdOrResponse;
 
-  const planInfo = await getUserPlan(userId);
-  if (!planInfo?.dedicatedIpsEnabled) {
+  const planInfo = await getUserPlanEntitlement(userId);
+  if ("blocked" in planInfo) {
+    return NextResponse.json(
+      {
+        error: "An active paid subscription is required.",
+        code: "payment_required",
+        reason: planInfo.blocked,
+      },
+      { status: 402 },
+    );
+  }
+  if (!planInfo.dedicatedIpsEnabled) {
     return NextResponse.json(
       {
         error:

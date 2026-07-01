@@ -4,6 +4,10 @@ import {
   unauthorizedResponse,
 } from "@/lib/api-auth";
 import { requireFullAccessForApiKeyCaller } from "@/lib/api-key-permissions";
+import {
+  checkMutationAllowed,
+  quotaExceededResponse,
+} from "@/lib/billing/quota";
 import { getRootApiAlias } from "@/lib/root-api-compatibility";
 import {
   AudienceMetadataServiceError,
@@ -77,6 +81,8 @@ export async function POST(request: NextRequest) {
   if (permissionError) return permissionError;
   const userId = await resolveUserId(auth);
   if (!userId) return unauthorizedResponse();
+  const gate = await checkMutationAllowed(userId);
+  if (!gate.ok) return quotaExceededResponse(gate.info);
 
   try {
     const body = await request.json();

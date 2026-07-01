@@ -56,3 +56,15 @@ test.describe("DELETE /api/dedicated-ips/{id} — unauthenticated", () => {
     expect(res.status()).toBe(401);
   });
 });
+
+test.describe("POST /api/internal/dedicated-ips/{id}/approve — unauthenticated", () => {
+  test("returns 401 when no Authorization header is provided", async ({
+    request,
+  }) => {
+    const res = await request.post(
+      `${BASE_URL}/api/internal/dedicated-ips/00000000-0000-0000-0000-000000000001/approve`,
+      { data: {} },
+    );
+    expect(res.status()).toBe(401);
+  });
+});

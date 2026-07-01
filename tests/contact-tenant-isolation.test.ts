@@ -25,6 +25,9 @@ const mockContactOperationsService = vi.hoisted(() => ({
   listContactTopics: vi.fn(),
   updateContactTopics: vi.fn(),
 }));
+const mockResolveBillingEntitlement = vi.hoisted(() =>
+  vi.fn(async () => ({ mode: "self_host" as const })),
+);
 const MockContactServiceError = vi.hoisted(
   () =>
     class ContactServiceError extends Error {
@@ -104,6 +107,7 @@ vi.mock("@opensend/core", () => ({
   ContactOperationsServiceError: MockContactOperationsServiceError,
   createContactService: () => mockContactService,
   createContactOperationsService: () => mockContactOperationsService,
+  resolveBillingEntitlement: mockResolveBillingEntitlement,
 }));
 
 vi.mock("@/lib/db", () => ({
@@ -127,6 +131,9 @@ describe("contact API tenant isolation", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.resetAllMocks();
+    mockResolveBillingEntitlement.mockResolvedValue({
+      mode: "self_host" as const,
+    });
     mockValidateApiKey.mockResolvedValue({
       apiKeyId: "key-b",
       permission: "full_access",
@@ -297,6 +304,9 @@ describe("contact API tenant isolation", () => {
     });
 
     vi.resetAllMocks();
+    mockResolveBillingEntitlement.mockResolvedValue({
+      mode: "self_host" as const,
+    });
     mockValidateApiKey.mockResolvedValue({
       apiKeyId: "key-b",
       permission: "full_access",

@@ -23,10 +23,10 @@ export async function GET() {
     if (!summary) {
       return NextResponse.json(
         {
-          error:
-            "No plan available. Run database seed to create the Free plan.",
+          error: "No active plan. Subscribe to Lite to use the hosted service.",
+          code: "no_active_plan",
         },
-        { status: 503 },
+        { status: 402 },
       );
     }
 
